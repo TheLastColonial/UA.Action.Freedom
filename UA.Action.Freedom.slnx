@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj" />
+    <Project Path="src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj" />
+    <Project Path="src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj" />
+    <Project Path="src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/UA.Action.Freedom.Tests.BDD/UA.Action.Freedom.Tests.BDD.csproj" />
+    <Project Path="tests/UA.Action.Freedom.Tests.Component/UA.Action.Freedom.Tests.Component.csproj" />
+    <Project Path="tests/UA.Action.Freedom.Tests.Integration/UA.Action.Freedom.Tests.Integration.csproj" />
+    <Project Path="tests/UA.Action.Freedom.Tests.Unit/UA.Action.Freedom.Tests.Unit.csproj" />
+  </Folder>
+</Solution>
