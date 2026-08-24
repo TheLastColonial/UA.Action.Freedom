@@ -24,5 +24,8 @@ Ready --> InTransit
 InTransit --> Delivered
 InTransit --> Lost
 Delivered --> Returned
+Lost -->[*]
+Returned -->[*]
+Delivered -->[*]
 
 @enduml
