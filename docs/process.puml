@@ -1,0 +1,39 @@
+@startuml Manifest Creation Process
+
+start
+
+group Admin {
+    
+    :Truck List Published;
+    :Manifest Proposed;
+    :Manifest Approved;
+
+    fork
+        :Generate GMR;
+    fork again
+        :Generate ELO;
+    end fork
+
+}
+
+group Execution {
+
+    :Prepare Boxes;
+    :Load Trucks;
+    :Truck Departs;
+    
+}
+
+group Stock Ordering {
+
+    fork
+        :Update Truck Kit Stock;
+    fork again
+        :Update Merchandise Stock;
+    end fork
+
+}
+
+end
+
+@enduml

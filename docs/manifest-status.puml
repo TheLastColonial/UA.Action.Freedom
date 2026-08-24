@@ -1,0 +1,31 @@
+@startuml Manifest Status
+
+title Manifest Status
+
+state "Created" as Created : Initial state of the manifest. \nThe manifest has been created but not populated completely.
+state "Proposed" as Proposed : Requesting approval for the manifest.
+state "Rejected" as Rejected : The manifest has been rejected.
+state "Confirmed" as Confirmed : The manifest has been confirmed.
+state "Preparing" as Preparing : Volunteers are preparing the boxes for transit.
+state "Ready" as Ready : The manifest is ready for collection.
+state "In Transit" as InTransit : The manifest is on a convoy.
+state "Delivered" as Delivered : The manifest has arrived at the ultimate destination.
+state "Lost" as Lost : The manifest has been lost during transit.
+state "Returned" as Returned : The manifest has been returned by the destination.
+
+[*] --> Created
+Created --> Proposed
+Created --> Rejected
+Proposed --> Rejected
+Proposed --> Confirmed
+Confirmed --> Preparing
+Preparing --> Ready
+Ready --> InTransit
+InTransit --> Delivered
+InTransit --> Lost
+Delivered --> Returned
+Lost -->[*]
+Returned -->[*]
+Delivered -->[*]
+
+@enduml
