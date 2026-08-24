@@ -1,8 +1,22 @@
-﻿namespace UA.Action.Freedom.Domain
+﻿namespace UA.Action.Freedom.Domain;
+
+public class Driver : Person
 {
-    internal class Driver : Volunteer
-    {
-        public Convoy Convoy { get; set; }
-        public bool Committed { get; set; }
-    }
+    public Convoy[] Convoys { get; set; }
+    public bool Committed { get; set; }
+}
+
+public enum ConvoyRole
+{
+    Unknown = 0,
+    Driver,
+    Passenger,
+    TeamLeader
+}
+
+public class DriverTeam
+{
+    public Driver PrimaryDriver { get; set; }
+    public Driver SecondaryDriver { get; set; }
+    public Driver[] All => new[] { PrimaryDriver, SecondaryDriver };
 }

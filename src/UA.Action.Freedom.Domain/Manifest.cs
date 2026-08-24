@@ -1,22 +1,65 @@
 ﻿namespace UA.Action.Freedom.Domain;
 
 /// <summary>
-/// List of Boxes allocated to a 
+/// List of Boxes allocated to a <see cref="Veichle"/> in a <see cref="Convoy"/>
 /// </summary>
 public class Manifest
 {
-    public ManifestId Id { get; set; }
-    public Veichle Veichle { get; set; }
-    public Box[] Boxes { get; set; }
+    /// <summary>
+    /// Unique reference
+    /// </summary>
+    public ManifestId Id { get; init; }
 
-    public int TotalWeightKg()
-    {
-        return this.Veichle.WeightKg + this.Boxes.Sum(box => box.WeightKg);
-    }
+    /// <summary>
+    /// Veichle allocated to transport <see cref="Box[]"/>
+    /// </summary>
+    public Veichle Veichle { get; init; }
+
+    /// <summary>
+    /// <see cref="Driver"/> allocated for UK to Europe Route
+    /// </summary>
+    public DriverTeam DriverUK { get; init; }
+
+    /// <summary>
+    /// <see cref="Driver"/> allocated for Europe to Ukraine Rotue
+    /// </summary>
+    public DriverTeam DriverBorder { get; init; }
+
+    /// <summary>
+    /// Cargo to be transported
+    /// </summary>
+    public Box[] Boxes { get; init; }
+
+    /// <summary>
+    /// Text block for passing addtional informaiton or comments
+    /// </summary>
+    public string? DeliveryNotes { get; init; }
+
+    /// <summary>
+    /// Completed Ferry Booking
+    /// </summary>
+    public bool FerryBookingComplete { get; init; }
+
+    /// <summary>
+    /// Total weight of <see cref="Veichle"/>, Cargo etc for border checks in kilograms
+    /// </summary>
+    /// <returns>Total Kilograms</returns>
+    public int TotalWeightKg() =>
+        this.Veichle.WeightKg
+        + this.Boxes.Sum(box => box.WeightKg) // Cargo
+        + 100 * 2 // 2x Driver + Bags
+        + 45; // Fuel
 }
 
+/// <summary>
+/// Unique reference to a combined cargo, convoy and drivers
+/// </summary>
+/// <param name="Value"></param>
 public record ManifestId(string Value);
 
+/// <summary>
+/// Status of a Manifest to manage flow
+/// </summary>
 public record ManifestStatus
 {
     public int Id { get; set; }
