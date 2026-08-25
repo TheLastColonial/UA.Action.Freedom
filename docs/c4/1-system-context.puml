@@ -1,0 +1,51 @@
+@startuml System Context | UA Action Freedom
+
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+!define AzurePuml https://raw.githubusercontent.com/plantuml-stdlib/Azure-PlantUML/release/2-2/dist
+
+!includeurl AzurePuml/AzureCommon.puml
+!includeurl AzurePuml/AzureC4Integration.puml
+
+title System Context | UA Action Freedom
+
+Person_Ext(donor, "Donor", "A person who donates to UA Action")
+Person_Ext(guard, "Border Guard", "A person who represents a country border guards")
+Person_Ext(driver, "Driver", "A person who drives vehicles")
+Person_Ext(authority, "Authority", "A person who represents the local authorities")
+
+Enterprise_Boundary(ua_action, "UA Action") {
+
+    
+    Person(administrator, "Administrator", "A person who manages access and roles")
+    Person(ground_officer, "Ground Officer", "A person who connects with local authorities to coordinate convoys and requests for aid")
+    Person(purchaser, "Purchaser", "A person who manages procurement and supplies for convoys")    
+    Person(loader, "Loader", "A person who loads cargo onto vehicles and verifies donations")
+    Person(dispatcher, "Dispatcher", "A person who dispatches viechles and manages paperwork for a convoy")
+
+    System(freedom, "Freedom", "A system that helps coordinate convoys for humanitarian aid")
+}
+
+System_Ext(ferry, "Ferry Website", "Booking of ferry tickets for vehicles")
+
+donor --> freedom : Requests Donation Sheet
+
+freedom --> driver : Notified of Convoy Allocation
+
+dispatcher <--> driver : Communicates convoy status
+
+administrator --> freedom : Manages Access and Roles
+
+purchaser --> freedom : Manages Procurement
+
+freedom --> loader : Recieves Cargo Manifest
+loader --> freedom : Confirms Donations Contents
+
+ground_officer --> freedom : Raises requests for aid
+ground_officer <--> authority : Communicates with local authorities
+
+dispatcher --> ferry : Books ferry tickets
+dispatcher --> freedom : Updates convoy information
+
+guard -> driver : Verifies convoy information
+
+@enduml
