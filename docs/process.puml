@@ -2,8 +2,9 @@
 
 start
 
-group Admin {
+group Administration {
     
+    :Truck List Created;
     :Truck List Published;
     :Manifest Proposed;
     :Manifest Approved;
