@@ -18,6 +18,8 @@ Person_Ext(guard, "Border Guard", "A person who represents a country border guar
 Person_Ext(driver, "Driver", "A person who drives vehicles")
 Person_Ext(authority, "Authority", "A person who represents the local authorities")
 
+System_Ext(ferry, "Ferry Website", "Booking of ferry tickets for vehicles")
+
 Enterprise_Boundary(ua_action, "UA Action") {
 
     
@@ -35,11 +37,12 @@ Enterprise_Boundary(ua_action, "UA Action") {
         web_app --> api : Uses
         api --> db : Reads from and writes to
     }
+
+    System(website, "Public Website", "Public website for UA Action that provides information about the organization and its activities")
 }
 
-System_Ext(ferry, "Ferry Website", "Booking of ferry tickets for vehicles")
-
-donor --> freedom : Requests Donation Sheet
+donor --> website : Requests Donation Sheet
+driver --> website : Requests to become a driver
 
 freedom --> driver : Notified of Convoy Allocation
 
