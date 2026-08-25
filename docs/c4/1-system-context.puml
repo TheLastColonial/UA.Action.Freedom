@@ -22,7 +22,7 @@ Enterprise_Boundary(ua_action, "UA Action") {
     Person(ground_officer, "Ground Officer", "A person who connects with local authorities to coordinate convoys and requests for aid")
     Person(purchaser, "Purchaser", "A person who manages procurement and supplies for convoys")    
     Person(loader, "Loader", "A person who loads cargo onto vehicles and verifies donations")
-    Person(dispatcher, "Dispatcher", "A person who dispatches viechles and manages paperwork for a convoy")
+    Person(dispatcher, "Dispatcher", "A person who dispatches vehicles and manages paperwork for a convoy")
 
     System(freedom, "Freedom", "A system that helps coordinate convoys for humanitarian aid")
     System(website, "Public Website", "Public website for UA Action that provides information about the organization and its activities")

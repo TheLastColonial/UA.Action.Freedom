@@ -10,6 +10,7 @@
 !includeurl AzurePuml/Databases/AzureCosmosDb.puml
 !includeurl AzurePuml/Databases/all.puml
 !includeurl AzurePuml/Compute/AzureFunction.puml
+!includeurl AzurePuml/Storage/AzureQueueStorage.puml
 
 title Containers | UA Action Freedom
 
@@ -20,6 +21,11 @@ Person_Ext(authority, "Authority", "A person who represents the local authoritie
 
 System_Ext(ferry, "Ferry Website", "Booking of ferry tickets for vehicles")
 
+
+Enterprise_Boundary(hmrc, "HMRC") {
+    System_Ext(hmrc_goods_api, "Goods Movement System Haulier API", "API for the UK Government's Goods Movement System", $link="https://developer.service.hmrc.gov.uk/api-documentation/docs/api/service/goods-movement-system-haulier-api/1.0/oas/page")
+}
+
 Enterprise_Boundary(ua_action, "UA Action") {
 
     
@@ -27,7 +33,7 @@ Enterprise_Boundary(ua_action, "UA Action") {
     Person(ground_officer, "Ground Officer", "A person who connects with local authorities to coordinate convoys and requests for aid")
     Person(purchaser, "Purchaser", "A person who manages procurement and supplies for convoys")    
     Person(loader, "Loader", "A person who loads cargo onto vehicles and verifies donations")
-    Person(dispatcher, "Dispatcher", "A person who dispatches viechles and manages paperwork for a convoy")
+    Person(dispatcher, "Dispatcher", "A person who dispatches vehicles and manages paperwork for a convoy")
 
     System_Boundary(freedom, "Freedom") {
         Container(web_app, "Web Application", "ASP.NET Core MVC", "Allows users to manage convoys and donations")
@@ -36,10 +42,17 @@ Enterprise_Boundary(ua_action, "UA Action") {
 
         web_app --> api : Uses
         api --> db : Reads from and writes to
+        
+        AzureQueueStorage(gmr_queue, "GMR Queue", "Azure Queue Storage", "Queue for Ground Movement Requests")
+        AzureFunction(gmr_function, "GMR Function", "Azure Function", "Processes Ground Movement Requests from the queue")
+        
+        gmr_queue --> gmr_function : Triggers        
     }
 
     System(website, "Public Website", "Public website for UA Action that provides information about the organization and its activities")
 }
+
+gmr_function --> hmrc_goods_api : Sends Ground Movement Requests
 
 donor --> website : Requests Donation Sheet
 driver --> website : Requests to become a driver
