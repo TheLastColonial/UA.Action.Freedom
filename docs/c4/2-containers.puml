@@ -6,107 +6,103 @@
 !includeurl AzurePuml/AzureCommon.puml
 !includeurl AzurePuml/AzureC4Integration.puml
 
-!includeurl AzurePuml/Databases/AzureRedisCache.puml
-!includeurl AzurePuml/Databases/AzureCosmosDb.puml
-!includeurl AzurePuml/Databases/AzureSqlDatabase.puml
-
+!includeurl AzurePuml/Containers/AzureContainerApp.puml
 !includeurl AzurePuml/Compute/AzureFunction.puml
-!includeurl AzurePuml/Compute/AzureAppService.puml
+
+!includeurl AzurePuml/Databases/AzureSqlDatabase.puml
 
 !includeurl AzurePuml/Storage/AzureQueueStorage.puml
 !includeurl AzurePuml/Storage/AzureBlobStorage.puml
-!includeurl AzurePuml/Storage/AzureStorageContainer.puml
 
-!includeurl AzurePuml/Identity/AzureActiveDirectory.puml
+!includeurl AzurePuml/Identity/AzureActiveDirectoryB2C.puml
+!includeurl AzurePuml/Security/AzureKeyVault.puml
+!includeurl AzurePuml/DevOps/AzureApplicationInsights.puml
 
-!includeurl AzurePuml/Networking/AzureFrontDoor.puml
+title Containers | UA Action Freedom\nTarget state on Azure — every component sits on a permanent free allowance or scales to zero.\nPerson-to-person and person-to-third-party interactions are shown on the System Context diagram.
 
-title Containers | UA Action Freedom
-
-Person_Ext(donor, "Donor", "A person who donates to UA Action")
-Person_Ext(guard, "Border Guard", "A person who represents a country border guards")
+Person_Ext(guard, "Border Guard", "A person who represents a country's border guards")
 Person_Ext(driver, "Driver", "A person who drives vehicles")
-Person_Ext(authority, "Authority", "A person who represents the local authorities")
 
-System_Ext(ferry, "Ferry Website", "Booking of ferry tickets for vehicles")
+System_Ext(github, "GitHub", "Source, CI/CD and container registry (GitHub Actions + ghcr.io, free for the repo)")
+System_Ext(email, "Email / SMS Provider", "Azure Communication Services — pay-per-message, no standing charge")
 
 Enterprise_Boundary(hmrc, "HMRC") {
     System_Ext(hmrc_goods_api, "Goods Movement System Haulier API", "API for the UK Government's Goods Movement System", $link="https://developer.service.hmrc.gov.uk/api-documentation/docs/api/service/goods-movement-system-haulier-api/1.0/oas/page")
     System_Ext(hmrc_notifications, "Push Pull Notifications API", "API for the UK Government's Notifications for asyncronous communication", $link="https://developer.service.hmrc.gov.uk/api-documentation/docs/api/service/push-pull-notifications-api/1.0/oas/page")
-
-    hmrc_goods_api --> hmrc_notifications : Completes Goods Movement Requests
 }
 
 Enterprise_Boundary(ua_action, "UA Action") {
 
-    
     Person(administrator, "Administrator", "A person who manages access and roles")
     Person(ground_officer, "Ground Officer", "A person who connects with local authorities to coordinate convoys and requests for aid")
-    Person(purchaser, "Purchaser", "A person who manages procurement and supplies for convoys")    
+    Person(purchaser, "Purchaser", "A person who manages procurement and supplies for convoys")
     Person(loader, "Loader", "A person who loads cargo onto vehicles and verifies donations")
     Person(dispatcher, "Dispatcher", "A person who dispatches vehicles and manages paperwork for a convoy")
 
+    AzureActiveDirectoryB2C(identity, "Identity Provider", "Microsoft Entra External ID", "Sign-in, MFA and app roles for staff and volunteers. Free up to 50,000 monthly active users")
+
+    System(website, "Public Website", "Azure Static Web Apps (Free tier) — information about the organisation, donation sheets and driver applications")
+
     System_Boundary(freedom, "Freedom") {
 
-        AzureFrontDoor(front_door, "Front Door", "Azure Front Door", "Provides a secure entry point for Freedom users")
+        Container(edge, "Edge", "Cloudflare Free", "DNS, TLS termination, CDN, DDoS protection and managed WAF rules in front of the application. Free tier — replaces Azure Front Door, which carries a fixed monthly charge")
 
-        AzureAppService(web_app, "Web Application", "ASP.NET Core MVC", "Allows users to manage convoys and donations")
-        
-        AzureAppService(api, "API", "ASP.NET Core Web API", "Provides access to Freedom data and functionality")
-        AzureSqlDatabase(db, "Database", "Azure SQL Database", "Stores Freedom data")
-        
-        AzureQueueStorage(gmr_queue, "GMR Queue", "Azure Queue Storage", "Queue for Ground Movement Requests")
-        AzureFunction(gmr_function, "GMR Function", "Azure Function", "Processes Ground Movement Requests from the queue")
-         
+        AzureContainerApp(app, "Freedom Application", "ASP.NET Core 10 on Azure Container Apps (Consumption)", "Single deployable serving both the operator UI and its JSON API. Scales 0..N; the monthly free grant of vCPU-seconds and requests covers a convoy cycle")
 
-        AzureBlobStorage(manifest_storage, "Manifest Storage", "Azure Blob Storage", "Stores cargo manifests for convoys")
-        AzureBlobStorage(gmr_storage, "GMR Storage", "Azure Blob Storage", "Stores GMR for convoys")
-        AzureBlobStorage(elo_storage, "ELO Storage", "Azure Blob Storage", "Stores ELO documents for convoys")
-        
-        front_door --> web_app : Routes requests
-        web_app --> api : Uses
-        api --> db : Reads from and writes
-        
-        api --> manifest_storage : Saves Cargo Manifest
-        api --> elo_storage : Saves ELO Document
+        AzureFunction(customs_worker, "Customs Worker", "Azure Functions (Consumption, .NET isolated)", "Queue-triggered: submits Goods Movement References to HMRC. Timer-triggered: polls HMRC for outcomes while any GMR is in flight, then falls idle")
 
-        gmr_queue --> gmr_function : Triggers
-        gmr_function --> gmr_storage : Saves GMR Document        
+        AzureQueueStorage(work_queue, "Customs Work Queue", "Azure Queue Storage", "Durable hand-off for GMR submissions and refreshes, with a poison queue for failed attempts")
+
+        AzureSqlDatabase(db, "Freedom Database", "Azure SQL Database (Serverless, free offer, auto-pause)", "Convoys, vehicles, manifests, boxes, people and roles. Sensitive receiver detail is held in a separate, restricted schema")
+
+        AzureBlobStorage(documents, "Document Store", "Azure Blob Storage (Cool, private)", "One storage account holding manifests/, gmr/ and elo/ prefixes. No public access; downloads issued as short-lived user-delegation SAS")
+
+        AzureKeyVault(vault, "Secret Store", "Azure Key Vault (Standard, per-operation billing)", "HMRC OAuth client credentials and the ASP.NET Core data-protection master key. No standing charge")
+
+        AzureApplicationInsights(telemetry, "Telemetry", "Application Insights + Log Analytics", "Traces, metrics and audit events. Sampling on and a daily ingestion cap set to stay inside the 5 GB/month free allowance")
     }
-
-    AzureActiveDirectory(ad, "Azure Active Directory", "Identity Provider", "Provides authentication and authorization for Freedom users")
-
-    System(website, "Public Website", "Public website for UA Action that provides information about the organization and its activities")
 }
 
-administrator --> ad : Manages Access and Roles
+' --- Operators reach the application through the edge ---
+Rel_D(dispatcher, edge, "Plans convoys, builds manifests, requests GMR and ELO", "HTTPS")
+Rel_D(loader, edge, "Confirms donation contents, weighs and validates boxes", "HTTPS")
+Rel_D(purchaser, edge, "Records sourced vehicles and supplies", "HTTPS")
+Rel_D(ground_officer, edge, "Raises requests for aid, confirms receipt", "HTTPS")
+Rel_U(guard, edge, "Scans manifest QR code to verify a load", "HTTPS, anonymous single-manifest token")
 
-api --> gmr_queue : Sends Ground Movement Requests
-api --> gmr_queue : Sends Refresh Requests for Ground Movement Requests
+Rel_D(administrator, identity, "Manages accounts, roles and MFA policy")
 
-gmr_function --> api : Sends status updates of Ground Movement Requests
+' --- Inside Freedom ---
+Rel_D(edge, app, "Routes requests", "HTTPS")
+Rel(app, identity, "Authenticates users, authorises by app role", "OpenID Connect")
+Rel_D(app, db, "Reads from and writes to", "Entra auth, managed identity")
+Rel_D(app, documents, "Saves and serves Manifest and ELO documents", "managed identity")
+Rel_D(app, work_queue, "Queues GMR submissions and refreshes", "managed identity")
+Rel(app, vault, "Reads secrets", "managed identity")
+Rel(app, telemetry, "Emits traces, metrics and audit events")
 
-gmr_function --> hmrc_goods_api : Sends Goods Movement Requests
-gmr_function --> hmrc_notifications : Receives status updates of Goods Movement Requests
+Rel_D(work_queue, customs_worker, "Triggers")
+Rel_D(customs_worker, db, "Writes GMR status against the Manifest", "managed identity")
+Rel_D(customs_worker, documents, "Saves GMR document", "managed identity")
+Rel(customs_worker, vault, "Reads HMRC credentials", "managed identity")
+Rel(customs_worker, telemetry, "Emits traces and metrics")
 
-donor --> website : Requests Donation Sheet
-driver --> website : Requests to become a driver
+' --- Outbound to HMRC: pull only, no inbound endpoint ---
+Rel_R(customs_worker, hmrc_goods_api, "Submits Goods Movement References", "HTTPS, OAuth 2.0")
+Rel_R(customs_worker, hmrc_notifications, "Polls for outcomes", "HTTPS — pull, no inbound endpoint exposed")
+Rel_D(hmrc_goods_api, hmrc_notifications, "Publishes Goods Movement Reference outcomes")
 
-freedom --> driver : Notified of Convoy Allocation
+' --- Notifications out ---
+Rel_R(app, email, "Sends convoy allocation and manifest notifications")
+Rel_D(email, driver, "Notifies of convoy allocation and provides the manifest link")
 
-dispatcher <--> driver : Communicates convoy status
+' --- Public website feeds Freedom (proposed — see docs/recommendations.md) ---
+Rel_L(website, app, "Submits driver applications and donation declarations", "HTTPS, rate-limited public endpoint")
 
-purchaser --> front_door : Manages Procurement
+' --- Delivery pipeline ---
+Rel_L(github, app, "Deploys container image", "GitHub Actions, OIDC federated credential")
+Rel_L(github, customs_worker, "Deploys function package", "GitHub Actions, OIDC federated credential")
 
-freedom --> loader : Recieves Cargo Manifest
-loader --> front_door : Confirms Donations Contents
-
-ground_officer --> front_door : Raises requests for aid
-ground_officer <--> authority : Communicates with local authorities
-
-dispatcher --> ferry : Books ferry tickets
-dispatcher --> front_door : Updates convoy information
-
-guard -> driver : Verifies convoy information
+SHOW_LEGEND()
 
 @enduml
