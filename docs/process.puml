@@ -1,5 +1,7 @@
 @startuml Manifest Creation Process
 
+title Manifest Creation Process
+
 start
 
 group Administration {
