@@ -15,8 +15,14 @@ Person_Ext(authority, "Authority", "A person who represents the local authoritie
 
 System_Ext(ferry, "Ferry Website", "Booking of ferry tickets for vehicles")
 
-Enterprise_Boundary(ua_action, "UA Action") {
+Enterprise_Boundary(hmrc, "HMRC") {
+    System_Ext(hmrc_goods_api, "Goods Movement System Haulier API", "API for the UK Government's Goods Movement System", $link="https://developer.service.hmrc.gov.uk/api-documentation/docs/api/service/goods-movement-system-haulier-api/1.0/oas/page")
+    System_Ext(hmrc_notifications, "Push Pull Notifications API", "API for the UK Government's Notifications for asyncronous communication", $link="https://developer.service.hmrc.gov.uk/api-documentation/docs/api/service/push-pull-notifications-api/1.0/oas/page")
 
+    hmrc_goods_api --> hmrc_notifications : Completes Goods Movement Requests
+}
+
+Enterprise_Boundary(ua_action, "UA Action") {
     
     Person(administrator, "Administrator", "A person who manages access and roles")
     Person(ground_officer, "Ground Officer", "A person who connects with local authorities to coordinate convoys and requests for aid")
@@ -49,5 +55,8 @@ dispatcher --> ferry : Books ferry tickets
 dispatcher --> freedom : Updates convoy information
 
 guard -> driver : Verifies convoy information
+
+freedom --> hmrc_goods_api : Sends Goods Movement Requests
+hmrc_notifications --> freedom : Updates status of Goods Movement Requests
 
 @enduml

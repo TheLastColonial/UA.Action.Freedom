@@ -8,9 +8,18 @@
 
 !includeurl AzurePuml/Databases/AzureRedisCache.puml
 !includeurl AzurePuml/Databases/AzureCosmosDb.puml
-!includeurl AzurePuml/Databases/all.puml
+!includeurl AzurePuml/Databases/AzureSqlDatabase.puml
+
 !includeurl AzurePuml/Compute/AzureFunction.puml
+!includeurl AzurePuml/Compute/AzureAppService.puml
+
 !includeurl AzurePuml/Storage/AzureQueueStorage.puml
+!includeurl AzurePuml/Storage/AzureBlobStorage.puml
+!includeurl AzurePuml/Storage/AzureStorageContainer.puml
+
+!includeurl AzurePuml/Identity/AzureActiveDirectory.puml
+
+!includeurl AzurePuml/Networking/AzureFrontDoor.puml
 
 title Containers | UA Action Freedom
 
@@ -21,9 +30,11 @@ Person_Ext(authority, "Authority", "A person who represents the local authoritie
 
 System_Ext(ferry, "Ferry Website", "Booking of ferry tickets for vehicles")
 
-
 Enterprise_Boundary(hmrc, "HMRC") {
     System_Ext(hmrc_goods_api, "Goods Movement System Haulier API", "API for the UK Government's Goods Movement System", $link="https://developer.service.hmrc.gov.uk/api-documentation/docs/api/service/goods-movement-system-haulier-api/1.0/oas/page")
+    System_Ext(hmrc_notifications, "Push Pull Notifications API", "API for the UK Government's Notifications for asyncronous communication", $link="https://developer.service.hmrc.gov.uk/api-documentation/docs/api/service/push-pull-notifications-api/1.0/oas/page")
+
+    hmrc_goods_api --> hmrc_notifications : Completes Goods Movement Requests
 }
 
 Enterprise_Boundary(ua_action, "UA Action") {
@@ -36,23 +47,47 @@ Enterprise_Boundary(ua_action, "UA Action") {
     Person(dispatcher, "Dispatcher", "A person who dispatches vehicles and manages paperwork for a convoy")
 
     System_Boundary(freedom, "Freedom") {
-        Container(web_app, "Web Application", "ASP.NET Core MVC", "Allows users to manage convoys and donations")
-        Container(api, "API", "ASP.NET Core Web API", "Provides access to Freedom data and functionality")
-        Container(db, "Database", "Azure SQL Database", "Stores Freedom data")
 
-        web_app --> api : Uses
-        api --> db : Reads from and writes to
+        AzureFrontDoor(front_door, "Front Door", "Azure Front Door", "Provides a secure entry point for Freedom users")
+
+        AzureAppService(web_app, "Web Application", "ASP.NET Core MVC", "Allows users to manage convoys and donations")
+        
+        AzureAppService(api, "API", "ASP.NET Core Web API", "Provides access to Freedom data and functionality")
+        AzureSqlDatabase(db, "Database", "Azure SQL Database", "Stores Freedom data")
         
         AzureQueueStorage(gmr_queue, "GMR Queue", "Azure Queue Storage", "Queue for Ground Movement Requests")
         AzureFunction(gmr_function, "GMR Function", "Azure Function", "Processes Ground Movement Requests from the queue")
+         
+
+        AzureBlobStorage(manifest_storage, "Manifest Storage", "Azure Blob Storage", "Stores cargo manifests for convoys")
+        AzureBlobStorage(gmr_storage, "GMR Storage", "Azure Blob Storage", "Stores GMR for convoys")
+        AzureBlobStorage(elo_storage, "ELO Storage", "Azure Blob Storage", "Stores ELO documents for convoys")
         
-        gmr_queue --> gmr_function : Triggers        
+        front_door --> web_app : Routes requests
+        web_app --> api : Uses
+        api --> db : Reads from and writes
+        
+        api --> manifest_storage : Saves Cargo Manifest
+        api --> elo_storage : Saves ELO Document
+
+        gmr_queue --> gmr_function : Triggers
+        gmr_function --> gmr_storage : Saves GMR Document        
     }
+
+    AzureActiveDirectory(ad, "Azure Active Directory", "Identity Provider", "Provides authentication and authorization for Freedom users")
 
     System(website, "Public Website", "Public website for UA Action that provides information about the organization and its activities")
 }
 
-gmr_function --> hmrc_goods_api : Sends Ground Movement Requests
+administrator --> ad : Manages Access and Roles
+
+api --> gmr_queue : Sends Ground Movement Requests
+api --> gmr_queue : Sends Refresh Requests for Ground Movement Requests
+
+gmr_function --> api : Sends status updates of Ground Movement Requests
+
+gmr_function --> hmrc_goods_api : Sends Goods Movement Requests
+gmr_function --> hmrc_notifications : Receives status updates of Goods Movement Requests
 
 donor --> website : Requests Donation Sheet
 driver --> website : Requests to become a driver
@@ -61,18 +96,16 @@ freedom --> driver : Notified of Convoy Allocation
 
 dispatcher <--> driver : Communicates convoy status
 
-administrator --> freedom : Manages Access and Roles
-
-purchaser --> freedom : Manages Procurement
+purchaser --> front_door : Manages Procurement
 
 freedom --> loader : Recieves Cargo Manifest
-loader --> freedom : Confirms Donations Contents
+loader --> front_door : Confirms Donations Contents
 
-ground_officer --> freedom : Raises requests for aid
+ground_officer --> front_door : Raises requests for aid
 ground_officer <--> authority : Communicates with local authorities
 
 dispatcher --> ferry : Books ferry tickets
-dispatcher --> freedom : Updates convoy information
+dispatcher --> front_door : Updates convoy information
 
 guard -> driver : Verifies convoy information
 
