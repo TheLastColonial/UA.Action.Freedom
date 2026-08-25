@@ -8,12 +8,23 @@ Manages access to indiviuals and the roles they may hold on Freedom.
 
 ### Dispatcher
 
-Responsbile to creating a [Manifest](#Manifest)
+Responsbile to creating a [Manifest](#Manifest) and being a communcication point for convoy team leaders.
 
 ### Loader
 
 Responsible to be onsite; verify the contents of donations and load the vehicles in the next convoy.
 We need to verify the contents of donations to weigh for boarder checks and assure the contents as its a trust boundary between the donor and Ukrainian Action.
+
+### Purchaser
+
+Responsbile for the sourcing of vehicles, equipment and other sundaries consumed in a convoy.
+
+### Ground Officer
+
+Responsible to the communcicating with the local authorities in Ukraine.
+Ensuring requests for aid are collected and documented.
+Ensuring aid that is delivered is accepted.
+Segregation of the delivery logistics from the sensitive details of a delivery.
 
 ## Convoy
 
