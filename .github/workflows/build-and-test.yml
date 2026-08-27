@@ -1,0 +1,167 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: build-and-test-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  CONFIGURATION: Release
+  PACKABLE_PROJECTS: >-
+    src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj
+    src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj
+    src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    outputs:
+      packageVersion: ${{ steps.version.outputs.value }}
+      isRelease: ${{ steps.version.outputs.isRelease }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v3
+        with:
+          versionSpec: '6.x'
+
+      - name: Determine version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v3
+        with:
+          configFilePath: GitVersion.yml
+
+      - name: Resolve package version
+        id: version
+        run: |
+          base='${{ steps.gitversion.outputs.majorMinorPatch }}'
+          if [ '${{ github.ref }}' = 'refs/heads/main' ]; then
+            echo "value=${base}" >> "$GITHUB_OUTPUT"
+            echo "isRelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${base}-beta.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "isRelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore
+        run: dotnet restore UA.Action.Freedom.slnx
+
+      - name: Build
+        run: >
+          dotnet build UA.Action.Freedom.slnx
+          --configuration ${{ env.CONFIGURATION }}
+          --no-restore
+          -p:Version=${{ steps.version.outputs.value }}
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          include-hidden-files: true
+          retention-days: 1
+          path: |
+            **/bin/**
+            **/obj/**
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Test
+        run: >
+          dotnet test UA.Action.Freedom.slnx
+          --configuration ${{ env.CONFIGURATION }}
+          --no-build
+          --no-restore
+          --verbosity normal
+
+  publish:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    # Skip on PRs originating from forks: they have a read-only token and no package write access.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    env:
+      PACKAGE_VERSION: ${{ needs.build.outputs.packageVersion }}
+      IS_RELEASE: ${{ needs.build.outputs.isRelease }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Pack
+        run: |
+          for proj in ${{ env.PACKABLE_PROJECTS }}; do
+            dotnet pack "$proj" \
+              --configuration ${{ env.CONFIGURATION }} \
+              --no-build \
+              --no-restore \
+              -p:PackageVersion=${PACKAGE_VERSION} \
+              --output ./artifacts
+          done
+
+      - name: Push package to GitHub Packages
+        run: >
+          dotnet nuget push "./artifacts/*.nupkg"
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate
+
+      - name: Create GitHub Release
+        if: env.IS_RELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create "v${PACKAGE_VERSION}"
+          ./artifacts/*.nupkg
+          --title "v${PACKAGE_VERSION}"
+          --generate-notes
+          --target ${{ github.sha }}
