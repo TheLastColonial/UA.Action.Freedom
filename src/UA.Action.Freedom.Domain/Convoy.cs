@@ -1,7 +1,7 @@
 ﻿namespace UA.Action.Freedom.Domain;
 
 /// <summary>
-/// Collection of <see cref="Veichle"/> tranisting together
+/// Collection of <see cref="Vehicle"/> tranisting together
 /// </summary>
 public class Convoy
 {
@@ -10,7 +10,7 @@ public class Convoy
     /// </summary>
     public ConvoyId Id { get; init; }
 
-    public List<Veichle> Veichles { get; init; }
+    public List<Vehicle> Vehicles { get; init; }
 
     /// <summary>
     /// Departure Timestamp

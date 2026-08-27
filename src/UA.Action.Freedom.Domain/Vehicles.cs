@@ -3,10 +3,10 @@
 /// <summary>
 /// Truck or car that is being donated
 /// </summary>
-public class Veichle
+public class Vehicle
 {
     /// <summary>
-    /// Veichle Identification Number
+    /// Vehicle Identification Number
     /// </summary>
     public string VIN { get; init; }
 
@@ -36,12 +36,12 @@ public class Veichle
     public TransmissionType Transmission { get; init; }
 
     /// <summary>
-    /// Commentary of the veichle for damages or other issues
+    /// Commentary of the vehicle for damages or other issues
     /// </summary>
     public string? Notes { get; init; }
 
     /// <summary>
-    /// Mile the viechle as used
+    /// Mileage of the vehicle as used
     /// </summary>
     public int? Mileage { get; init; }
     public bool Servicing { get; init; }
@@ -57,12 +57,12 @@ public class Veichle
     public FuelType Fuel { get; init; }
 
     /// <summary>
-    /// Grouping of viechles
+    /// Grouping of vehicles
     /// </summary>
     public Convoy Convoy { get; init; }
 
     /// <summary>
-    /// Indiviual responsible for the purchase order of a viechle
+    /// Individual responsible for the purchase order of a vehicle
     /// </summary>
     public Person Purchaser { get; init; }
 
@@ -83,7 +83,7 @@ public class Veichle
 }
 
 /// <summary>
-/// Type of transmission of a veichle
+/// Type of transmission of a vehicle
 /// </summary>
 public enum TransmissionType
 {
@@ -93,7 +93,7 @@ public enum TransmissionType
 }
 
 /// <summary>
-/// Fuel used in the viechle
+/// Fuel used in the vehicle
 /// </summary>
 public enum FuelType
 {

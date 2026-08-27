@@ -1,7 +1,7 @@
 ﻿namespace UA.Action.Freedom.Domain;
 
 /// <summary>
-/// List of Boxes allocated to a <see cref="Veichle"/> in a <see cref="Convoy"/>
+/// List of Boxes allocated to a <see cref="Vehicle"/> in a <see cref="Convoy"/>
 /// </summary>
 public class Manifest
 {
@@ -11,9 +11,9 @@ public class Manifest
     public ManifestId Id { get; init; }
 
     /// <summary>
-    /// Veichle allocated to transport <see cref="Box[]"/>
+    /// Vehicle allocated to transport <see cref="Box[]"/>
     /// </summary>
-    public Veichle Veichle { get; init; }
+    public Vehicle Vehicle { get; init; }
 
     /// <summary>
     /// <see cref="Driver"/> allocated for UK to Europe Route
@@ -41,11 +41,11 @@ public class Manifest
     public bool FerryBookingComplete { get; init; }
 
     /// <summary>
-    /// Total weight of <see cref="Veichle"/>, Cargo etc for border checks in kilograms
+    /// Total weight of <see cref="Vehicle"/>, Cargo etc for border checks in kilograms
     /// </summary>
     /// <returns>Total Kilograms</returns>
     public int TotalWeightKg() =>
-        this.Veichle.WeightKg
+        this.Vehicle.WeightKg
         + this.Boxes.Sum(box => box.WeightKg) // Cargo
         + 100 * 2 // 2x Driver + Bags
         + 45; // Fuel
