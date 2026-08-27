@@ -17,6 +17,7 @@ state "Returned" as Returned : The manifest has been returned by the destination
 Created --> Proposed
 Created --> Rejected
 Proposed --> Rejected
+Rejected --> Proposed
 Proposed --> Confirmed
 Confirmed --> Preparing
 Preparing --> Ready
