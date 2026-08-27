@@ -37,7 +37,8 @@ access when they leave.
 
 Responsible for creating a [Manifest](#manifest) and acting as the communication point for convoy team leaders.
 Books ferry crossings and triggers the [GMR](#gmr--goods-movement-reference) and [ELO](#elo--obligatory-logistics-envelope)
-paperwork.
+paperwork. Also the booking of hotel accomidation for the trip. They will also coordinate with third parties to ensure servicing process.
+Also to find insurance for the [Driver](#driver) and [Vehicle](#vehicle).
 
 ### Loader
 
@@ -48,6 +49,7 @@ boundary between the donor and Ukrainian Action.
 ### Purchaser
 
 Responsible for the sourcing of vehicles, equipment and other sundries consumed in a convoy.
+Including transportation of the purchase to the logistical hubs.
 
 ### Ground Officer
 
@@ -192,7 +194,7 @@ Not all data in Freedom carries the same risk, and the difference drives how it 
 | Class | Examples | Handling |
 | --- | --- | --- |
 | **Sensitive** | Ukrainian delivery addresses, receiver contact names and organisations | Segregated storage, Ground Officer access only, every read audited, redacted from anything that crosses a border |
-| **Personal** | Volunteer names, dates of birth, phone numbers | UK data residency, never written to logs, defined retention period |
+| **Personal** | Volunteer names, dates of birth, phone numbers, driving license | UK data residency, never written to logs, defined retention period |
 | **Operational** | Convoys, vehicles, boxes, weights, routes within the UK/EU | Standard role-based access |
 
 **Why this matters.** A manifest listing precise Ukrainian delivery addresses is a targeting document, and it
