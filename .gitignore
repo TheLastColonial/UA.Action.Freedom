@@ -471,3 +471,4 @@ FodyWeavers.xsd
 # NSwag code-generation scratch output (see build/nswag/README.md).
 # The split, committed client lives in src/UA.Action.Freedom.Hmrc.Gvms/Generated/.
 build/nswag/generated/
+credientials.md
