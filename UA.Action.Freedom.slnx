@@ -4,6 +4,7 @@
     <Project Path="src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj" />
     <Project Path="src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj" />
     <Project Path="src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj" />
+    <Project Path="src/UA.Action.Freedom.Hmrc.Gvms/UA.Action.Freedom.Hmrc.Gvms.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/UA.Action.Freedom.Tests.BDD/UA.Action.Freedom.Tests.BDD.csproj" />

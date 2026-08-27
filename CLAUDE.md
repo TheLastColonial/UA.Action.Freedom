@@ -11,12 +11,22 @@ UA.Action.Freedom — automation to support Ukrainian Action, a charity that run
 Built on .NET 10 (`net10.0`), solution file is `UA.Action.Freedom.slnx`.
 
 ```
-dotnet build UA.Action.Freedom.slnx          # build everything
-dotnet test UA.Action.Freedom.slnx           # run all test projects
-dotnet test tests/UA.Action.Freedom.Tests.Unit/UA.Action.Freedom.Tests.Unit.csproj   # run one test project
-dotnet test --filter "FullyQualifiedName~ClassName.MethodName"                       # run a single test
+dotnet build UA.Action.Freedom.slnx                                  # build everything
+dotnet test --solution UA.Action.Freedom.slnx                        # run all test projects
+dotnet test --project tests/UA.Action.Freedom.Tests.Unit/UA.Action.Freedom.Tests.Unit.csproj   # run one test project
+dotnet test --project <proj> --filter-query "/*/*/ClassName/MethodName"                         # run a single test
 dotnet run --project src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj          # run the API (http://localhost:5100)
 ```
+
+`dotnet test` runs in **Microsoft.Testing.Platform (MTP) mode**, opted in via `global.json`
+(`{ "test": { "runner": "Microsoft.Testing.Platform" } }`) because the .NET 10 SDK dropped the
+legacy VSTest bridge that `xunit.v3` relied on. MTP mode changes the CLI: pass the solution as
+`--solution` and a project as `--project` (bare paths are no longer positional). Filter with
+xUnit v3's MTP options — `--filter-class "*Name"`, `--filter-method "*Name"`,
+`--filter-namespace`, `--filter-trait "k=v"`, or `--filter-query "/asm/ns/class/method"`
+(the [query filter language](https://xunit.net/docs/query-filter-language)) — **not** the plain
+`--filter` / `FullyQualifiedName~...` VSTest syntax, which silently matches nothing here.
+`--configuration`, `--no-build`, `--no-restore`, `--verbosity` still work as before.
 
 Test framework is xUnit v3 with `AwesomeAssertions` (fluent assertions), `NSubstitute` (mocking), and `MELT` (testable `ILogger`). `Xunit` is globally usable via implicit `<Using>` in each test csproj — no `using Xunit;` needed.
 
