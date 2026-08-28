@@ -8,7 +8,7 @@
   },
   "codeGenerators": {
     "openApiToCSharpClient": {
-      "namespace": "UA.Action.Freedom.Hmrc.PushPullNotifications",
+      "namespace": "HMRC.PushPullNotifications",
       "className": "PushPullNotificationsClient",
       "operationGenerationMode": "SingleClientFromOperationId",
 

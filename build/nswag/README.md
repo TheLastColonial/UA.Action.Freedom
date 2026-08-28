@@ -1,13 +1,13 @@
 # HMRC client code generation
 
-Generates the typed HTTP clients under `src/UA.Action.Freedom.Hmrc.*/Generated/` from the
+Generates the typed HTTP clients under `src/HMRC.*/Generated/` from the
 committed HMRC OpenAPI specs in `docs/schemas/hmrc/`, using
 [NSwag](https://github.com/RicoSuter/NSwag).
 
 | API | Spec | Project |
 | --- | --- | --- |
-| Goods Vehicle Movements | `goods-vehicle-movements-1.0.yaml` | `UA.Action.Freedom.Hmrc.Gvms` |
-| Push Pull Notifications | `push-pull-notifications-1.0.yaml` | `UA.Action.Freedom.Hmrc.PushPullNotifications` |
+| Goods Vehicle Movements | `goods-vehicle-movements-1.0.yaml` | `HMRC.GVMS` |
+| Push Pull Notifications | `push-pull-notifications-1.0.yaml` | `HMRC.PushPullNotifications` |
 
 The generated code **is committed**. Regeneration is a manual step run by a developer when a
 spec or the generator config changes; it is deliberately not wired into `dotnet build` or CI

@@ -8,7 +8,7 @@
   },
   "codeGenerators": {
     "openApiToCSharpClient": {
-      "namespace": "UA.Action.Freedom.Hmrc.Gvms",
+      "namespace": "HMRC.GVMS",
       "className": "GvmsClient",
       "operationGenerationMode": "SingleClientFromOperationId",
 

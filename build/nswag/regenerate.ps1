@@ -41,8 +41,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $projectByApi = @{
-    'goods-vehicle-movements' = 'UA.Action.Freedom.Hmrc.Gvms'
-    'push-pull-notifications' = 'UA.Action.Freedom.Hmrc.PushPullNotifications'
+    'goods-vehicle-movements' = 'HMRC.GVMS'
+    'push-pull-notifications' = 'HMRC.PushPullNotifications'
 }
 $project = $projectByApi[$Api]
 

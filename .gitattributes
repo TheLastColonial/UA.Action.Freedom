@@ -1,4 +1,4 @@
 # Keep NSwag-generated client code stable across Windows/Linux checkouts and CI.
 # The generator emits LF; pin it so core.autocrlf cannot renormalise the diff.
-src/UA.Action.Freedom.Hmrc.Gvms/Generated/** text eol=lf
-src/UA.Action.Freedom.Hmrc.PushPullNotifications/Generated/** text eol=lf
+src/HMRC.GVMS/Generated/** text eol=lf
+src/HMRC.PushPullNotifications/Generated/** text eol=lf

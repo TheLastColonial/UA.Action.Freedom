@@ -21,8 +21,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$api" in
-    goods-vehicle-movements) project="UA.Action.Freedom.Hmrc.Gvms" ;;
-    push-pull-notifications) project="UA.Action.Freedom.Hmrc.PushPullNotifications" ;;
+    goods-vehicle-movements) project="HMRC.GVMS" ;;
+    push-pull-notifications) project="HMRC.PushPullNotifications" ;;
     *) echo "unknown --api: $api" >&2; exit 2 ;;
 esac
 

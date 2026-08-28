@@ -469,6 +469,6 @@ FodyWeavers.xsd
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,visualstudiocode,dotnetcore,dotenv,dotsettings,terraform
 
 # NSwag code-generation scratch output (see build/nswag/README.md).
-# The split, committed client lives in src/UA.Action.Freedom.Hmrc.Gvms/Generated/.
+# The split, committed client lives in src/HMRC.GVMS/Generated/ and src/HMRC.PushPullNotifications/Generated/.
 build/nswag/generated/
 credientials.md
