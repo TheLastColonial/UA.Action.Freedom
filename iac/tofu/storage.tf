@@ -51,7 +51,7 @@ resource "terraform_data" "blob_containers" {
   # is reached through Docker Desktop's loopback proxy, which resets connections when the
   # whole graph hits it at once — and an intermittent failure in the first command a
   # newcomer runs is worse than an apply that takes a few seconds longer.
-  depends_on = [keycloak_user_roles.seed]
+  depends_on = [keycloak_user_groups.seed]
 
   # Re-runs when the set of containers changes, or when the account is replaced underneath
   # — `docker compose down -v` wipes the Azurite volume, and state must not go on claiming

@@ -28,7 +28,7 @@ Every check `Healthy` means the environment is wired up correctly.
 Azure region. It deliberately creates nothing inside them.
 
 **OpenTofu is the control plane** — it creates the blob containers, queues, database schema,
-realm, client, app roles and users, the same way `azurerm` and `azuread` would in Azure.
+realm, client, app roles, groups and users, the same way `azurerm` and `azuread` would in Azure.
 
 That split is the point. `docker compose down` is like tearing down a region;
 `tofu destroy` is like deleting a resource group. Keeping resource creation in OpenTofu
@@ -111,10 +111,17 @@ Ports are all overridable in `.env` if something on your machine already owns on
 
 ### Signing in
 
-OpenTofu seeds one user per domain role, all with the password `password`:
+OpenTofu seeds three users, all with the password `password`:
 
-`administrator`, `dispatcher`, `loader`, `purchaser`, `groundofficer`
+| Username | Roles |
+| --- | --- |
+| `admin` | Administrator |
+| `operator` | Dispatcher, Loader, Purchaser |
+| `groundofficer` | GroundOfficer |
 
+Each role is a Keycloak group of the same name, and each user is a member of the groups its
+roles name. `groundofficer` is kept separate so the receiver-address segregation that role
+carries in production holds locally too — no other seed user can resolve a receiver address.
 Roles arrive in the token as a flat `roles` claim, which is the shape Entra app roles arrive
 in — so authorisation policies written against this realm port across unchanged. To get a
 token without a browser:
@@ -124,7 +131,7 @@ curl -s -X POST http://localhost:8081/realms/freedom/protocol/openid-connect/tok
   -d grant_type=password \
   -d client_id=freedom-app \
   -d client_secret=local-freedom-client-secret \
-  -d username=dispatcher -d password=password
+  -d username=operator -d password=password
 ```
 
 ### Exercising the customs path
@@ -313,7 +320,7 @@ iac/
     grafana/                     Grafana dashboards, provisioned at boot
   tofu/
     versions.tf variables.tf outputs.tf
-    keycloak.tf                  realm, client, app roles, seeded users
+    keycloak.tf                  realm, client, app roles, role groups, seeded users
     storage.tf                   blob containers and queues
     database.tf                  applies sql/001-schemas.sql
 ```

@@ -18,7 +18,7 @@ resource "keycloak_realm" "freedom" {
 
   # Short-lived tokens are the compensating control for having no Conditional Access on
   # the free tier: a leaked token stops being useful quickly.
-  access_token_lifespan = "15m"
+  access_token_lifespan    = "15m"
   sso_session_idle_timeout = "8h"
 }
 
@@ -57,6 +57,19 @@ locals {
     Purchaser     = "Records sourced vehicles and supplies."
     GroundOfficer = "Coordinates with local authorities; the only role that may resolve receiver addresses."
   }
+
+  # Three seeded logins, each a member of the groups that carry its roles:
+  #   Admin        — account, role and MFA administration only.
+  #   Operator     — the day-to-day operational roles, so one login walks that whole path.
+  #   GroundOfficer — kept as its own login so the receiver-address segregation that this
+  #                   role carries in production (docs/domain/key-concepts.md, Data
+  #                   Sensitivity) is preserved locally: no other seed user can resolve a
+  #                   receiver address.
+  seed_users = {
+    Admin         = ["Administrator"]
+    Operator      = ["Dispatcher", "Loader", "Purchaser"]
+    GroundOfficer = ["GroundOfficer"]
+  }
 }
 
 resource "keycloak_role" "app_role" {
@@ -66,6 +79,24 @@ resource "keycloak_role" "app_role" {
   client_id   = keycloak_openid_client.freedom_app.id
   name        = each.key
   description = each.value
+}
+
+# Each role is delegated through a group of the same name: adding a user to the group grants
+# the role. This is the group-membership assignment model Entra keeps behind a P1 licence;
+# it is used here purely because it keeps the two seed logins readable.
+resource "keycloak_group" "app_role" {
+  for_each = local.app_roles
+
+  realm_id = keycloak_realm.freedom.id
+  name     = each.key
+}
+
+resource "keycloak_group_roles" "app_role" {
+  for_each = local.app_roles
+
+  realm_id = keycloak_realm.freedom.id
+  group_id = keycloak_group.app_role[each.key].id
+  role_ids = [keycloak_role.app_role[each.key].id]
 }
 
 # Put the roles in the token as a flat `roles` claim, which is the shape an ASP.NET Core
@@ -83,12 +114,11 @@ resource "keycloak_openid_user_client_role_protocol_mapper" "roles" {
   add_to_userinfo             = true
 }
 
-# One user per role, so every authorisation path can be exercised as the person who would
-# actually walk it. Named for the role rather than for a person: these are fixtures, and
+# Two users, named for what they can do rather than for a person: these are fixtures, and
 # seeding them with realistic volunteer names would put invented personal data in version
 # control for no benefit.
 resource "keycloak_user" "seed" {
-  for_each = local.app_roles
+  for_each = local.seed_users
 
   realm_id   = keycloak_realm.freedom.id
   username   = lower(each.key)
@@ -96,7 +126,7 @@ resource "keycloak_user" "seed" {
   first_name = each.key
   # Keycloak validates names against a person-name pattern that rejects brackets and most
   # punctuation, so this cannot be decorated with "(local)" or similar.
-  last_name  = "Local"
+  last_name = "Local"
 
   enabled        = true
   email_verified = true
@@ -107,10 +137,12 @@ resource "keycloak_user" "seed" {
   }
 }
 
-resource "keycloak_user_roles" "seed" {
-  for_each = local.app_roles
+# Group membership is what grants roles here. Authoritative for each seed user, so a role
+# removed from the list above is removed from the user on the next apply.
+resource "keycloak_user_groups" "seed" {
+  for_each = local.seed_users
 
-  realm_id = keycloak_realm.freedom.id
-  user_id  = keycloak_user.seed[each.key].id
-  role_ids = [keycloak_role.app_role[each.key].id]
+  realm_id  = keycloak_realm.freedom.id
+  user_id   = keycloak_user.seed[each.key].id
+  group_ids = [for role in each.value : keycloak_group.app_role[role].id]
 }
