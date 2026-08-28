@@ -70,6 +70,8 @@ Core entities and how they relate:
 
 Not yet provisioned on Azure, but **simulated locally in `iac/`** — see `iac/README.md`. `docker compose up -d --wait` starts stand-ins for every container on the diagram (Traefik for Cloudflare, Azurite for Blob/Queue Storage, SQL Server for Azure SQL, Keycloak for Entra External ID, WireMock for the HMRC APIs, Grafana OTEL-LGTM for App Insights, Mailpit for ACS); `tofu apply` then provisions resources into them the way `azurerm` would. Use it before changing anything here — several of the gotchas below are exercised by it.
 
+The local Keycloak realm (`iac/tofu/keycloak.tf`) seeds **three** logins, all with password `password`: `admin` (Administrator), `operator` (Dispatcher + Loader + Purchaser), and `groundofficer` (GroundOfficer). Locally each app role is delegated through a Keycloak **group** of the same name and users get roles by group membership — this is the group-assignment model Entra keeps behind a paid tier, used here only because it keeps the seed logins readable; the token still carries a flat `roles` claim, so authorisation policies port to Azure app roles unchanged. `groundofficer` is deliberately kept as its own isolated login so the receiver-address segregation that role carries in production holds locally too — no other seed user can resolve a receiver address.
+
 The full reasoning, cost model and security posture live in **`docs/recommendations.md`**; read it before making infrastructure or hosting changes, because most of these choices are load-bearing rather than incidental.
 
 The binding constraints:
@@ -86,7 +88,7 @@ Decisions already taken:
 | Background work | Azure Functions (Consumption), queue- and timer-triggered |
 | Database | Azure SQL free offer (serverless, auto-pause) |
 | Documents | One Blob Storage account, `manifests/` `gmr/` `elo/` prefixes — not one account per document type |
-| Identity | Microsoft Entra External ID, app roles (not group assignment, which needs a paid tier) |
+| Identity | Microsoft Entra External ID, app roles (not group assignment, which needs a paid tier). The local Keycloak sim does use role groups — a readability convenience, not a design change; see above. |
 | Edge | Cloudflare Free — DNS, TLS, CDN, WAF |
 | CI/CD | GitHub Actions → ghcr.io, authenticated by OIDC federated credential |
 
