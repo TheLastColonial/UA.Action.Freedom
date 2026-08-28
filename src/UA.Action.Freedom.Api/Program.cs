@@ -1,7 +1,12 @@
+using System.Text.Json.Serialization;
+using FluentValidation;
 using Scalar.AspNetCore;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Api.Health;
 using UA.Action.Freedom.Api.Installer;
+using UA.Action.Freedom.Api.Vehicles;
+using UA.Action.Freedom.Application;
+using UA.Action.Freedom.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +19,12 @@ var hosting = builder.Configuration.GetSection(HostingOptions.SectionName).Get<H
               ?? new HostingOptions();
 var storage = builder.Configuration.GetSection(StorageOptions.SectionName).Get<StorageOptions>()
               ?? new StorageOptions();
+var oidc = builder.Configuration.GetSection(OidcOptions.SectionName).Get<OidcOptions>()
+              ?? new OidcOptions();
+
+// Accept and emit enum values (Fuel, Transmission) by name rather than ordinal.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -24,7 +35,17 @@ builder.Services.AddFreedomStorage(storage);
 builder.Services.AddFreedomDataProtection(storage);
 builder.Services.AddFreedomHealthChecks();
 
+builder.Services.AddProblemDetails();
+builder.Services.AddFreedomAuthentication(oidc, builder.Environment.IsDevelopment());
+builder.Services.AddFreedomAuthorization();
+
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddFreedomApplication();
+builder.Services.AddFreedomData();
+
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -40,7 +61,11 @@ if (hosting.UseHttpsRedirection)
     app.UseHttpsRedirection();
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapFreedomHealthChecks();
+app.MapFreedomVehicles();
 
 var summaries = new[]
 {

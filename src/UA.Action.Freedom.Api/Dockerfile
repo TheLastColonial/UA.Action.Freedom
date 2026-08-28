@@ -10,7 +10,8 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /source
 
 # Project files first, so a code-only change reuses the restore layer. The Api project
-# carries no ProjectReference today; the others are copied because it will.
+# references Application and Data, which reference Domain, so the whole graph is copied
+# before the restore.
 COPY global.json ./
 COPY src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj          src/UA.Action.Freedom.Api/
 COPY src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj src/UA.Action.Freedom.Application/

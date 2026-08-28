@@ -1,5 +1,10 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using UA.Action.Freedom.Application.Vehicles;
 
 namespace UA.Action.Freedom.Tests.Component;
 
@@ -29,6 +34,36 @@ internal static class FreedomApi
             ["Storage:ConnectionString"] =
                 "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10990/devstoreaccount1;QueueEndpoint=http://127.0.0.1:10991/devstoreaccount1;",
             ["Oidc:MetadataAddress"] = "http://127.0.0.1:10992/realms/freedom/.well-known/openid-configuration",
+        });
+
+    /// <summary>
+    /// The application with its vehicle persistence swapped for <paramref name="repository"/>
+    /// and its JWT scheme swapped for <see cref="TestAuthHandler"/>. <paramref name="roles"/>
+    /// are the app roles the caller's token carries; pass <c>authenticated: false</c> to send
+    /// no credentials at all.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithVehicles(
+        IVehicleRepository repository,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IVehicleRepository>();
+                services.AddScoped(_ => repository);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
         });
 
     internal static WebApplicationFactory<Program> With(IDictionary<string, string?> settings) =>

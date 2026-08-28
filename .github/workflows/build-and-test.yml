@@ -94,8 +94,96 @@ jobs:
             **/bin/**
             **/obj/**
 
-  publish:
+  # End-to-end lane. The Integration and BDD projects skip themselves when their
+  # target is not up (so build-and-test stays green without infrastructure); this
+  # job stands up the local Azure simulation from iac/ — exactly the sequence in
+  # iac/README.md — and runs them for real against it.
+  acceptance:
     needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_wrapper: false
+
+      - name: Configure the local environment
+        working-directory: iac/local
+        run: cp .env.example .env
+
+      - name: Build the application image
+        working-directory: iac/local
+        run: docker compose build app
+
+      # tofu talks to these three: keycloak.tf to Keycloak, storage.tf to Azurite
+      # (via the az CLI, preinstalled on the runner), database.tf via `docker exec`
+      # into the SQL Server container. Bring them up before provisioning.
+      - name: Start backing services
+        working-directory: iac/local
+        run: docker compose up -d --wait --wait-timeout 300 mssql keycloak azurite telemetry
+
+      - name: Provision realm, storage and database schema
+        working-directory: iac/tofu
+        run: |
+          tofu init -input=false
+          tofu apply -auto-approve -input=false
+
+      - name: Start the application and edge
+        working-directory: iac/local
+        run: docker compose up -d --wait --wait-timeout 300 app edge website
+
+      - name: Wait for readiness
+        run: |
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://localhost:8080/health/ready; then
+              echo; echo "ready after attempt ${attempt}"; exit 0
+            fi
+            echo "not ready yet (${attempt}/40)"; sleep 5
+          done
+          echo "the application never reported ready"; exit 1
+
+      - name: Build test projects
+        run: >
+          dotnet build UA.Action.Freedom.slnx
+          --configuration ${{ env.CONFIGURATION }}
+
+      - name: Integration tests (Dapper repository against SQL Server)
+        run: >
+          dotnet test
+          --project tests/UA.Action.Freedom.Tests.Integration/UA.Action.Freedom.Tests.Integration.csproj
+          --configuration ${{ env.CONFIGURATION }}
+          --no-build
+          --verbosity normal
+
+      - name: BDD tests (feature scenarios against the running containers)
+        run: >
+          dotnet test
+          --project tests/UA.Action.Freedom.Tests.BDD/UA.Action.Freedom.Tests.BDD.csproj
+          --configuration ${{ env.CONFIGURATION }}
+          --no-build
+          --verbosity normal
+
+      - name: Container logs
+        if: failure()
+        working-directory: iac/local
+        run: docker compose logs --no-color --tail 400
+
+      - name: Tear down
+        if: always()
+        working-directory: iac/local
+        run: docker compose down -v
+
+  publish:
+    needs: [build-and-test, acceptance]
     runs-on: ubuntu-latest
     # Skip on PRs originating from forks: they have a read-only token and no package write access.
     if: >-
