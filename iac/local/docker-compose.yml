@@ -236,6 +236,11 @@ services:
       # of the split horizon described on the `app` service.
       KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8081}
       KC_HOSTNAME_STRICT: "false"
+      # Backchannel URLs (jwks_uri, token_endpoint in the discovery document) follow the
+      # host the request came in on rather than KC_HOSTNAME. Without this the app container
+      # is told to fetch signing keys from localhost:8081, which it cannot reach, and every
+      # token fails signature validation.
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     ports:
       - "${KEYCLOAK_PORT:-8081}:8080"
     volumes:

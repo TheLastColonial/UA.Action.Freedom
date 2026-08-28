@@ -40,13 +40,15 @@ public static class AuthenticationExtensions
                 // `roles` rather than being rewritten to the WS-Federation role URI.
                 options.MapInboundClaims = false;
 
-                if (!string.IsNullOrWhiteSpace(oidc.DiscoveryEndpoint))
+                // Authority is the browser-facing issuer the token's `iss` must match.
+                // MetadataAddress, when given, is the URL this process fetches discovery and
+                // signing keys from — a different host under split-horizon DNS (the local
+                // Keycloak: issuer on localhost, backchannel on the compose network).
+                options.Authority = oidc.Authority;
+
+                if (!string.IsNullOrWhiteSpace(oidc.MetadataAddress))
                 {
-                    options.MetadataAddress = oidc.DiscoveryEndpoint;
-                }
-                else if (!string.IsNullOrWhiteSpace(oidc.Authority))
-                {
-                    options.Authority = oidc.Authority;
+                    options.MetadataAddress = oidc.MetadataAddress;
                 }
 
                 options.TokenValidationParameters = new TokenValidationParameters

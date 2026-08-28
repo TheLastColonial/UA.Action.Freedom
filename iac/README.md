@@ -241,6 +241,13 @@ app is given `Oidc__Authority` (localhost, used for validation) *and* `Oidc__Met
 (compose network, used to fetch discovery). Changing one without the other breaks sign-in in
 a way the error message does not explain.
 
+The same split bites token *validation* one level deeper: the discovery document names a
+`jwks_uri` and `token_endpoint`, and by default Keycloak stamps those with `KC_HOSTNAME`
+(`localhost:8081`), which the app container cannot reach — so every bearer token fails
+signature validation with no useful log line. `KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"` on
+the `keycloak` service makes those two URLs follow the host the request came in on, so the
+container gets `keycloak:8080` for the backchannel while `issuer` stays `localhost:8081`.
+
 **The edge health checks liveness, not readiness.** `/health/ready` is red until
 `tofu apply` has run, so pointing Traefik at it would deadlock the bootstrap — compose would
 refuse to come up until provisioning had run, and provisioning runs after compose. The
