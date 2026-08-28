@@ -140,5 +140,41 @@ BEGIN
 END
 GO
 
+-- --------------------------------------------------------------------------
+-- Convoy logistics — dbo.Vehicle
+--
+-- The first table from the Data project. VIN is the natural key. Navigation to
+-- Convoy / Purchaser / Drivers is not modelled yet: ConvoyId is a loose int and
+-- PurchaserName a denormalised string until dbo.Convoy and a people table exist.
+-- freedom_app already holds full DML on SCHEMA::dbo (above), so no new grant.
+--
+-- Column types are int (not tinyint/smallint) for the enum and year fields so they
+-- line up with the CLR types Dapper's constructor mapping expects for VehicleReadModel.
+-- --------------------------------------------------------------------------
+
+IF OBJECT_ID('dbo.Vehicle') IS NULL
+BEGIN
+    CREATE TABLE dbo.Vehicle (
+        Vin           varchar(32)    NOT NULL CONSTRAINT PK_Vehicle PRIMARY KEY,
+        Plate         nvarchar(16)   NOT NULL,
+        Brand         nvarchar(64)   NULL,
+        Model         nvarchar(64)   NULL,
+        Colour        nvarchar(32)   NULL,
+        Transmission  int            NOT NULL CONSTRAINT DF_Vehicle_Transmission DEFAULT 0,
+        Notes         nvarchar(1000) NULL,
+        Mileage       int            NULL,
+        Servicing     bit            NOT NULL CONSTRAINT DF_Vehicle_Servicing DEFAULT 0,
+        [Year]        int            NOT NULL,
+        Fuel          int            NOT NULL CONSTRAINT DF_Vehicle_Fuel DEFAULT 0,
+        ConvoyId      int            NULL,
+        PurchaserName nvarchar(200)  NULL,
+        PurchaseDate  datetime2(0)   NULL,
+        WeightKg      int            NOT NULL CONSTRAINT DF_Vehicle_WeightKg DEFAULT 0,
+        CreatedAt     datetime2(0)   NOT NULL CONSTRAINT DF_Vehicle_CreatedAt DEFAULT SYSUTCDATETIME(),
+        UpdatedAt     datetime2(0)   NOT NULL CONSTRAINT DF_Vehicle_UpdatedAt DEFAULT SYSUTCDATETIME()
+    );
+END
+GO
+
 PRINT 'Freedom database bootstrap complete.';
 GO

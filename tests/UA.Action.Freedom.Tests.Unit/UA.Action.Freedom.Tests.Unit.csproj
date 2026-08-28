@@ -24,7 +24,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj" />
     <ProjectReference Include="../../src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.CustomsWorker.csproj" />
+    <ProjectReference Include="../../src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>

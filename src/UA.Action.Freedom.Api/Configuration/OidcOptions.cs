@@ -31,6 +31,14 @@ public sealed class OidcOptions
     public string? ClientSecret { get; set; }
 
     /// <summary>
+    /// The value a token's <c>aud</c> claim must carry for this API to accept it. Left empty
+    /// locally — Keycloak issues <c>aud: account</c> by default and has no audience mapper —
+    /// so audience is not checked. Set it in Azure, where Entra External ID stamps the API's
+    /// identifier into <c>aud</c>.
+    /// </summary>
+    public string? Audience { get; set; }
+
+    /// <summary>
     /// Only ever <see langword="false"/> locally, where Keycloak is served over plain HTTP.
     /// </summary>
     public bool RequireHttpsMetadata { get; set; } = true;
