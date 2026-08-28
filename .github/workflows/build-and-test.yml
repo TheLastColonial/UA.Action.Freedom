@@ -24,7 +24,7 @@ env:
     src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
 
     outputs:
@@ -75,6 +75,15 @@ jobs:
           --no-restore
           -p:Version=${{ steps.version.outputs.value }}
 
+      - name: Test
+        run: >
+          dotnet test
+          --solution UA.Action.Freedom.slnx
+          --configuration ${{ env.CONFIGURATION }}
+          --no-build
+          --no-restore
+          --verbosity normal
+
       - name: Upload build output
         uses: actions/upload-artifact@v4
         with:
@@ -85,35 +94,8 @@ jobs:
             **/bin/**
             **/obj/**
 
-  test:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Download build output
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output
-
-      - name: Test
-        run: >
-          dotnet test
-          --solution UA.Action.Freedom.slnx
-          --configuration ${{ env.CONFIGURATION }}
-          --no-build
-          --no-restore
-          --verbosity normal
-
   publish:
-    needs: [build, test]
+    needs: build-and-test
     runs-on: ubuntu-latest
     # Skip on PRs originating from forks: they have a read-only token and no package write access.
     if: >-
@@ -121,8 +103,8 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
 
     env:
-      PACKAGE_VERSION: ${{ needs.build.outputs.packageVersion }}
-      IS_RELEASE: ${{ needs.build.outputs.isRelease }}
+      PACKAGE_VERSION: ${{ needs.build-and-test.outputs.packageVersion }}
+      IS_RELEASE: ${{ needs.build-and-test.outputs.isRelease }}
 
     steps:
       - name: Checkout
@@ -137,6 +119,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-output
+
+      # Repopulates the NuGet cache and obj/*.nuget.g.* so MSBuild can evaluate
+      # the projects during pack. Does not rebuild — pack runs with --no-build
+      # and reuses the binaries produced by the build-and-test job.
+      - name: Restore
+        run: dotnet restore UA.Action.Freedom.slnx
 
       - name: Pack
         run: |
