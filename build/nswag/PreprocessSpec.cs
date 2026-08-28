@@ -1,22 +1,33 @@
 #:package YamlDotNet@16.2.1
 //
-// Preprocesses the HMRC "Goods Vehicle Movements" OpenAPI document before NSwag runs.
+// Preprocesses a published HMRC OpenAPI document before NSwag runs.
 //
-//   dotnet run build/nswag/PreprocessSpec.cs -- <rawSpec.yaml> <outSpec.json>
+//   dotnet run build/nswag/PreprocessSpec.cs -- <rawSpec.yaml> <outSpec.json> [<config.json>]
 //
-// The published HMRC spec is a RAML -> OpenAPI conversion: it contains ZERO $ref, so every
-// schema is inlined and duplicated 3-5 times, and enums are modelled as `oneOf` of
-// single-value enum subschemas. Fed to NSwag as-is that yields ~170 near-duplicate classes
-// (Direction, Direction2, Direction3, PlannedCrossing .. PlannedCrossing5, dozens of
-// Anonymous*/Response*). This tool rewrites it into a conventional $ref-based document:
+// The published HMRC specs are RAML -> OpenAPI conversions: schemas are inlined and duplicated
+// 3-5 times, enums are sometimes modelled as `oneOf` of single-value enum subschemas, and the
+// operationIds / component keys carry conversion noise. Fed to NSwag as-is the worst of them
+// (Goods Vehicle Movements) yields ~170 near-duplicate classes. This tool rewrites the spec
+// into a conventional $ref-based document:
 //
-//   1. Pin the 6 operationIds to explicit PascalCase names (we own the method names).
+//   1. Pin operationIds to explicit PascalCase names (we own the method names).
 //   2. Drop the explicit Accept / Authorization / Content-Type header parameters.
 //   3. Strip `not` / `not.anyOf` blocks (NSwag cannot express them; it drops them silently).
 //   4. Collapse `oneOf`-of-single-value-enum schemas into a single `type: string` + `enum`.
-//   5. De-duplicate: hoist every distinct object/enum schema into components/schemas (seeded
-//      from the spec's existing 55 named component schemas) and replace occurrences with $ref.
-//   6. Rename the conversion-artifact component keys to clean type names.
+//   5. Rename / unwrap the conversion-artifact component keys to clean type names.
+//   6. De-duplicate: hoist every distinct object/enum schema into components/schemas (seeded
+//      from the spec's existing named component schemas) and replace occurrences with $ref.
+//   7. Prune component schemas that nothing references.
+//
+// Passes 1 and 5 are spec-specific and driven by the optional <config.json> sidecar:
+//
+//   {
+//     "operationIds":         { "<raw operationId>": "<PascalCase name>", ... },
+//     "unwrapArrayComponents":{ "<array component key>": "<element component name>", ... },
+//     "componentRenames":     { "<old component key>": "<new component key>", ... }
+//   }
+//
+// With no sidecar (or empty maps) only the generic passes 2-4, 6, 7 run.
 //
 // Output is JSON (NSwag reads OpenAPI JSON natively) written to <outSpec.json>.
 //
@@ -28,12 +39,13 @@ using YamlDotNet.RepresentationModel;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("usage: dotnet run PreprocessSpec.cs -- <rawSpec.yaml> <outSpec.json>");
+    Console.Error.WriteLine("usage: dotnet run PreprocessSpec.cs -- <rawSpec.yaml> <outSpec.json> [<config.json>]");
     return 1;
 }
 
 var inPath = args[0];
 var outPath = args[1];
+var configPath = args.Length > 2 ? args[2] : null;
 
 if (!File.Exists(inPath))
 {
@@ -41,14 +53,22 @@ if (!File.Exists(inPath))
     return 1;
 }
 
+if (configPath is not null && !File.Exists(configPath))
+{
+    Console.Error.WriteLine($"config not found: {configPath}");
+    return 1;
+}
+
+var config = PreprocessConfig.Load(configPath);
+
 var root = YamlToJson(inPath) as JsonObject
            ?? throw new InvalidOperationException("spec root is not a mapping");
 
-PinOperationIds(root);
+PinOperationIds(root, config);
 DropTransportHeaderParameters(root);
 StripNot(root);
 CollapseOneOfEnums(root);
-NormaliseArtifactComponents(root);
+NormaliseArtifactComponents(root, config);
 DeduplicateIntoComponents(root);
 PruneOrphanComponents(root);
 
@@ -58,32 +78,24 @@ File.WriteAllText(
     root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
     new UTF8Encoding(false));
 
-var schemas = (JsonObject)root["components"]!["schemas"]!;
+var schemaCount = (root["components"]?["schemas"] as JsonObject)?.Count ?? 0;
 Console.WriteLine($"preprocessed spec -> {outPath}");
-Console.WriteLine($"  components/schemas: {schemas.Count}");
+Console.WriteLine($"  components/schemas: {schemaCount}");
 return 0;
 
 // ---------------------------------------------------------------------------------------------
-// Pass 1: operationId pinning
+// Pass 1: operationId pinning (spec-specific, from config.operationIds)
 // ---------------------------------------------------------------------------------------------
-static void PinOperationIds(JsonObject root)
+static void PinOperationIds(JsonObject root, PreprocessConfig config)
 {
-    var map = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["List Goods Movement Records"] = "GetGoodsMovementRecords",
-        ["create-gmr"] = "CreateGoodsMovementRecord",
-        ["Get Goods Movement Record"] = "GetGoodsMovementRecord",
-        ["Update Goods Movement Record"] = "UpdateGoodsMovementRecord",
-        ["Delete a Goods Movement Record"] = "DeleteGoodsMovementRecord",
-        ["Get reference data"] = "GetReferenceData",
-    };
+    if (config.OperationIds.Count == 0) return;
 
     foreach (var op in Operations(root))
     {
         if (op["operationId"] is JsonValue v &&
             v.TryGetValue(out string? id) &&
             id is not null &&
-            map.TryGetValue(id, out var pinned))
+            config.OperationIds.TryGetValue(id, out var pinned))
         {
             op["operationId"] = pinned;
         }
@@ -296,19 +308,21 @@ static JsonObject Ref(string name) => new() { ["$ref"] = $"#/components/schemas/
 // array-typed `definitions` schema down to its element object. Runs before de-duplication so
 // the structural index is seeded under these names and inline payloads $ref straight to them.
 // ---------------------------------------------------------------------------------------------
-static void NormaliseArtifactComponents(JsonObject root)
+static void NormaliseArtifactComponents(JsonObject root, PreprocessConfig config)
 {
-    var schemas = (JsonObject)root["components"]!["schemas"]!;
+    if (root["components"]?["schemas"] is not JsonObject schemas) return;
 
-    if (schemas["definitions"] is JsonObject def && def["items"] is JsonObject defItem)
-    {
-        schemas.Remove("definitions");
-        schemas["goodsMovementRecordSummary"] = defItem.DeepClone();
-    }
+    // Unwrap array-typed component schemas down to their element object (e.g. the GVMS
+    // `definitions` schema is `type: array` wrapping the real summary object).
+    foreach (var (arrayKey, elementName) in config.UnwrapArrayComponents)
+        if (schemas[arrayKey] is JsonObject def && def["items"] is JsonObject defItem)
+        {
+            schemas.Remove(arrayKey);
+            schemas[elementName] = defItem.DeepClone();
+        }
 
-    Rename(schemas, "post-gmr-schema_definitions", "goodsMovementRecordRequest");
-    Rename(schemas, "get-gmr-schema_definitions", "goodsMovementRecord");
-    Rename(schemas, "error-response_definitions", "errorResponse");
+    foreach (var (oldKey, newKey) in config.ComponentRenames)
+        Rename(schemas, oldKey, newKey);
 
     static void Rename(JsonObject schemas, string oldKey, string newKey)
     {
@@ -543,5 +557,39 @@ static JsonNode? YamlToJson(string path)
             && !value.EndsWith(".", StringComparison.Ordinal))
             return JsonValue.Create(d);
         return JsonValue.Create(value);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// spec-specific configuration, loaded from the optional <config.json> sidecar. Passes 1 and 5
+// (operationId pinning, component rename / unwrap) are the only per-spec knobs; everything else
+// in the pipeline is structural and runs unconditionally.
+// ---------------------------------------------------------------------------------------------
+sealed class PreprocessConfig
+{
+    public Dictionary<string, string> OperationIds { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> UnwrapArrayComponents { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> ComponentRenames { get; } = new(StringComparer.Ordinal);
+
+    public static PreprocessConfig Load(string? path)
+    {
+        var config = new PreprocessConfig();
+        if (path is null) return config;
+
+        var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject
+                   ?? throw new InvalidOperationException($"config root is not an object: {path}");
+
+        Fill(config.OperationIds, root["operationIds"]);
+        Fill(config.UnwrapArrayComponents, root["unwrapArrayComponents"]);
+        Fill(config.ComponentRenames, root["componentRenames"]);
+        return config;
+
+        static void Fill(Dictionary<string, string> target, JsonNode? node)
+        {
+            if (node is not JsonObject obj) return;
+            foreach (var (key, value) in obj)
+                if (value is JsonValue v && v.TryGetValue(out string? s) && s is not null)
+                    target[key] = s;
+        }
     }
 }

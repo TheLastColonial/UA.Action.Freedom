@@ -1,0 +1,11 @@
+{
+  "operationIds": {
+    "Getalistofnotifications": "GetNotifications",
+    "Acknowledgealistofnotifications": "AcknowledgeNotifications"
+  },
+  "unwrapArrayComponents": {},
+  "componentRenames": {
+    "Acknowledgealistofnotifications": "AcknowledgeNotificationsRequest",
+    "Listofnotification": "Notification"
+  }
+}

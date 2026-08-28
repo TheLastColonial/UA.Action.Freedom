@@ -40,6 +40,7 @@ Solution follows a layered structure under `src/`:
 - **`UA.Action.Freedom.Application`** — intended for use cases/orchestration logic; currently just a scaffold (`Class1.cs`).
 - **`UA.Action.Freedom.Data`** — intended for persistence, references `Dapper`; currently just a scaffold (`Class1.cs`).
 - **`UA.Action.Freedom.Api`** — ASP.NET Core minimal API host (`Program.cs`). Currently only has the default template's `/weatherforecast` endpoint — no domain endpoints wired up yet. References `FluentValidation` and `OpenTelemetry.Api` for future use.
+- **`UA.Action.Freedom.Hmrc.Gvms`** / **`UA.Action.Freedom.Hmrc.PushPullNotifications`** — NSwag-generated typed HTTP clients for the HMRC Goods Vehicle Movements and Push Pull Notifications APIs. The `Generated/` folder is committed codegen output; regenerate with `build/nswag/regenerate.ps1 -Api <goods-vehicle-movements|push-pull-notifications>` and see `build/nswag/README.md`. Each project adds a hand-written `*ClientOptions` + `Add*Client(this IServiceCollection)` DI extension (typed `HttpClient`, HMRC versioned `Accept` header, caller supplies the OAuth handler). Do not hand-edit `Generated/`.
 
 Four test projects under `tests/` mirror different test types (`Unit`, `Component`, `Integration`, `Tests.BDD`) but each currently contains only the default `UnitTest1.cs` stub — no real tests exist yet to pattern-match against.
 

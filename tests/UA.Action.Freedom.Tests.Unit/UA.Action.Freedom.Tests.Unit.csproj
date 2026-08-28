@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/UA.Action.Freedom.Hmrc.Gvms/UA.Action.Freedom.Hmrc.Gvms.csproj" />
+    <ProjectReference Include="../../src/UA.Action.Freedom.Hmrc.PushPullNotifications/UA.Action.Freedom.Hmrc.PushPullNotifications.csproj" />
   </ItemGroup>
 
 </Project>

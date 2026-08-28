@@ -1,0 +1,70 @@
+{
+  "runtime": "Net100",
+  "defaultVariables": "SpecPath=generated/push-pull-notifications.preprocessed.json,JsonLibrary=SystemTextJson,OutFile=generated/PushPullNotificationsClient.cs",
+  "documentGenerator": {
+    "fromDocument": {
+      "url": "$(SpecPath)"
+    }
+  },
+  "codeGenerators": {
+    "openApiToCSharpClient": {
+      "namespace": "UA.Action.Freedom.Hmrc.PushPullNotifications",
+      "className": "PushPullNotificationsClient",
+      "operationGenerationMode": "SingleClientFromOperationId",
+
+      "generateClientClasses": true,
+      "generateClientInterfaces": true,
+      "generateDtoTypes": true,
+      "clientClassAccessModifier": "public",
+      "typeAccessModifier": "public",
+
+      "injectHttpClient": true,
+      "disposeHttpClient": false,
+      "useHttpClientCreationMethod": false,
+      "useHttpRequestMessageCreationMethod": false,
+
+      "useBaseUrl": true,
+      "generateBaseUrlProperty": true,
+
+      "generateExceptionClasses": true,
+      "exceptionClass": "PushPullNotificationsApiException",
+      "wrapDtoExceptions": true,
+      "generateResponseClasses": true,
+      "responseClass": "PushPullNotificationsResponse",
+
+      "generateOptionalParameters": true,
+      "generateSyncMethods": false,
+      "generateNativeRecords": false,
+      "useRequiredKeyword": false,
+
+      "jsonLibrary": "$(JsonLibrary)",
+      "generateJsonMethods": false,
+      "generateUpdateJsonSerializerSettingsMethod": true,
+      "generateDataAnnotations": true,
+      "requiredPropertiesMustBeDefined": true,
+      "generateDefaultValues": true,
+
+      "generateNullableReferenceTypes": true,
+      "generateOptionalPropertiesAsNullable": true,
+
+      "inlineNamedArrays": true,
+      "inlineNamedDictionaries": true,
+
+      "dateType": "System.DateTimeOffset",
+      "dateTimeType": "System.DateTimeOffset",
+      "timeType": "System.TimeSpan",
+      "timeSpanType": "System.TimeSpan",
+      "arrayType": "System.Collections.Generic.ICollection",
+      "arrayInstanceType": "System.Collections.ObjectModel.Collection",
+      "dictionaryType": "System.Collections.Generic.IDictionary",
+      "dictionaryInstanceType": "System.Collections.Generic.Dictionary",
+
+      "classStyle": "Poco",
+      "parameterDateTimeFormat": "s",
+      "parameterDateFormat": "yyyy-MM-dd",
+      "newLineBehavior": "LF",
+
+      "output": "$(OutFile)"
+    }
+  }
+}
