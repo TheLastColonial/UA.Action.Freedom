@@ -1,0 +1,22 @@
+# Loaded into grafana/otel-lgtm at container start, alongside the image's own
+# bundled providers (grafana-dashboards.yaml). Mounted read-only by the `telemetry`
+# service in ../../docker-compose.yml.
+#
+# The image's provider lists dashboards by explicit file path, not by directory, so
+# this adds a directory-scanning provider of our own rather than editing theirs.
+apiVersion: 1
+
+providers:
+  - name: Freedom
+    type: file
+    orgId: 1
+    folder: Freedom
+    disableDeletion: false
+    # The JSON file is the source of truth: read on every container start and re-checked
+    # every 30s, so an edit + `docker compose restart telemetry` (or just a save) reloads
+    # it. UI edits are therefore not persisted — copy the JSON model out and commit it.
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

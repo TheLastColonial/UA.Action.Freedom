@@ -1,0 +1,324 @@
+# Local stand-in for the Azure deployment in docs/c4/2-containers.puml.
+#
+# This file is the *substrate* — it starts the containers that play the part of an Azure
+# region. It deliberately creates no resources inside them: no blob containers, no queues,
+# no database schema, no realm. That is OpenTofu's job (../tofu), the same way azurerm
+# would own it in the real environment.
+#
+#   docker compose up -d --wait     # substrate
+#   cd ../tofu && tofu apply        # resources
+#
+# See ../README.md.
+
+name: freedom-local
+
+# Azurite's well-known development account. Public, fixed, and safe only because nothing
+# here is reachable from outside the machine. In Azure this is replaced by managed
+# identity with shared-key auth disabled (docs/recommendations.md 4.2).
+x-azurite: &azurite-connection-string "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;QueueEndpoint=http://azurite:10001/devstoreaccount1;TableEndpoint=http://azurite:10002/devstoreaccount1;"
+
+x-mssql: &freedom-connection-string "Server=mssql,1433;Database=Freedom;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=False"
+
+x-telemetry: &telemetry
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://telemetry:4317
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+
+services:
+
+  # --- Edge -----------------------------------------------------------------
+  # Stands in for Cloudflare Free: the single front door, TLS termination, and the
+  # only port a developer needs to know. Managed WAF rules and Turnstile have no
+  # local equivalent (docs/recommendations.md 4.6).
+  edge:
+    image: traefik:v3.3
+    container_name: freedom-edge
+    restart: unless-stopped
+    command:
+      - --entrypoints.web.address=:8080
+      - --entrypoints.websecure.address=:8443
+      # `--api.insecure` serves the dashboard on the built-in `traefik` entrypoint, which
+      # defaults to :8080 and would collide with `web`. Moving it is not optional.
+      - --entrypoints.traefik.address=:8090
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --api.dashboard=true
+      - --api.insecure=true
+      # Pin ping to the dashboard entrypoint. Left on the default it lands on `web`, where
+      # the catch-all router forwards /ping to the application and Traefik ends up health
+      # checking the app instead of itself.
+      - --ping=true
+      - --ping.entryPoint=traefik
+      - --log.level=INFO
+      - --accesslog=true
+    ports:
+      - "${EDGE_HTTP_PORT:-8080}:8080"
+      - "${EDGE_HTTPS_PORT:-8443}:8443"
+      - "${EDGE_DASHBOARD_PORT:-8090}:8090"
+    volumes:
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+    healthcheck:
+      # `traefik healthcheck` is a second process that re-reads the static configuration
+      # from its own arguments — it inherits nothing from the running one. Without these
+      # two flags repeated it probes the default ping entrypoint on :8080, which here is
+      # `web`, and ends up health checking the application through the catch-all router.
+      test:
+        - CMD
+        - traefik
+        - healthcheck
+        - --ping
+        - --ping.entryPoint=traefik
+        - --entrypoints.traefik.address=:8090
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      app:
+        condition: service_healthy
+      website:
+        condition: service_started
+
+  # --- Freedom Application --------------------------------------------------
+  # Stands in for the Container Apps deployment. One image serving both the operator
+  # UI and its JSON API, exactly as the target design intends.
+  app:
+    build:
+      context: ../..
+      dockerfile: src/UA.Action.Freedom.Api/Dockerfile
+    image: ua-action-freedom/app:local
+    container_name: freedom-app
+    restart: unless-stopped
+    environment:
+      <<: *telemetry
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      OTEL_SERVICE_NAME: freedom-app
+
+      # Container Apps terminates TLS at its ingress and forwards plain HTTP; the edge
+      # does the same here. Redirecting to HTTPS inside the container would loop.
+      Hosting__UseHttpsRedirection: "false"
+
+      ConnectionStrings__Freedom: *freedom-connection-string
+      Storage__ConnectionString: *azurite-connection-string
+      Storage__DocumentsContainer: manifests
+      Storage__DataProtectionContainer: dataprotection
+      Storage__CustomsQueue: customs-work
+
+      # Split-horizon OIDC. The browser reaches Keycloak on localhost, the container
+      # reaches it on the compose network — the same server, two URLs. The issuer in
+      # the token is the browser-facing one, so that is the Authority; the metadata is
+      # fetched over the compose network. See README "Keycloak issuer".
+      Oidc__Authority: http://localhost:${KEYCLOAK_PORT:-8081}/realms/freedom
+      Oidc__MetadataAddress: http://keycloak:8080/realms/freedom/.well-known/openid-configuration
+      Oidc__ClientId: freedom-app
+      Oidc__ClientSecret: ${OIDC_CLIENT_SECRET}
+      Oidc__RequireHttpsMetadata: "false"
+
+      Smtp__Host: mailpit
+      Smtp__Port: "1025"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    depends_on:
+      azurite:
+        condition: service_healthy
+      mssql:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      telemetry:
+        condition: service_started
+
+  # --- Customs Worker -------------------------------------------------------
+  # Stands in for the Azure Function. Queue-driven GMR submission plus a timer poll
+  # for outcomes, pull-only against HMRC (docs/recommendations.md 4.1).
+  customs-worker:
+    build:
+      context: ../..
+      dockerfile: src/UA.Action.Freedom.CustomsWorker/Dockerfile
+    image: ua-action-freedom/customs-worker:local
+    container_name: freedom-customs-worker
+    restart: unless-stopped
+    environment:
+      <<: *telemetry
+      DOTNET_ENVIRONMENT: Development
+      OTEL_SERVICE_NAME: freedom-customs-worker
+
+      Storage__ConnectionString: *azurite-connection-string
+      Storage__CustomsQueue: customs-work
+      Storage__PoisonQueue: customs-work-poison
+      Storage__GmrContainer: gmr
+
+      Hmrc__Gvms__BaseUrl: http://wiremock:8080/
+      Hmrc__Ppns__BaseUrl: http://wiremock:8080/
+      Hmrc__Ppns__BoxId: ${HMRC_PPNS_BOX_ID}
+      Hmrc__ClientId: ${HMRC_CLIENT_ID}
+      Hmrc__ClientSecret: ${HMRC_CLIENT_SECRET}
+      Worker__QueuePollSeconds: "5"
+      Worker__OutcomePollSeconds: "15"
+    depends_on:
+      azurite:
+        condition: service_healthy
+      wiremock:
+        condition: service_healthy
+
+  # --- Document Store + Customs Work Queue ----------------------------------
+  # Azurite is the reference implementation of the Azure Storage APIs, so the SDK
+  # calls the application makes here are the ones it will make in Azure.
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: freedom-azurite
+    restart: unless-stopped
+    command:
+      - azurite
+      - --blobHost
+      - 0.0.0.0
+      - --queueHost
+      - 0.0.0.0
+      - --tableHost
+      - 0.0.0.0
+      - --location
+      - /data
+      - --skipApiVersionCheck
+    ports:
+      - "${AZURITE_BLOB_PORT:-10000}:10000"
+      - "${AZURITE_QUEUE_PORT:-10001}:10001"
+      - "${AZURITE_TABLE_PORT:-10002}:10002"
+    volumes:
+      - azurite-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 10000 && nc -z 127.0.0.1 10001"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # --- Freedom Database -----------------------------------------------------
+  # The one non-open-source component, taken deliberately: it is the same engine as
+  # Azure SQL, so T-SQL and the `sensitive` schema segregation behave identically.
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: freedom-mssql
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      MSSQL_PID: Developer
+    ports:
+      - "${MSSQL_PORT:-1433}:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+      - ./sql:/sql:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" -b
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # --- Identity Provider ----------------------------------------------------
+  # Stands in for Microsoft Entra External ID. Keycloak speaks the same OpenID Connect
+  # and issues roles as claims, so authorisation policies port across unchanged.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: freedom-keycloak
+    restart: unless-stopped
+    command: ["start-dev", "--http-port=8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+      # Pin the issuer to the browser-facing URL so tokens validate on both sides
+      # of the split horizon described on the `app` service.
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8081}
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "${KEYCLOAK_PORT:-8081}:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # --- HMRC ------------------------------------------------------------------
+  # Stands in for both HMRC APIs. Stubs are plain JSON under wiremock/mappings and
+  # load at boot, so adding a scenario needs no provisioning step and no script.
+  wiremock:
+    image: wiremock/wiremock:3.9.2
+    container_name: freedom-wiremock
+    restart: unless-stopped
+    command: ["--global-response-templating", "--verbose", "--port", "8080"]
+    ports:
+      - "${WIREMOCK_PORT:-8082}:8080"
+    volumes:
+      - ./wiremock/mappings:/home/wiremock/mappings:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/__admin/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # --- Telemetry -------------------------------------------------------------
+  # Stands in for Application Insights + Log Analytics. One container providing an
+  # OTLP endpoint plus Prometheus, Loki, Tempo and Grafana to read it back.
+  telemetry:
+    image: grafana/otel-lgtm:latest
+    container_name: freedom-telemetry
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+      - "${OTLP_GRPC_PORT:-4317}:4317"
+      - "${OTLP_HTTP_PORT:-4318}:4318"
+    volumes:
+      - telemetry-data:/data
+      # Dashboards provisioned at container start. The provider YAML sits next to the
+      # image's own bundled providers; the JSON models it points at are mounted into
+      # the path it scans. See grafana/README.md.
+      - ./grafana/provisioning/dashboards/freedom.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/freedom.yaml:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  # --- Email / SMS -----------------------------------------------------------
+  # Stands in for Azure Communication Services. Catches every message and shows it
+  # in a web inbox; nothing leaves the machine.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: freedom-mailpit
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8025/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # --- Public Website --------------------------------------------------------
+  # Stands in for Azure Static Web Apps. Exists so the website -> API driver
+  # application path (docs/recommendations.md 5.1) has somewhere to post from.
+  website:
+    image: nginx:1.27-alpine
+    container_name: freedom-website
+    restart: unless-stopped
+    volumes:
+      - ./website/html:/usr/share/nginx/html:ro
+
+volumes:
+  azurite-data:
+  mssql-data:
+  keycloak-data:
+  telemetry-data:

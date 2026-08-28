@@ -1,0 +1,29 @@
+{
+  "name": "GVMS — create a Goods Movement Record",
+  "priority": 5,
+  "request": {
+    "method": "POST",
+    "urlPath": "/customs/goods-movement-system/movements",
+    "headers": {
+      "Accept": { "equalTo": "application/vnd.hmrc.1.0+json" }
+    }
+  },
+  "response": {
+    "status": 202,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Stub-Gmr-Id": "GMRLOCAL0001"
+    },
+    "transformers": ["response-template"]
+  },
+  "metadata": {
+    "comment": [
+      "HMRC accepts a GMR submission without returning the record: the outcome arrives",
+      "later through the Push Pull Notifications API. That asynchrony is the whole",
+      "reason the Customs Worker exists, so the stub reproduces it faithfully rather",
+      "than shortcutting to a 201 with a body.",
+      "The X-Stub-Gmr-Id header is not part of the real API — it is here so a local",
+      "test can correlate the submission with the notification stub without guessing."
+    ]
+  }
+}
