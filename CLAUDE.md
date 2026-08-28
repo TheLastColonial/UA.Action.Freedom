@@ -11,12 +11,22 @@ UA.Action.Freedom — automation to support Ukrainian Action, a charity that run
 Built on .NET 10 (`net10.0`), solution file is `UA.Action.Freedom.slnx`.
 
 ```
-dotnet build UA.Action.Freedom.slnx          # build everything
-dotnet test UA.Action.Freedom.slnx           # run all test projects
-dotnet test tests/UA.Action.Freedom.Tests.Unit/UA.Action.Freedom.Tests.Unit.csproj   # run one test project
-dotnet test --filter "FullyQualifiedName~ClassName.MethodName"                       # run a single test
+dotnet build UA.Action.Freedom.slnx                                  # build everything
+dotnet test --solution UA.Action.Freedom.slnx                        # run all test projects
+dotnet test --project tests/UA.Action.Freedom.Tests.Unit/UA.Action.Freedom.Tests.Unit.csproj   # run one test project
+dotnet test --project <proj> --filter-query "/*/*/ClassName/MethodName"                         # run a single test
 dotnet run --project src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj          # run the API (http://localhost:5100)
 ```
+
+`dotnet test` runs in **Microsoft.Testing.Platform (MTP) mode**, opted in via `global.json`
+(`{ "test": { "runner": "Microsoft.Testing.Platform" } }`) because the .NET 10 SDK dropped the
+legacy VSTest bridge that `xunit.v3` relied on. MTP mode changes the CLI: pass the solution as
+`--solution` and a project as `--project` (bare paths are no longer positional). Filter with
+xUnit v3's MTP options — `--filter-class "*Name"`, `--filter-method "*Name"`,
+`--filter-namespace`, `--filter-trait "k=v"`, or `--filter-query "/asm/ns/class/method"`
+(the [query filter language](https://xunit.net/docs/query-filter-language)) — **not** the plain
+`--filter` / `FullyQualifiedName~...` VSTest syntax, which silently matches nothing here.
+`--configuration`, `--no-build`, `--no-restore`, `--verbosity` still work as before.
 
 Test framework is xUnit v3 with `AwesomeAssertions` (fluent assertions), `NSubstitute` (mocking), and `MELT` (testable `ILogger`). `Xunit` is globally usable via implicit `<Using>` in each test csproj — no `using Xunit;` needed.
 
@@ -30,8 +40,9 @@ Solution follows a layered structure under `src/`:
 - **`UA.Action.Freedom.Application`** — intended for use cases/orchestration logic; currently just a scaffold (`Class1.cs`).
 - **`UA.Action.Freedom.Data`** — intended for persistence, references `Dapper`; currently just a scaffold (`Class1.cs`).
 - **`UA.Action.Freedom.Api`** — ASP.NET Core minimal API host (`Program.cs`). Currently only has the default template's `/weatherforecast` endpoint — no domain endpoints wired up yet. References `FluentValidation` and `OpenTelemetry.Api` for future use.
+- **`HMRC.GVMS`** (`src/HMRC.GVMS`) / **`HMRC.PushPullNotifications`** (`src/HMRC.PushPullNotifications`) — NSwag-generated typed HTTP clients for the HMRC Goods Vehicle Movements and Push Pull Notifications APIs. These are standalone HMRC SDKs and deliberately carry no `UA.Action.Freedom` prefix — namespace and assembly name match the project name. The `Generated/` folder is committed codegen output; regenerate with `build/nswag/regenerate.ps1 -Api <goods-vehicle-movements|push-pull-notifications>` and see `build/nswag/README.md`. Each project adds a hand-written `*ClientOptions` + `Add*Client(this IServiceCollection)` DI extension (typed `HttpClient`, HMRC versioned `Accept` header, caller supplies the OAuth handler). Do not hand-edit `Generated/`. Their unit tests live in `tests/HMRC.GVMS.Tests.Unit` and `tests/HMRC.PushPullNotifications.Tests.Unit` — one dedicated test project per SDK, not folded into `UA.Action.Freedom.Tests.Unit`.
 
-Four test projects under `tests/` mirror different test types (`Unit`, `Component`, `Integration`, `Tests.BDD`) but each currently contains only the default `UnitTest1.cs` stub — no real tests exist yet to pattern-match against.
+Six test projects under `tests/`: `HMRC.GVMS.Tests.Unit` and `HMRC.PushPullNotifications.Tests.Unit` hold the SDK client tests; the four `UA.Action.Freedom.Tests.*` projects (`Unit`, `Component`, `Integration`, `BDD`) mirror the app's test types but still contain only the default `UnitTest1.cs` stub — no real domain tests exist yet to pattern-match against.
 
 ### Domain model (`src/UA.Action.Freedom.Domain`)
 

@@ -1,0 +1,18 @@
+{
+  "operationIds": {
+    "List Goods Movement Records": "GetGoodsMovementRecords",
+    "create-gmr": "CreateGoodsMovementRecord",
+    "Get Goods Movement Record": "GetGoodsMovementRecord",
+    "Update Goods Movement Record": "UpdateGoodsMovementRecord",
+    "Delete a Goods Movement Record": "DeleteGoodsMovementRecord",
+    "Get reference data": "GetReferenceData"
+  },
+  "unwrapArrayComponents": {
+    "definitions": "goodsMovementRecordSummary"
+  },
+  "componentRenames": {
+    "post-gmr-schema_definitions": "goodsMovementRecordRequest",
+    "get-gmr-schema_definitions": "goodsMovementRecord",
+    "error-response_definitions": "errorResponse"
+  }
+}
