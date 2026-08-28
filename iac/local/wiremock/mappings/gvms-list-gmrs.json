@@ -1,0 +1,42 @@
+{
+  "name": "GVMS — list Goods Movement Records from the last 28 days",
+  "priority": 10,
+  "request": {
+    "method": "GET",
+    "urlPath": "/customs/goods-movement-system/movements"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "transformers": ["response-template"],
+    "jsonBody": [
+      {
+        "gmrId": "GMRLOCAL0001",
+        "direction": "UK_OUTBOUND",
+        "isUnaccompanied": false,
+        "inspectionRequired": false,
+        "vehicleRegNum": "AB12CDE",
+        "state": "OPEN",
+        "createdDateTime": "{{now offset=\"-1 hours\" format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}",
+        "updatedDateTime": "{{now format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}"
+      },
+      {
+        "gmrId": "GMRLOCAL0002",
+        "direction": "UK_OUTBOUND",
+        "isUnaccompanied": false,
+        "inspectionRequired": true,
+        "vehicleRegNum": "XY98ZAB",
+        "state": "CHECKED_IN",
+        "createdDateTime": "{{now offset=\"-3 days\" format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}",
+        "updatedDateTime": "{{now offset=\"-2 hours\" format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}"
+      }
+    ]
+  },
+  "metadata": {
+    "comment": [
+      "Lower priority than gvms-get-gmr so the more specific path wins. One record",
+      "needs an inspection and one does not, because 'inspection required' is the",
+      "outcome that changes what a dispatcher has to do next."
+    ]
+  }
+}

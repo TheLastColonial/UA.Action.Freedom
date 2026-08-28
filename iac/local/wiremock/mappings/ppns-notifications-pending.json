@@ -1,0 +1,44 @@
+{
+  "name": "PPNS — one unread GMR outcome waiting in the box",
+  "scenarioName": "gmr-outcome",
+  "requiredScenarioState": "Started",
+  "priority": 5,
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/misc/push-pull-notification/box/[^/]+/notifications"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": [
+      {
+        "notificationId": "1ed5f407-8a11-4c8f-8a2d-1a8b1c4d0001",
+        "boxId": "1c5b9365-18a6-55a5-99c9-83a091ac7f26",
+        "messageContentType": "application/json",
+        "message": "{\"gmrId\":\"GMRLOCAL0001\",\"state\":\"OPEN\",\"inspectionRequired\":false,\"updatedDateTime\":\"2026-09-01T09:00:00.000Z\"}",
+        "status": "PENDING",
+        "createdDateTime": "2026-09-01T09:00:00.000Z"
+      }
+    ]
+  },
+  "metadata": {
+    "comment": [
+      "HMRC nests the outcome as a JSON *string* in `message`, not as an object — the",
+      "worker has to deserialise it a second time. Getting that wrong is the most likely",
+      "integration bug, so the stub reproduces the double encoding exactly.",
+      "",
+      "This mapping deliberately does NOT use response templating, unlike the GVMS ones.",
+      "Handlebars parses the response body before it is sent, and the backslash-escaped",
+      "quotes inside `message` are a parse error to it — WireMock answers 500 with a",
+      "HandlebarsException instead of the notification. The cost is that boxId is a fixed",
+      "value rather than an echo of the request; keep it in step with HMRC_PPNS_BOX_ID",
+      "in .env if you change it.",
+      "",
+      "This is the opening state of the `gmr-outcome` scenario. Acknowledging the",
+      "notification advances it to Acknowledged and the box goes empty, so the polling",
+      "loop terminates the way it does against the real API instead of spinning on the",
+      "same message forever. Reset with:",
+      "  curl -X POST http://localhost:8082/__admin/scenarios/reset"
+    ]
+  }
+}

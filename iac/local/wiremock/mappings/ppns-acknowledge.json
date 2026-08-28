@@ -1,0 +1,25 @@
+{
+  "name": "PPNS — acknowledge notifications",
+  "scenarioName": "gmr-outcome",
+  "requiredScenarioState": "Started",
+  "newScenarioState": "Acknowledged",
+  "priority": 5,
+  "request": {
+    "method": "PUT",
+    "urlPathPattern": "/misc/push-pull-notification/box/[^/]+/notifications/acknowledge",
+    "bodyPatterns": [
+      { "matchesJsonPath": "$.notificationIds" }
+    ]
+  },
+  "response": {
+    "status": 204
+  },
+  "metadata": {
+    "comment": [
+      "Acknowledging is what empties the box, so this mapping is the scenario's only",
+      "transition. The bodyPatterns matcher means a worker that forgets to send",
+      "notificationIds gets a 404 from WireMock rather than a silent success — which",
+      "is the failure you want surfaced locally rather than against HMRC."
+    ]
+  }
+}

@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj" />
     <Project Path="src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj" />
+    <Project Path="src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.CustomsWorker.csproj" />
     <Project Path="src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj" />
     <Project Path="src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj" />
     <Project Path="src/HMRC.GVMS/HMRC.GVMS.csproj" />

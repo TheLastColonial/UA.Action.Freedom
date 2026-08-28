@@ -1,0 +1,76 @@
+# Edge routing — the local stand-in for Cloudflare's origin rules.
+#
+# Routing is path-based on a single host rather than by hostname. `*.localhost` names
+# resolve in browsers but not in the Windows resolver, so curl and integration tests
+# would break on a Host()-rule setup. One port, one host, no /etc/hosts edits.
+
+http:
+  routers:
+
+    # Everything that is not /site belongs to the Freedom Application. It serves both
+    # the operator UI and the JSON API from one deployable, so there is nothing to
+    # split here — that is the point of the target design.
+    app:
+      rule: PathPrefix(`/`)
+      priority: 1
+      entryPoints: [web, websecure]
+      service: app
+      middlewares: [forwarded-proto, security-headers]
+
+    # Stands in for Azure Static Web Apps sitting on its own hostname.
+    website:
+      rule: PathPrefix(`/site`)
+      priority: 10
+      entryPoints: [web, websecure]
+      service: website
+      middlewares: [strip-site-prefix, security-headers]
+
+  middlewares:
+
+    strip-site-prefix:
+      stripPrefix:
+        prefixes: ["/site"]
+
+    # Container Apps' ingress sets these; the app trusts them to reconstruct the
+    # public URL when it builds redirect and sign-in URIs.
+    forwarded-proto:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: http
+
+    # A local rehearsal of docs/recommendations.md 4.6. Cloudflare's managed rules
+    # have no equivalent here, but the hardening headers do.
+    security-headers:
+      headers:
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+        frameDeny: true
+
+  services:
+
+    app:
+      loadBalancer:
+        servers:
+          - url: http://app:8080
+        healthCheck:
+          # Liveness, not readiness, and deliberately so.
+          #
+          # Readiness is red until `tofu apply` has created the containers, queues and
+          # realm — which is the correct answer, but pointing the edge at it deadlocks the
+          # bootstrap: compose would refuse to come up until provisioning had run, and
+          # provisioning runs after compose. It also matches how Container Apps ingress
+          # behaves, where liveness decides whether a replica receives traffic and
+          # readiness gates a rolling deployment.
+          #
+          # The consequence to know about: between `compose up` and `tofu apply` the edge
+          # will happily forward traffic to an application that cannot reach anything.
+          # /health/ready is where you find that out.
+          path: /health/live
+          interval: 30s
+          timeout: 5s
+
+    website:
+      loadBalancer:
+        servers:
+          - url: http://website:80

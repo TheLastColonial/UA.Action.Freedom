@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ukrainian Action — local placeholder</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      max-width: 44rem; margin: 4rem auto; padding: 0 1.5rem; line-height: 1.6;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    p.lede { color: #666; margin-top: 0; }
+    fieldset { border: 1px solid #ccc; border-radius: 6px; padding: 1rem 1.25rem; }
+    label { display: block; margin: 0.75rem 0 0.25rem; font-weight: 600; font-size: 0.9rem; }
+    input { width: 100%; padding: 0.5rem; font: inherit; box-sizing: border-box; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; font: inherit; cursor: pointer; }
+    pre { background: #0001; padding: 0.75rem; border-radius: 6px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>Ukrainian Action</h1>
+  <p class="lede">
+    Local stand-in for the Azure Static Web Apps public website.
+  </p>
+
+  <p>
+    The real site carries information about the organisation, donation sheets and driver
+    applications. It exists here only so the one path that connects it to Freedom has
+    somewhere to post from — the rate-limited anonymous endpoint proposed in
+    <code>docs/recommendations.md</code> §5.1.
+  </p>
+
+  <form id="apply" action="/applications/driver" method="post">
+    <fieldset>
+      <legend>Driver application</legend>
+      <label for="name">Name</label>
+      <input id="name" name="name" required>
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required>
+      <button type="submit">Apply</button>
+    </fieldset>
+  </form>
+
+  <p>
+    The endpoint is not built yet, so this posts to the Freedom Application through the
+    edge and you should expect a 404. That is the correct current behaviour — when the
+    endpoint lands, this form starts working with no change to the environment.
+  </p>
+
+  <p>Everything else on this host is the Freedom Application:</p>
+  <pre>curl http://localhost:8080/health/ready
+curl http://localhost:8080/weatherforecast</pre>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# Build context is the repository root, so that a Dockerfile can restore against the
+# whole solution graph. Everything that does not affect the build is excluded — the
+# context is copied to the daemon on every build, and bin/obj alone is hundreds of MB.
+
+**/bin/
+**/obj/
+**/.vs/
+**/TestResults/
+**/node_modules/
+
+.git/
+.github/
+.gitignore
+.gitattributes
+.dockerignore
+
+docs/
+plans/
+iac/
+build/
+LICENSE
+README.md
+CLAUDE.md
+*.md
+
+# Never let local secrets into an image layer.
+**/.env
+**/*.tfstate
+**/*.tfstate.*
+**/.terraform/
+**/appsettings.*.local.json
+**/*.user

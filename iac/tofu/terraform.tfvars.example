@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars only if you changed the defaults in ../local/.env.
+# terraform.tfvars is gitignored; the defaults in variables.tf already match .env.example,
+# so a stock environment needs no file here at all.
+
+# keycloak_url            = "http://localhost:8081"
+# keycloak_admin_username = "admin"
+# keycloak_admin_password = "admin"
+
+# edge_url                = "http://localhost:8080"
+# oidc_client_secret      = "local-freedom-client-secret"
+# test_user_password      = "password"
+
+# mssql_container         = "freedom-mssql"
+# mssql_sa_password       = "Local_Freedom_Dev_1"

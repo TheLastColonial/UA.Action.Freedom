@@ -1,0 +1,40 @@
+{
+  "name": "GVMS — get a Goods Movement Record",
+  "priority": 5,
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/customs/goods-movement-system/movements/[^/]+"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "transformers": ["response-template"],
+    "jsonBody": {
+      "gmrId": "{{request.pathSegments.[3]}}",
+      "haulierEORI": "GB123456789000",
+      "direction": "UK_OUTBOUND",
+      "haulierType": "STANDARD",
+      "isUnaccompanied": false,
+      "vehicleRegNum": "AB12CDE",
+      "metadata": {
+        "state": "OPEN",
+        "gmrStatusVersion": 1,
+        "inspectionRequired": false,
+        "createdDateTime": "{{now format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}",
+        "updatedDateTime": "{{now format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}"
+      },
+      "plannedCrossing": {
+        "routeId": "20000",
+        "localDateTimeOfDeparture": "{{now offset=\"2 days\" format=\"yyyy-MM-dd'T'HH:mm\"}}"
+      }
+    }
+  },
+  "metadata": {
+    "comment": [
+      "Echoes back whatever GMR id was asked for and reports it OPEN — the happy path.",
+      "To rehearse a rejection, copy this file, set metadata.state to NOT_FINALISABLE",
+      "and add a ruleFailures array, then give it a higher priority and a request",
+      "matcher narrow enough to pick out the id you want to fail."
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "PPNS — box empty once the outcome has been acknowledged",
+  "scenarioName": "gmr-outcome",
+  "requiredScenarioState": "Acknowledged",
+  "priority": 5,
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/misc/push-pull-notification/box/[^/]+/notifications"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": []
+  },
+  "metadata": {
+    "comment": [
+      "The steady state. Section 4.1 of docs/recommendations.md has the worker poll",
+      "only while a GMR is in flight and fall idle otherwise; an empty box is the",
+      "signal to stop polling."
+    ]
+  }
+}
