@@ -1,9 +1,10 @@
-using Microsoft.AspNetCore.Authentication;
+﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Vehicles;
 
 namespace UA.Action.Freedom.Tests.Component;
@@ -54,6 +55,36 @@ internal static class FreedomApi
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IVehicleRepository>();
+                services.AddScoped(_ => repository);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with its volunteer persistence swapped for <paramref name="repository"/>
+    /// and its JWT scheme swapped for <see cref="TestAuthHandler"/>. <paramref name="roles"/> are
+    /// the app roles the caller's token carries; pass <c>authenticated: false</c> to send no
+    /// credentials at all.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithPeople(
+        IPersonRepository repository,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IPersonRepository>();
                 services.AddScoped(_ => repository);
 
                 services

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Vehicles;
 
 namespace UA.Action.Freedom.Application;
@@ -17,6 +18,12 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DeleteVehicleCommand, DeleteVehicleOutcome>, DeleteVehicleHandler>();
         services.AddScoped<IQueryHandler<GetVehicleByVinQuery, VehicleReadModel?>, GetVehicleByVinHandler>();
         services.AddScoped<IQueryHandler<ListVehiclesQuery, IReadOnlyList<VehicleReadModel>>, ListVehiclesHandler>();
+
+        services.AddScoped<ICommandHandler<CreatePersonCommand, Guid>, CreatePersonHandler>();
+        services.AddScoped<ICommandHandler<UpdatePersonCommand, UpdatePersonOutcome>, UpdatePersonHandler>();
+        services.AddScoped<ICommandHandler<DeletePersonCommand, DeletePersonOutcome>, DeletePersonHandler>();
+        services.AddScoped<IQueryHandler<GetPersonByIdQuery, PersonReadModel?>, GetPersonByIdHandler>();
+        services.AddScoped<IQueryHandler<ListPeopleQuery, IReadOnlyList<PersonReadModel>>, ListPeopleHandler>();
 
         return services;
     }

@@ -6,13 +6,18 @@ namespace UA.Action.Freedom.Tests.BDD.Support;
 public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
 {
     /// <summary>
-    /// Removes any vehicle a scenario created, so a re-run starts clean. Best effort — a
-    /// failure here must not mask the scenario result.
+    /// Removes anything a scenario created, so a re-run starts clean. Best effort — a failure
+    /// here must not mask the scenario result.
     /// </summary>
+    /// <remarks>
+    /// Deletes as <c>admin</c>, which holds every write policy. A scenario that proved a role
+    /// may <em>not</em> write has nothing to clean up anyway, and one that created a resource
+    /// should not also depend on its own role being able to remove it.
+    /// </remarks>
     [AfterScenario]
-    public async Task RemoveVehiclesCreatedByTheScenario()
+    public async Task RemoveResourcesCreatedByTheScenario()
     {
-        if (state.CreatedVins.Count == 0)
+        if (state.CreatedResources.Count == 0)
         {
             return;
         }
@@ -27,11 +32,11 @@ public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
             return;
         }
 
-        foreach (var vin in state.CreatedVins)
+        foreach (var (resource, key) in state.CreatedResources)
         {
             try
             {
-                await api.SendAsync(HttpMethod.Delete, $"/vehicles/{vin}", adminToken, null);
+                await api.SendAsync(HttpMethod.Delete, $"/{resource}/{key}", adminToken, null);
             }
             catch
             {

@@ -1,9 +1,10 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using FluentValidation;
 using Scalar.AspNetCore;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Api.Health;
 using UA.Action.Freedom.Api.Installer;
+using UA.Action.Freedom.Api.People;
 using UA.Action.Freedom.Api.Vehicles;
 using UA.Action.Freedom.Application;
 using UA.Action.Freedom.Data;
@@ -66,32 +67,9 @@ app.UseAuthorization();
 
 app.MapFreedomHealthChecks();
 app.MapFreedomVehicles();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.MapFreedomPeople();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
 
 /// <summary>Exposed so component tests can host the application in memory.</summary>
 public partial class Program;

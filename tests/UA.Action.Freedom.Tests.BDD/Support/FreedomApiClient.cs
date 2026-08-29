@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -68,8 +68,15 @@ public sealed class FreedomApiClient : IDisposable
         return token;
     }
 
-    /// <summary>True when the deployed API answers a liveness probe and exposes /vehicles.</summary>
-    public async Task<(bool Ok, string Reason)> ProbeAsync()
+    /// <summary>
+    /// True when the deployed API answers a liveness probe and exposes <paramref name="route"/>.
+    /// </summary>
+    /// <remarks>
+    /// Checking the feature's own route, not just liveness, is what separates "the stack is not
+    /// running" from "the running image predates this feature". Both skip, but the reason a
+    /// developer reads is different, and only one of them means "rebuild the image".
+    /// </remarks>
+    public async Task<(bool Ok, string Reason)> ProbeAsync(string route = "/vehicles")
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(4));
 
@@ -83,10 +90,10 @@ public sealed class FreedomApiClient : IDisposable
                 return (false, $"/health/live returned {(int)live.StatusCode}");
             }
 
-            using var vehicles = await Http.GetAsync($"{root}/vehicles", timeout.Token);
-            if (vehicles.StatusCode == System.Net.HttpStatusCode.NotFound)
+            using var probe = await Http.GetAsync($"{root}{route}", timeout.Token);
+            if (probe.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                return (false, "the deployed API has no /vehicles route (image predates this feature)");
+                return (false, $"the deployed API has no {route} route (image predates this feature)");
             }
 
             return (true, string.Empty);

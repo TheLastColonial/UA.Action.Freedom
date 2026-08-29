@@ -176,5 +176,41 @@ BEGIN
 END
 GO
 
+-- --------------------------------------------------------------------------
+-- Volunteers — dbo.Person
+--
+-- One row per individual supporting Ukrainian Action. The domain models a Driver as a
+-- subtype of Person; the database keeps one table with IsDriver telling them apart, because
+-- everything a driver adds (Committed) is two columns rather than a second identity.
+--
+-- Personal data (recommendations 4.8): UK residency, never written to a log, and a defined
+-- retention period. The key is a uniqueidentifier rather than an IDENTITY sequence so that a
+-- volunteer's URL does not disclose how many volunteers the charity has.
+--
+-- Convoy history (Driver.Convoys) is not modelled yet — it arrives with dbo.Convoy.
+-- freedom_app already holds full DML on SCHEMA::dbo (above), so no new grant.
+-- --------------------------------------------------------------------------
+
+IF OBJECT_ID('dbo.Person') IS NULL
+BEGIN
+    CREATE TABLE dbo.Person (
+        Id           uniqueidentifier NOT NULL CONSTRAINT PK_Person PRIMARY KEY,
+        FirstName    nvarchar(100)    NOT NULL,
+        LastName     nvarchar(100)    NOT NULL,
+        DateOfBirth  datetime2(0)     NOT NULL,
+        Joined       datetime2(0)     NOT NULL,
+        Phone        nvarchar(50)     NULL,
+        IsDriver     bit              NOT NULL CONSTRAINT DF_Person_IsDriver DEFAULT 0,
+        Committed    bit              NOT NULL CONSTRAINT DF_Person_Committed DEFAULT 0,
+        CreatedAt    datetime2(0)     NOT NULL CONSTRAINT DF_Person_CreatedAt DEFAULT SYSUTCDATETIME(),
+        UpdatedAt    datetime2(0)     NOT NULL CONSTRAINT DF_Person_UpdatedAt DEFAULT SYSUTCDATETIME()
+    );
+
+    -- The dispatcher's shortlist is "drivers, by name". Everything else pages the full roster
+    -- in the same order, so one index serves both reads.
+    CREATE INDEX IX_Person_IsDriver_Name ON dbo.Person (IsDriver, LastName, FirstName, Id);
+END
+GO
+
 PRINT 'Freedom database bootstrap complete.';
 GO

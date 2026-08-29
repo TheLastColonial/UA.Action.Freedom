@@ -18,6 +18,16 @@ public static class AuthenticationExtensions
     /// <summary>Create, change or remove a vehicle — Purchaser and Administrator only.</summary>
     public const string VehiclesWrite = "vehicles:write";
 
+    /// <summary>Read the volunteer roster — every operational role.</summary>
+    public const string PeopleRead = "people:read";
+
+    /// <summary>
+    /// Add, change or remove a volunteer — Administrator only. Approving new volunteers and
+    /// revoking access when they leave is what the Administrator role exists for
+    /// (docs/domain/key-concepts.md § Roles).
+    /// </summary>
+    public const string PeopleWrite = "people:write";
+
     private const string RoleClaimType = "roles";
 
     private const string Administrator = "Administrator";
@@ -69,7 +79,11 @@ public static class AuthenticationExtensions
             .AddPolicy(VehiclesRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(VehiclesWrite, policy =>
-                policy.RequireRole(Administrator, Purchaser));
+                policy.RequireRole(Administrator, Purchaser))
+            .AddPolicy(PeopleRead, policy =>
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
+            .AddPolicy(PeopleWrite, policy =>
+                policy.RequireRole(Administrator));
 
         return services;
     }
