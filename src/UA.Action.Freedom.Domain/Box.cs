@@ -1,54 +1,58 @@
-﻿namespace UA.Action.Freedom.Domain;
+namespace UA.Action.Freedom.Domain;
 
 /// <summary>
-/// Packaged <see cref="Item[]"/> into a container for transport
+/// Packaged <see cref="Item"/>s in a container for transport
 /// </summary>
 public class Box
 {
     /// <summary>
     /// Unique reference
     /// </summary>
-    public BoxId Id { get; init; }
+    public required BoxId Id { get; init; }
 
     /// <summary>
-    /// <see cref="Item"/> packaged into the <see cref="Box"/>
+    /// <see cref="Item"/>s packaged into the <see cref="Box"/>
     /// </summary>
-    public List<Item> Items { get; init; }
+    public List<Item> Items { get; init; } = [];
 
     /// <summary>
     /// Confirmed weight of the <see cref="Box"/>
     /// </summary>
-    public int WeightKg { get; init; } = 0;
+    public int WeightKg { get; init; }
 
     /// <summary>
-    /// The contents of the box has been validated
+    /// The contents of the box have been validated
     /// </summary>
-    public bool Validated => this.ValidatedBy != null;
+    public bool Validated => this.ValidatedBy is not null;
 
     /// <summary>
     /// Who validated the contents of the box
     /// </summary>
+    /// <remarks>
+    /// With <see cref="ValidatedAt"/> this is an audit artefact, not a status flag: validation is
+    /// the trust boundary between the donor and Ukrainian Action, and the weight it confirms is
+    /// what the border check relies on. See docs/domain/key-concepts.md § Box.
+    /// </remarks>
     public Person? ValidatedBy { get; init; }
 
     /// <summary>
-    /// When the box was validated
+    /// When the box was validated. Null while it is unvalidated.
     /// </summary>
-    public DateTime ValidatedAt { get; init; }
+    public DateTime? ValidatedAt { get; init; }
 
     /// <summary>
     /// Current location of the <see cref="Box"/>
     /// </summary>
-    public Address Location { get; init; }
+    public Address? Location { get; init; }
 
     /// <summary>
-    /// Ultimate <see cref="Reciever"/> of the box contents
+    /// Ultimate <see cref="Domain.Receiver"/> of the box contents
     /// </summary>
-    public Reciever Reciever { get; init; }
+    public Receiver? Receiver { get; init; }
 }
 
 /// <summary>
 /// Unique reference to a <see cref="Box"/>
 /// </summary>
-/// <param name="value"></param>
-public record BoxId(int value);
-
+/// <param name="Value"></param>
+public record BoxId(int Value);

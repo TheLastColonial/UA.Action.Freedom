@@ -1,16 +1,16 @@
-﻿namespace UA.Action.Freedom.Domain;
+namespace UA.Action.Freedom.Domain;
 
 /// <summary>
-/// Collection of <see cref="Vehicle"/> tranisting together
+/// Collection of <see cref="Vehicle"/>s transiting together
 /// </summary>
 public class Convoy
 {
     /// <summary>
-    /// Unique refernence
+    /// Unique reference
     /// </summary>
-    public ConvoyId Id { get; init; }
+    public required ConvoyId Id { get; init; }
 
-    public List<Vehicle> Vehicles { get; init; }
+    public List<Vehicle> Vehicles { get; init; } = [];
 
     /// <summary>
     /// Departure Timestamp
@@ -23,9 +23,19 @@ public class Convoy
     public DateTime ExpectedEnd { get; init; }
 
     /// <summary>
+    /// When the truck list was published. Null while the convoy is still being planned.
+    /// </summary>
+    /// <remarks>
+    /// docs/process.puml puts <em>Truck List Published</em> before <em>Manifest Proposed</em>:
+    /// manifests are proposed against the set of vehicles committed to the convoy, so there has to
+    /// be a published set first.
+    /// </remarks>
+    public DateTime? TruckListPublishedAt { get; init; }
+
+    /// <summary>
     /// Steps that will be taken by the <see cref="Convoy"/>
     /// </summary>
-    public Route Route { get; init; }
+    public Route Route { get; init; } = [];
 }
 
 /// <summary>

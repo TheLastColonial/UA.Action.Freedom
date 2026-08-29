@@ -346,11 +346,14 @@ protection (Cloudflare Turnstile is free) and an explicit approval step before a
    happen — degrade to read-only from cached documents, or accept an outage? This is a business decision.
    > Read Only from the cache documents, we will revisit later if this is acceptable.
 
-### 5.3 Reconcile `ManifestStatus` with `manifest-status.puml`
+### 5.3 Reconcile `ManifestStatus` with `manifest-status.puml` — settled
 
-Out of scope for this document but worth flagging: the code defines six manifest states while
-`docs/manifest-status.puml` documents ten. This design assumes the `.puml` is the target. Confirm before building
-the workflow, because the status model determines where the GMR submission is triggered from.
+Out of scope for this document but worth flagging: the code defined six manifest states while
+`docs/manifest-status.puml` documents ten. This design assumed the `.puml` was the target.
+
+> Confirmed: the ten-state `.puml` is authoritative. `ManifestStatus` is now an enum matching it exactly, and the
+> edges are data in `ManifestTransitions.CanTransition`. Confirmation is what releases a manifest to GMR
+> submission, and per §5.2 the manifest is frozen once that GMR exists.
 
 ---
 

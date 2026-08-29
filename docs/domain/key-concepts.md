@@ -92,8 +92,8 @@ A truck or car that has been donated, and which is itself part of the aid — ve
 not driven back. Identified by VIN and licence plate, and carrying the detail a border check needs: kerb weight,
 fuel type, transmission, year, and condition notes.
 
-> **Naming:** the domain type has been renamed from `Veichle` to `Vehicle`. At the time of writing the rename is
-> incomplete — `Manifest.cs` and `Convoy.cs` still reference the old spelling. Use **Vehicle** in all new work.
+> **Naming:** the domain type was renamed from `Veichle` to `Vehicle`. The rename is complete across the
+> solution.
 
 ### Route
 
@@ -123,8 +123,8 @@ border check relies on. Both facts make the validation record an audit artefact,
 The destination of a box's contents: a responsible individual, an organisation, and an [Address](#address) in
 Ukraine.
 
-> **Naming:** the domain type is currently spelled `Reciever`. Prefer **Receiver** in documentation and in new
-> code.
+> **Naming:** the domain type was spelled `Reciever` and has been renamed to `Receiver` across the solution,
+> along with `ResponsibleIndiviual` → `ResponsibleIndividual`.
 
 ### Driver Team
 
