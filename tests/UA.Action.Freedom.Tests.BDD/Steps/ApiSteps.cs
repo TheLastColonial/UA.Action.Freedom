@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using AwesomeAssertions;
 using Reqnroll;
@@ -40,26 +40,43 @@ public sealed class ApiSteps(FreedomApiClient api, ScenarioState state)
 
     [When("I GET \"(.*)\" without a token")]
     public Task WhenIGetWithoutAToken(string path) =>
-        api.SendAsync(HttpMethod.Get, path, bearerToken: null, jsonBody: null);
+        api.SendAsync(HttpMethod.Get, Resolve(path), bearerToken: null, jsonBody: null);
 
     [When("I GET \"(.*)\"")]
     public Task WhenIGet(string path) =>
-        api.SendAsync(HttpMethod.Get, path, state.CurrentToken, jsonBody: null);
+        api.SendAsync(HttpMethod.Get, Resolve(path), state.CurrentToken, jsonBody: null);
 
     [When("I POST \"(.*)\" with body:")]
     public async Task WhenIPostWithBody(string path, string body)
     {
-        var response = await api.SendAsync(HttpMethod.Post, path, state.CurrentToken, body);
+        var response = await api.SendAsync(HttpMethod.Post, Resolve(path), state.CurrentToken, body);
+        TrackCreated(response);
+    }
+
+    [When("I POST \"(.*)\"")]
+    public async Task WhenIPost(string path)
+    {
+        var response = await api.SendAsync(HttpMethod.Post, Resolve(path), state.CurrentToken, jsonBody: null);
         TrackCreated(response);
     }
 
     [When("I PUT \"(.*)\" with body:")]
     public Task WhenIPutWithBody(string path, string body) =>
-        api.SendAsync(HttpMethod.Put, path, state.CurrentToken, body);
+        api.SendAsync(HttpMethod.Put, Resolve(path), state.CurrentToken, body);
+
+    [When("I PUT \"(.*)\"")]
+    public Task WhenIPut(string path) =>
+        api.SendAsync(HttpMethod.Put, Resolve(path), state.CurrentToken, jsonBody: null);
 
     [When("I DELETE \"(.*)\"")]
     public Task WhenIDelete(string path) =>
-        api.SendAsync(HttpMethod.Delete, path, state.CurrentToken, jsonBody: null);
+        api.SendAsync(HttpMethod.Delete, Resolve(path), state.CurrentToken, jsonBody: null);
+
+    /// <summary>
+    /// Substitutes <c>{id}</c> for the key of the resource the scenario most recently created.
+    /// </summary>
+    private string Resolve(string path) =>
+        path.Replace("{id}", state.LastCreatedKey ?? "missing-id", StringComparison.Ordinal);
 
     [Then("the response status is (\\d+)")]
     public void ThenTheResponseStatusIs(int expected) =>
@@ -123,6 +140,7 @@ public sealed class ApiSteps(FreedomApiClient api, ScenarioState state)
         if (segments.Length >= 2)
         {
             state.CreatedResources.Add((segments[^2], segments[^1]));
+            state.LastCreatedKey = segments[^1];
         }
     }
 }

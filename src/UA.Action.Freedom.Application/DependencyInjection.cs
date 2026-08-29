@@ -1,5 +1,6 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Vehicles;
 
@@ -24,6 +25,18 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DeletePersonCommand, DeletePersonOutcome>, DeletePersonHandler>();
         services.AddScoped<IQueryHandler<GetPersonByIdQuery, PersonReadModel?>, GetPersonByIdHandler>();
         services.AddScoped<IQueryHandler<ListPeopleQuery, IReadOnlyList<PersonReadModel>>, ListPeopleHandler>();
+
+        services.AddScoped<ICommandHandler<CreateConvoyCommand, int>, CreateConvoyHandler>();
+        services.AddScoped<ICommandHandler<UpdateConvoyCommand, UpdateConvoyOutcome>, UpdateConvoyHandler>();
+        services.AddScoped<ICommandHandler<DeleteConvoyCommand, DeleteConvoyOutcome>, DeleteConvoyHandler>();
+        services.AddScoped<IQueryHandler<GetConvoyByIdQuery, ConvoyReadModel?>, GetConvoyByIdHandler>();
+        services.AddScoped<IQueryHandler<ListConvoysQuery, IReadOnlyList<ConvoyReadModel>>, ListConvoysHandler>();
+        services.AddScoped<IQueryHandler<GetConvoyRouteQuery, IReadOnlyList<RouteStopReadModel>?>, GetConvoyRouteHandler>();
+        services.AddScoped<ICommandHandler<ReplaceConvoyRouteCommand, ReplaceConvoyRouteOutcome>, ReplaceConvoyRouteHandler>();
+        services.AddScoped<ICommandHandler<PublishTruckListCommand, PublishTruckListOutcome>, PublishTruckListHandler>();
+        services.AddScoped<ICommandHandler<AssignVehicleToConvoyCommand, AssignVehicleOutcome>, AssignVehicleToConvoyHandler>();
+        services.AddScoped<ICommandHandler<UnassignVehicleFromConvoyCommand, UnassignVehicleOutcome>, UnassignVehicleFromConvoyHandler>();
+        services.AddScoped<IQueryHandler<ListConvoyVehiclesQuery, IReadOnlyList<ConvoyVehicleReadModel>?>, ListConvoyVehiclesHandler>();
 
         return services;
     }

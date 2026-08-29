@@ -2,6 +2,7 @@
 using FluentValidation;
 using Scalar.AspNetCore;
 using UA.Action.Freedom.Api.Configuration;
+using UA.Action.Freedom.Api.Convoys;
 using UA.Action.Freedom.Api.Health;
 using UA.Action.Freedom.Api.Installer;
 using UA.Action.Freedom.Api.People;
@@ -68,6 +69,7 @@ app.UseAuthorization();
 app.MapFreedomHealthChecks();
 app.MapFreedomVehicles();
 app.MapFreedomPeople();
+app.MapFreedomConvoys();
 
 app.Run();
 

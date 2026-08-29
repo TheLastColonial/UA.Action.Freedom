@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
 namespace UA.Action.Freedom.Api.Configuration;
@@ -27,6 +27,16 @@ public static class AuthenticationExtensions
     /// (docs/domain/key-concepts.md § Roles).
     /// </summary>
     public const string PeopleWrite = "people:write";
+
+    /// <summary>Read convoys, their route and their truck list — every operational role.</summary>
+    public const string ConvoysRead = "convoys:read";
+
+    /// <summary>
+    /// Plan a convoy, set its route, and publish its truck list — Administrator and Dispatcher.
+    /// Creating the manifest and coordinating the convoy is the Dispatcher's job
+    /// (docs/domain/key-concepts.md § Roles).
+    /// </summary>
+    public const string ConvoysWrite = "convoys:write";
 
     private const string RoleClaimType = "roles";
 
@@ -83,7 +93,11 @@ public static class AuthenticationExtensions
             .AddPolicy(PeopleRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(PeopleWrite, policy =>
-                policy.RequireRole(Administrator));
+                policy.RequireRole(Administrator))
+            .AddPolicy(ConvoysRead, policy =>
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
+            .AddPolicy(ConvoysWrite, policy =>
+                policy.RequireRole(Administrator, Dispatcher));
 
         return services;
     }

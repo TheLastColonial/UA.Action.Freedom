@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Vehicles;
+using UA.Action.Freedom.Data.Convoys;
 using UA.Action.Freedom.Data.People;
 using UA.Action.Freedom.Data.Vehicles;
 
@@ -17,6 +19,7 @@ public static class DependencyInjection
         services.AddSingleton<IDbConnectionFactory, SqlConnectionFactory>();
         services.AddScoped<IVehicleRepository, VehicleRepository>();
         services.AddScoped<IPersonRepository, PersonRepository>();
+        services.AddScoped<IConvoyRepository, ConvoyRepository>();
 
         return services;
     }

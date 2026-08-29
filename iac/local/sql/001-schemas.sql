@@ -212,5 +212,91 @@ BEGIN
 END
 GO
 
+-- --------------------------------------------------------------------------
+-- Convoys — dbo.Convoy and dbo.ConvoyRouteStop
+--
+-- A convoy is the unit that is planned; the manifest is the unit that is executed per
+-- vehicle. Roughly one convoy a month, never concurrent (recommendations 5.2), so an int
+-- IDENTITY is a generous key and it keeps the /convoys/{id} route readable.
+--
+-- TruckListPublishedAt is the gate in docs/process.puml: Truck List Created -> Truck List
+-- Published -> Manifest Proposed. Manifests are proposed against the published set of
+-- vehicles, so publication is one-way and the application refuses to change the vehicle
+-- list afterwards. NULL means "still being planned".
+--
+-- The route is a child table rather than a column of stops, because Sequence is what makes
+-- it a journey rather than a bag of addresses. Sequence is dense and 1-based; the
+-- application renumbers on write, so nothing here has to trust the caller's numbering.
+-- --------------------------------------------------------------------------
+
+IF OBJECT_ID('dbo.Convoy') IS NULL
+BEGIN
+    CREATE TABLE dbo.Convoy (
+        Id                   int          NOT NULL IDENTITY(1,1) CONSTRAINT PK_Convoy PRIMARY KEY,
+        Start                datetime2(0) NOT NULL,
+        ExpectedEnd          datetime2(0) NOT NULL,
+        TruckListPublishedAt datetime2(0) NULL,
+        CreatedAt            datetime2(0) NOT NULL CONSTRAINT DF_Convoy_CreatedAt DEFAULT SYSUTCDATETIME(),
+        UpdatedAt            datetime2(0) NOT NULL CONSTRAINT DF_Convoy_UpdatedAt DEFAULT SYSUTCDATETIME()
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.ConvoyRouteStop') IS NULL
+BEGIN
+    CREATE TABLE dbo.ConvoyRouteStop (
+        ConvoyId  int           NOT NULL,
+        Sequence  int           NOT NULL,
+        House     nvarchar(100) NULL,
+        Street    nvarchar(200) NULL,
+        City      nvarchar(100) NULL,
+        Country   nvarchar(100) NULL,
+        Postcode  nvarchar(20)  NOT NULL CONSTRAINT DF_ConvoyRouteStop_Postcode DEFAULT '',
+        CONSTRAINT PK_ConvoyRouteStop PRIMARY KEY (ConvoyId, Sequence),
+        -- The route has no life of its own: deleting the convoy takes it with it, which is
+        -- also what stops a cancelled convoy leaving orphan stops behind.
+        CONSTRAINT FK_ConvoyRouteStop_Convoy FOREIGN KEY (ConvoyId)
+            REFERENCES dbo.Convoy (Id) ON DELETE CASCADE
+    );
+END
+GO
+
+-- --------------------------------------------------------------------------
+-- dbo.Vehicle.ConvoyId becomes a real foreign key
+--
+-- The Vehicle table was created before dbo.Convoy existed, and its own comment records
+-- ConvoyId as "a loose int ... until dbo.Convoy exists". It does now.
+--
+-- Any value already in that column was written when nothing validated it, so orphans are
+-- cleared first — the constraint cannot be added while they are there, and this script has
+-- to stay re-runnable on a database that predates the convoy table. ON DELETE SET NULL:
+-- cancelling a convoy releases its vehicles rather than deleting donated vehicles.
+-- --------------------------------------------------------------------------
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Vehicle_Convoy')
+BEGIN
+    UPDATE v SET ConvoyId = NULL
+    FROM dbo.Vehicle AS v
+    WHERE v.ConvoyId IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM dbo.Convoy AS c WHERE c.Id = v.ConvoyId);
+
+    ALTER TABLE dbo.Vehicle ADD CONSTRAINT FK_Vehicle_Convoy
+        FOREIGN KEY (ConvoyId) REFERENCES dbo.Convoy (Id) ON DELETE SET NULL;
+END
+GO
+
+-- The truck list is read by convoy: "which vehicles are travelling together".
+--
+-- Deliberately not a filtered index on ConvoyId IS NOT NULL, though most vehicles are
+-- unassigned between convoys. Filtered indexes require SET QUOTED_IDENTIFIER ON, and sqlcmd
+-- — which is what applies this file — runs with it off. A bootstrap script that depends on
+-- the session settings of whatever tool invokes it is a trap; the fleet is small enough that
+-- the saving was never worth it.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Vehicle_ConvoyId' AND object_id = OBJECT_ID('dbo.Vehicle'))
+BEGIN
+    CREATE INDEX IX_Vehicle_ConvoyId ON dbo.Vehicle (ConvoyId);
+END
+GO
+
 PRINT 'Freedom database bootstrap complete.';
 GO
