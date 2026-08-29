@@ -364,5 +364,70 @@ BEGIN
 END
 GO
 
+-- --------------------------------------------------------------------------
+-- Cargo — dbo.Box and dbo.BoxItem
+--
+-- A box is a packed container of items with a confirmed weight, a current location and a
+-- target receiver. ValidatedByPersonId + ValidatedAt are an audit artefact rather than a
+-- status flag: a Loader physically checks the contents and weighs the box, and that check
+-- is the trust boundary between the donor and Ukrainian Action. The application refuses to
+-- change a validated box, so those two columns are only ever written once.
+--
+-- ReceiverRef is the opaque reference into dbo.Receiver and nothing more. The delivery
+-- address lives in sensitive.ReceiverDetail and never comes near cargo (4.4).
+--
+-- Location is the box's current whereabouts — a UK depot, routine, not sensitive.
+--
+-- Item properties are open-ended (size, condition, expiry, whatever a donation needs), so
+-- they are stored as a JSON document rather than as a table nobody could keep up with.
+-- --------------------------------------------------------------------------
+
+IF OBJECT_ID('dbo.Box') IS NULL
+BEGIN
+    CREATE TABLE dbo.Box (
+        Id                  int              NOT NULL IDENTITY(1,1) CONSTRAINT PK_Box PRIMARY KEY,
+        WeightKg            int              NOT NULL CONSTRAINT DF_Box_WeightKg DEFAULT 0,
+        ReceiverRef         uniqueidentifier NULL,
+        House               nvarchar(100)    NULL,
+        Street              nvarchar(200)    NULL,
+        City                nvarchar(100)    NULL,
+        Country             nvarchar(100)    NULL,
+        Postcode            nvarchar(20)     NULL,
+        ValidatedByPersonId uniqueidentifier NULL,
+        ValidatedAt         datetime2(0)     NULL,
+        CreatedAt           datetime2(0)     NOT NULL CONSTRAINT DF_Box_CreatedAt DEFAULT SYSUTCDATETIME(),
+        UpdatedAt           datetime2(0)     NOT NULL CONSTRAINT DF_Box_UpdatedAt DEFAULT SYSUTCDATETIME(),
+
+        -- A receiver cannot be deleted out from under cargo already routed to it.
+        CONSTRAINT FK_Box_Receiver FOREIGN KEY (ReceiverRef) REFERENCES dbo.Receiver (ReceiverRef),
+
+        -- The validator is a volunteer on file. NO ACTION on delete: a volunteer who leaves
+        -- must not take the record of what they signed for with them.
+        CONSTRAINT FK_Box_ValidatedBy FOREIGN KEY (ValidatedByPersonId) REFERENCES dbo.Person (Id),
+
+        -- Validation is one event, so its two halves are written together or not at all.
+        CONSTRAINT CK_Box_ValidationIsWholeOrAbsent CHECK (
+            (ValidatedByPersonId IS NULL AND ValidatedAt IS NULL)
+            OR (ValidatedByPersonId IS NOT NULL AND ValidatedAt IS NOT NULL))
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.BoxItem') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoxItem (
+        Id             uniqueidentifier NOT NULL CONSTRAINT PK_BoxItem PRIMARY KEY,
+        BoxId          int              NOT NULL,
+        Description    nvarchar(400)    NOT NULL,
+        PropertiesJson nvarchar(max)    NOT NULL CONSTRAINT DF_BoxItem_PropertiesJson DEFAULT '{}',
+
+        -- Items have no life outside their box: unpacking one is deleting the box.
+        CONSTRAINT FK_BoxItem_Box FOREIGN KEY (BoxId) REFERENCES dbo.Box (Id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IX_BoxItem_BoxId ON dbo.BoxItem (BoxId);
+END
+GO
+
 PRINT 'Freedom database bootstrap complete.';
 GO

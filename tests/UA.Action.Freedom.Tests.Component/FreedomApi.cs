@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
@@ -148,6 +149,37 @@ internal static class FreedomApi
                 services.AddScoped(_ => receivers);
                 services.RemoveAll<IReceiverDetailRepository>();
                 services.AddScoped(_ => detail);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with box persistence and the volunteer roster swapped out. Both are
+    /// needed together: validating a box checks that the volunteer who signed for it is on file.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithBoxes(
+        IBoxRepository boxes,
+        IPersonRepository people,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IBoxRepository>();
+                services.AddScoped(_ => boxes);
+                services.RemoveAll<IPersonRepository>();
+                services.AddScoped(_ => people);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)

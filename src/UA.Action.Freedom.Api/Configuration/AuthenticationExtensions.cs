@@ -59,6 +59,23 @@ public static class AuthenticationExtensions
     /// </remarks>
     public const string ReceiversDetail = "receivers:detail";
 
+    /// <summary>Read boxes and their contents — every operational role.</summary>
+    public const string BoxesRead = "boxes:read";
+
+    /// <summary>Pack, move or remove a box — Administrator, Dispatcher and Loader.</summary>
+    public const string BoxesWrite = "boxes:write";
+
+    /// <summary>
+    /// Confirm a box's contents and weight — Administrator and Loader.
+    /// </summary>
+    /// <remarks>
+    /// The Loader is the role that stands in the warehouse and opens the box, so this is theirs.
+    /// It is separate from <see cref="BoxesWrite"/> because packing a box and vouching for what
+    /// is in it are different acts: the validation record is what the charity's assurance to a
+    /// border rests on (docs/domain/key-concepts.md § Loader).
+    /// </remarks>
+    public const string BoxesValidate = "boxes:validate";
+
     private const string RoleClaimType = "roles";
 
     private const string Administrator = "Administrator";
@@ -131,7 +148,13 @@ public static class AuthenticationExtensions
             .AddPolicy(ReceiversWrite, policy =>
                 policy.RequireRole(Administrator, GroundOfficer))
             .AddPolicy(ReceiversDetail, policy =>
-                policy.RequireRole(GroundOfficer));
+                policy.RequireRole(GroundOfficer))
+            .AddPolicy(BoxesRead, policy =>
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
+            .AddPolicy(BoxesWrite, policy =>
+                policy.RequireRole(Administrator, Dispatcher, Loader))
+            .AddPolicy(BoxesValidate, policy =>
+                policy.RequireRole(Administrator, Loader));
 
         return services;
     }

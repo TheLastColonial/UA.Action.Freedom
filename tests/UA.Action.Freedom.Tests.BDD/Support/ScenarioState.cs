@@ -32,6 +32,18 @@ public sealed class ScenarioState
         remembered[name] = LastCreatedKey
             ?? throw new InvalidOperationException($"Nothing has been created to remember as '{name}'.");
 
+    /// <summary>
+    /// Pins an arbitrary value under a name — an identifier a scenario needs later that did not
+    /// come from the last Location header, such as the volunteer who validates a box.
+    /// </summary>
+    public void Pin(string name, string value) => remembered[name] = value;
+
+    /// <summary>Reads back a value stored by <see cref="Pin"/> or <see cref="Remember"/>.</summary>
+    public string Pinned(string name) =>
+        remembered.TryGetValue(name, out var value)
+            ? value
+            : throw new InvalidOperationException($"No '{name}' has been remembered.");
+
     /// <summary>Substitutes <c>{id}</c> in <paramref name="template"/> with a remembered key.</summary>
     public string Recall(string name, string template) =>
         template.Replace(

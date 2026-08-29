@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
@@ -46,6 +47,16 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListReceiversQuery, IReadOnlyList<ReceiverReadModel>>, ListReceiversHandler>();
         services.AddScoped<IQueryHandler<GetReceiverDetailQuery, ReceiverDetailReadModel?>, GetReceiverDetailHandler>();
         services.AddScoped<ICommandHandler<SetReceiverDetailCommand, SetReceiverDetailOutcome>, SetReceiverDetailHandler>();
+
+        services.AddScoped<ICommandHandler<CreateBoxCommand, int>, CreateBoxHandler>();
+        services.AddScoped<ICommandHandler<UpdateBoxCommand, UpdateBoxOutcome>, UpdateBoxHandler>();
+        services.AddScoped<ICommandHandler<DeleteBoxCommand, DeleteBoxOutcome>, DeleteBoxHandler>();
+        services.AddScoped<IQueryHandler<GetBoxByIdQuery, BoxReadModel?>, GetBoxByIdHandler>();
+        services.AddScoped<IQueryHandler<ListBoxesQuery, IReadOnlyList<BoxReadModel>>, ListBoxesHandler>();
+        services.AddScoped<ICommandHandler<ValidateBoxCommand, ValidateBoxOutcome>, ValidateBoxHandler>();
+        services.AddScoped<IQueryHandler<ListBoxItemsQuery, IReadOnlyList<BoxItemReadModel>?>, ListBoxItemsHandler>();
+        services.AddScoped<ICommandHandler<AddBoxItemCommand, AddBoxItemOutcome>, AddBoxItemHandler>();
+        services.AddScoped<ICommandHandler<RemoveBoxItemCommand, RemoveBoxItemOutcome>, RemoveBoxItemHandler>();
 
         return services;
     }
