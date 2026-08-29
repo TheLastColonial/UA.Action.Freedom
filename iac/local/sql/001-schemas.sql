@@ -93,8 +93,66 @@ DENY SELECT ON SCHEMA::sensitive TO freedom_app, freedom_worker, administrator, 
 GO
 
 -- --------------------------------------------------------------------------
--- A table in each schema, so the separation is demonstrable before the real
--- model lands. Replace these when the Data project grows migrations.
+-- Logins, and the users that carry those roles
+--
+-- The roles and the DENY above are inert until something actually connects *as* one of
+-- them. Until these logins existed the application connected as `sa` — and `sa` is
+-- sysadmin, which bypasses permission checks entirely, so the DENY that 4.4 calls
+-- load-bearing was decorative. Two ordinary logins fix that:
+--
+--   freedom_app        the application's own identity. Full DML on dbo, DENY on sensitive.
+--   freedom_sensitive  the Ground Officer path, and the only way to read a delivery address.
+--
+-- In Azure both are managed identities with Entra-only authentication and no password at
+-- all (4.2); the passwords here exist because a local SQL Server has nothing else to
+-- authenticate with. They arrive as sqlcmd scripting variables resolved from the
+-- environment, so they are never on a command line — same reasoning as ../../tofu/database.tf.
+--
+-- User names differ from role names because a database principal cannot share a name with
+-- a role in the same database.
+-- --------------------------------------------------------------------------
+
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'freedom_app')
+BEGIN
+    CREATE LOGIN freedom_app WITH PASSWORD = '$(FREEDOM_APP_PASSWORD)', CHECK_POLICY = OFF;
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'freedom_sensitive')
+BEGIN
+    CREATE LOGIN freedom_sensitive WITH PASSWORD = '$(FREEDOM_SENSITIVE_PASSWORD)', CHECK_POLICY = OFF;
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = 'freedom_app_user')
+BEGIN
+    CREATE USER freedom_app_user FOR LOGIN freedom_app;
+    ALTER ROLE freedom_app ADD MEMBER freedom_app_user;
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = 'freedom_sensitive_user')
+BEGIN
+    CREATE USER freedom_sensitive_user FOR LOGIN freedom_sensitive;
+    ALTER ROLE ground_officer ADD MEMBER freedom_sensitive_user;
+END
+GO
+
+-- The Ground Officer path writes an audit row for every address it resolves, so it needs
+-- more than the SELECT that ground_officer already grants on the schema.
+GRANT INSERT ON sensitive.ReceiverDetailAccessLog TO ground_officer;
+GO
+
+-- --------------------------------------------------------------------------
+-- Receivers — the split that matters most
+--
+-- dbo.Receiver is what the rest of the application joins on and what may appear on a
+-- document that crosses a border: an opaque reference, the organisation, and a region.
+-- Region is as precise as anything that travels gets (4.4.2).
+--
+-- sensitive.ReceiverDetail holds the delivery address and the contact. Only ground_officer
+-- can read it, and freedom_app is explicitly DENY'd, so the application identity cannot
+-- select a delivery address even if someone later adds a broad grant elsewhere.
 -- --------------------------------------------------------------------------
 
 IF OBJECT_ID('dbo.Receiver') IS NULL
@@ -107,6 +165,14 @@ BEGIN
         Region          nvarchar(100)    NOT NULL,
         CreatedAt       datetime2(0)     NOT NULL CONSTRAINT DF_Receiver_CreatedAt DEFAULT SYSUTCDATETIME()
     );
+END
+GO
+
+-- The Receiver table predates the repository convention of carrying an UpdatedAt.
+IF COL_LENGTH('dbo.Receiver', 'UpdatedAt') IS NULL
+BEGIN
+    ALTER TABLE dbo.Receiver ADD UpdatedAt datetime2(0) NOT NULL
+        CONSTRAINT DF_Receiver_UpdatedAt DEFAULT SYSUTCDATETIME();
 END
 GO
 

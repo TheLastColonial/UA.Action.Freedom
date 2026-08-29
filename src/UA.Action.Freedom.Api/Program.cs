@@ -4,6 +4,7 @@ using Scalar.AspNetCore;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Api.Convoys;
 using UA.Action.Freedom.Api.Health;
+using UA.Action.Freedom.Api.Receivers;
 using UA.Action.Freedom.Api.Installer;
 using UA.Action.Freedom.Api.People;
 using UA.Action.Freedom.Api.Vehicles;
@@ -70,6 +71,7 @@ app.MapFreedomHealthChecks();
 app.MapFreedomVehicles();
 app.MapFreedomPeople();
 app.MapFreedomConvoys();
+app.MapFreedomReceivers();
 
 app.Run();
 

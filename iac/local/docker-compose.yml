@@ -17,7 +17,10 @@ name: freedom-local
 # identity with shared-key auth disabled (docs/recommendations.md 4.2).
 x-azurite: &azurite-connection-string "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;QueueEndpoint=http://azurite:10001/devstoreaccount1;TableEndpoint=http://azurite:10002/devstoreaccount1;"
 
-x-mssql: &freedom-connection-string "Server=mssql,1433;Database=Freedom;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=False"
+x-mssql: &freedom-connection-string "Server=mssql,1433;Database=Freedom;User Id=freedom_app;Password=${FREEDOM_APP_DB_PASSWORD:-Local_Freedom_App_1};TrustServerCertificate=True;Encrypt=False"
+# The Ground Officer path. Held by a login in the ground_officer database role, which is
+# the only role granted SELECT on the sensitive schema — freedom_app is DENY'd there.
+x-mssql-sensitive: &freedom-sensitive-connection-string "Server=mssql,1433;Database=Freedom;User Id=freedom_sensitive;Password=${FREEDOM_SENSITIVE_DB_PASSWORD:-Local_Freedom_Sensitive_1};TrustServerCertificate=True;Encrypt=False"
 
 x-telemetry: &telemetry
   OTEL_EXPORTER_OTLP_ENDPOINT: http://telemetry:4317
@@ -98,6 +101,7 @@ services:
       Hosting__UseHttpsRedirection: "false"
 
       ConnectionStrings__Freedom: *freedom-connection-string
+      ConnectionStrings__FreedomSensitive: *freedom-sensitive-connection-string
       Storage__ConnectionString: *azurite-connection-string
       Storage__DocumentsContainer: manifests
       Storage__DataProtectionContainer: dataprotection

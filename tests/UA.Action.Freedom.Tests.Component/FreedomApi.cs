@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.People;
+using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Vehicles;
 
 namespace UA.Action.Freedom.Tests.Component;
@@ -115,6 +116,38 @@ internal static class FreedomApi
             {
                 services.RemoveAll<IConvoyRepository>();
                 services.AddScoped(_ => repository);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with both halves of receiver persistence swapped out and its JWT scheme
+    /// swapped for <see cref="TestAuthHandler"/>. Both halves are replaced together because the
+    /// endpoints that matter here span them — deleting a receiver touches its address.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithReceivers(
+        IReceiverRepository receivers,
+        IReceiverDetailRepository detail,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IReceiverRepository>();
+                services.AddScoped(_ => receivers);
+                services.RemoveAll<IReceiverDetailRepository>();
+                services.AddScoped(_ => detail);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)

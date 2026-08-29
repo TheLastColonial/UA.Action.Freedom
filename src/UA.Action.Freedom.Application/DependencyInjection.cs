@@ -2,6 +2,7 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.People;
+using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Vehicles;
 
 namespace UA.Action.Freedom.Application;
@@ -37,6 +38,14 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<AssignVehicleToConvoyCommand, AssignVehicleOutcome>, AssignVehicleToConvoyHandler>();
         services.AddScoped<ICommandHandler<UnassignVehicleFromConvoyCommand, UnassignVehicleOutcome>, UnassignVehicleFromConvoyHandler>();
         services.AddScoped<IQueryHandler<ListConvoyVehiclesQuery, IReadOnlyList<ConvoyVehicleReadModel>?>, ListConvoyVehiclesHandler>();
+
+        services.AddScoped<ICommandHandler<CreateReceiverCommand, Guid>, CreateReceiverHandler>();
+        services.AddScoped<ICommandHandler<UpdateReceiverCommand, UpdateReceiverOutcome>, UpdateReceiverHandler>();
+        services.AddScoped<ICommandHandler<DeleteReceiverCommand, DeleteReceiverOutcome>, DeleteReceiverHandler>();
+        services.AddScoped<IQueryHandler<GetReceiverByRefQuery, ReceiverReadModel?>, GetReceiverByRefHandler>();
+        services.AddScoped<IQueryHandler<ListReceiversQuery, IReadOnlyList<ReceiverReadModel>>, ListReceiversHandler>();
+        services.AddScoped<IQueryHandler<GetReceiverDetailQuery, ReceiverDetailReadModel?>, GetReceiverDetailHandler>();
+        services.AddScoped<ICommandHandler<SetReceiverDetailCommand, SetReceiverDetailOutcome>, SetReceiverDetailHandler>();
 
         return services;
     }

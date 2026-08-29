@@ -38,12 +38,40 @@ public static class AuthenticationExtensions
     /// </summary>
     public const string ConvoysWrite = "convoys:write";
 
+    /// <summary>
+    /// Read receivers — reference, organisation and region only. Every operational role, plus
+    /// the Ground Officer: this is the half that may appear on a document which crosses a border.
+    /// </summary>
+    public const string ReceiversRead = "receivers:read";
+
+    /// <summary>Register or amend a receiving organisation — Administrator and Ground Officer.</summary>
+    public const string ReceiversWrite = "receivers:write";
+
+    /// <summary>
+    /// Resolve, record or remove a Ukrainian delivery address — <strong>Ground Officer alone</strong>.
+    /// </summary>
+    /// <remarks>
+    /// The narrowest policy in the API, and the reason the role exists: segregating delivery
+    /// logistics from delivery detail (docs/domain/key-concepts.md § Ground Officer). Do not add
+    /// a role here without reading recommendations §4.4 first. Note that the policy is only the
+    /// outermost of three controls — the Ground Officer database identity and the DENY on the
+    /// sensitive schema hold even if this list is widened by mistake.
+    /// </remarks>
+    public const string ReceiversDetail = "receivers:detail";
+
     private const string RoleClaimType = "roles";
 
     private const string Administrator = "Administrator";
     private const string Purchaser = "Purchaser";
     private const string Dispatcher = "Dispatcher";
     private const string Loader = "Loader";
+
+    /// <summary>
+    /// The only role that sees full receiver detail. Deliberately absent from every other
+    /// policy: a Ground Officer has no reason to read the vehicle roster or the volunteer list,
+    /// and the isolation runs both ways.
+    /// </summary>
+    private const string GroundOfficer = "GroundOfficer";
 
     public static IServiceCollection AddFreedomAuthentication(
         this IServiceCollection services, OidcOptions oidc, bool isDevelopment)
@@ -97,7 +125,13 @@ public static class AuthenticationExtensions
             .AddPolicy(ConvoysRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(ConvoysWrite, policy =>
-                policy.RequireRole(Administrator, Dispatcher));
+                policy.RequireRole(Administrator, Dispatcher))
+            .AddPolicy(ReceiversRead, policy =>
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader, GroundOfficer))
+            .AddPolicy(ReceiversWrite, policy =>
+                policy.RequireRole(Administrator, GroundOfficer))
+            .AddPolicy(ReceiversDetail, policy =>
+                policy.RequireRole(GroundOfficer));
 
         return services;
     }

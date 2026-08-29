@@ -105,7 +105,28 @@ tofu apply
 | Email inbox (Mailpit) | <http://localhost:8025> |
 | Edge dashboard (Traefik) | <http://localhost:8090/dashboard/> |
 | Azurite | blob `:10000`, queue `:10001`, table `:10002` |
-| SQL Server | `localhost:1433`, `sa` / see `.env` |
+| SQL Server | `localhost:1433` — three logins, all in `.env`; see below |
+
+**The application does not connect as `sa`.** `sa` is sysadmin and bypasses permission checks, which
+would make the `DENY` on the `sensitive` schema — the control `docs/recommendations.md` §4.4 calls
+load-bearing — decorative. Three logins exist instead:
+
+| Login | Role | Can read |
+| --- | --- | --- |
+| `sa` | sysadmin | everything; used only to apply the schema bootstrap |
+| `freedom_app` | `freedom_app` | full DML on `dbo`. **`DENY SELECT` on `sensitive`** — this is the application's own identity |
+| `freedom_sensitive` | `ground_officer` | `sensitive` as well; the only way to resolve a Ukrainian delivery address |
+
+The application is given both as `ConnectionStrings__Freedom` and `ConnectionStrings__FreedomSensitive`,
+and only `ReceiverDetailRepository` takes the second. In Azure both become managed identities with
+Entra-only authentication and no password at all (§4.2); only the connection string differs.
+
+You can see the segregation for yourself:
+
+```
+docker exec freedom-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U freedom_app   -P "$FREEDOM_APP_DB_PASSWORD" -C -d Freedom -Q "SELECT COUNT(1) FROM sensitive.ReceiverDetail"
+# Msg 229 ... The SELECT permission was denied on the object 'ReceiverDetail'
+```
 
 Ports are all overridable in `.env` if something on your machine already owns one.
 
