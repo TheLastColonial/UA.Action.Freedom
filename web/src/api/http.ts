@@ -54,3 +54,8 @@ export function delete204(path: string): Promise<void> {
 export function postTransition(path: string): Promise<void> {
   return request({ method: 'POST', path, expect: 'nocontent' });
 }
+
+/** `POST` an action with a body that the API answers with 204 (add-item, validate). */
+export function post204(path: string, body: unknown): Promise<void> {
+  return request({ method: 'POST', path, expect: 'nocontent', body });
+}
