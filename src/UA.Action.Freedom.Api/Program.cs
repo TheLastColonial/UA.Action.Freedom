@@ -1,15 +1,20 @@
 ﻿using System.Text.Json.Serialization;
+using Azure.Storage.Queues;
+using Microsoft.Extensions.Options;
 using FluentValidation;
 using Scalar.AspNetCore;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Api.Boxes;
 using UA.Action.Freedom.Api.Convoys;
 using UA.Action.Freedom.Api.Health;
+using UA.Action.Freedom.Api.Manifests;
+using UA.Action.Freedom.Api.Messaging;
 using UA.Action.Freedom.Api.Receivers;
 using UA.Action.Freedom.Api.Installer;
 using UA.Action.Freedom.Api.People;
 using UA.Action.Freedom.Api.Vehicles;
 using UA.Action.Freedom.Application;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 // in the local Azure simulation and on Container Apps, told apart only by what it is given.
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection(OidcOptions.SectionName));
+builder.Services.Configure<CustomsOptions>(builder.Configuration.GetSection(CustomsOptions.SectionName));
 
 var hosting = builder.Configuration.GetSection(HostingOptions.SectionName).Get<HostingOptions>()
               ?? new HostingOptions();
@@ -47,6 +53,15 @@ builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddFreedomApplication();
 builder.Services.AddFreedomData();
 
+// The durable hand-off to the Customs Worker. Pull, not push: Freedom exposes no callback
+// endpoint and the worker polls HMRC for outcomes (recommendations 4.1).
+builder.Services.AddScoped<IManifestWorkQueue>(provider => new AzureManifestWorkQueue(
+    // GetService, not GetRequiredService: the queue client is only registered when a storage
+    // account is configured, and the application is expected to start without one.
+    provider.GetService<QueueServiceClient>(),
+    provider.GetRequiredService<IOptions<StorageOptions>>(),
+    provider.GetRequiredService<IOptions<CustomsOptions>>()));
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -74,6 +89,7 @@ app.MapFreedomPeople();
 app.MapFreedomConvoys();
 app.MapFreedomReceivers();
 app.MapFreedomBoxes();
+app.MapFreedomManifests();
 
 app.Run();
 

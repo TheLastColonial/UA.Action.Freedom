@@ -76,6 +76,26 @@ public static class AuthenticationExtensions
     /// </remarks>
     public const string BoxesValidate = "boxes:validate";
 
+    /// <summary>Read manifests, their teams, their cargo and their weight — every operational role.</summary>
+    public const string ManifestsRead = "manifests:read";
+
+    /// <summary>
+    /// Build a manifest and move it through its lifecycle — Administrator and Dispatcher.
+    /// Creating the manifest is what the Dispatcher role exists for.
+    /// </summary>
+    public const string ManifestsWrite = "manifests:write";
+
+    /// <summary>
+    /// Approve a manifest — Administrator only.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ManifestsWrite"/> because approval is not another edit. It
+    /// releases the Goods Movement Reference to HMRC and freezes the manifest for good
+    /// (docs/process.puml, recommendations §5.2), so the person who builds a manifest is not
+    /// the person who signs it off.
+    /// </remarks>
+    public const string ManifestsApprove = "manifests:approve";
+
     private const string RoleClaimType = "roles";
 
     private const string Administrator = "Administrator";
@@ -154,7 +174,13 @@ public static class AuthenticationExtensions
             .AddPolicy(BoxesWrite, policy =>
                 policy.RequireRole(Administrator, Dispatcher, Loader))
             .AddPolicy(BoxesValidate, policy =>
-                policy.RequireRole(Administrator, Loader));
+                policy.RequireRole(Administrator, Loader))
+            .AddPolicy(ManifestsRead, policy =>
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
+            .AddPolicy(ManifestsWrite, policy =>
+                policy.RequireRole(Administrator, Dispatcher))
+            .AddPolicy(ManifestsApprove, policy =>
+                policy.RequireRole(Administrator));
 
         return services;
     }

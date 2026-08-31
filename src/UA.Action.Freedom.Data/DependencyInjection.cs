@@ -1,11 +1,13 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Vehicles;
 using UA.Action.Freedom.Data.Boxes;
 using UA.Action.Freedom.Data.Convoys;
+using UA.Action.Freedom.Data.Manifests;
 using UA.Action.Freedom.Data.People;
 using UA.Action.Freedom.Data.Receivers;
 using UA.Action.Freedom.Data.Vehicles;
@@ -26,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<IConvoyRepository, ConvoyRepository>();
         services.AddScoped<IReceiverRepository, ReceiverRepository>();
         services.AddScoped<IBoxRepository, BoxRepository>();
+        services.AddScoped<IManifestRepository, ManifestRepository>();
 
         // The Ground Officer path to Ukrainian delivery detail. A second connection factory,
         // bound to a database identity in the ground_officer role — the application's own

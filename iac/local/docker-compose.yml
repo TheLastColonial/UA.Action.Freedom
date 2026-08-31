@@ -107,6 +107,12 @@ services:
       Storage__DataProtectionContainer: dataprotection
       Storage__CustomsQueue: customs-work
 
+      # What HMRC needs to identify a movement that the manifest itself does not carry. Both are
+      # charity- or route-level facts; WireMock accepts anything, so these exist so the message
+      # the Customs Worker picks up is the shape it would be in production.
+      Customs__HaulierEori: ${CUSTOMS_HAULIER_EORI:-GB123456789000}
+      Customs__RouteId: ${CUSTOMS_ROUTE_ID:-20000}
+
       # Split-horizon OIDC. The browser reaches Keycloak on localhost, the container
       # reaches it on the compose network — the same server, two URLs. The issuer in
       # the token is the browser-facing one, so that is the Authority; the metadata is

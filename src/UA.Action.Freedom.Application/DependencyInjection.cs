@@ -2,6 +2,7 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Vehicles;
@@ -57,6 +58,20 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListBoxItemsQuery, IReadOnlyList<BoxItemReadModel>?>, ListBoxItemsHandler>();
         services.AddScoped<ICommandHandler<AddBoxItemCommand, AddBoxItemOutcome>, AddBoxItemHandler>();
         services.AddScoped<ICommandHandler<RemoveBoxItemCommand, RemoveBoxItemOutcome>, RemoveBoxItemHandler>();
+
+        services.AddScoped<ICommandHandler<CreateManifestCommand, CreateManifestOutcome>, CreateManifestHandler>();
+        services.AddScoped<ICommandHandler<UpdateManifestCommand, UpdateManifestOutcome>, UpdateManifestHandler>();
+        services.AddScoped<ICommandHandler<DeleteManifestCommand, DeleteManifestOutcome>, DeleteManifestHandler>();
+        services.AddScoped<IQueryHandler<GetManifestByIdQuery, ManifestReadModel?>, GetManifestByIdHandler>();
+        services.AddScoped<IQueryHandler<ListManifestsQuery, IReadOnlyList<ManifestReadModel>>, ListManifestsHandler>();
+        services.AddScoped<ICommandHandler<TransitionManifestCommand, TransitionManifestOutcome>, TransitionManifestHandler>();
+        services.AddScoped<ICommandHandler<ApproveManifestCommand, TransitionManifestOutcome>, ApproveManifestHandler>();
+        services.AddScoped<ICommandHandler<SetManifestTeamCommand, SetManifestTeamOutcome>, SetManifestTeamHandler>();
+        services.AddScoped<IQueryHandler<ListManifestTeamsQuery, IReadOnlyList<ManifestDriverTeamReadModel>?>, ListManifestTeamsHandler>();
+        services.AddScoped<ICommandHandler<AddManifestBoxCommand, ManifestBoxOutcome>, AddManifestBoxHandler>();
+        services.AddScoped<ICommandHandler<RemoveManifestBoxCommand, ManifestBoxOutcome>, RemoveManifestBoxHandler>();
+        services.AddScoped<IQueryHandler<ListManifestBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListManifestBoxesHandler>();
+        services.AddScoped<IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>, GetManifestWeightHandler>();
 
         return services;
     }

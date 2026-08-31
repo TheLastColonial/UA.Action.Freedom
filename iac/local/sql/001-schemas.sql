@@ -429,5 +429,85 @@ BEGIN
 END
 GO
 
+-- --------------------------------------------------------------------------
+-- Manifests — dbo.Manifest, dbo.ManifestDriverTeam and dbo.ManifestBox
+--
+-- The central document of the system: one vehicle, on one convoy, with its two driver teams
+-- and its cargo. ManifestId is a natural key like Vin — it is a document reference people
+-- read out at a border, not a surrogate.
+--
+-- Status is the ten-state model of docs/manifest-status.puml, stored as int to line up with
+-- the CLR enum Dapper hydrates. The legal edges live in ManifestTransitions, not here: a
+-- CHECK constraint would have to be kept in step with the code by hand, and the code is
+-- where the two rules the diagram cannot express already live.
+--
+-- GmrSubmittedAt is the freeze. recommendations 5.2 records the ruling that once a GMR is
+-- created no edit may modify the manifest; the application refuses every write once this is
+-- set, and only Delivered / Lost / Returned remain reachable.
+-- --------------------------------------------------------------------------
+
+IF OBJECT_ID('dbo.Manifest') IS NULL
+BEGIN
+    CREATE TABLE dbo.Manifest (
+        Id                   varchar(32)   NOT NULL CONSTRAINT PK_Manifest PRIMARY KEY,
+        Vin                  varchar(32)   NULL,
+        ConvoyId             int           NULL,
+        Status               int           NOT NULL CONSTRAINT DF_Manifest_Status DEFAULT 0,
+        DeliveryNotes        nvarchar(2000) NULL,
+        FerryBookingComplete bit           NOT NULL CONSTRAINT DF_Manifest_Ferry DEFAULT 0,
+        GmrSubmittedAt       datetime2(0)  NULL,
+        CreatedAt            datetime2(0)  NOT NULL CONSTRAINT DF_Manifest_CreatedAt DEFAULT SYSUTCDATETIME(),
+        UpdatedAt            datetime2(0)  NOT NULL CONSTRAINT DF_Manifest_UpdatedAt DEFAULT SYSUTCDATETIME(),
+
+        -- A vehicle or convoy cannot be deleted out from under a manifest that names it.
+        CONSTRAINT FK_Manifest_Vehicle FOREIGN KEY (Vin) REFERENCES dbo.Vehicle (Vin),
+        CONSTRAINT FK_Manifest_Convoy FOREIGN KEY (ConvoyId) REFERENCES dbo.Convoy (Id)
+    );
+END
+GO
+
+-- One team per leg: 0 is UK to Europe, 1 is Europe to Ukraine. The pair is the primary key,
+-- so assigning a team to a leg replaces whoever was on it rather than accumulating crews.
+IF OBJECT_ID('dbo.ManifestDriverTeam') IS NULL
+BEGIN
+    CREATE TABLE dbo.ManifestDriverTeam (
+        ManifestId        varchar(32)      NOT NULL,
+        Leg               int              NOT NULL,
+        PrimaryPersonId   uniqueidentifier NOT NULL,
+        SecondaryPersonId uniqueidentifier NULL,
+
+        CONSTRAINT PK_ManifestDriverTeam PRIMARY KEY (ManifestId, Leg),
+        CONSTRAINT FK_ManifestDriverTeam_Manifest FOREIGN KEY (ManifestId)
+            REFERENCES dbo.Manifest (Id) ON DELETE CASCADE,
+        CONSTRAINT FK_ManifestDriverTeam_Primary FOREIGN KEY (PrimaryPersonId) REFERENCES dbo.Person (Id),
+        CONSTRAINT FK_ManifestDriverTeam_Secondary FOREIGN KEY (SecondaryPersonId) REFERENCES dbo.Person (Id),
+
+        -- A pair is two people. The same volunteer twice would read as crewed while leaving
+        -- somebody driving a leg to Ukraine alone.
+        CONSTRAINT CK_ManifestDriverTeam_DistinctDrivers CHECK (
+            SecondaryPersonId IS NULL OR SecondaryPersonId <> PrimaryPersonId)
+    );
+END
+GO
+
+-- Cargo. A box travels on at most one manifest, which the primary key on BoxId enforces:
+-- the same box on two manifests would be counted twice at a border and arrive once.
+IF OBJECT_ID('dbo.ManifestBox') IS NULL
+BEGIN
+    CREATE TABLE dbo.ManifestBox (
+        BoxId      int         NOT NULL CONSTRAINT PK_ManifestBox PRIMARY KEY,
+        ManifestId varchar(32) NOT NULL,
+
+        CONSTRAINT FK_ManifestBox_Manifest FOREIGN KEY (ManifestId)
+            REFERENCES dbo.Manifest (Id) ON DELETE CASCADE,
+        -- Removing a box from the system takes it off the manifest with it.
+        CONSTRAINT FK_ManifestBox_Box FOREIGN KEY (BoxId)
+            REFERENCES dbo.Box (Id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IX_ManifestBox_ManifestId ON dbo.ManifestBox (ManifestId);
+END
+GO
+
 PRINT 'Freedom database bootstrap complete.';
 GO

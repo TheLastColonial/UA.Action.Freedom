@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Vehicles;
@@ -180,6 +181,44 @@ internal static class FreedomApi
                 services.AddScoped(_ => boxes);
                 services.RemoveAll<IPersonRepository>();
                 services.AddScoped(_ => people);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with manifest persistence, the convoy repository, the volunteer roster and
+    /// the customs queue all swapped out. The manifest slice reaches across all four: proposing
+    /// checks the convoy's truck list, crewing checks the roster, and approving queues a GMR.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithManifests(
+        IManifestRepository manifests,
+        IConvoyRepository convoys,
+        IPersonRepository people,
+        IManifestWorkQueue queue,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IManifestRepository>();
+                services.AddScoped(_ => manifests);
+                services.RemoveAll<IConvoyRepository>();
+                services.AddScoped(_ => convoys);
+                services.RemoveAll<IPersonRepository>();
+                services.AddScoped(_ => people);
+                services.RemoveAll<IManifestWorkQueue>();
+                services.AddScoped(_ => queue);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
