@@ -107,6 +107,34 @@ NULL`, `IF COL_LENGTH(...) IS NULL`, `IF NOT EXISTS (SELECT 1 FROM sys.foreign_k
 Adding `FK_Vehicle_Convoy` also had to null out orphaned `ConvoyId` values first, because the
 column existed as a loose `int` before `dbo.Convoy` did.
 
+### Test schema changes against a *fresh* database, not yours
+
+Your local database has every table from every increment you have run. CI's does not. A statement
+that references an object created further down the script works for you and fails in CI on the
+first line that needs it.
+
+This actually happened: a `GRANT INSERT ON sensitive.ReceiverDetailAccessLog` was placed in the
+logins section, several sections above the `CREATE TABLE`. Every local run passed, because the
+table already existed from an earlier increment. The `acceptance` job failed on a clean volume
+with `Msg 15151: Cannot find the object 'ReceiverDetailAccessLog'`.
+
+Two lessons, in order of usefulness:
+
+1. **Prefer schema-level grants.** `GRANT ... ON SCHEMA::sensitive` applies to objects created
+   *after* it, so it has no ordering constraint at all. The offending statement was not merely
+   misplaced — it was redundant, and deleting it was the fix. The same is already true of `dbo`:
+   a new table there needs no new grant.
+2. **Reproduce CI locally before pushing a schema change.** It costs a few minutes:
+
+```bash
+cd iac/local && docker compose down -v          # the -v is the point: drop the volumes
+docker compose up -d --wait mssql keycloak azurite telemetry
+cd ../tofu && rm -f terraform.tfstate* && tofu apply -auto-approve
+```
+
+Dropping the tofu state matters as much as the volumes — otherwise tofu believes the resources it
+created last time still exist and skips them, which is a *second* way to not test what CI tests.
+
 ### Foreign key delete behaviour is deliberate, per relationship
 
 | Relationship | Behaviour | Why |

@@ -3,7 +3,11 @@
     on Azure SQL. Applied by OpenTofu (../../tofu/database.tf), not by the container,
     because resource creation belongs to the control plane.
 
-    Idempotent: safe to run repeatedly.
+    Idempotent: safe to run repeatedly — and it must also be correct on an *empty* database,
+    which is what CI has. Statements run top to bottom, so nothing may reference an object
+    created further down. Prefer schema-level grants, which apply to objects created after
+    them and so carry no ordering constraint at all. See docs/gotchas-and-open-questions.md
+    for how to reproduce a clean run locally before pushing a change here.
 
     The point of this file is not the tables — those arrive with the Data project. It is
     the *shape* of the access control, so that docs/recommendations.md 4.4 is something
@@ -138,10 +142,11 @@ BEGIN
 END
 GO
 
--- The Ground Officer path writes an audit row for every address it resolves, so it needs
--- more than the SELECT that ground_officer already grants on the schema.
-GRANT INSERT ON sensitive.ReceiverDetailAccessLog TO ground_officer;
-GO
+-- No table-level grant is needed for the audit log the Ground Officer path writes on every
+-- address it resolves: the SCHEMA::sensitive grant above already carries INSERT, and it
+-- applies to objects created after it. An explicit GRANT here would also have to come after
+-- the CREATE TABLE, which is several sections further down — a statement that only works on
+-- a database where the table happens to exist already.
 
 -- --------------------------------------------------------------------------
 -- Receivers — the split that matters most
