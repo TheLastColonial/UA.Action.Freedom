@@ -5,6 +5,7 @@
     <Project Path="src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.CustomsWorker.csproj" />
     <Project Path="src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj" />
     <Project Path="src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj" />
+    <Project Path="src/UA.Action.Freedom.ManifestWorker/UA.Action.Freedom.ManifestWorker.csproj" />
     <Project Path="src/HMRC.GVMS/HMRC.GVMS.csproj" />
     <Project Path="src/HMRC.PushPullNotifications/HMRC.PushPullNotifications.csproj" />
   </Folder>

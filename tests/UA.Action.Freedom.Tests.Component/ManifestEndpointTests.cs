@@ -210,6 +210,40 @@ public class ManifestEndpointTests
     }
 
     [Fact]
+    public async Task Approving_also_queues_the_document_that_travels_with_the_vehicle()
+    {
+        // The other half of the fork in docs/process.puml. Composed here, where the database is,
+        // so the worker that renders it needs no database access at all.
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Proposed))
+            .WithVehicleWeight(1_400)
+            .WithBoxOn(Id, new ManifestBoxReadModel(1, 30, Validated: true));
+        var queue = new RecordingManifestWorkQueue();
+        await using var api = FreedomApi.WithManifests(
+            manifests, AConvoy(), ARosterOfDrivers(), queue, roles: "Administrator");
+        using var client = api.CreateClient();
+
+        await client.PostAsync($"/manifests/{Id}/approve", content: null, TestContext.Current.CancellationToken);
+
+        var document = queue.Documents.Should().ContainSingle().Subject;
+        document.ManifestId.Should().Be(Id);
+        document.VehicleWeightKg.Should().Be(1_400);
+        document.CargoKg.Should().Be(30);
+        document.TotalKg.Should().Be(1_675);
+        document.Lines.Should().ContainSingle().Which.ReceiverRegion.Should().Be("Kharkiv oblast");
+    }
+
+    [Fact]
+    public void The_queued_document_has_nowhere_to_put_a_delivery_address()
+    {
+        // Region-level is as precise as anything that travels gets. A later change cannot leak
+        // an address onto the printed manifest without first adding a field to carry one.
+        var lineFields = typeof(ManifestDocumentLineReadModel).GetProperties().Select(property => property.Name);
+
+        lineFields.Should().BeEquivalentTo(
+            "BoxId", "WeightKg", "ItemCount", "ReceiverOrganisation", "ReceiverRegion");
+    }
+
+    [Fact]
     public async Task The_queued_submission_carries_no_receiver_detail()
     {
         // A queue message is durable and readable by anything holding the storage credential,

@@ -159,6 +159,14 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
 
     public Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult(vehicleWeightKg);
+
+    public Task<IReadOnlyList<ManifestDocumentLineReadModel>> GetDocumentLinesAsync(
+        string id, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ManifestDocumentLineReadModel>>(
+            boxes.GetValueOrDefault(id, [])
+                .Select(box => new ManifestDocumentLineReadModel(
+                    box.BoxId, box.WeightKg, ItemCount: 0, "Kharkiv Regional Hospital", "Kharkiv oblast"))
+                .ToList());
 }
 
 /// <summary>
@@ -169,9 +177,17 @@ internal sealed class RecordingManifestWorkQueue : IManifestWorkQueue
 {
     public List<GmrSubmissionRequest> Submissions { get; } = [];
 
+    public List<ManifestDocumentRequest> Documents { get; } = [];
+
     public Task EnqueueGmrSubmissionAsync(GmrSubmissionRequest submission, CancellationToken cancellationToken)
     {
         Submissions.Add(submission);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueDocumentAsync(ManifestDocumentRequest document, CancellationToken cancellationToken)
+    {
+        Documents.Add(document);
         return Task.CompletedTask;
     }
 }

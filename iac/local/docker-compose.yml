@@ -106,6 +106,7 @@ services:
       Storage__DocumentsContainer: manifests
       Storage__DataProtectionContainer: dataprotection
       Storage__CustomsQueue: customs-work
+      Storage__DocumentQueue: manifest-documents
 
       # What HMRC needs to identify a movement that the manifest itself does not carry. Both are
       # charity- or route-level facts; WireMock accepts anything, so these exist so the message
@@ -172,6 +173,31 @@ services:
       azurite:
         condition: service_healthy
       wiremock:
+        condition: service_healthy
+
+  # Renders the document that travels with a vehicle. Reads the manifest document queue and
+  # writes to the manifests container — no database access at all, which is what makes it
+  # unable to print a delivery address even in principle (recommendations 4.4).
+  manifest-worker:
+    build:
+      context: ../..
+      dockerfile: src/UA.Action.Freedom.ManifestWorker/Dockerfile
+    image: ua-action-freedom/manifest-worker:local
+    container_name: freedom-manifest-worker
+    restart: unless-stopped
+    environment:
+      <<: *telemetry
+      DOTNET_ENVIRONMENT: Development
+      OTEL_SERVICE_NAME: freedom-manifest-worker
+
+      Storage__ConnectionString: *azurite-connection-string
+      Storage__DocumentQueue: manifest-documents
+      Storage__PoisonQueue: manifest-documents-poison
+      Storage__DocumentsContainer: manifests
+
+      Worker__QueuePollSeconds: "5"
+    depends_on:
+      azurite:
         condition: service_healthy
 
   # --- Document Store + Customs Work Queue ----------------------------------

@@ -105,6 +105,22 @@ tofu apply
 | Email inbox (Mailpit) | <http://localhost:8025> |
 | Edge dashboard (Traefik) | <http://localhost:8090/dashboard/> |
 | Azurite | blob `:10000`, queue `:10001`, table `:10002` |
+
+Two workers run alongside the app, both queue-driven and neither listening on a port:
+`freedom-customs-worker` drains `customs-work` and talks to HMRC (WireMock), and
+`freedom-manifest-worker` drains `manifest-documents` and writes the document that travels with a
+vehicle into the `manifests` container. To see one for yourself, approve a manifest and then read
+the blob it produced:
+
+```
+docker compose logs manifest-worker --tail 5
+az storage blob download --container-name manifests --name <MANIFEST-ID>.txt --file -
+```
+
+The document shows cargo, weights and a **region** — never a street address or a contact. The
+Manifest Worker has no database access at all, which is what makes that structural rather than a
+convention: the application composes the document and queues it, so the worker could not read a
+delivery address even if it tried.
 | SQL Server | `localhost:1433` — three logins, all in `.env`; see below |
 
 **The application does not connect as `sa`.** `sa` is sysadmin and bypasses permission checks, which

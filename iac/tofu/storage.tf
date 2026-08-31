@@ -31,9 +31,14 @@ locals {
   #                    outside the container filesystem for the same reason
   blob_containers = ["manifests", "gmr", "elo", "dataprotection"]
 
-  # The durable hand-off to the Customs Worker, plus somewhere for submissions that will
-  # never succeed to go and be noticed.
-  queues = ["customs-work", "customs-work-poison"]
+  # The durable hand-offs to the workers, each with somewhere for messages that will never
+  # succeed to go and be noticed:
+  #   customs-work        GMR submissions for the Customs Worker
+  #   manifest-documents  approved manifests for the Manifest Worker to render
+  queues = [
+    "customs-work", "customs-work-poison",
+    "manifest-documents", "manifest-documents-poison",
+  ]
 
   azurite_connection_string = join(";", [
     "DefaultEndpointsProtocol=http",

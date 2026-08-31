@@ -158,6 +158,36 @@ public sealed class ApproveManifestHandler(
             new GmrSubmissionRequest(command.Id, manifest.Vin ?? string.Empty, convoy?.Start),
             cancellationToken);
 
+        // The other half of the fork in docs/process.puml: the document that travels with the
+        // vehicle. Composed here, where the database is, so the worker that renders it needs no
+        // database access — and therefore cannot read a delivery address even in principle.
+        await queue.EnqueueDocumentAsync(
+            await ComposeDocument(command.Id, manifest, cancellationToken), cancellationToken);
+
         return TransitionManifestOutcome.Transitioned;
+    }
+
+    /// <summary>Two drivers and their bags. A border-check estimate, deliberately fixed.</summary>
+    private const int CrewAndBagsKg = 100 * 2;
+
+    /// <summary>Fuel allowance. Also deliberately fixed.</summary>
+    private const int FuelKg = 45;
+
+    private async Task<ManifestDocumentRequest> ComposeDocument(
+        string id, ManifestReadModel manifest, CancellationToken cancellationToken)
+    {
+        var vehicleKg = await repository.GetVehicleWeightKgAsync(id, cancellationToken);
+        var lines = await repository.GetDocumentLinesAsync(id, cancellationToken);
+        var cargoKg = lines.Sum(line => line.WeightKg);
+
+        return new ManifestDocumentRequest(
+            id,
+            manifest.Vin,
+            vehicleKg,
+            cargoKg,
+            CrewAndBagsKg,
+            FuelKg,
+            vehicleKg + cargoKg + CrewAndBagsKg + FuelKg,
+            lines);
     }
 }

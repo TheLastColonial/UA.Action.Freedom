@@ -259,4 +259,31 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             new { id },
             cancellationToken: cancellationToken)) ?? 0;
     }
+
+    public async Task<IReadOnlyList<ManifestDocumentLineReadModel>> GetDocumentLinesAsync(
+        string id, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // dbo.Receiver only — organisation and region. sensitive.ReceiverDetail is not joined
+        // and could not be: this connection is DENY'd on that schema, so a query here that
+        // reached for a delivery address would fail at the database (recommendations §4.4).
+        var rows = await connection.QueryAsync<ManifestDocumentLineReadModel>(new CommandDefinition(
+            """
+            SELECT b.Id                                          AS BoxId,
+                   b.WeightKg,
+                   (SELECT COUNT(1) FROM dbo.BoxItem AS i WHERE i.BoxId = b.Id) AS ItemCount,
+                   r.Organisation                                AS ReceiverOrganisation,
+                   r.Region                                      AS ReceiverRegion
+            FROM dbo.ManifestBox AS mb
+            INNER JOIN dbo.Box AS b ON b.Id = mb.BoxId
+            LEFT JOIN dbo.Receiver AS r ON r.ReceiverRef = b.ReceiverRef
+            WHERE mb.ManifestId = @id
+            ORDER BY b.Id
+            """,
+            new { id },
+            cancellationToken: cancellationToken));
+
+        return rows.ToList();
+    }
 }

@@ -63,4 +63,22 @@ public sealed class AzureManifestWorkQueue(
 
         await queue.SendMessageAsync(message, cancellationToken);
     }
+
+    public async Task EnqueueDocumentAsync(
+        ManifestDocumentRequest document, CancellationToken cancellationToken)
+    {
+        if (queues is null)
+        {
+            throw new InvalidOperationException(
+                "Storage:ConnectionString is not configured, so the document for this manifest cannot be handed "
+                + "to the Manifest Worker.");
+        }
+
+        var queue = queues.GetQueueClient(_storage.DocumentQueue);
+
+        // The record serialises as-is: it already contains exactly what the document may show,
+        // so there is no mapping step here that could add something it must not.
+        await queue.SendMessageAsync(
+            JsonSerializer.Serialize(document, JsonSerializerOptions.Web), cancellationToken);
+    }
 }

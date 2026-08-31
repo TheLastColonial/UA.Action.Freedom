@@ -55,6 +55,18 @@ public interface IManifestRepository
 
     /// <summary>The kerb weight of the manifest's vehicle, or zero when none is assigned yet.</summary>
     Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// One line per box for the document that travels with the vehicle: what is being carried,
+    /// and roughly where to.
+    /// </summary>
+    /// <remarks>
+    /// Reads <c>dbo.Receiver</c> only — organisation and region. The delivery address lives in
+    /// the <c>sensitive</c> schema, which this connection is <c>DENY</c>'d on, so a query here
+    /// that reached for one would fail at the database rather than quietly succeed (§4.4).
+    /// </remarks>
+    Task<IReadOnlyList<ManifestDocumentLineReadModel>> GetDocumentLinesAsync(
+        string id, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -69,7 +81,43 @@ public interface IManifestRepository
 public interface IManifestWorkQueue
 {
     Task EnqueueGmrSubmissionAsync(GmrSubmissionRequest submission, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Asks the Manifest Worker to render the document that travels with the vehicle.
+    /// </summary>
+    /// <remarks>
+    /// The whole document is composed here and put on the queue, rather than the worker being
+    /// given a reference to look up. That is what lets the worker have no database access at
+    /// all: it cannot read a delivery address because it cannot read anything, and the request
+    /// type has nowhere to carry one.
+    /// </remarks>
+    Task EnqueueDocumentAsync(ManifestDocumentRequest document, CancellationToken cancellationToken);
 }
+
+/// <summary>One box on the document that travels with the vehicle.</summary>
+public sealed record ManifestDocumentLineReadModel(
+    int BoxId, int WeightKg, int ItemCount, string? ReceiverOrganisation, string? ReceiverRegion);
+
+/// <summary>
+/// Everything the printed manifest is allowed to contain.
+/// </summary>
+/// <remarks>
+/// Deliberately has nowhere to put a street address, a contact name or a phone number. The
+/// document crosses several borders where it may be inspected or seized, and one listing precise
+/// Ukrainian delivery addresses is a targeting document (docs/domain/key-concepts.md § Data
+/// Sensitivity). Region is as precise as it gets. The wire shape must stay in step with
+/// <c>UA.Action.Freedom.ManifestWorker.Documents.ManifestDocumentRequest</c>; the two projects
+/// do not share a type because the worker is a separate deployable.
+/// </remarks>
+public sealed record ManifestDocumentRequest(
+    string ManifestId,
+    string? VehicleRegistration,
+    int VehicleWeightKg,
+    int CargoKg,
+    int CrewAndBagsKg,
+    int FuelKg,
+    int TotalKg,
+    IReadOnlyList<ManifestDocumentLineReadModel> Lines);
 
 /// <param name="ManifestId">Which manifest this movement is for.</param>
 /// <param name="VehicleRegistration">The plate the border expects to see.</param>
