@@ -120,9 +120,9 @@ jobs:
         working-directory: iac/local
         run: cp .env.example .env
 
-      - name: Build the application image
+      - name: Build the application and worker images
         working-directory: iac/local
-        run: docker compose build app
+        run: docker compose build app customs-worker manifest-worker
 
       # tofu talks to these three: keycloak.tf to Keycloak, storage.tf to Azurite
       # (via the az CLI, preinstalled on the runner), database.tf via `docker exec`
@@ -137,9 +137,11 @@ jobs:
           tofu init -input=false
           tofu apply -auto-approve -input=false
 
-      - name: Start the application and edge
+      # The workers are started too: the BDD suite approves a manifest, which is what puts a
+      # GMR submission and a document request on their queues.
+      - name: Start the application, workers and edge
         working-directory: iac/local
-        run: docker compose up -d --wait --wait-timeout 300 app edge website
+        run: docker compose up -d --wait --wait-timeout 300 app edge website customs-worker manifest-worker
 
       - name: Wait for readiness
         run: |

@@ -31,10 +31,14 @@ public class TelemetryTests
         });
         using var client = api.CreateClient();
 
-        await client.GetAsync("/weatherforecast", TestContext.Current.CancellationToken);
+        // A real business route rather than a health probe: probes are the first thing anyone
+        // filters out of tracing, and this test is about ordinary traffic. No token is sent, so
+        // this is the 401 path — which still has to be traced, or an authorization problem in
+        // production is invisible.
+        await client.GetAsync("/vehicles", TestContext.Current.CancellationToken);
         api.Services.GetRequiredService<TracerProvider>().ForceFlush();
 
         exportedSpans.Should().Contain(span =>
-            span.Kind == ActivityKind.Server && span.DisplayName.Contains("weatherforecast"));
+            span.Kind == ActivityKind.Server && span.DisplayName.Contains("vehicles"));
     }
 }

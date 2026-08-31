@@ -94,3 +94,20 @@ variable "mssql_sa_password" {
   default     = "Local_Freedom_Dev_1"
   sensitive   = true
 }
+
+# The two ordinary logins the bootstrap creates. In Azure both are managed identities with
+# no password at all (recommendations 4.2); these exist only because a local SQL Server has
+# nothing else to authenticate with. They must match what docker-compose hands the app.
+variable "mssql_app_password" {
+  description = "Password for the freedom_app login (FREEDOM_APP_DB_PASSWORD in .env)."
+  type        = string
+  default     = "Local_Freedom_App_1"
+  sensitive   = true
+}
+
+variable "mssql_sensitive_password" {
+  description = "Password for the freedom_sensitive login (FREEDOM_SENSITIVE_DB_PASSWORD in .env)."
+  type        = string
+  default     = "Local_Freedom_Sensitive_1"
+  sensitive   = true
+}

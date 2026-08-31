@@ -27,7 +27,7 @@ resource "terraform_data" "database_schema" {
       # not in `docker inspect`, not in the process table — and, just as usefully, never
       # has to survive `cmd /C` quoting, which silently mangles a quoted -P argument into
       # a login failure.
-      "docker exec -e SQLCMDPASSWORD ${var.mssql_container}",
+      "docker exec -e SQLCMDPASSWORD -e FREEDOM_APP_PASSWORD -e FREEDOM_SENSITIVE_PASSWORD ${var.mssql_container}",
       "/opt/mssql-tools18/bin/sqlcmd",
       "-S localhost -U sa",
       # -C trusts the container's self-signed certificate; -b makes sqlcmd exit non-zero on
@@ -36,6 +36,12 @@ resource "terraform_data" "database_schema" {
       "-i /sql/001-schemas.sql",
     ])
 
-    environment = { SQLCMDPASSWORD = var.mssql_sa_password }
+    # sqlcmd resolves $(NAME) in the script from the environment as well as from -v, so the
+    # login passwords reach CREATE LOGIN the same way the sa password reaches sqlcmd itself.
+    environment = {
+      SQLCMDPASSWORD             = var.mssql_sa_password
+      FREEDOM_APP_PASSWORD       = var.mssql_app_password
+      FREEDOM_SENSITIVE_PASSWORD = var.mssql_sensitive_password
+    }
   }
 }

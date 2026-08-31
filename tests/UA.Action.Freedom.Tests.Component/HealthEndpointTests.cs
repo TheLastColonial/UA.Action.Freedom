@@ -114,7 +114,7 @@ public class HealthEndpointTests
         await using var api = FreedomApi.WithNoBackingServices();
         using var client = api.CreateClient();
 
-        var response = await client.GetAsync("/weatherforecast", TestContext.Current.CancellationToken);
+        var response = await client.GetAsync("/health/live", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }

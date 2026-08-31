@@ -472,3 +472,4 @@ FodyWeavers.xsd
 # The split, committed client lives in src/HMRC.GVMS/Generated/ and src/HMRC.PushPullNotifications/Generated/.
 build/nswag/generated/
 credientials.md
+out/

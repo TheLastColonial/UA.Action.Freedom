@@ -1,9 +1,14 @@
-using Microsoft.AspNetCore.Authentication;
+﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Manifests;
+using UA.Action.Freedom.Application.People;
+using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Vehicles;
 
 namespace UA.Action.Freedom.Tests.Component;
@@ -55,6 +60,165 @@ internal static class FreedomApi
             {
                 services.RemoveAll<IVehicleRepository>();
                 services.AddScoped(_ => repository);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with its volunteer persistence swapped for <paramref name="repository"/>
+    /// and its JWT scheme swapped for <see cref="TestAuthHandler"/>. <paramref name="roles"/> are
+    /// the app roles the caller's token carries; pass <c>authenticated: false</c> to send no
+    /// credentials at all.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithPeople(
+        IPersonRepository repository,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IPersonRepository>();
+                services.AddScoped(_ => repository);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with its convoy persistence swapped for <paramref name="repository"/>
+    /// and its JWT scheme swapped for <see cref="TestAuthHandler"/>.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithConvoys(
+        IConvoyRepository repository,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IConvoyRepository>();
+                services.AddScoped(_ => repository);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with both halves of receiver persistence swapped out and its JWT scheme
+    /// swapped for <see cref="TestAuthHandler"/>. Both halves are replaced together because the
+    /// endpoints that matter here span them — deleting a receiver touches its address.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithReceivers(
+        IReceiverRepository receivers,
+        IReceiverDetailRepository detail,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IReceiverRepository>();
+                services.AddScoped(_ => receivers);
+                services.RemoveAll<IReceiverDetailRepository>();
+                services.AddScoped(_ => detail);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with box persistence and the volunteer roster swapped out. Both are
+    /// needed together: validating a box checks that the volunteer who signed for it is on file.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithBoxes(
+        IBoxRepository boxes,
+        IPersonRepository people,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IBoxRepository>();
+                services.AddScoped(_ => boxes);
+                services.RemoveAll<IPersonRepository>();
+                services.AddScoped(_ => people);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with manifest persistence, the convoy repository, the volunteer roster and
+    /// the customs queue all swapped out. The manifest slice reaches across all four: proposing
+    /// checks the convoy's truck list, crewing checks the roster, and approving queues a GMR.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithManifests(
+        IManifestRepository manifests,
+        IConvoyRepository convoys,
+        IPersonRepository people,
+        IManifestWorkQueue queue,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IManifestRepository>();
+                services.AddScoped(_ => manifests);
+                services.RemoveAll<IConvoyRepository>();
+                services.AddScoped(_ => convoys);
+                services.RemoveAll<IPersonRepository>();
+                services.AddScoped(_ => people);
+                services.RemoveAll<IManifestWorkQueue>();
+                services.AddScoped(_ => queue);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)

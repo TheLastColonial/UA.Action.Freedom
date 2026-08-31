@@ -17,7 +17,10 @@ name: freedom-local
 # identity with shared-key auth disabled (docs/recommendations.md 4.2).
 x-azurite: &azurite-connection-string "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;QueueEndpoint=http://azurite:10001/devstoreaccount1;TableEndpoint=http://azurite:10002/devstoreaccount1;"
 
-x-mssql: &freedom-connection-string "Server=mssql,1433;Database=Freedom;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=False"
+x-mssql: &freedom-connection-string "Server=mssql,1433;Database=Freedom;User Id=freedom_app;Password=${FREEDOM_APP_DB_PASSWORD:-Local_Freedom_App_1};TrustServerCertificate=True;Encrypt=False"
+# The Ground Officer path. Held by a login in the ground_officer database role, which is
+# the only role granted SELECT on the sensitive schema — freedom_app is DENY'd there.
+x-mssql-sensitive: &freedom-sensitive-connection-string "Server=mssql,1433;Database=Freedom;User Id=freedom_sensitive;Password=${FREEDOM_SENSITIVE_DB_PASSWORD:-Local_Freedom_Sensitive_1};TrustServerCertificate=True;Encrypt=False"
 
 x-telemetry: &telemetry
   OTEL_EXPORTER_OTLP_ENDPOINT: http://telemetry:4317
@@ -98,10 +101,18 @@ services:
       Hosting__UseHttpsRedirection: "false"
 
       ConnectionStrings__Freedom: *freedom-connection-string
+      ConnectionStrings__FreedomSensitive: *freedom-sensitive-connection-string
       Storage__ConnectionString: *azurite-connection-string
       Storage__DocumentsContainer: manifests
       Storage__DataProtectionContainer: dataprotection
       Storage__CustomsQueue: customs-work
+      Storage__DocumentQueue: manifest-documents
+
+      # What HMRC needs to identify a movement that the manifest itself does not carry. Both are
+      # charity- or route-level facts; WireMock accepts anything, so these exist so the message
+      # the Customs Worker picks up is the shape it would be in production.
+      Customs__HaulierEori: ${CUSTOMS_HAULIER_EORI:-GB123456789000}
+      Customs__RouteId: ${CUSTOMS_ROUTE_ID:-20000}
 
       # Split-horizon OIDC. The browser reaches Keycloak on localhost, the container
       # reaches it on the compose network — the same server, two URLs. The issuer in
@@ -162,6 +173,31 @@ services:
       azurite:
         condition: service_healthy
       wiremock:
+        condition: service_healthy
+
+  # Renders the document that travels with a vehicle. Reads the manifest document queue and
+  # writes to the manifests container — no database access at all, which is what makes it
+  # unable to print a delivery address even in principle (recommendations 4.4).
+  manifest-worker:
+    build:
+      context: ../..
+      dockerfile: src/UA.Action.Freedom.ManifestWorker/Dockerfile
+    image: ua-action-freedom/manifest-worker:local
+    container_name: freedom-manifest-worker
+    restart: unless-stopped
+    environment:
+      <<: *telemetry
+      DOTNET_ENVIRONMENT: Development
+      OTEL_SERVICE_NAME: freedom-manifest-worker
+
+      Storage__ConnectionString: *azurite-connection-string
+      Storage__DocumentQueue: manifest-documents
+      Storage__PoisonQueue: manifest-documents-poison
+      Storage__DocumentsContainer: manifests
+
+      Worker__QueuePollSeconds: "5"
+    depends_on:
+      azurite:
         condition: service_healthy
 
   # --- Document Store + Customs Work Queue ----------------------------------

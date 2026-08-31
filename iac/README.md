@@ -105,11 +105,52 @@ tofu apply
 | Email inbox (Mailpit) | <http://localhost:8025> |
 | Edge dashboard (Traefik) | <http://localhost:8090/dashboard/> |
 | Azurite | blob `:10000`, queue `:10001`, table `:10002` |
-| SQL Server | `localhost:1433`, `sa` / see `.env` |
+
+Two workers run alongside the app, both queue-driven and neither listening on a port:
+`freedom-customs-worker` drains `customs-work` and talks to HMRC (WireMock), and
+`freedom-manifest-worker` drains `manifest-documents` and writes the document that travels with a
+vehicle into the `manifests` container. To see one for yourself, approve a manifest and then read
+the blob it produced:
+
+```
+docker compose logs manifest-worker --tail 5
+az storage blob download --container-name manifests --name <MANIFEST-ID>.txt --file -
+```
+
+The document shows cargo, weights and a **region** — never a street address or a contact. The
+Manifest Worker has no database access at all, which is what makes that structural rather than a
+convention: the application composes the document and queues it, so the worker could not read a
+delivery address even if it tried.
+| SQL Server | `localhost:1433` — three logins, all in `.env`; see below |
+
+**The application does not connect as `sa`.** `sa` is sysadmin and bypasses permission checks, which
+would make the `DENY` on the `sensitive` schema — the control `docs/recommendations.md` §4.4 calls
+load-bearing — decorative. Three logins exist instead:
+
+| Login | Role | Can read |
+| --- | --- | --- |
+| `sa` | sysadmin | everything; used only to apply the schema bootstrap |
+| `freedom_app` | `freedom_app` | full DML on `dbo`. **`DENY SELECT` on `sensitive`** — this is the application's own identity |
+| `freedom_sensitive` | `ground_officer` | `sensitive` as well; the only way to resolve a Ukrainian delivery address |
+
+The application is given both as `ConnectionStrings__Freedom` and `ConnectionStrings__FreedomSensitive`,
+and only `ReceiverDetailRepository` takes the second. In Azure both become managed identities with
+Entra-only authentication and no password at all (§4.2); only the connection string differs.
+
+You can see the segregation for yourself:
+
+```
+docker exec freedom-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U freedom_app   -P "$FREEDOM_APP_DB_PASSWORD" -C -d Freedom -Q "SELECT COUNT(1) FROM sensitive.ReceiverDetail"
+# Msg 229 ... The SELECT permission was denied on the object 'ReceiverDetail'
+```
 
 Ports are all overridable in `.env` if something on your machine already owns one.
 
 ### Signing in
+
+> For calling the API with a token — the seed logins, the role/policy matrix and the
+> troubleshooting list — see [`../docs/local-authentication.md`](../docs/local-authentication.md).
+
 
 OpenTofu seeds three users, all with the password `password`:
 

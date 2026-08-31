@@ -8,12 +8,12 @@ public class Vehicle
     /// <summary>
     /// Vehicle Identification Number
     /// </summary>
-    public string VIN { get; init; }
+    public required string VIN { get; init; }
 
     /// <summary>
     /// Licence Plate Number
     /// </summary>
-    public string Plate { get; init; }
+    public required string Plate { get; init; }
 
     /// <summary>
     /// e.g. Ford
@@ -57,19 +57,19 @@ public class Vehicle
     public FuelType Fuel { get; init; }
 
     /// <summary>
-    /// Grouping of vehicles
+    /// Grouping of vehicles. Null until the vehicle is assigned to a convoy.
     /// </summary>
-    public Convoy Convoy { get; init; }
+    public Convoy? Convoy { get; init; }
 
     /// <summary>
-    /// Individual responsible for the purchase order of a vehicle
+    /// Individual responsible for the purchase order of a vehicle. Null for a direct donation.
     /// </summary>
-    public Person Purchaser { get; init; }
+    public Person? Purchaser { get; init; }
 
     /// <summary>
-    /// Timestamp of the purchase
+    /// Timestamp of the purchase. Null for a direct donation.
     /// </summary>
-    public DateTime PurchaseDate { get; init; }
+    public DateTime? PurchaseDate { get; init; }
 
     /// <summary>
     /// History of drivers

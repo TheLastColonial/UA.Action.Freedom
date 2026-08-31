@@ -1,4 +1,4 @@
-namespace UA.Action.Freedom.Api.Configuration;
+﻿namespace UA.Action.Freedom.Api.Configuration;
 
 /// <summary>
 /// Where documents and the customs work queue live.
@@ -33,6 +33,9 @@ public sealed class StorageOptions
 
     /// <summary>Queue the application hands GMR submissions to the Customs Worker on.</summary>
     public string CustomsQueue { get; set; } = "customs-work";
+
+    /// <summary>Queue the Manifest Worker takes approved manifests from to render their documents.</summary>
+    public string DocumentQueue { get; set; } = "manifest-documents";
 
     /// <summary>Whether enough is configured to reach a storage account at all.</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ConnectionString);

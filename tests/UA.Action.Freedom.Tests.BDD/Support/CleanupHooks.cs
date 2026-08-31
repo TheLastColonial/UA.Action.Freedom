@@ -1,4 +1,4 @@
-using Reqnroll;
+﻿using Reqnroll;
 
 namespace UA.Action.Freedom.Tests.BDD.Support;
 
@@ -6,32 +6,30 @@ namespace UA.Action.Freedom.Tests.BDD.Support;
 public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
 {
     /// <summary>
-    /// Removes any vehicle a scenario created, so a re-run starts clean. Best effort — a
-    /// failure here must not mask the scenario result.
+    /// Removes anything a scenario created, so a re-run starts clean. Best effort — a failure
+    /// here must not mask the scenario result.
     /// </summary>
+    /// <remarks>
+    /// Deletes as <c>admin</c> by default, which holds every write policy that exists — with one
+    /// deliberate exception. Removing a receiver also removes its Ukrainian delivery address, so
+    /// that route is Ground Officer only and an admin token is refused; receivers are therefore
+    /// cleaned up as <c>groundofficer</c>. A cleanup hook silently 403-ing is worse than one that
+    /// fails loudly, because it leaves delivery detail behind (docs/recommendations.md §4.4).
+    /// </remarks>
     [AfterScenario]
-    public async Task RemoveVehiclesCreatedByTheScenario()
+    public async Task RemoveResourcesCreatedByTheScenario()
     {
-        if (state.CreatedVins.Count == 0)
+        if (state.CreatedResources.Count == 0)
         {
             return;
         }
 
-        string adminToken;
-        try
-        {
-            adminToken = await api.TokenForAsync("admin");
-        }
-        catch
-        {
-            return;
-        }
-
-        foreach (var vin in state.CreatedVins)
+        foreach (var (resource, key) in state.CreatedResources)
         {
             try
             {
-                await api.SendAsync(HttpMethod.Delete, $"/vehicles/{vin}", adminToken, null);
+                var token = await api.TokenForAsync(CleanerFor(resource));
+                await api.SendAsync(HttpMethod.Delete, $"/{resource}/{key}", token, null);
             }
             catch
             {
@@ -39,4 +37,11 @@ public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
             }
         }
     }
+
+    /// <summary>
+    /// The seed login that may delete this kind of resource. Everything is the Administrator's
+    /// to remove except a receiver, whose deletion reaches into the sensitive schema.
+    /// </summary>
+    private static string CleanerFor(string resource) =>
+        resource.Equals("receivers", StringComparison.OrdinalIgnoreCase) ? "groundofficer" : "admin";
 }

@@ -1,6 +1,68 @@
 @UA.Action.Freedom.Api_HostAddress = http://localhost:5100
 
-GET {{UA.Action.Freedom.Api_HostAddress}}/weatherforecast/
+### Liveness — the one route that needs no token.
+GET {{UA.Action.Freedom.Api_HostAddress}}/health/live
 Accept: application/json
+
+### Readiness — checks SQL, blob, queue and OIDC discovery for real.
+GET {{UA.Action.Freedom.Api_HostAddress}}/health/ready
+Accept: application/json
+
+### A token from the local Keycloak. Seed logins, all with password "password":
+### admin (Administrator), operator (Dispatcher+Loader+Purchaser), groundofficer (GroundOfficer).
+# @name token
+POST http://localhost:8081/realms/freedom/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=freedom-app&client_secret=local-freedom-client-secret&username=admin&password=password&scope=openid
+
+###
+@access_token = {{token.response.body.access_token}}
+
+### Vehicles — read is open to every operational role, write to Purchaser and Administrator.
+GET {{UA.Action.Freedom.Api_HostAddress}}/vehicles?page=1&pageSize=50
+Accept: application/json
+Authorization: Bearer {{access_token}}
+
+###
+POST {{UA.Action.Freedom.Api_HostAddress}}/vehicles
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "vin": "WDB9066331S0BDD01",
+  "plate": "UA10ACT",
+  "brand": "Mercedes-Benz",
+  "model": "Sprinter",
+  "year": 2014,
+  "fuel": "Diesel",
+  "transmission": "Manual",
+  "weightKg": 2200
+}
+
+### People — read is open to every operational role, write is Administrator only.
+GET {{UA.Action.Freedom.Api_HostAddress}}/people?page=1&pageSize=50
+Accept: application/json
+Authorization: Bearer {{access_token}}
+
+### The dispatcher's shortlist for building driver teams.
+GET {{UA.Action.Freedom.Api_HostAddress}}/people?driversOnly=true
+Accept: application/json
+Authorization: Bearer {{access_token}}
+
+###
+POST {{UA.Action.Freedom.Api_HostAddress}}/people
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "firstName": "Olena",
+  "lastName": "Shevchenko",
+  "dateOfBirth": "1988-04-12T00:00:00Z",
+  "joined": "2024-02-24T00:00:00Z",
+  "phone": "+447700900123",
+  "isDriver": true,
+  "committed": false
+}
 
 ###
