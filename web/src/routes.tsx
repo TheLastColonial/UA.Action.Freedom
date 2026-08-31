@@ -5,14 +5,14 @@ import { NotFound } from './components/NotFound';
 import { RequireAuth } from './components/RequireAuth';
 import { RouteError } from './components/RouteError';
 import { Dashboard } from './pages/Dashboard';
-import { Placeholder } from './pages/Placeholder';
 import { boxRoutes } from './pages/boxes/routes';
 import { convoyRoutes } from './pages/convoys/routes';
 import { manifestRoutes } from './pages/manifests/routes';
 import { peopleRoutes } from './pages/people/routes';
+import { receiverRoutes } from './pages/receivers/routes';
 import { vehicleRoutes } from './pages/vehicles/routes';
 
-// Slice routes are placeholders until Phases C–G replace them with the real pages.
+// Every slice is mounted under the authenticated app shell.
 export const routes: RouteObject[] = [
   {
     element: <RequireAuth />,
@@ -27,7 +27,7 @@ export const routes: RouteObject[] = [
           { path: 'convoys', children: convoyRoutes },
           { path: 'boxes', children: boxRoutes },
           { path: 'manifests', children: manifestRoutes },
-          { path: 'receivers/*', element: <Placeholder title="Receivers" /> },
+          { path: 'receivers', children: receiverRoutes },
           { path: '*', element: <NotFound /> },
         ],
       },

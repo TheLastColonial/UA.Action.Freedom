@@ -79,6 +79,15 @@ route, roles })`): list renders/empty/error/pagination/role-gated "New"; create 
    `stackIsUp()`, navigating **in-app** (click links, never `page.goto` between SPA pages —
    a full reload drops the in-memory token).
 
+## Receiver delivery detail (Ground Officer only)
+
+`src/api/receiverDetail.ts` is deliberately isolated: it is imported only by
+`pages/receivers/ReceiverSensitivePanel.tsx`, uses **no React Query** (nothing is cached),
+and every `revealReceiverDetail(ref, reason)` call is a fresh, server-audited round trip.
+The reason is collected in a modal that states the access is logged; it never enters the
+URL or a query key. `src/api/schemas/receivers.ts` has organisation and region only — list
+and detail code cannot leak an address because the type has no address field.
+
 ## API response conventions the client encodes
 
 - List endpoints return a bare array; paging is `?page=&pageSize=` (1-based), no total count.
