@@ -46,6 +46,35 @@ resource "keycloak_openid_client" "freedom_app" {
   web_origins                     = [var.edge_url]
 }
 
+resource "keycloak_openid_client" "freedom_spa" {
+  realm_id  = keycloak_realm.freedom.id
+  client_id = var.oidc_spa_client_id
+  name      = "Freedom Operator UI"
+
+  # Public, authorisation-code + PKCE — a browser SPA cannot keep a secret. This is the
+  # flow Entra External ID uses for users in the target design; only the authority and
+  # audience change when this moves to Azure.
+  access_type                  = "PUBLIC"
+  standard_flow_enabled        = true
+  implicit_flow_enabled        = false
+  direct_access_grants_enabled = false
+  service_accounts_enabled     = false
+
+  pkce_code_challenge_method = "S256"
+
+  # The SPA is served under /app, on the edge in the container and on the Vite dev server
+  # locally.
+  valid_redirect_uris = [
+    "${var.edge_url}/app/*",
+    "${var.vite_dev_url}/app/*",
+  ]
+  valid_post_logout_redirect_uris = [
+    "${var.edge_url}/app/*",
+    "${var.vite_dev_url}/app/*",
+  ]
+  web_origins = [var.edge_url, var.vite_dev_url]
+}
+
 # One role per role in docs/domain/key-concepts.md. Least privilege is modelled explicitly
 # rather than through a single "staff" role — a Loader confirms box contents and has no
 # business seeing convoy routes or receiver detail.
@@ -104,6 +133,22 @@ resource "keycloak_group_roles" "app_role" {
 resource "keycloak_openid_user_client_role_protocol_mapper" "roles" {
   realm_id   = keycloak_realm.freedom.id
   client_id  = keycloak_openid_client.freedom_app.id
+  name       = "app-roles"
+  claim_name = "roles"
+
+  client_id_for_role_mappings = keycloak_openid_client.freedom_app.client_id
+  multivalued                 = true
+  add_to_access_token         = true
+  add_to_id_token             = true
+  add_to_userinfo             = true
+}
+
+# The SPA token needs the same flat `roles` claim as the API's confidential client. The
+# role assignments themselves live on freedom-app (users get them via the role groups), so
+# this mapper reads from there — client_id_for_role_mappings points at freedom-app.
+resource "keycloak_openid_user_client_role_protocol_mapper" "spa_roles" {
+  realm_id   = keycloak_realm.freedom.id
+  client_id  = keycloak_openid_client.freedom_spa.id
   name       = "app-roles"
   claim_name = "roles"
 

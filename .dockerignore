@@ -8,6 +8,15 @@
 **/TestResults/
 **/node_modules/
 
+# Frontend build/test artefacts. The web/ source itself must stay in the context — the
+# Dockerfile's frontend stage builds it.
+web/dist/
+web/coverage/
+web/playwright-report/
+web/test-results/
+web/.vite/
+web/e2e/.auth/
+
 .git/
 .github/
 .gitignore

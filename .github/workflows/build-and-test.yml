@@ -94,6 +94,53 @@ jobs:
             **/bin/**
             **/obj/**
 
+  # The operator web UI (web/). Independent of the .NET lane — runs in parallel.
+  frontend:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          retention-days: 1
+          path: web/dist
+
   # End-to-end lane. The Integration and BDD projects skip themselves when their
   # target is not up (so build-and-test stays green without infrastructure); this
   # job stands up the local Azure simulation from iac/ — exactly the sequence in
@@ -110,6 +157,17 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies and Playwright browsers
+        working-directory: web
+        run: npm ci && npx playwright install --with-deps chromium
 
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@v1
@@ -174,6 +232,20 @@ jobs:
           --no-build
           --verbosity normal
 
+      - name: Playwright E2E smokes (operator UI against the running stack)
+        working-directory: web
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
+        run: npm run e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          retention-days: 3
+          path: web/playwright-report
+
       - name: Container logs
         if: failure()
         working-directory: iac/local
@@ -185,7 +257,7 @@ jobs:
         run: docker compose down -v
 
   publish:
-    needs: [build-and-test, acceptance]
+    needs: [build-and-test, frontend, acceptance]
     runs-on: ubuntu-latest
     # Skip on PRs originating from forks: they have a read-only token and no package write access.
     if: >-

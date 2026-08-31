@@ -80,6 +80,19 @@ if (hosting.UseHttpsRedirection)
     app.UseHttpsRedirection();
 }
 
+// The operator SPA is baked into wwwroot/app at image-build time and served from the same
+// origin as the API, under /app so its client routes never collide with an API route.
+// Static assets are public — the SPA runs its own OIDC flow — so this sits ahead of
+// authentication, and *before routing*: StaticFileMiddleware bows out once an endpoint has
+// been selected, and the /app fallback below would otherwise claim every asset request.
+// A no-op when wwwroot is absent.
+if (hosting.ServeStaticFrontend)
+{
+    app.UseStaticFiles();
+}
+
+app.UseRouting();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -90,6 +103,14 @@ app.MapFreedomConvoys();
 app.MapFreedomReceivers();
 app.MapFreedomBoxes();
 app.MapFreedomManifests();
+
+// Only paths under /app that are not a real static asset reach here — the SPA's own router
+// then takes over. Scoped to /app, so no API route, health probe or OpenAPI document is
+// ever shadowed. Misses (404) when the SPA has not been built into wwwroot/app.
+if (hosting.ServeStaticFrontend)
+{
+    app.MapFallbackToFile("/app/{*path}", "app/index.html");
+}
 
 app.Run();
 

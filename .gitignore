@@ -13,6 +13,10 @@ obj/
 /node_modules
 /wwwroot/node_modules
 
+# The operator SPA is built into wwwroot/app only inside the container image. A stray local
+# `vite build` must never land there — it would change what the Component tests host.
+/src/UA.Action.Freedom.Api/wwwroot/
+
 ### DotSettings ###
 *.DotSettings
 

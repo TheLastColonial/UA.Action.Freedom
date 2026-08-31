@@ -230,6 +230,27 @@ internal static class FreedomApi
             });
         });
 
+    /// <summary>
+    /// The application with its static web root pointed at <paramref name="webRootPath"/> — a
+    /// stand-in for the <c>wwwroot</c> the operator SPA is baked into at image-build time.
+    /// Pass <paramref name="serveStaticFrontend"/> <see langword="false"/> to prove the host
+    /// serves no SPA even when the directory is populated.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithWebRoot(
+        string webRootPath,
+        bool? serveStaticFrontend = null) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+            builder.UseWebRoot(webRootPath);
+
+            if (serveStaticFrontend is bool flag)
+            {
+                builder.UseSetting("Hosting:ServeStaticFrontend", flag ? "true" : "false");
+            }
+        });
+
     internal static WebApplicationFactory<Program> With(IDictionary<string, string?> settings) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {

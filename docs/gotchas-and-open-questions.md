@@ -4,9 +4,10 @@ Things that will cost you time, rules that look like bugs but are not, and decis
 still outstanding. Written up while building out the API and workers across the domain, so most
 entries are here because they actually bit somebody rather than because they seemed likely to.
 
-**How to read this.** §1–§6 are things that are true now and will surprise you. §7 is work that
-has been decided but not built. §8 is genuinely undecided and needs a person. §9 is a per-slice
-index if you are looking for the history of one area.
+**How to read this.** §1–§7 are things that are true now and will surprise you (§7 is the
+operator UI in `web/`). §8 is work that has been decided but not built. §9 is genuinely
+undecided and needs a person. §10 is a per-slice index if you are looking for the history of
+one area.
 
 Related: [`recommendations.md`](recommendations.md) for the hosting design and its reasoning,
 [`domain/key-concepts.md`](domain/key-concepts.md) for the vocabulary, and `CLAUDE.md` at the
@@ -348,7 +349,67 @@ TImplementation>` broke **every** component test at once — DI validation fails
 
 ---
 
-## 7. Decided, but not built
+## 7. The operator UI (`web/`)
+
+### It is served under `/app`, not `/`
+
+The SPA's client routes (`/vehicles`, `/manifests`, …) are the same strings as the API's own
+collection routes. Serving the SPA at `/` would mean a browser hard-navigating to
+`https://host/vehicles` gets the JSON list, not the app. So `Program.cs` serves it under
+`/app` (`MapFallbackToFile("/app/{*path}", "app/index.html")`), Vite builds with `base:
+'/app/'`, React Router uses `basename="/app"`, and the Dockerfile copies `dist` to
+`wwwroot/app`.
+
+### `UseStaticFiles` must run *before* `UseRouting`
+
+`StaticFileMiddleware` bows out the moment routing has selected an endpoint. With
+`UseStaticFiles` after the (auto-inserted) routing, every `/app/assets/*.js` request was
+claimed by the `/app/{*path}` fallback and served `index.html` — a MIME error and a blank
+SPA. `Program.cs` now calls `app.UseStaticFiles()` and then `app.UseRouting()` explicitly.
+`StaticFrontendTests.A_built_asset_is_served_as_a_file_not_the_index_fallback` pins it.
+
+### The access token lives in memory only
+
+A hard reload drops it; the SPA then bounces through Keycloak (`prompt=none` against the SSO
+cookie) to get a fresh one. In a Playwright spec this means **never `page.goto` between two
+SPA pages** — navigate by clicking links, or the reload loses both the token and the target
+route. A spec that switches seed users calls `signIn` (which clears cookies first);
+`e2e/auth.setup.ts` captures the SSO cookie per user so single-user specs skip the form.
+
+### `Hosting__ServeStaticFrontend` — default on, a no-op without `wwwroot`
+
+`dotnet run` and `dotnet test` have no `wwwroot`, so the static middleware and fallback do
+nothing and the API is unaffected. The container image is the only build with a populated
+`wwwroot/app`. `src/UA.Action.Freedom.Api/wwwroot/` is git-ignored so a stray local `vite
+build` cannot change what the Component tests host.
+
+### Vitest Browser Mode
+
+Tests run in real Chromium (`npx playwright install chromium`). Two non-obvious bits of
+config: `resolve.dedupe` + `optimizeDeps.include` for react / react-dom / react-query /
+router / oidc (Browser Mode otherwise hands a second, empty React copy to libraries that do
+`import React from 'react'`), and an explicit `afterEach(cleanup)` in `src/test/setup.ts`
+(Browser Mode does not auto-clean the DOM across files, so a left-open modal or stacked
+render poisons the next file's `getByRole`). MSW needs the committed
+`web/public/mockServiceWorker.js`.
+
+### The reason-gate modal is hand-rolled
+
+`react-aria-components` was dropped: its `Modal` left `aria-hidden` on the app tree after a
+`cleanup()`-while-open, and every later test's `getByRole` then found nothing. `ReasonModal`
+is a plain controlled `<div role="dialog" aria-modal>` overlay.
+
+### The receiver-detail read is deliberately un-cached
+
+`web/src/api/receiverDetail.ts` is an isolated module (imported only by the Ground Officer
+panel), uses **no React Query**, and every `revealReceiverDetail(ref, reason)` is a fresh,
+server-audited round trip. The reason is collected in the modal and never enters the URL or
+a query key. `ReceiverReadModel` has organisation and region only — list/detail code has no
+address field to leak.
+
+---
+
+## 8. Decided, but not built
 
 | Item | Where it is written down |
 | --- | --- |
@@ -361,7 +422,7 @@ TImplementation>` broke **every** component test at once — DI validation fails
 
 ---
 
-## 8. Open questions — these need a person
+## 9. Open questions — these need a person
 
 1. **Does publishing a truck list really close the convoy's vehicle list?**
    Implemented as a `409`, inferred from `process.puml` ordering *Truck List Published → Manifest
@@ -405,7 +466,7 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 
 ---
 
-## 9. Per-increment index
+## 10. Per-increment index
 
 | # | Slice | The things worth remembering |
 | --- | --- | --- |
@@ -416,3 +477,4 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 | 5 | `/boxes` | Validation is write-once and freezes the box. `boxes:validate` is separate from `boxes:write` — packing and vouching are different acts. The validator must be a volunteer on file; a signature naming nobody is worse than no signature. The 500 kg cap is a typo guard, not a real bound. |
 | 6 | `/manifests` | The freeze semantics correction (§4). One `POST` per edge of the diagram, not a `PATCH` of a status field. `ConfirmAndFreezeAsync` as a single statement. Freeze-then-enqueue ordering. The optional-`QueueServiceClient` DI failure (§6). |
 | 7 | Manifest worker | No database access at all, by design. Plain text output. The integration-test deadlock and its fix (§1). CI's `acceptance` job now starts both workers — it previously started only `app edge website`, so the queue hand-offs were never exercised there. |
+| 8 | Operator UI (`web/`) | A React + Vite SPA co-served by the API under `/app` — see §7 for the load-bearing traps (`/app` not `/`, `UseStaticFiles` before `UseRouting`, in-memory token, Browser Mode config, the hand-rolled reason modal, the un-cached receiver-detail read). New `frontend` CI job (typecheck/lint/format/test/build) and Playwright `@smoke` specs in the `acceptance` job; `publish` needs both. A new public PKCE Keycloak client `freedom-spa` — the API's confidential client is unchanged. |

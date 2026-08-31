@@ -103,6 +103,18 @@ the rest.
 
 Tokens last **15 minutes**. When calls start returning 401, fetch another.
 
+### Through the operator UI
+
+The web UI (`web/`) never uses the password grant. It signs in with **Authorization Code +
+PKCE** against a separate **public** Keycloak client, `freedom-spa` (no client secret), which
+`tofu apply` provisions alongside `freedom-app`. Open <http://localhost:8080/app/> (or
+<http://localhost:5173/app/> when running `npm run dev` in `web/`), sign in as one of the
+three seed logins, and the browser is redirected back with a token the UI keeps in memory
+and renews silently. The token carries the same flat `roles` claim as a password-grant
+token, so everything in "Which role can do what" below applies unchanged. The UI's own
+`POLICY_MATRIX` mirrors that table — it hides what a role cannot do, and the API still
+enforces it.
+
 ---
 
 ## The three seed logins
@@ -339,8 +351,9 @@ the BDD scenario proves it against a real token.
 ## What changes in Azure
 
 The password grant is a local convenience and does not survive the move. Entra External ID uses
-authorization code with PKCE for users, and client credentials for service-to-service. What does
-survive unchanged:
+authorization code with PKCE for users, and client credentials for service-to-service. The
+operator UI already uses Authorization Code + PKCE (against `freedom-spa`), so for it only the
+authority and audience change. What does survive unchanged:
 
 - the flat `roles` claim, and every policy written against it;
 - `RoleClaimType` / `MapInboundClaims`;
