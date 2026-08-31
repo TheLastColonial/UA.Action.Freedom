@@ -35,9 +35,14 @@ export function postCreate(path: string, body: unknown): Promise<CreatedResource
   return request({ method: 'POST', path, expect: 'created', body });
 }
 
-/** `PUT` an update. The API returns 204. */
-export function put204(path: string, body: unknown): Promise<void> {
-  return request({ method: 'PUT', path, expect: 'nocontent', body });
+/** `PUT` an update, with or without a body. The API returns 204. */
+export function put204(path: string, body?: unknown): Promise<void> {
+  return request({
+    method: 'PUT',
+    path,
+    expect: 'nocontent',
+    ...(body === undefined ? {} : { body }),
+  });
 }
 
 /** `DELETE` a resource. The API returns 204. */

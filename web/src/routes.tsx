@@ -6,6 +6,8 @@ import { RequireAuth } from './components/RequireAuth';
 import { RouteError } from './components/RouteError';
 import { Dashboard } from './pages/Dashboard';
 import { Placeholder } from './pages/Placeholder';
+import { convoyRoutes } from './pages/convoys/routes';
+import { peopleRoutes } from './pages/people/routes';
 import { vehicleRoutes } from './pages/vehicles/routes';
 
 // Slice routes are placeholders until Phases C–G replace them with the real pages.
@@ -19,8 +21,8 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <Dashboard /> },
           { path: 'vehicles', children: vehicleRoutes },
-          { path: 'people/*', element: <Placeholder title="Volunteers" /> },
-          { path: 'convoys/*', element: <Placeholder title="Convoys" /> },
+          { path: 'people', children: peopleRoutes },
+          { path: 'convoys', children: convoyRoutes },
           { path: 'boxes/*', element: <Placeholder title="Boxes" /> },
           { path: 'manifests/*', element: <Placeholder title="Manifests" /> },
           { path: 'receivers/*', element: <Placeholder title="Receivers" /> },

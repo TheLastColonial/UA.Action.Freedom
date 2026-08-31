@@ -51,6 +51,9 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
       ],
+      // react-hook-form field paths are `stops.${number}.postcode` — the numeric index is
+      // load-bearing for the FieldPath type; String()-wrapping it breaks type inference.
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
     },
   },
   {

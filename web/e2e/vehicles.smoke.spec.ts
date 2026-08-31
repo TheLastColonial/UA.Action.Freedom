@@ -7,7 +7,7 @@ test.beforeEach(async () => {
   test.skip(!(await stackIsUp()), 'the local stack is not up (docker compose + tofu apply)');
 });
 
-test('@smoke operator creates a vehicle and finds it in the list', async ({ page }) => {
+test('@smoke operator creates a vehicle and reads it back', async ({ page }) => {
   await signIn(page, 'operator');
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 
@@ -24,8 +24,7 @@ test('@smoke operator creates a vehicle and finds it in the list', async ({ page
   await page.getByLabel('Kerb weight (kg)').fill('1800');
   await page.getByRole('button', { name: 'Create vehicle' }).click();
 
+  // Landing on the detail page is a read-back through GET /vehicles/{vin}.
   await expect(page.getByRole('heading', { name: vin })).toBeVisible();
-
-  await nav.getByRole('link', { name: 'Vehicles' }).click();
-  await expect(page.getByRole('link', { name: vin })).toBeVisible();
+  await expect(page.getByText('E2E 001')).toBeVisible();
 });

@@ -71,7 +71,7 @@ Each slice adds, in order:
    the real routes and status codes; `src/test/factories/<slice>.ts` for fully-defaulted
    read models.
 7. **Tests** — one Vitest Browser file per page (`renderWithProviders(null, { routes,
-   route, roles })`): list renders/empty/error/pagination/role-gated "New"; create shows
+route, roles })`): list renders/empty/error/pagination/role-gated "New"; create shows
    client validation, maps a mocked 400 to a field, follows `Location` on success, shows a
    409 detail verbatim; edit pre-populates and navigates back; detail renders / 404 / hides
    actions for the wrong role.
