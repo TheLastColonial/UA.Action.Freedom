@@ -28,7 +28,7 @@ Every check `Healthy` means the environment is wired up correctly.
 Azure region. It deliberately creates nothing inside them.
 
 **OpenTofu is the control plane** — it creates the blob containers, queues, database schema,
-realm, client, app roles, groups and users, the same way `azurerm` and `azuread` would in Azure.
+realm, clients, app roles, groups and users, the same way `azurerm` and `azuread` would in Azure.
 
 That split is the point. `docker compose down` is like tearing down a region;
 `tofu destroy` is like deleting a resource group. Keeping resource creation in OpenTofu
@@ -96,6 +96,7 @@ tofu apply
 | | |
 | --- | --- |
 | Freedom Application | <http://localhost:8080> |
+| Operator UI | <http://localhost:8080/app/> (or <http://localhost:5173/app/> with `npm run dev` in `web/`) |
 | Readiness (start here) | <http://localhost:8080/health/ready> |
 | API reference (Scalar) | <http://localhost:8080/scalar/v1> |
 | Public website | <http://localhost:8080/site> |
@@ -368,7 +369,7 @@ iac/
     grafana/                     Grafana dashboards, provisioned at boot
   tofu/
     versions.tf variables.tf outputs.tf
-    keycloak.tf                  realm, client, app roles, role groups, seeded users
+    keycloak.tf                  realm, two clients (confidential API + public PKCE SPA), app roles, role groups, seeded users
     storage.tf                   blob containers and queues
     database.tf                  applies sql/001-schemas.sql
 ```

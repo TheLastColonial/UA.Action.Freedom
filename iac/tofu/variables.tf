@@ -46,6 +46,18 @@ variable "edge_url" {
   default     = "http://localhost:8080"
 }
 
+variable "oidc_spa_client_id" {
+  description = "Client id the browser SPA (operator UI) authenticates with — public, PKCE."
+  type        = string
+  default     = "freedom-spa"
+}
+
+variable "vite_dev_url" {
+  description = "Origin of the Vite dev server, added to the SPA client's redirect URIs and web origins for local development."
+  type        = string
+  default     = "http://localhost:5173"
+}
+
 variable "test_user_password" {
   description = "Password shared by every seeded test user."
   type        = string

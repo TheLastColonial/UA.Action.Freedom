@@ -3,6 +3,8 @@ output "environment" {
 
   value = {
     application    = var.edge_url
+    operator_ui    = "${var.edge_url}/app/"
+    spa_client_id  = var.oidc_spa_client_id
     readiness      = "${var.edge_url}/health/ready"
     api_reference  = "${var.edge_url}/scalar/v1"
     public_website = "${var.edge_url}/site"

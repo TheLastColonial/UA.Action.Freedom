@@ -17,4 +17,16 @@ public sealed class HostingOptions
     /// </para>
     /// </summary>
     public bool UseHttpsRedirection { get; set; } = true;
+
+    /// <summary>
+    /// Whether the host serves the operator SPA from <c>wwwroot</c> and falls unmatched
+    /// routes back to its <c>index.html</c>.
+    /// <para>
+    /// <see langword="true"/> by default, so the container image — the only build that has a
+    /// populated <c>wwwroot</c> — needs no configuration. When <c>wwwroot</c> is absent (every
+    /// non-Docker run, including <c>dotnet test</c>) the static middleware is a no-op and the
+    /// fallback simply misses, so the API is unaffected either way.
+    /// </para>
+    /// </summary>
+    public bool ServeStaticFrontend { get; set; } = true;
 }

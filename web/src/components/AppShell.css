@@ -1,0 +1,52 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.app-shell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.app-shell__brand {
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.app-shell__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.app-shell__roles {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+}
+
+.app-shell__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.app-shell__sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  border-inline-end: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.app-shell__main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-5);
+  overflow-x: auto;
+}

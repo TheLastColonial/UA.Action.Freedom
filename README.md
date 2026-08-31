@@ -9,6 +9,7 @@ Built on .NET 10 with ASP.NET Core minimal APIs, Dapper for data access, and Ope
 ### Prerequisites
 
 - **.NET 10 SDK** — [Download](https://dotnet.microsoft.com/download/dotnet)
+- **Node 22 LTS** — for the operator web UI (`web/`); `nvm use` picks it up from `web/.nvmrc`
 - **Docker Desktop** — for local infrastructure simulation
 - **PowerShell** or **Bash** — for build/test scripts
 - **OpenTofu** (optional) — for provisioning local resources (`iac/tofu/`)
@@ -46,6 +47,11 @@ tests/
 ├── UA.Action.Freedom.Tests.BDD/        # Reqnroll feature scenarios
 ├── HMRC.GVMS.Tests.Unit/
 └── HMRC.PushPullNotifications.Tests.Unit/
+
+web/                                    # React + Vite operator UI (TypeScript, strict)
+├── src/                                # App shell, api client, auth, pages per slice
+├── e2e/                                # Playwright smokes against the running stack
+└── ...                                 # built to web/dist, baked into the API image at /app
 
 iac/
 ├── local/                              # Docker Compose substrate (all services)
@@ -97,6 +103,31 @@ curl http://localhost:5100/health/live
 curl http://localhost:5100/health/ready
 ```
 
+### Run the web app
+
+The operator UI lives in `web/`. For a fast loop, run the Vite dev server (it proxies API
+calls to the edge, so no CORS):
+
+```bash
+cd web
+npm ci
+npm run dev            # http://localhost:5173/app/  (API proxied to http://localhost:8080)
+```
+
+Point the proxy elsewhere with `VITE_API_PROXY_TARGET` (e.g. `http://localhost:5100` for a
+bare `dotnet run`). The production bundle is built into the API image and served at
+`http://localhost:8080/app/` — there is no need to run `vite build` locally.
+
+### Run the web tests
+
+```bash
+cd web
+npm run test           # Vitest Browser Mode (real Chromium) + Testing Library + MSW
+npm run e2e:install    # one-time: download the Playwright browser
+npm run e2e            # Playwright smokes — needs the docker stack up; self-skips otherwise
+npm run verify         # typecheck + lint + format + test + build (what CI runs)
+```
+
 ### Local Development Environment
 
 Run the full local infrastructure (SQL, Blob/Queue Storage, Keycloak auth, HMRC mocks):
@@ -115,6 +146,10 @@ tofu apply
 # Verify all services are healthy
 curl http://localhost:8080/health/ready
 ```
+
+`tofu apply` also provisions the public PKCE Keycloak client (`freedom-spa`) the operator UI
+signs in with. The UI is then at <http://localhost:8080/app/>; all three seed logins work
+through the browser.
 
 **Test logins** (all have password `password`):
 - `admin` — Administrator role
@@ -143,6 +178,20 @@ Core resource endpoints:
 See `docs/local-authentication.md` for the full role/policy matrix.
 
 ## Architecture
+
+### Operator Web UI
+
+- React + Vite SPA in `web/` (TypeScript strict), served **same-origin** by the API host
+  under `/app` — built into `wwwroot/app` at image-build time, no separate deployable, no
+  CORS. `Program.cs` serves it with `UseStaticFiles` + `MapFallbackToFile("/app/{*path}")`,
+  scoped to `/app` so it never shadows an API route or health probe. Toggle with
+  `Hosting__ServeStaticFrontend` (default on).
+- Sign-in is **Authorization Code + PKCE** against the public Keycloak client `freedom-spa`
+  (`iac/tofu/keycloak.tf`); the resulting JWT is sent as `Authorization: Bearer`. The API is
+  unchanged — still a pure JWT resource server.
+- Nav and actions are gated by the same 15-policy matrix the API enforces
+  (`docs/local-authentication.md`); the API remains the enforcement point. Receiver street
+  addresses are never rendered on any print/verification view.
 
 ### Authentication & Authorization
 
@@ -218,7 +267,7 @@ See `docs/gotchas-and-open-questions.md` for:
 2. Write failing tests first (TDD)
 3. Implement the minimum to pass tests
 4. Run all tests to ensure no regressions
-5. Open a pull request — CI will build, test (Unit/Component), and acceptance-test (Integration/BDD + full stack)
+5. Open a pull request — CI will build, test (Unit/Component), run the `web/` frontend job (typecheck/lint/format/test/build), and acceptance-test (Integration/BDD + Playwright smokes against the full stack)
 6. Wait for approval and status checks to pass
 
 ## Resources
