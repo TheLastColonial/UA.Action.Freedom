@@ -60,6 +60,21 @@ Seven test projects under `tests/`. `HMRC.GVMS.Tests.Unit` and `HMRC.PushPullNot
 
 **CI:** `.github/workflows/build-and-test.yml` has three jobs. `build-and-test` runs `dotnet test --solution` (Integration + BDD self-skip there — no infrastructure). `acceptance` stands up the `iac/` simulation (`docker compose` substrate + `tofu apply` for realm/storage/schema) and runs the Integration and BDD projects against it for real. `publish` (NuGet pack + push, GitHub Release) needs both — a failing acceptance run blocks a release.
 
+### README.md maintenance
+
+The **README.md is the primary onboarding document** for new developers. Keep it synchronized with the codebase — when code changes, the README changes in the same commit or PR. Update these sections immediately when:
+
+- **Prerequisites** — Add/remove .NET versions, Docker, OpenTofu, or any required tools
+- **Project Structure** — When adding/removing projects or slices (e.g., new `UA.Action.Freedom.SomethingWorker` or test project); update both the `src/` and `tests/` trees
+- **Usage commands** — If build, test, or run commands change (e.g., new solution structure, test runner opts); verify command output locally before committing
+- **API Endpoints** — When adding new REST routes or sub-resources (e.g., `PUT /vehicles/{vin}/service-record`), document the route, HTTP method, and access policy; update both the listing and the policy matrix if applicable
+- **Architecture** — When introducing new patterns (new repository port, new worker, new state machine, new security boundary), add a short paragraph to the Architecture section explaining the pattern
+- **Local setup** — If Docker Compose services, environment variables, Keycloak roles, or OpenTofu provisioning steps change, update the "Local Development Environment" section; test the full stack locally first
+- **Development guidance** — When the workflow for adding a slice changes (new test file locations, new handler patterns, new schema table conventions), update the "Adding a New Slice" subsection
+- **Known Issues** — When known gotchas are resolved, remove them; when new ones discovered, add them and link to `docs/gotchas-and-open-questions.md`
+
+**These updates are part of the feature work, not follow-up cleanup** — they go in the same commit as the code change, and any PR that touches code but not the README is incomplete.
+
 ### Domain model (`src/UA.Action.Freedom.Domain`)
 
 Core entities and how they relate:
