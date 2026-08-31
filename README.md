@@ -177,6 +177,11 @@ Core resource endpoints:
 
 See `docs/local-authentication.md` for the full role/policy matrix.
 
+The **operator UI (`web/`) covers every endpoint above** — all six slices, every sub-resource
+(convoy route/vehicles, box items/validate, manifest teams/boxes/weight), all nine manifest
+transitions, and the reason-gated receiver-detail flow — with nav and actions gated by the
+same policy matrix (the API stays the enforcement point).
+
 ## Architecture
 
 ### Operator Web UI
@@ -245,6 +250,9 @@ To add a new domain concept (e.g., a new `Donation` slice):
 6. Register in `Program.cs` via `AddFreedomApplication()` and `AddFreedomData()`
 7. Add test suites: Unit, Component, Integration, and BDD feature files
 8. Update schema in `iac/local/sql/001-schemas.sql` and re-run `tofu apply`
+9. Build the operator-UI slice — see the 8-step recipe in `web/README.md` (Zod schemas,
+   `api/<slice>.ts` hooks, pages + routes, MSW handlers + factory, a Vitest Browser test per
+   page, one `@smoke` Playwright spec). `src/pages/vehicles/` is the reference.
 
 ## Observability
 

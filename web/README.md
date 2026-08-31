@@ -8,6 +8,8 @@ the edge, so there is no CORS.
 ## Prerequisites
 
 - **Node 22 LTS** — `nvm use` reads `.nvmrc`.
+- **Playwright Chromium** — `npx playwright install chromium` (used by both `npm run test`,
+  which runs in a real browser, and `npm run e2e`). `npm run e2e:install` adds OS deps.
 
 ## Scripts
 
@@ -36,11 +38,16 @@ as `Authorization: Bearer`. Sign in as one of the seed logins (`admin` / `operat
 src/
   auth/        oidc config, useAuth, policyMatrix (mirrors the 15-policy matrix; API still enforces)
   api/         apiFetch wrapper + typed verbs, Zod schemas, per-slice query/mutation hooks
-  components/  app shell, data table, forms, error/cold-start UX
+  components/  app shell, data table, pagination, form/fields, error/cold-start UX
   pages/       one folder per slice (vehicles, people, convoys, receivers, boxes, manifests)
+  styles/      tokens.css (light + dark) + global.css
   test/        renderWithProviders, MSW handlers + factories
-e2e/           Playwright smokes + auth setup
+e2e/           auth.setup.ts (one PKCE login per seed user), per-role + per-slice @smoke specs
 ```
+
+Styling is **plain scoped CSS** — a `Component.css` imported for its side effect, with
+semantic class names (not CSS Modules: `noPropertyAccessFromIndexSignature` fights the
+untyped `styles.x` object).
 
 ## Adding a slice
 
@@ -77,7 +84,20 @@ route, roles })`): list renders/empty/error/pagination/role-gated "New"; create 
    actions for the wrong role.
 8. **Smoke** — one `e2e/<slice>.smoke.spec.ts` (`@smoke`), self-skipping via
    `stackIsUp()`, navigating **in-app** (click links, never `page.goto` between SPA pages —
-   a full reload drops the in-memory token).
+   a full reload drops the in-memory token). A smoke that switches seed users calls
+   `signIn` (which clears cookies); one that stays as a single user can `test.use` a
+   storage state from `auth.setup.ts`.
+
+### Slice-specific patterns to copy
+
+- **Sub-resource tab pages** (`convoys`, `manifests`) — the detail page keeps the active
+  tab in `?tab=` and renders one panel component per tab; each panel owns its own query.
+- **A published/validated/frozen aggregate** (`convoys` truck list, `boxes` validate,
+  `manifests` GMR) — the freezing `POST` is its own action, and every editing control
+  reads the computed `truckListPublished` / `validated` / `frozen` flag to disable itself.
+- **A state machine** (`manifests`) — the legal edges live as a pure table in
+  `pages/manifests/transitions.ts` mirroring the C# `ManifestTransitions`, unit-tested
+  edge-by-edge; the panel renders `availableTransitions(ctx)` as buttons.
 
 ## Receiver delivery detail (Ground Officer only)
 
