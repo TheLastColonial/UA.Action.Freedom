@@ -148,6 +148,10 @@ Ports are all overridable in `.env` if something on your machine already owns on
 
 ### Signing in
 
+> For calling the API with a token — the seed logins, the role/policy matrix and the
+> troubleshooting list — see [`../docs/local-authentication.md`](../docs/local-authentication.md).
+
+
 OpenTofu seeds three users, all with the password `password`:
 
 | Username | Roles |

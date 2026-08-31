@@ -113,6 +113,8 @@ Security principles this design commits to: managed identity everywhere (shared-
 ### Docs
 
 - `docs/domain/key-concepts.md` — the shared vocabulary (roles, Convoy, Manifest, Box, Receiver, documents). **Start here** for domain questions; it is more current than the code.
+- `docs/local-authentication.md` — how to get a token locally, the three seed logins and what each may do, the full role/policy matrix, and why `MapInboundClaims = false` matters.
+- `docs/gotchas-and-open-questions.md` — **read this before a long debugging session.** Every trap found while building the slices out: the tooling ones (MTP verbs, `QUOTED_IDENTIFIER` under sqlcmd, the integration-test deadlock), the security invariants that are easy to remove by accident, the domain rules that look like bugs, and what is still undecided.
 - `docs/recommendations.md` — Azure hosting design, cost model, security recommendations, and open questions still needing a decision.
 - `docs/c4/1-system-context.puml` — C4 level 1. Person-to-person and person-to-third-party interactions belong here, not on level 2.
 - `docs/c4/2-containers.puml` — C4 level 2, the target Azure deployment. Uses C4-PlantUML plus Azure-PlantUML sprites from the `release/2-2` dist; verify a sprite exists in that release before adding an include, as newer Azure services are missing from it.
