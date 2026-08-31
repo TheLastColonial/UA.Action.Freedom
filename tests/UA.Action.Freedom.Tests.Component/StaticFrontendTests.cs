@@ -72,6 +72,23 @@ public class StaticFrontendTests
     }
 
     [Fact]
+    public async Task A_built_asset_is_served_as_a_file_not_the_index_fallback()
+    {
+        using var webRoot = new TemporaryDirectory();
+        await webRoot.WriteAppIndexHtml(IndexHtml);
+        await webRoot.WriteAppAsset("assets/app-abc123.js", "export const marker = 'asset';");
+        await using var api = FreedomApi.WithWebRoot(webRoot.Path);
+        using var client = api.CreateClient();
+
+        var asset = await client.GetAsync("/app/assets/app-abc123.js", TestContext.Current.CancellationToken);
+        var body = await asset.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        asset.StatusCode.Should().Be(HttpStatusCode.OK);
+        asset.Content.Headers.ContentType?.MediaType.Should().Be("text/javascript");
+        body.Should().Contain("marker");
+    }
+
+    [Fact]
     public async Task The_frontend_fallback_does_not_shadow_the_api_or_health_probes()
     {
         using var webRoot = new TemporaryDirectory();
@@ -110,6 +127,13 @@ public class StaticFrontendTests
             var appDirectory = System.IO.Path.Combine(Path, "app");
             Directory.CreateDirectory(appDirectory);
             await File.WriteAllTextAsync(System.IO.Path.Combine(appDirectory, "index.html"), html);
+        }
+
+        public async Task WriteAppAsset(string relativePath, string content)
+        {
+            var target = System.IO.Path.Combine(Path, "app", relativePath);
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
+            await File.WriteAllTextAsync(target, content);
         }
 
         public void Dispose()

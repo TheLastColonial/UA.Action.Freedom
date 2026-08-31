@@ -47,6 +47,10 @@ export default tseslint.config(
       // House style (global CLAUDE.md): `type` for data shapes, `interface` for behaviour
       // contracts — a judgement call per declaration, not a blanket rule.
       '@typescript-eslint/consistent-type-definitions': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
     },
   },
   {

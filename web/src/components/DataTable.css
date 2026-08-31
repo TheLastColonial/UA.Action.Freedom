@@ -1,0 +1,32 @@
+.data-table__scroll {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.925rem;
+}
+
+.data-table__caption {
+  text-align: start;
+  padding-block-end: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.data-table th,
+.data-table td {
+  text-align: start;
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.data-table th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.data-table__empty {
+  color: var(--color-text-muted);
+}

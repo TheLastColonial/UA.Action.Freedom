@@ -6,6 +6,7 @@ import { RequireAuth } from './components/RequireAuth';
 import { RouteError } from './components/RouteError';
 import { Dashboard } from './pages/Dashboard';
 import { Placeholder } from './pages/Placeholder';
+import { vehicleRoutes } from './pages/vehicles/routes';
 
 // Slice routes are placeholders until Phases C–G replace them with the real pages.
 export const routes: RouteObject[] = [
@@ -17,7 +18,7 @@ export const routes: RouteObject[] = [
         errorElement: <RouteError />,
         children: [
           { index: true, element: <Dashboard /> },
-          { path: 'vehicles/*', element: <Placeholder title="Vehicles" /> },
+          { path: 'vehicles', children: vehicleRoutes },
           { path: 'people/*', element: <Placeholder title="Volunteers" /> },
           { path: 'convoys/*', element: <Placeholder title="Convoys" /> },
           { path: 'boxes/*', element: <Placeholder title="Boxes" /> },

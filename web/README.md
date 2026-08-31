@@ -44,10 +44,40 @@ e2e/           Playwright smokes + auth setup
 
 ## Adding a slice
 
-_(Filled in with the Vehicles reference implementation.)_ Each slice adds: Zod schemas in
-`src/api/schemas/<slice>.ts`, client + hooks in `src/api/<slice>.ts`, pages under
-`src/pages/<slice>/`, MSW handlers in `src/test/msw/handlers/<slice>.ts`, a Vitest Browser
-test per page, and one Playwright smoke.
+**Vehicles (`src/pages/vehicles/`, `src/api/vehicles.ts`) is the reference — copy its shape.**
+Each slice adds, in order:
+
+1. **Schemas** — `src/api/schemas/<slice>.ts`: a `z.object` for the read model (optional
+   scalars are `.nullable()` — the API sends `null`, not omitted) and a `type` for the
+   request DTO (optional fields are `field?: T`, omitted not null). Enums come from
+   `src/api/schemas/common.ts` and must match the C# members by name.
+2. **Form model** — `src/pages/<slice>/<slice>FormModel.ts` (lowercase, to avoid a
+   case-collision with the `.tsx` component): a `FormValues` type of all strings/booleans,
+   `empty…()`, `…ToFormValues(readModel)`, a pure `…FormToRequest(values)` mapper (trim,
+   omit empty, coerce numbers), and a validation-only Zod schema whose output type equals
+   its input type (no transform — keeps react-hook-form happy). All pure → unit-tested.
+3. **API module** — `src/api/<slice>.ts`: `fetch…` / `create…` / `update…` / `delete…`
+   built on `src/api/http.ts`, then `use…` query/mutation hooks keyed with `qk.<slice>`
+   from `src/api/queryKeys.ts`. Mutations invalidate the narrowest safe prefix.
+4. **Components** — reuse `DataTable`, `Pagination`, `Gate`, `form/fields`. The shared
+   `<SliceForm>` takes `mode`, `initialValues`, `submitting`, `errorMessage` (from a 409
+   `ApiDomainProblem`), `fieldErrors` (from a 400 `ApiValidationProblem`, PascalCase keys
+   mapped through `problemFieldToFormPath`), and `onSubmit`.
+5. **Pages + routes** — `…ListPage` (URL `?page`, "New" behind `Gate`), `…DetailPage`
+   (`ApiNotFound` → `<NotFound/>`, Edit/Delete behind `Gate`), `…CreatePage` (on 201,
+   navigate to the id from `Location`), `…EditPage`. Export a `RouteObject[]` from
+   `src/pages/<slice>/routes.tsx` and mount it in `src/routes.tsx`.
+6. **MSW** — `src/test/msw/<slice>.ts` exporting `…Api(seed)` → `{ db, handlers }` matching
+   the real routes and status codes; `src/test/factories/<slice>.ts` for fully-defaulted
+   read models.
+7. **Tests** — one Vitest Browser file per page (`renderWithProviders(null, { routes,
+   route, roles })`): list renders/empty/error/pagination/role-gated "New"; create shows
+   client validation, maps a mocked 400 to a field, follows `Location` on success, shows a
+   409 detail verbatim; edit pre-populates and navigates back; detail renders / 404 / hides
+   actions for the wrong role.
+8. **Smoke** — one `e2e/<slice>.smoke.spec.ts` (`@smoke`), self-skipping via
+   `stackIsUp()`, navigating **in-app** (click links, never `page.goto` between SPA pages —
+   a full reload drops the in-memory token).
 
 ## API response conventions the client encodes
 

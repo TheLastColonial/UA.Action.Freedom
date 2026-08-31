@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { afterAll, afterEach, beforeAll } from 'vitest';
+import { cleanup } from 'vitest-browser-react';
 
 import { worker } from './msw/worker';
 
@@ -9,6 +10,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  cleanup();
   worker.resetHandlers();
 });
 
