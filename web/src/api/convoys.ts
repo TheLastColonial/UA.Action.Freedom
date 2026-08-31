@@ -79,8 +79,15 @@ export function useConvoys(params: PageParams): UseQueryResult<readonly ConvoyRe
   return useQuery({ queryKey: qk.convoys.list(params), queryFn: () => fetchConvoys(params) });
 }
 
-export function useConvoy(id: number): UseQueryResult<ConvoyReadModel> {
-  return useQuery({ queryKey: qk.convoys.detail(id), queryFn: () => fetchConvoy(id) });
+export function useConvoy(
+  id: number,
+  options: { enabled?: boolean } = {},
+): UseQueryResult<ConvoyReadModel> {
+  return useQuery({
+    queryKey: qk.convoys.detail(id),
+    queryFn: () => fetchConvoy(id),
+    enabled: options.enabled ?? true,
+  });
 }
 
 export function useConvoyRoute(

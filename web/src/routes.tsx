@@ -8,6 +8,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Placeholder } from './pages/Placeholder';
 import { boxRoutes } from './pages/boxes/routes';
 import { convoyRoutes } from './pages/convoys/routes';
+import { manifestRoutes } from './pages/manifests/routes';
 import { peopleRoutes } from './pages/people/routes';
 import { vehicleRoutes } from './pages/vehicles/routes';
 
@@ -25,7 +26,7 @@ export const routes: RouteObject[] = [
           { path: 'people', children: peopleRoutes },
           { path: 'convoys', children: convoyRoutes },
           { path: 'boxes', children: boxRoutes },
-          { path: 'manifests/*', element: <Placeholder title="Manifests" /> },
+          { path: 'manifests', children: manifestRoutes },
           { path: 'receivers/*', element: <Placeholder title="Receivers" /> },
           { path: '*', element: <NotFound /> },
         ],
