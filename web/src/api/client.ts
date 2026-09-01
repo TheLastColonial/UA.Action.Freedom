@@ -12,7 +12,7 @@ import {
   problemJsonSchema,
 } from './problem';
 
-export type ExpectKind = 'json' | 'created' | 'nocontent' | 'collection';
+export type ExpectKind = 'json' | 'created' | 'nocontent' | 'collection' | 'text';
 
 export type CreatedResource = { readonly id: string };
 export type ParentMissing = { readonly parentMissing: true };
@@ -95,13 +95,15 @@ async function readProblem(response: Response): Promise<never> {
 export function request<T>(req: ApiRequest<T> & { expect: 'json' }): Promise<T>;
 export function request(req: ApiRequest<unknown> & { expect: 'created' }): Promise<CreatedResource>;
 export function request(req: ApiRequest<unknown> & { expect: 'nocontent' }): Promise<void>;
+export function request(req: ApiRequest<unknown> & { expect: 'text' }): Promise<string>;
 export function request<T>(
   req: ApiRequest<T> & { expect: 'collection' },
 ): Promise<T | ParentMissing>;
 export async function request<T>(
   req: ApiRequest<T>,
-): Promise<T | CreatedResource | ParentMissing | void> {
-  const headers = new Headers({ Accept: 'application/json' });
+): Promise<T | CreatedResource | ParentMissing | string | void> {
+  const accept = req.expect === 'text' ? 'image/svg+xml, text/plain' : 'application/json';
+  const headers = new Headers({ Accept: accept });
   const token = config.getAccessToken();
   if (token !== undefined) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -156,6 +158,10 @@ export async function request<T>(
       throw new ApiNotFound();
     }
     return readProblem(response);
+  }
+
+  if (req.expect === 'text') {
+    return response.text();
   }
 
   if (req.expect === 'nocontent') {

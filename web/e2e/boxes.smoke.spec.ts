@@ -44,3 +44,23 @@ test('@smoke loader packs a box, adds an item and validates it', async ({ page }
     page.getByText('This box has been validated — its contents are now fixed.'),
   ).toBeVisible();
 });
+
+test('@smoke a loader issues a QR label for a box and it is ready to print', async ({ page }) => {
+  await signIn(page, 'operator');
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+
+  await nav.getByRole('link', { name: 'Boxes' }).click();
+  await page.getByRole('link', { name: 'New box' }).click();
+  await page.getByLabel('City').fill('Lviv');
+  await page.getByRole('button', { name: 'Create box' }).click();
+  await expect(page.getByRole('heading', { name: /Box #/ })).toBeVisible();
+
+  await expect(page.getByRole('heading', { name: 'QR label' })).toBeVisible();
+  await expect(page.getByText('This box has no QR label.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Issue label' }).click();
+
+  await expect(page.getByText('Label issued', { exact: false })).toBeVisible();
+  await expect(page.getByRole('img', { name: /QR label for box \d+/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Print label' })).toBeEnabled();
+});

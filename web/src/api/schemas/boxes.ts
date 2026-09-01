@@ -23,6 +23,16 @@ export const boxItemReadModelSchema = z.object({
 });
 export type BoxItemReadModel = z.infer<typeof boxItemReadModelSchema>;
 
+// The box's active QR label — src/UA.Action.Freedom.Application/Boxes/BoxReadModel.cs.
+export const boxQrCodeReadModelSchema = z.object({
+  token: z.string(),
+  boxId: z.number().int(),
+  issuedAt: z.string(),
+  revokedAt: z.string().nullable(),
+  active: z.boolean(),
+});
+export type BoxQrCodeReadModel = z.infer<typeof boxQrCodeReadModelSchema>;
+
 // Request shapes — src/UA.Action.Freedom.Api/Boxes/BoxRequests.cs.
 export interface CreateBoxRequest {
   receiverRef?: string;

@@ -182,10 +182,12 @@ Core resource endpoints:
 See `docs/local-authentication.md` for the full role/policy matrix.
 
 The **operator UI (`web/`) covers every endpoint above** — all six slices, every sub-resource
-(convoy route/vehicles, box items/validate, manifest teams/boxes/weight), all nine manifest
-transitions, and the reason-gated receiver-detail flow — with nav and actions gated by the
-same policy matrix (the API stays the enforcement point). The box QR-label endpoints
-(`/boxes/{id}/qr-code`, `/label`, `/boxes/scan/{token}`) are API-only for now.
+(convoy route/vehicles, box items/validate, box QR label issue/print/revoke, manifest
+teams/boxes/weight), all nine manifest transitions, and the reason-gated receiver-detail flow —
+with nav and actions gated by the same policy matrix (the API stays the enforcement point). The
+box detail page's **QR label** panel issues a label, shows it inline and prints it (a print
+stylesheet reveals the label alone); `/boxes/scan/{token}` is consumed by whatever scans the
+printed label, not the operator UI.
 
 ## Architecture
 

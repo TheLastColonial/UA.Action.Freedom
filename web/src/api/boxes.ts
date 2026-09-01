@@ -3,13 +3,28 @@ import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { z } from 'zod';
 
 import type { CreatedResource, ParentMissing } from './client';
-import { delete204, getCollection, getJson, post204, postCreate, put204 } from './http';
+import {
+  delete204,
+  getCollection,
+  getJson,
+  getText,
+  post201,
+  post204,
+  postCreate,
+  put204,
+} from './http';
+import { ApiNotFound } from './problem';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
-import { boxItemReadModelSchema, boxReadModelSchema } from './schemas/boxes';
+import {
+  boxItemReadModelSchema,
+  boxQrCodeReadModelSchema,
+  boxReadModelSchema,
+} from './schemas/boxes';
 import type {
   AddBoxItemRequest,
   BoxItemReadModel,
+  BoxQrCodeReadModel,
   BoxReadModel,
   CreateBoxRequest,
   UpdateBoxRequest,
@@ -56,6 +71,32 @@ export function removeBoxItem(id: number, itemId: string): Promise<void> {
 
 export function validateBox(id: number, body: ValidateBoxRequest): Promise<void> {
   return post204(`${idPath(id)}/validate`, body);
+}
+
+/** The box's active QR label, or `null` when it has none. */
+export async function fetchBoxQrCode(id: number): Promise<BoxQrCodeReadModel | null> {
+  try {
+    return await getJson(`${idPath(id)}/qr-code`, boxQrCodeReadModelSchema);
+  } catch (error) {
+    if (error instanceof ApiNotFound) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/** Issue (or re-issue) the box's QR label. Re-issuing revokes whatever it had. */
+export function issueBoxQrCode(id: number): Promise<CreatedResource> {
+  return post201(`${idPath(id)}/qr-code`);
+}
+
+export function revokeBoxQrCode(id: number): Promise<void> {
+  return delete204(`${idPath(id)}/qr-code`);
+}
+
+/** The printable label as an SVG document. */
+export function fetchBoxLabel(id: number): Promise<string> {
+  return getText(`${idPath(id)}/label`);
 }
 
 export function useBoxes(params: PageParams): UseQueryResult<readonly BoxReadModel[]> {
@@ -125,4 +166,34 @@ export function useValidateBox(id: number): UseMutationResult<void, Error, Valid
       await queryClient.invalidateQueries({ queryKey: qk.boxes.all });
     },
   });
+}
+
+export function useBoxQrCode(id: number): UseQueryResult<BoxQrCodeReadModel | null> {
+  return useQuery({ queryKey: qk.boxes.qrCode(id), queryFn: () => fetchBoxQrCode(id) });
+}
+
+export function useBoxLabel(id: number, enabled: boolean): UseQueryResult<string> {
+  return useQuery({ queryKey: qk.boxes.label(id), queryFn: () => fetchBoxLabel(id), enabled });
+}
+
+function useQrCodeMutation(
+  id: number,
+  mutationFn: () => Promise<unknown>,
+): UseMutationResult<unknown, Error, void> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.boxes.qrCode(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.boxes.label(id) });
+    },
+  });
+}
+
+export function useIssueBoxQrCode(id: number): UseMutationResult<unknown, Error, void> {
+  return useQrCodeMutation(id, () => issueBoxQrCode(id));
+}
+
+export function useRevokeBoxQrCode(id: number): UseMutationResult<unknown, Error, void> {
+  return useQrCodeMutation(id, () => revokeBoxQrCode(id));
 }
