@@ -10,14 +10,21 @@ import type {
 } from '../../api/schemas/boxes';
 import { problem } from './problem';
 
+interface ActiveQrCode {
+  token: string;
+  issuedAt: string;
+}
+
 export interface BoxApi {
   db: Map<number, BoxReadModel>;
   items: Map<number, BoxItemReadModel[]>;
+  qr: Map<number, ActiveQrCode>;
   handlers: RequestHandler[];
 }
 
 let mintedBox = 500;
 let mintedItem = 0;
+let mintedToken = 0;
 
 export function boxApi(
   seed: readonly BoxReadModel[] = [],
@@ -25,6 +32,7 @@ export function boxApi(
 ): BoxApi {
   const db = new Map<number, BoxReadModel>(seed.map((b) => [b.id, b]));
   const items = new Map<number, BoxItemReadModel[]>();
+  const qr = new Map<number, ActiveQrCode>();
   const idFrom = (raw: string | readonly string[] | undefined) => Number(String(raw));
   const validators = new Set(knownVolunteerIds);
 
@@ -164,7 +172,68 @@ export function boxApi(
       });
       return new HttpResponse(null, { status: 204 });
     }),
+
+    http.get('/boxes/:id/qr-code', ({ params }) => {
+      const id = idFrom(params['id']);
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const code = qr.get(id);
+      return code
+        ? HttpResponse.json({
+            token: code.token,
+            boxId: id,
+            issuedAt: code.issuedAt,
+            revokedAt: null,
+            active: true,
+          })
+        : new HttpResponse(null, { status: 404 });
+    }),
+
+    http.post('/boxes/:id/qr-code', ({ params }) => {
+      const id = idFrom(params['id']);
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      // Re-issuing replaces the active code — the previous token stops resolving.
+      mintedToken += 1;
+      const token = `cccccccc-0000-0000-0000-${String(mintedToken).padStart(12, '0')}`;
+      qr.set(id, { token, issuedAt: '2026-05-01T09:00:00' });
+      return new HttpResponse(null, {
+        status: 201,
+        headers: { Location: `/boxes/scan/${token}` },
+      });
+    }),
+
+    http.delete('/boxes/:id/qr-code', ({ params }) => {
+      const id = idFrom(params['id']);
+      if (!db.has(id) || !qr.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      qr.delete(id);
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.get('/boxes/:id/label', ({ params }) => {
+      const id = idFrom(params['id']);
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      if (!qr.has(id)) {
+        return problem(409, 'This box has no QR code. Issue one before printing a label.');
+      }
+      // Mirrors the real label: a box number and the charity, never the destination.
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="240">` +
+        `<text x="248" y="52">UKRAINIAN ACTION</text>` +
+        `<text x="248" y="112">BOX #${String(id)}</text>` +
+        `</svg>`;
+      return new HttpResponse(svg, {
+        status: 200,
+        headers: { 'Content-Type': 'image/svg+xml' },
+      });
+    }),
   ];
 
-  return { db, items, handlers };
+  return { db, items, qr, handlers };
 }

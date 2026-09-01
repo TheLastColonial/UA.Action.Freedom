@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
@@ -19,6 +20,9 @@ public static class BoxEndpoints
 {
     private const string ValidatedProblem =
         "This box has been validated. Its contents and weight were confirmed by a Loader and can no longer change.";
+
+    private const string NoQrCodeProblem =
+        "This box has no QR code. Issue one with POST /boxes/{id}/qr-code before printing a label.";
 
     public static WebApplication MapFreedomBoxes(this WebApplication app)
     {
@@ -153,6 +157,103 @@ public static class BoxEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
+        // QR labels. Issuing and revoking are ordinary box writes; reading, the image and the
+        // printable label are ordinary box reads. A label is not box contents, so none of this
+        // is refused on a validated box.
+        boxes.MapPost("/{id:int}/qr-code", async (
+            int id,
+            ICommandHandler<IssueBoxQrCodeCommand, BoxQrCodeReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            // Re-issuing revokes whatever label the box had: the old token stops resolving here.
+            var code = await handler.HandleAsync(new IssueBoxQrCodeCommand(id), cancellationToken);
+            return code is null
+                ? Results.NotFound()
+                : Results.Created($"/boxes/scan/{code.Token}", null);
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
+
+        boxes.MapGet("/{id:int}/qr-code", async (
+            int id,
+            IQueryHandler<GetBoxQrCodeQuery, BoxQrCodeReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var code = await handler.HandleAsync(new GetBoxQrCodeQuery(id), cancellationToken);
+            return code is null ? Results.NotFound() : Results.Ok(code);
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesRead);
+
+        boxes.MapDelete("/{id:int}/qr-code", async (
+            int id,
+            ICommandHandler<RevokeBoxQrCodeCommand, RevokeBoxQrCodeOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new RevokeBoxQrCodeCommand(id), cancellationToken);
+            return outcome == RevokeBoxQrCodeOutcome.Revoked ? Results.NoContent() : Results.NotFound();
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
+
+        boxes.MapGet("/{id:int}/qr-code/image", async (
+            int id,
+            string? format,
+            HttpContext http,
+            IOptions<AppOptions> app,
+            IQueryHandler<GetBoxQrCodeQuery, BoxQrCodeReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var code = await handler.HandleAsync(new GetBoxQrCodeQuery(id), cancellationToken);
+            if (code is null)
+            {
+                return Results.NotFound();
+            }
+
+            var baseUrl = PublicBaseUrl(http, app.Value);
+            return string.Equals(format, "png", StringComparison.OrdinalIgnoreCase)
+                ? Results.Bytes(QrCodeRenderer.ToPng(code.Token, baseUrl), "image/png")
+                : Results.Text(QrCodeRenderer.ToSvg(code.Token, baseUrl), "image/svg+xml");
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesRead);
+
+        boxes.MapGet("/{id:int}/label", async (
+            int id,
+            HttpContext http,
+            IOptions<AppOptions> app,
+            IQueryHandler<GetBoxByIdQuery, BoxReadModel?> boxHandler,
+            IQueryHandler<GetBoxQrCodeQuery, BoxQrCodeReadModel?> codeHandler,
+            CancellationToken cancellationToken) =>
+        {
+            var box = await boxHandler.HandleAsync(new GetBoxByIdQuery(id), cancellationToken);
+            if (box is null)
+            {
+                return Results.NotFound();
+            }
+
+            var code = await codeHandler.HandleAsync(new GetBoxQrCodeQuery(id), cancellationToken);
+            if (code is null)
+            {
+                return Results.Problem(detail: NoQrCodeProblem, statusCode: StatusCodes.Status409Conflict);
+            }
+
+            var svg = BoxLabelRenderer.ToSvg(box.Id, code.Token, code.IssuedAt, PublicBaseUrl(http, app.Value));
+            return Results.Text(svg, "image/svg+xml");
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesRead);
+
+        boxes.MapGet("/scan/{token:guid}", async (
+            Guid token,
+            IQueryHandler<ResolveBoxByQrCodeQuery, BoxReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var box = await handler.HandleAsync(new ResolveBoxByQrCodeQuery(token), cancellationToken);
+            return box is null ? Results.NotFound() : Results.Ok(box);
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesRead);
+
         return app;
     }
+
+    private static string PublicBaseUrl(HttpContext http, AppOptions app) =>
+        string.IsNullOrWhiteSpace(app.PublicBaseUrl)
+            ? $"{http.Request.Scheme}://{http.Request.Host}"
+            : app.PublicBaseUrl;
 }

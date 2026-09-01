@@ -1,0 +1,52 @@
+.qr-panel {
+  margin-top: var(--space-5);
+}
+
+.qr-panel__print {
+  margin: var(--space-3) 0;
+}
+
+.qr-panel__label {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+}
+
+.qr-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.qr-panel__note {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* Print just the label: hide everything, then reveal the label region alone. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .qr-panel__print,
+  .qr-panel__print * {
+    visibility: visible;
+  }
+
+  .qr-panel__print {
+    position: absolute;
+    inset: 0 auto auto 0;
+    margin: 0;
+  }
+
+  .qr-panel__label {
+    border: none;
+    max-width: none;
+    width: auto;
+  }
+}

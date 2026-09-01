@@ -99,6 +99,14 @@ route, roles })`): list renders/empty/error/pagination/role-gated "New"; create 
   `pages/manifests/transitions.ts` mirroring the C# `ManifestTransitions`, unit-tested
   edge-by-edge; the panel renders `availableTransitions(ctx)` as buttons.
 
+- **A non-JSON document + print** (`boxes` QR label) — `getText` in `src/api/http.ts`
+  (`expect: 'text'`) fetches the label SVG with the bearer token; `BoxQrCodePanel` renders it
+  as an `<img>` data URL and a "Print label" button calls `window.print()`. Printing just the
+  label is a `@media print` rule in `BoxQrCodePanel.css` that hides everything and re-reveals
+  the `.qr-panel__print` region. A `GET /boxes/{id}/qr-code` that 404s means "no label", not an
+  error — `fetchBoxQrCode` maps it to `null`. Issue/revoke are behind `Gate policy="boxes:write"`;
+  print is visible to any `boxes:read` role.
+
 ## Receiver delivery detail (Ground Officer only)
 
 `src/api/receiverDetail.ts` is deliberately isolated: it is imported only by
@@ -116,3 +124,4 @@ and detail code cannot leak an address because the type has no address field.
 - `400` → `application/problem+json` with an `errors` map keyed by PascalCase field.
 - `409` / domain-rule failures → `application/problem+json` with a human `detail`.
 - Sub-resource collections: `404` (empty body) = parent missing; `200 []` = parent exists, empty.
+- Document endpoints (the box QR label) return `image/svg+xml`, read as text via `getText`.

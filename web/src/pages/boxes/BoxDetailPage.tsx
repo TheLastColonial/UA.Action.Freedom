@@ -7,6 +7,7 @@ import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { BoxItemsPanel } from './BoxItemsPanel';
+import { BoxQrCodePanel } from './BoxQrCodePanel';
 import { BoxValidatePanel } from './BoxValidatePanel';
 
 export function BoxDetailPage(): JSX.Element {
@@ -69,6 +70,8 @@ export function BoxDetailPage(): JSX.Element {
       {remove.isError ? <p role="alert">The box could not be removed.</p> : null}
 
       <BoxItemsPanel boxId={box.id} frozen={box.validated} />
+
+      <BoxQrCodePanel boxId={box.id} />
 
       {!box.validated ? (
         <Gate policy="boxes:validate">

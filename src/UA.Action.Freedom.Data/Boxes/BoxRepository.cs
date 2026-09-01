@@ -5,12 +5,15 @@ using UA.Action.Freedom.Application.Boxes;
 namespace UA.Action.Freedom.Data.Boxes;
 
 /// <summary>
-/// Dapper-backed <see cref="IBoxRepository"/> over <c>dbo.Box</c> and <c>dbo.BoxItem</c>.
+/// Dapper-backed <see cref="IBoxRepository"/> over <c>dbo.Box</c>, <c>dbo.BoxItem</c> and
+/// <c>dbo.BoxQrCode</c>.
 /// </summary>
 public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBoxRepository
 {
     private const string Columns =
         "Id, WeightKg, ReceiverRef, House, Street, City, Country, Postcode, ValidatedByPersonId, ValidatedAt";
+
+    private const string QrCodeColumns = "Token, BoxId, IssuedAt, RevokedAt";
 
     /// <summary>
     /// Item properties are an open-ended bag stored as JSON, so they cannot be hydrated by
@@ -178,6 +181,69 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM dbo.BoxItem WHERE Id = @itemId AND BoxId = @boxId",
             new { boxId, itemId },
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<BoxQrCodeReadModel?> GetActiveQrCodeAsync(int boxId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<BoxQrCodeReadModel>(new CommandDefinition(
+            $"SELECT {QrCodeColumns} FROM dbo.BoxQrCode WHERE BoxId = @boxId AND RevokedAt IS NULL",
+            new { boxId },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<BoxQrCodeReadModel?> ResolveActiveQrCodeAsync(Guid token, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // Active only: a revoked token names a label that has been replaced, and it must read
+        // as unknown rather than resolve to a box it no longer identifies.
+        return await connection.QuerySingleOrDefaultAsync<BoxQrCodeReadModel>(new CommandDefinition(
+            $"SELECT {QrCodeColumns} FROM dbo.BoxQrCode WHERE Token = @token AND RevokedAt IS NULL",
+            new { token },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<BoxQrCodeReadModel> IssueQrCodeAsync(
+        int boxId, Guid token, DateTime issuedAt, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+
+        // The second transaction in the codebase, and it earns it the same way ReplaceRouteAsync
+        // does: re-labelling is one act. Revoking the old code and failing before the new one is
+        // inserted would leave the box with no label a scan resolves to. The revoke is
+        // conditional on RevokedAt IS NULL so the database settles a concurrent double-issue.
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE dbo.BoxQrCode SET RevokedAt = @issuedAt WHERE BoxId = @boxId AND RevokedAt IS NULL",
+            new { boxId, issuedAt },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            "INSERT INTO dbo.BoxQrCode (Token, BoxId, IssuedAt) VALUES (@token, @boxId, @issuedAt)",
+            new { token, boxId, issuedAt },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return new BoxQrCodeReadModel(token, boxId, issuedAt, RevokedAt: null);
+    }
+
+    public async Task<bool> RevokeActiveQrCodeAsync(int boxId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE dbo.BoxQrCode SET RevokedAt = SYSUTCDATETIME() WHERE BoxId = @boxId AND RevokedAt IS NULL",
+            new { boxId },
             cancellationToken: cancellationToken));
 
         return affected > 0;

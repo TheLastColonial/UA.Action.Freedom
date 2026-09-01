@@ -143,6 +143,7 @@ created last time still exist and skips them, which is a *second* way to not tes
 | `Vehicle → Convoy` | `ON DELETE SET NULL` | Vehicles *are* the aid. A cancelled convoy releases them; it must not delete donated vehicles. |
 | `ConvoyRouteStop → Convoy` | `ON DELETE CASCADE` | A route has no life without its convoy. |
 | `BoxItem → Box` | `ON DELETE CASCADE` | Items have no life outside their box. |
+| `BoxQrCode → Box` | `ON DELETE CASCADE` | A label has no life outside its box; a stray one must not outlive it. |
 | `ManifestBox → Manifest` | `ON DELETE CASCADE` | Removes the *link*, not the box. |
 | `ManifestBox → Box` | `ON DELETE CASCADE` | Deleting a box takes it off the manifest. |
 | `Manifest → Vehicle` / `Convoy` | no action | Cannot delete a vehicle or convoy a manifest names. |
@@ -153,6 +154,32 @@ created last time still exist and skips them, which is a *second* way to not tes
 
 A box travels on **at most one** manifest. The same box on two manifests would be declared twice
 at a border and arrive once. `AddBoxAsync` therefore *moves* a box rather than duplicating it.
+
+### `BoxRepository.IssueQrCodeAsync` is the second transaction in the codebase
+
+Re-labelling a box is one act: the old token must stop resolving at the instant the new one
+starts. `IssueQrCodeAsync` revokes any active `dbo.BoxQrCode` row and inserts the new one inside
+`BeginTransactionAsync` — the same reasoning as `ConvoyRepository.ReplaceRouteAsync` (§ per-
+increment index), and the second and last transaction here. Do not "simplify" it into a revoke
+call followed by an insert: a failure between them leaves a box with no label a scan resolves to.
+
+"At most one active label per box" is enforced by that method — the revoke is
+`WHERE BoxId = @boxId AND RevokedAt IS NULL`, so the database settles a concurrent double-issue —
+**not** by a filtered unique index, because `001-schemas.sql` runs under sqlcmd with
+`QUOTED_IDENTIFIER` off (see § Tooling). `ResolveActiveQrCodeAsync` and `GetActiveQrCodeAsync`
+both filter `RevokedAt IS NULL`, so a revoked token reads as unknown rather than resolving to a
+box it no longer names.
+
+### QRCoder is the first drawing dependency — use only its managed renderers
+
+`src/UA.Action.Freedom.Api` references `QRCoder` for the box QR image and label. Use
+`SvgQRCode` and `PngByteQRCode` (pure managed). The `QRCode` type is `System.Drawing`-based and
+pulls a native dependency that is absent from the Linux image the API ships in — it must not be
+used, and the same applies to any future use of QRCoder in a worker or the Functions target.
+`QrCodeRenderer` / `BoxLabelRenderer` are pure and deterministic so the endpoint tests can pin
+their output; the label renderer's signature carries no receiver data, which is what makes the
+"no delivery detail on a label that travels" rule structural (§ Security invariants — *Redaction
+is structural, not a rule*).
 
 ---
 
@@ -478,3 +505,4 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 | 6 | `/manifests` | The freeze semantics correction (§4). One `POST` per edge of the diagram, not a `PATCH` of a status field. `ConfirmAndFreezeAsync` as a single statement. Freeze-then-enqueue ordering. The optional-`QueueServiceClient` DI failure (§6). |
 | 7 | Manifest worker | No database access at all, by design. Plain text output. The integration-test deadlock and its fix (§1). CI's `acceptance` job now starts both workers — it previously started only `app edge website`, so the queue hand-offs were never exercised there. |
 | 8 | Operator UI (`web/`) | A React + Vite SPA co-served by the API under `/app` — see §7 for the load-bearing traps (`/app` not `/`, `UseStaticFiles` before `UseRouting`, in-memory token, Browser Mode config, the hand-rolled reason modal, the un-cached receiver-detail read). New `frontend` CI job (typecheck/lint/format/test/build) and Playwright `@smoke` specs in the `acceptance` job; `publish` needs both. A new public PKCE Keycloak client `freedom-spa` — the API's confidential client is unchanged. |
+| 9 | Box QR labels | `dbo.BoxQrCode` — opaque non-enumerable token, revoke/reissue, revoked rows kept. `IssueQrCodeAsync` is the **second** transaction in the codebase (§2). "One active label" enforced there, not by a filtered index (§1). `QRCoder` is the first drawing dependency — managed renderers only, never the `System.Drawing`-based `QRCode` (§2). The label renderer's signature carries no receiver data, so the "no delivery detail on a travelling label" rule is structural (§3). New `App:PublicBaseUrl` env-only config with a request-host fallback; the local sim sets `App__PublicBaseUrl` because the container sees the edge, not the browser host. BDD probes `/boxes/scan/{all-zero-guid}` — auth runs before the handler, so a present route answers 401 and an old image answers 404. |

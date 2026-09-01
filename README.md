@@ -170,6 +170,10 @@ Core resource endpoints:
 - `GET|POST /boxes` — Packing containers
   - `GET|POST|DELETE /boxes/{id}/items` — Item inventory
   - `POST /boxes/{id}/validate` — Lock box weight
+  - `POST|GET|DELETE /boxes/{id}/qr-code` — Issue / read / revoke the box's QR label (`boxes:write` to issue and revoke, `boxes:read` to read)
+  - `GET /boxes/{id}/qr-code/image` (`?format=svg\|png`) — The QR image alone (`boxes:read`)
+  - `GET /boxes/{id}/label` — Printable SVG label: QR + box number, no receiver detail (`boxes:read`)
+  - `GET /boxes/scan/{token}` — Resolve a scanned token to its box (`boxes:read`)
 - `GET|POST /manifests` — Vehicle + drivers + cargo units
   - `GET|PUT /manifests/{id}/teams/{leg}` — Driver team assignment
   - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo assignment
@@ -178,9 +182,12 @@ Core resource endpoints:
 See `docs/local-authentication.md` for the full role/policy matrix.
 
 The **operator UI (`web/`) covers every endpoint above** — all six slices, every sub-resource
-(convoy route/vehicles, box items/validate, manifest teams/boxes/weight), all nine manifest
-transitions, and the reason-gated receiver-detail flow — with nav and actions gated by the
-same policy matrix (the API stays the enforcement point).
+(convoy route/vehicles, box items/validate, box QR label issue/print/revoke, manifest
+teams/boxes/weight), all nine manifest transitions, and the reason-gated receiver-detail flow —
+with nav and actions gated by the same policy matrix (the API stays the enforcement point). The
+box detail page's **QR label** panel issues a label, shows it inline and prints it (a print
+stylesheet reveals the label alone); `/boxes/scan/{token}` is consumed by whatever scans the
+printed label, not the operator UI.
 
 ## Architecture
 
@@ -223,7 +230,31 @@ Manifests follow a 10-state model (see `docs/manifest-status.puml`):
 - **Dapper** for SQL mapping (typed constructor, rows map to primary constructor CLR types)
 - One repository per slice with dedicated `I*Repository` port
 - **CQRS read models** (flat shapes) separate from domain objects
-- **Transactions** only where required (route replacement as atomic unit)
+- **Transactions** only where required: route replacement, and QR-label re-issue
+  (`BoxRepository.IssueQrCodeAsync` revokes the old row and inserts the new one atomically —
+  see below)
+
+### Box QR labels
+
+- `dbo.BoxQrCode` holds one row per label — an opaque, **non-enumerable** `Guid` token, the box
+  it belongs to, and issue / revoke timestamps. The token is the only identifier printed on a
+  physical label.
+- A box can be re-labelled. Issuing a new code revokes any it already had (`IssueQrCodeAsync`,
+  one transaction), so at most one row per box is active; revoked rows are kept as history. The
+  "one active" rule lives in that method, not a filtered unique index — `001-schemas.sql` runs
+  under sqlcmd with `QUOTED_IDENTIFIER` OFF and avoids filtered indexes throughout.
+- `GET /boxes/scan/{token}` resolves an **active** token to its box — a revoked token reads as
+  unknown. This is the link from the physical box to its digital record.
+- The QR image and the printable label are rendered synchronously with **QRCoder** (managed
+  `SvgQRCode` / `PngByteQRCode`, no `System.Drawing`, so nothing native in the Linux image) —
+  `QrCodeRenderer` / `BoxLabelRenderer` in `src/UA.Action.Freedom.Api/Boxes/`. Both are pure and
+  deterministic. The label renderer takes only a box id, a token and a date: it has no parameter
+  through which a receiver, region or address could reach the label, so the redaction is
+  structural (see `docs/domain/key-concepts.md` § Data Sensitivity).
+- The QR encodes `{App:PublicBaseUrl}/boxes/scan/{token}`. `App:PublicBaseUrl` is
+  environment-only config; when unset each request's own scheme + host are used (fine for
+  `dotnet run`, wrong behind a proxy — the local simulation sets `App__PublicBaseUrl`
+  explicitly).
 
 ## Development
 

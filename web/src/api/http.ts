@@ -55,6 +55,16 @@ export function postTransition(path: string): Promise<void> {
   return request({ method: 'POST', path, expect: 'nocontent' });
 }
 
+/** `POST` a bodyless create. The API returns 201 with the new location in `Location`. */
+export function post201(path: string): Promise<CreatedResource> {
+  return request({ method: 'POST', path, expect: 'created' });
+}
+
+/** `GET` a non-JSON document (an SVG label). Throws `ApiNotFound` when it does not exist. */
+export function getText(path: string): Promise<string> {
+  return request({ method: 'GET', path, expect: 'text' });
+}
+
 /** `POST` an action with a body that the API answers with 204 (add-item, validate). */
 export function post204(path: string, body: unknown): Promise<void> {
   return request({ method: 'POST', path, expect: 'nocontent', body });
