@@ -118,6 +118,15 @@ the system records who validated it and when.
 Validation is the trust boundary between the donor and Ukrainian Action, and the weight it produces is what the
 border check relies on. Both facts make the validation record an audit artefact, not just a status flag.
 
+A box carries a **QR label**: an opaque, non-enumerable token that a scan resolves back to the box's record
+(`GET /boxes/scan/{token}`). A box can be re-labelled — issuing a new code revokes the previous one, so a label
+lost in transit is replaced and the old one stops working. The label is printed by the system and contains a box
+number, the token and the charity name — and deliberately nothing else. It travels with the box and may be
+inspected at a border, so it names no [Receiver](#receiver), region or [Address](#address); see
+[Data Sensitivity](#data-sensitivity). Issuing or reprinting a label is allowed at any point in a box's life,
+including after validation — a label is not box contents, so the freeze that protects the confirmed weight does
+not apply to it.
+
 ### Receiver
 
 The destination of a box's contents: a responsible individual, an organisation, and an [Address](#address) in
@@ -206,6 +215,11 @@ The practical consequence: **what is on the manifest is a deliberate decision, n
 model.** Documents that travel show cargo, weights and a region-level destination. Precise delivery detail is
 released to the driver at the point of delivery. See
 [recommendations §4.4](../recommendations.md#44-treat-ukrainian-delivery-detail-as-the-most-sensitive-data-in-the-system).
+
+The same rule applies to a [Box](#box)'s **QR label**. Its renderer (`BoxLabelRenderer`) takes a box id, a token
+and a date — there is no parameter through which a receiver, region or address could reach it, so the redaction
+is a property of the type rather than a rule a developer has to remember. Component and BDD tests assert the
+rendered label never contains the box's city, street or receiver reference.
 
 ---
 

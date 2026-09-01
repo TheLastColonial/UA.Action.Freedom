@@ -35,3 +35,26 @@ public sealed record BoxItemReadModel(
     Guid Id,
     string Description,
     IReadOnlyDictionary<string, string> Properties);
+
+/// <summary>
+/// A QR label issued for a box: an opaque, non-enumerable token a scanner resolves back to the
+/// box's record.
+/// </summary>
+/// <remarks>
+/// A box can be re-labelled — issuing a new code revokes the previous one — so at most one code
+/// per box is active. <see cref="RevokedAt"/> is the whole history: revoked rows are kept, not
+/// deleted, so a label found in the wild can always be told from an unknown one.
+///
+/// The token is the only identifier that ever appears on the physical label. The label may be
+/// inspected at a border, so it carries no receiver, address or contents
+/// (docs/domain/key-concepts.md § Data Sensitivity).
+/// </remarks>
+public sealed record BoxQrCodeReadModel(
+    Guid Token,
+    int BoxId,
+    DateTime IssuedAt,
+    DateTime? RevokedAt)
+{
+    /// <summary>Whether this is the code a scan currently resolves to.</summary>
+    public bool Active => this.RevokedAt is null;
+}

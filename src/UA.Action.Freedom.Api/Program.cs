@@ -21,6 +21,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Configuration comes from the environment and nothing else: the same image runs locally,
 // in the local Azure simulation and on Container Apps, told apart only by what it is given.
+builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.SectionName));
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection(OidcOptions.SectionName));
 builder.Services.Configure<CustomsOptions>(builder.Configuration.GetSection(CustomsOptions.SectionName));

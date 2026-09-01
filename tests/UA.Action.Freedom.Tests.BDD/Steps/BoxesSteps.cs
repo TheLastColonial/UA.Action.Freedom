@@ -57,6 +57,29 @@ public sealed class BoxesSteps(FreedomApiClient api, ScenarioState state)
     public Task WhenIPostOnTheRememberedBoxWithBody(string template, string body) =>
         api.SendAsync(HttpMethod.Post, state.Recall("box", template), state.CurrentToken, body);
 
+    [When("I POST \"(.*)\" on the remembered box")]
+    public Task WhenIPostOnTheRememberedBox(string template) =>
+        api.SendAsync(HttpMethod.Post, state.Recall("box", template), state.CurrentToken, null);
+
+    [When("I DELETE \"(.*)\" on the remembered box")]
+    public Task WhenIDeleteOnTheRememberedBox(string template) =>
+        api.SendAsync(HttpMethod.Delete, state.Recall("box", template), state.CurrentToken, null);
+
+    [Given("I remember the issued QR token")]
+    public void GivenIRememberTheIssuedQrToken()
+    {
+        // Read it straight off the Location header the issue call returned: /boxes/scan/{token}.
+        var location = api.LastResponse!.Headers.Location
+            ?? throw new InvalidOperationException("The last response carried no Location header to read a QR token from.");
+        var path = location.IsAbsoluteUri ? location.AbsolutePath : location.ToString();
+
+        state.Pin("qrtoken", path.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1]);
+    }
+
+    [When("I GET \"(.*)\" for the remembered QR token")]
+    public Task WhenIGetForTheRememberedQrToken(string template) =>
+        api.SendAsync(HttpMethod.Get, state.Recall("qrtoken", template), state.CurrentToken, null);
+
     [When("I POST \"(.*)\" on the remembered box with the validating volunteer weighing (\\d+)")]
     public Task WhenIValidateTheRememberedBox(string template, int weightKg)
     {

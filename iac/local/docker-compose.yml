@@ -100,6 +100,11 @@ services:
       # does the same here. Redirecting to HTTPS inside the container would loop.
       Hosting__UseHttpsRedirection: "false"
 
+      # The externally reachable URL a box QR code points back at. The container sees the
+      # edge as its caller, not the browser-facing host, so this cannot be inferred from the
+      # request the way it can under `dotnet run`.
+      App__PublicBaseUrl: http://localhost:${EDGE_HTTP_PORT:-8080}
+
       ConnectionStrings__Freedom: *freedom-connection-string
       ConnectionStrings__FreedomSensitive: *freedom-sensitive-connection-string
       Storage__ConnectionString: *azurite-connection-string

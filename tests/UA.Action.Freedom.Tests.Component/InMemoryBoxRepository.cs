@@ -9,6 +9,7 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
 {
     private readonly Dictionary<int, BoxReadModel> boxes = [];
     private readonly Dictionary<int, List<BoxItemReadModel>> items = [];
+    private readonly List<BoxQrCodeReadModel> qrCodes = [];
 
     private int nextId = 1;
 
@@ -27,10 +28,19 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
 
     public IReadOnlyList<BoxItemReadModel> Items(int boxId) => items.GetValueOrDefault(boxId, []);
 
+    public BoxQrCodeReadModel? ActiveQrCode(int boxId) =>
+        qrCodes.SingleOrDefault(code => code.BoxId == boxId && code.Active);
+
     public InMemoryBoxRepository WithItem(int boxId, BoxItemReadModel item)
     {
         items.TryAdd(boxId, []);
         items[boxId].Add(item);
+        return this;
+    }
+
+    public InMemoryBoxRepository WithQrCode(BoxQrCodeReadModel code)
+    {
+        qrCodes.Add(code);
         return this;
     }
 
@@ -111,5 +121,45 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
         }
 
         return Task.FromResult(packed.RemoveAll(item => item.Id == itemId) > 0);
+    }
+
+    public Task<BoxQrCodeReadModel?> GetActiveQrCodeAsync(int boxId, CancellationToken cancellationToken) =>
+        Task.FromResult(qrCodes.SingleOrDefault(code => code.BoxId == boxId && code.Active));
+
+    public Task<BoxQrCodeReadModel?> ResolveActiveQrCodeAsync(Guid token, CancellationToken cancellationToken) =>
+        Task.FromResult(qrCodes.SingleOrDefault(code => code.Token == token && code.Active));
+
+    public Task<BoxQrCodeReadModel> IssueQrCodeAsync(
+        int boxId, Guid token, DateTime issuedAt, CancellationToken cancellationToken)
+    {
+        // Mirrors the SQL transaction: any live code for the box is revoked before the new one
+        // is added, so exactly one stays active.
+        for (var i = 0; i < qrCodes.Count; i++)
+        {
+            if (qrCodes[i].BoxId == boxId && qrCodes[i].Active)
+            {
+                qrCodes[i] = qrCodes[i] with { RevokedAt = issuedAt };
+            }
+        }
+
+        var code = new BoxQrCodeReadModel(token, boxId, issuedAt, RevokedAt: null);
+        qrCodes.Add(code);
+        return Task.FromResult(code);
+    }
+
+    public Task<bool> RevokeActiveQrCodeAsync(int boxId, CancellationToken cancellationToken)
+    {
+        var revoked = false;
+
+        for (var i = 0; i < qrCodes.Count; i++)
+        {
+            if (qrCodes[i].BoxId == boxId && qrCodes[i].Active)
+            {
+                qrCodes[i] = qrCodes[i] with { RevokedAt = DateTime.UtcNow };
+                revoked = true;
+            }
+        }
+
+        return Task.FromResult(revoked);
     }
 }
