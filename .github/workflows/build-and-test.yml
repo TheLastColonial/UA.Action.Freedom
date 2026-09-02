@@ -8,8 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 concurrency:
   group: build-and-test-${{ github.ref }}
@@ -18,14 +17,15 @@ concurrency:
 env:
   DOTNET_VERSION: '10.0.x'
   CONFIGURATION: Release
-  PACKABLE_PROJECTS: >-
-    src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj
-    src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj
-    src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj
+  # ghcr requires a lowercase namespace; the repo owner (TheLastColonial) is mixed-case.
+  IMAGE_NAMESPACE: ghcr.io/thelastcolonial
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     outputs:
       packageVersion: ${{ steps.version.outputs.value }}
@@ -84,19 +84,12 @@ jobs:
           --no-restore
           --verbosity normal
 
-      - name: Upload build output
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          include-hidden-files: true
-          retention-days: 1
-          path: |
-            **/bin/**
-            **/obj/**
-
   # The operator web UI (web/). Independent of the .NET lane — runs in parallel.
   frontend:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     defaults:
       run:
@@ -134,20 +127,31 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload web bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          retention-days: 1
-          path: web/dist
-
-  # End-to-end lane. The Integration and BDD projects skip themselves when their
-  # target is not up (so build-and-test stays green without infrastructure); this
-  # job stands up the local Azure simulation from iac/ — exactly the sequence in
-  # iac/README.md — and runs them for real against it.
+  # End-to-end lane, and the one job that produces the deployable artifacts.
+  #
+  # The Integration and BDD projects skip themselves when their target is not up (so
+  # build-and-test stays green without infrastructure); this job stands up the local Azure
+  # simulation from iac/ — exactly the sequence in iac/README.md — builds the three service
+  # images once, runs the suite against *those exact images*, and on a non-PR run pushes
+  # them to ghcr.io. Building here rather than in a separate job means the image that is
+  # tested is byte-for-byte the image that is published.
   acceptance:
-    needs: build-and-test
+    needs: [build-and-test, frontend]
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write          # build-provenance attestation
+      attestations: write
+
+    env:
+      PACKAGE_VERSION: ${{ needs.build-and-test.outputs.packageVersion }}
+
+    outputs:
+      api_image: ${{ steps.push.outputs.api_ref }}
+      customs_image: ${{ steps.push.outputs.customs_ref }}
+      manifest_image: ${{ steps.push.outputs.manifest_ref }}
 
     steps:
       - name: Checkout
@@ -174,20 +178,44 @@ jobs:
         with:
           tofu_wrapper: false
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Configure the local environment
         working-directory: iac/local
         run: cp .env.example .env
 
-      - name: Build the application and worker images
-        working-directory: iac/local
-        run: docker compose build app customs-worker manifest-worker
+      # Build the three service images once, load them into the local daemon under the
+      # :local tags the compose file expects, and cache layers in the Actions cache. These
+      # are the exact images the acceptance suite runs against and — on a non-PR run — the
+      # exact images pushed to ghcr.io below (replaces the old `docker compose build`).
+      - name: Build service images
+        run: |
+          set -euo pipefail
+          build() {
+            local local_tag="$1" dockerfile="$2" scope="$3"
+            docker buildx build \
+              --file "$dockerfile" \
+              --tag "$local_tag" \
+              --platform linux/amd64 \
+              --load \
+              --cache-from "type=gha,scope=$scope" \
+              --cache-to "type=gha,mode=max,scope=$scope" \
+              --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+              --label "org.opencontainers.image.revision=${{ github.sha }}" \
+              --label "org.opencontainers.image.version=${PACKAGE_VERSION}" \
+              .
+          }
+          build ua-action-freedom/app:local             src/UA.Action.Freedom.Api/Dockerfile            api
+          build ua-action-freedom/customs-worker:local  src/UA.Action.Freedom.CustomsWorker/Dockerfile  customs-worker
+          build ua-action-freedom/manifest-worker:local src/UA.Action.Freedom.ManifestWorker/Dockerfile manifest-worker
 
       # tofu talks to these three: keycloak.tf to Keycloak, storage.tf to Azurite
       # (via the az CLI, preinstalled on the runner), database.tf via `docker exec`
       # into the SQL Server container. Bring them up before provisioning.
       - name: Start backing services
         working-directory: iac/local
-        run: docker compose up -d --wait --wait-timeout 300 mssql keycloak azurite telemetry
+        run: docker compose up -d --wait --wait-timeout 300 --no-build mssql keycloak azurite telemetry
 
       - name: Provision realm, storage and database schema
         working-directory: iac/tofu
@@ -196,10 +224,11 @@ jobs:
           tofu apply -auto-approve -input=false
 
       # The workers are started too: the BDD suite approves a manifest, which is what puts a
-      # GMR submission and a document request on their queues.
+      # GMR submission and a document request on their queues. --no-build: the images were
+      # built and loaded above.
       - name: Start the application, workers and edge
         working-directory: iac/local
-        run: docker compose up -d --wait --wait-timeout 300 app edge website customs-worker manifest-worker
+        run: docker compose up -d --wait --wait-timeout 300 --no-build app edge website customs-worker manifest-worker
 
       - name: Wait for readiness
         run: |
@@ -238,6 +267,70 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://localhost:8080
         run: npm run e2e
 
+      # --- Publish the tested images (non-PR events only) -----------------------
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push images
+        id: push
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          short_sha="${GITHUB_SHA::7}"
+          tags=("${PACKAGE_VERSION}" "sha-${short_sha}")
+          if [ '${{ github.ref }}' = 'refs/heads/main' ]; then
+            tags+=("latest")
+          fi
+          publish() {
+            local key="$1" local_tag="$2" ci_name="$3"
+            local target="${IMAGE_NAMESPACE}/ua-action-freedom-${ci_name}"
+            for t in "${tags[@]}"; do
+              docker tag "$local_tag" "${target}:${t}"
+              docker push "${target}:${t}"
+            done
+            local repo_digests ref
+            repo_digests="$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "${target}:${PACKAGE_VERSION}")"
+            ref="$(printf '%s\n' "$repo_digests" | grep -m1 "^${target}@" || true)"
+            if [ -z "$ref" ]; then
+              echo "could not resolve a pushed digest for ${target}" >&2
+              exit 1
+            fi
+            echo "${key}_ref=${ref}" >> "$GITHUB_OUTPUT"
+            echo "${key}_digest=${ref#*@}" >> "$GITHUB_OUTPUT"
+          }
+          publish api      ua-action-freedom/app:local             api
+          publish customs  ua-action-freedom/customs-worker:local  customs-worker
+          publish manifest ua-action-freedom/manifest-worker:local manifest-worker
+
+      - name: Attest API image provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.IMAGE_NAMESPACE }}/ua-action-freedom-api
+          subject-digest: ${{ steps.push.outputs.api_digest }}
+          push-to-registry: true
+
+      - name: Attest customs-worker image provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.IMAGE_NAMESPACE }}/ua-action-freedom-customs-worker
+          subject-digest: ${{ steps.push.outputs.customs_digest }}
+          push-to-registry: true
+
+      - name: Attest manifest-worker image provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.IMAGE_NAMESPACE }}/ua-action-freedom-manifest-worker
+          subject-digest: ${{ steps.push.outputs.manifest_digest }}
+          push-to-registry: true
+
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
@@ -256,17 +349,26 @@ jobs:
         working-directory: iac/local
         run: docker compose down -v
 
-  publish:
-    needs: [build-and-test, frontend, acceptance]
+  # The two HMRC SDKs are standalone reusable libraries — the only projects in the solution
+  # that make sense as NuGet packages. Behaviour is unchanged from the old `publish` job:
+  # -beta.<run> packages on (non-fork) PRs, full versions on merge to main.
+  nuget:
+    needs: [build-and-test, acceptance]
     runs-on: ubuntu-latest
-    # Skip on PRs originating from forks: they have a read-only token and no package write access.
+    # Skip on PRs from forks: they have a read-only token and no package write access.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
 
+    permissions:
+      contents: read
+      packages: write
+
     env:
       PACKAGE_VERSION: ${{ needs.build-and-test.outputs.packageVersion }}
-      IS_RELEASE: ${{ needs.build-and-test.outputs.isRelease }}
+      HMRC_PROJECTS: >-
+        src/HMRC.GVMS/HMRC.GVMS.csproj
+        src/HMRC.PushPullNotifications/HMRC.PushPullNotifications.csproj
 
     steps:
       - name: Checkout
@@ -277,25 +379,13 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Download build output
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output
-
-      # Repopulates the NuGet cache and obj/*.nuget.g.* so MSBuild can evaluate
-      # the projects during pack. Does not rebuild — pack runs with --no-build
-      # and reuses the binaries produced by the build-and-test job.
-      - name: Restore
-        run: dotnet restore UA.Action.Freedom.slnx
-
-      - name: Pack
+      - name: Pack HMRC SDKs
         run: |
-          for proj in ${{ env.PACKABLE_PROJECTS }}; do
+          for proj in ${{ env.HMRC_PROJECTS }}; do
             dotnet pack "$proj" \
               --configuration ${{ env.CONFIGURATION }} \
-              --no-build \
-              --no-restore \
               -p:PackageVersion=${PACKAGE_VERSION} \
+              -p:ContinuousIntegrationBuild=true \
               --output ./artifacts
           done
 
@@ -306,13 +396,48 @@ jobs:
           --api-key ${{ secrets.GITHUB_TOKEN }}
           --skip-duplicate
 
-      - name: Create GitHub Release
-        if: env.IS_RELEASE == 'true'
+  # Main-only. Annotates the pushed images by digest — the immutable ref a deployment
+  # workflow should pin. No file assets.
+  release:
+    needs: [build-and-test, acceptance, nuget]
+    runs-on: ubuntu-latest
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.build-and-test.outputs.isRelease == 'true'
+
+    permissions:
+      contents: write
+
+    env:
+      PACKAGE_VERSION: ${{ needs.build-and-test.outputs.packageVersion }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compose release notes
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_IMAGE: ${{ needs.acceptance.outputs.api_image }}
+          CUSTOMS_IMAGE: ${{ needs.acceptance.outputs.customs_image }}
+          MANIFEST_IMAGE: ${{ needs.acceptance.outputs.manifest_image }}
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          {
+            echo "## Container images"
+            echo
+            echo "Pushed to \`${IMAGE_NAMESPACE}\` — tags \`${PACKAGE_VERSION}\`, \`sha-${short_sha}\`, \`latest\`."
+            echo
+            echo "- \`${API_IMAGE}\`"
+            echo "- \`${CUSTOMS_IMAGE}\`"
+            echo "- \`${MANIFEST_IMAGE}\`"
+          } > release-notes.md
+
+      - name: Create GitHub Release
         run: >
           gh release create "v${PACKAGE_VERSION}"
-          ./artifacts/*.nupkg
           --title "v${PACKAGE_VERSION}"
+          --target "${{ github.sha }}"
+          --notes-file release-notes.md
           --generate-notes
-          --target ${{ github.sha }}
