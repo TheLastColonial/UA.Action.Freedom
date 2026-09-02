@@ -4,13 +4,37 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591;CS8618;CS8625;CS8765;CS0472;CS1573</NoWarn>
   </PropertyGroup>
 
+  <!-- Published to GitHub Packages by the `nuget` CI job. Version is supplied at pack
+       time (-p:PackageVersion=), so there is deliberately no <Version> here. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>HMRC.GVMS</PackageId>
+    <Title>HMRC GVMS client</Title>
+    <Description>Generated .NET client for the HMRC Goods Vehicle Movement Service (GVMS) API.</Description>
+    <PackageTags>hmrc;gvms;customs</PackageTags>
+    <Authors>Alex Woodward</Authors>
+    <Company>Ukrainian Action</Company>
+    <Product>UA.Action.Freedom</Product>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/TheLastColonial/UA.Action.Freedom</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/TheLastColonial/UA.Action.Freedom</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

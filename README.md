@@ -156,6 +156,28 @@ through the browser.
 - `operator` — Dispatcher, Loader, Purchaser roles
 - `groundofficer` — GroundOfficer role (segregated access to delivery addresses)
 
+### Container images
+
+CI builds and publishes the deployable artifacts — one container image per service, to
+GitHub Container Registry (public):
+
+| Image | Contents |
+| --- | --- |
+| `ghcr.io/thelastcolonial/ua-action-freedom-api` | ASP.NET Core host + the operator SPA (baked in) |
+| `ghcr.io/thelastcolonial/ua-action-freedom-customs-worker` | Customs Worker |
+| `ghcr.io/thelastcolonial/ua-action-freedom-manifest-worker` | Manifest Worker |
+
+Tags: `<semver>` (e.g. `1.4.0`), `sha-<short>`, and `latest` on `main`. Pushes happen only on
+`main` and `workflow_dispatch`; pull-request runs build the images and test them but do not push.
+The images are built inside the `acceptance` job so the image that passes the end-to-end suite is
+the one that ships. `iac/local/docker-compose.yml` still builds its own `:local` images for the
+local environment — unchanged.
+
+The workflow only triggers on changes under `src/`, `tests/`, `iac/`, `web/`, `build/`, the
+root `UA.Action.Freedom.slnx` / `global.json` / `GitVersion.yml`, or the workflow file itself.
+Doc-only commits (`docs/**`, `plans/**`, `*.md`) do not start a build; use `workflow_dispatch`
+to force a run.
+
 ### API Endpoints
 
 Core resource endpoints:
@@ -306,7 +328,7 @@ See `docs/gotchas-and-open-questions.md` for:
 2. Write failing tests first (TDD)
 3. Implement the minimum to pass tests
 4. Run all tests to ensure no regressions
-5. Open a pull request — CI will build, test (Unit/Component), run the `web/` frontend job (typecheck/lint/format/test/build), and acceptance-test (Integration/BDD + Playwright smokes against the full stack)
+5. Open a pull request — CI will build, test (Unit/Component), run the `web/` frontend job (typecheck/lint/format/test/build), and acceptance-test (Integration/BDD + Playwright smokes against the full stack), building the three service container images and running the suite against them. Merging to `main` pushes those images to `ghcr.io/thelastcolonial/*`, publishes the two HMRC SDK NuGet packages to GitHub Packages, and cuts a GitHub Release annotated with the image digests.
 6. Wait for approval and status checks to pass
 
 ## Resources
