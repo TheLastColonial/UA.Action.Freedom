@@ -1,10 +1,34 @@
 name: Build and Test
 
+# Only build and test when something that can change build or test output moves:
+# the code (src/tests), the local Azure simulation (iac), the operator UI (web),
+# the codegen scripts (build), the solution/version/SDK plumbing at the root, or
+# this workflow itself. Doc-only commits (docs/**, *.md, plans/**) are skipped.
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'iac/**'
+      - 'web/**'
+      - 'build/**'
+      - 'UA.Action.Freedom.slnx'
+      - 'global.json'
+      - 'GitVersion.yml'
+      - '.github/workflows/build-and-test.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'iac/**'
+      - 'web/**'
+      - 'build/**'
+      - 'UA.Action.Freedom.slnx'
+      - 'global.json'
+      - 'GitVersion.yml'
+      - '.github/workflows/build-and-test.yml'
   workflow_dispatch:
 
 permissions:

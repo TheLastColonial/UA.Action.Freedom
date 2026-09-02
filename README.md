@@ -173,6 +173,11 @@ The images are built inside the `acceptance` job so the image that passes the en
 the one that ships. `iac/local/docker-compose.yml` still builds its own `:local` images for the
 local environment — unchanged.
 
+The workflow only triggers on changes under `src/`, `tests/`, `iac/`, `web/`, `build/`, the
+root `UA.Action.Freedom.slnx` / `global.json` / `GitVersion.yml`, or the workflow file itself.
+Doc-only commits (`docs/**`, `plans/**`, `*.md`) do not start a build; use `workflow_dispatch`
+to force a run.
+
 ### API Endpoints
 
 Core resource endpoints:
