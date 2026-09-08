@@ -139,7 +139,7 @@ public sealed class ApiSteps(FreedomApiClient api, ScenarioState state)
 
         if (segments.Length >= 2)
         {
-            state.CreatedResources.Add((segments[^2], segments[^1]));
+            state.TrackCreated(segments[^2], segments[^1]);
             state.LastCreatedKey = segments[^1];
         }
     }

@@ -82,7 +82,7 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
 
         if (response.StatusCode == HttpStatusCode.Created)
         {
-            state.CreatedResources.Add(("manifests", state.Pinned(ManifestKey)));
+            state.TrackCreated("manifests", state.Pinned(ManifestKey));
         }
     }
 
@@ -96,7 +96,7 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
         var path = location.IsAbsoluteUri ? location.AbsolutePath : location.ToString();
         var convoyId = path.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
 
-        state.CreatedResources.Add(("convoys", convoyId));
+        state.TrackCreated("convoys", convoyId);
         state.Pin(ConvoyKey, convoyId);
     }
 }

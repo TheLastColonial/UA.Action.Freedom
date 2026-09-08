@@ -236,6 +236,34 @@ their state in docker volumes. There are deliberately no destroy-time provisione
 OpenTofu configuration, because they would fail whenever the volume had already gone —
 which is most of the time.
 
+### Resetting data between runs
+
+To empty the database without the full teardown — after test runs or manual poking have left
+rows behind — run:
+
+```bash
+cd iac/local && ./reset-data.sh          # or ./reset-data.ps1 on Windows
+```
+
+This applies `sql/002-reset-data.sql` inside the SQL Server container as `sa`: it deletes every
+application row in foreign-key order but leaves the schema, roles, logins, grants and the
+Keycloak realm untouched, so there is no `tofu apply` to repeat afterwards. It is idempotent
+and safe on an empty database. `002-reset-data.sql` is **not** run by `tofu apply` — it is a
+developer tool only.
+
+The automated suites already scope-clean their own rows after a local run, so you only need
+this for leftovers from a crash or from manual testing:
+
+- **BDD** (`dotnet test ...Tests.BDD`) — an `[AfterTestRun]` hook (`Support/DataResetHook.cs`)
+  connects as `sa` and deletes rows created during the run. It is what removes an approved
+  manifest, which the per-scenario HTTP cleanup cannot (a frozen manifest returns 409). Set
+  `FREEDOM_SKIP_DB_RESET` when the suite targets a remote stack.
+- **Playwright** (`npm run e2e`) — a `teardown` project (`web/e2e/global.teardown.ts`) runs
+  `sql/003-clean-since.sql`, deleting everything created since a marker `db.setup.ts` takes
+  before the run. Rows made by hand beforehand are left alone.
+
+Both are best effort: no Docker daemon or an unreachable database just means no cleanup.
+
 ---
 
 ## Known issues
@@ -331,6 +359,10 @@ a command line on Windows, where `cmd /C` eats the quoting. Use
 you ran `docker compose down -v` afterwards, which wipes the Azurite volume. Re-run
 `tofu apply`; the triggers are keyed on the endpoint so it will recreate them.
 
+**Rows left over after a test run or a hard kill** — run `iac/local/reset-data.sh` (or
+`reset-data.ps1`) to empty the database without a full teardown. See "Resetting data between
+runs" above.
+
 **Sign-in fails with an issuer mismatch** — see "The Keycloak issuer is two different URLs".
 
 ---
@@ -365,6 +397,9 @@ iac/
     traefik/dynamic/routes.yml   edge routing
     wiremock/mappings/           HMRC stubs, loaded at boot
     sql/001-schemas.sql          schemas, roles and the sensitive/ segregation
+    sql/002-reset-data.sql       empties every table (developer tool, not run by tofu)
+    sql/003-clean-since.sql      deletes rows created since a marker time (Playwright teardown)
+    reset-data.ps1 / .sh         run 002-reset-data.sql in the SQL Server container
     website/html/                Static Web Apps placeholder
     grafana/                     Grafana dashboards, provisioned at boot
   tofu/

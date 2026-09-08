@@ -38,7 +38,7 @@ public sealed class BoxesSteps(FreedomApiClient api, ScenarioState state)
         var path = location.IsAbsoluteUri ? location.AbsolutePath : location.ToString();
         var personId = path.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
 
-        state.CreatedResources.Add(("people", personId));
+        state.TrackCreated("people", personId);
         state.Pin(ValidatorKey, personId);
     }
 

@@ -31,7 +31,7 @@ public sealed class VehiclesSteps(FreedomApiClient api, ScenarioState state)
         var response = await api.SendAsync(HttpMethod.Post, "/vehicles", token, body);
 
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Created, HttpStatusCode.Conflict);
-        state.CreatedResources.Add(("vehicles", vin));
+        state.TrackCreated("vehicles", vin);
     }
 
     [Then("the response body lists a vehicle with VIN \"(.*)\"")]

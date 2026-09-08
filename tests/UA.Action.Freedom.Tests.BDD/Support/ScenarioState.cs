@@ -5,15 +5,27 @@ public sealed class ScenarioState
 {
     public string? CurrentToken { get; set; }
 
+    private readonly List<(string Resource, string Key)> createdResources = [];
+
     /// <summary>
     /// Resources created during the scenario as (collection route, key) — for example
-    /// <c>("vehicles", "WDB9066331S0BDD01")</c> — removed again in the AfterScenario hook.
+    /// <c>("vehicles", "WDB9066331S0BDD01")</c> — removed again in the AfterScenario hook, in
+    /// reverse of the order they were added so a child goes before its parent.
     /// </summary>
     /// <remarks>
     /// Keyed by route rather than by type so that a new feature needs no new cleanup code: the
     /// hook deletes <c>/{resource}/{key}</c> and every slice in this API answers that shape.
     /// </remarks>
-    public HashSet<(string Resource, string Key)> CreatedResources { get; } = [];
+    public IReadOnlyList<(string Resource, string Key)> CreatedResources => createdResources;
+
+    /// <summary>Records a created resource for the AfterScenario cleanup. Ignores duplicates.</summary>
+    public void TrackCreated(string resource, string key)
+    {
+        if (!createdResources.Contains((resource, key)))
+        {
+            createdResources.Add((resource, key));
+        }
+    }
 
     /// <summary>
     /// The key of the most recently created resource, taken from its Location header. Scenarios

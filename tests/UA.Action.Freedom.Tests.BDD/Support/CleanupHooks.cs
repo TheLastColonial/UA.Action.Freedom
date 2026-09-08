@@ -15,6 +15,11 @@ public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
     /// that route is Ground Officer only and an admin token is refused; receivers are therefore
     /// cleaned up as <c>groundofficer</c>. A cleanup hook silently 403-ing is worse than one that
     /// fails loudly, because it leaves delivery detail behind (docs/recommendations.md §4.4).
+    ///
+    /// Resources go in reverse of the order they were created, so a child (a manifest) is
+    /// removed before its parent (the convoy it names). What this cannot reach — an approved
+    /// manifest is frozen and <c>DELETE</c> returns 409, which also pins its convoy — is swept
+    /// after the whole suite by <see cref="DataResetHook"/>.
     /// </remarks>
     [AfterScenario]
     public async Task RemoveResourcesCreatedByTheScenario()
@@ -24,7 +29,7 @@ public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
             return;
         }
 
-        foreach (var (resource, key) in state.CreatedResources)
+        foreach (var (resource, key) in state.CreatedResources.Reverse())
         {
             try
             {

@@ -18,12 +18,14 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    { name: 'setup', testMatch: /\.setup\.ts$/ },
+    { name: 'teardown', testMatch: /global\.teardown\.ts$/ },
     {
       name: 'chromium',
-      testIgnore: /auth\.setup\.ts/,
+      testIgnore: /\.(setup|teardown)\.ts$/,
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['setup'],
+      teardown: 'teardown',
     },
   ],
 });
