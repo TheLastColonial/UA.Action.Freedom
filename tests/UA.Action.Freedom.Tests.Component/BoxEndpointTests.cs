@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Tests.Component;
@@ -20,6 +21,8 @@ public class BoxEndpointTests
 {
     private const int BoxId = 7;
 
+    private const int LocationId = 3;
+
     private static readonly Guid Loader = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
 
     private static BoxReadModel ABox(bool validated = false) => new(
@@ -29,11 +32,7 @@ public class BoxEndpointTests
         DepthCm: validated ? 30 : null,
         HeightCm: validated ? 20 : null,
         ReceiverRef: null,
-        House: "Unit 4",
-        Street: "Cross Road",
-        City: "Coventry",
-        Country: "United Kingdom",
-        Postcode: "CV1 2AB",
+        LocationId: LocationId,
         ValidatedByPersonId: validated ? Loader : null,
         ValidatedAt: validated ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null);
 
@@ -83,7 +82,7 @@ public class BoxEndpointTests
 
         var response = await client.PostAsJsonAsync(
             "/boxes",
-            new { house = "Unit 4", street = "Cross Road", city = "Coventry", postcode = "CV1 2AB" },
+            new { locationId = LocationId },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -254,11 +253,11 @@ public class BoxEndpointTests
 
         var response = await client.PutAsJsonAsync(
             $"/boxes/{BoxId}",
-            new { receiverRef = Guid.NewGuid(), city = "Lviv" },
+            new { receiverRef = Guid.NewGuid(), locationId = 9 },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        boxes.Box(BoxId)!.City.Should().Be("Coventry");
+        boxes.Box(BoxId)!.LocationId.Should().Be(LocationId);
     }
 
     [Fact]
@@ -269,15 +268,17 @@ public class BoxEndpointTests
         await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
         using var client = api.CreateClient();
 
+        const int newLocationId = 9;
+
         var response = await client.PutAsJsonAsync(
             $"/boxes/{BoxId}",
-            new { city = "Dover", weightKg = 99, validatedByPersonId = Loader, validatedAt = "2026-01-01T00:00:00Z" },
+            new { locationId = newLocationId, weightKg = 99, validatedByPersonId = Loader, validatedAt = "2026-01-01T00:00:00Z" },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         boxes.Box(BoxId)!.Validated.Should().BeFalse();
         boxes.Box(BoxId)!.WeightKg.Should().Be(0);
-        boxes.Box(BoxId)!.City.Should().Be("Dover");
+        boxes.Box(BoxId)!.LocationId.Should().Be(newLocationId);
     }
 
     [Fact]
@@ -337,5 +338,144 @@ public class BoxEndpointTests
             $"/boxes/{BoxId}/items/{Guid.NewGuid()}", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    private const int BayId = 9;
+
+    private static BayReadModel AStoredBay(int locationId = LocationId) => new(BayId, locationId, "A1");
+
+    [Fact]
+    public async Task A_loader_places_a_box_in_a_bay()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(
+            boxes, AKnownLoader(), new InMemoryBayRepository(AStoredBay()), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}/bay",
+            new { bayId = BayId, assignedByPersonId = Loader },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var assignment = await client.GetFromJsonAsync<JsonElement>(
+            $"/boxes/{BoxId}/bay", TestContext.Current.CancellationToken);
+        assignment.GetProperty("bayId").GetInt32().Should().Be(BayId);
+    }
+
+    [Fact]
+    public async Task An_administrator_cannot_place_a_box_in_a_bay()
+    {
+        // Bay allocation is Loader-only — narrower than boxes:write — because it is the on-site,
+        // physical act of shelving a box, not coordination.
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(
+            boxes, AKnownLoader(), new InMemoryBayRepository(AStoredBay()), roles: "Administrator");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}/bay",
+            new { bayId = BayId, assignedByPersonId = Loader },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task A_dispatcher_cannot_place_a_box_in_a_bay_either()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(
+            boxes, AKnownLoader(), new InMemoryBayRepository(AStoredBay()), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}/bay",
+            new { bayId = BayId, assignedByPersonId = Loader },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task A_box_cannot_be_placed_in_a_bay_at_a_different_location()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(
+            boxes, AKnownLoader(), new InMemoryBayRepository(AStoredBay(locationId: 999)), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}/bay",
+            new { bayId = BayId, assignedByPersonId = Loader },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task A_loader_vacates_a_boxs_bay()
+    {
+        var assignment = new BoxBayAssignmentReadModel(1, BoxId, BayId, Loader, DateTime.UtcNow, VacatedAt: null);
+        var boxes = new InMemoryBoxRepository(ABox()).WithBayAssignment(assignment);
+        await using var api = FreedomApi.WithBoxes(
+            boxes, AKnownLoader(), new InMemoryBayRepository(AStoredBay()), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync($"/boxes/{BoxId}/bay", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.GetAsync($"/boxes/{BoxId}/bay", TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Vacating_a_box_with_no_active_bay_is_a_404()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(
+            boxes, AKnownLoader(), new InMemoryBayRepository(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync($"/boxes/{BoxId}/bay", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Bay_history_keeps_a_vacated_assignment()
+    {
+        var vacated = new BoxBayAssignmentReadModel(
+            1, BoxId, BayId, Loader, DateTime.UtcNow.AddHours(-1), VacatedAt: DateTime.UtcNow);
+        var boxes = new InMemoryBoxRepository(ABox()).WithBayAssignment(vacated);
+        await using var api = FreedomApi.WithBoxes(
+            boxes, AKnownLoader(), new InMemoryBayRepository(AStoredBay()), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var history = await client.GetFromJsonAsync<JsonElement>(
+            $"/boxes/{BoxId}/bay/history", TestContext.Current.CancellationToken);
+
+        var entry = history.EnumerateArray().Should().ContainSingle().Subject;
+        entry.GetProperty("bayId").GetInt32().Should().Be(BayId);
+        entry.GetProperty("active").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Creating_a_box_with_an_invalid_guid_returns_a_friendly_error()
+    {
+        var boxes = new InMemoryBoxRepository();
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/boxes",
+            new { receiverRef = "12345", locationId = LocationId },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
+        problem.GetProperty("status").GetInt32().Should().Be(400);
+        problem.GetProperty("detail").GetString().Should().Contain("GUID");
     }
 }

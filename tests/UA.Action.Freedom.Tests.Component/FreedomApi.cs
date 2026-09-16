@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
@@ -162,12 +163,14 @@ internal static class FreedomApi
         });
 
     /// <summary>
-    /// The application with box persistence and the volunteer roster swapped out. Both are
-    /// needed together: validating a box checks that the volunteer who signed for it is on file.
+    /// The application with box persistence, the bay repository and the volunteer roster
+    /// swapped out. All three are needed together: validating a box and assigning it a bay both
+    /// check that the volunteer named is on file, and bay assignment looks the bay up too.
     /// </summary>
     internal static WebApplicationFactory<Program> WithBoxes(
         IBoxRepository boxes,
         IPersonRepository people,
+        IBayRepository? bays = null,
         bool authenticated = true,
         params string[] roles) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
@@ -181,6 +184,38 @@ internal static class FreedomApi
                 services.AddScoped(_ => boxes);
                 services.RemoveAll<IPersonRepository>();
                 services.AddScoped(_ => people);
+                services.RemoveAll<IBayRepository>();
+                services.AddScoped(_ => bays ?? new InMemoryBayRepository());
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    /// <summary>
+    /// The application with location and bay persistence swapped out.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithLocations(
+        ILocationRepository locations,
+        IBayRepository bays,
+        bool authenticated = true,
+        params string[] roles) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<ILocationRepository>();
+                services.AddScoped(_ => locations);
+                services.RemoveAll<IBayRepository>();
+                services.AddScoped(_ => bays);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)

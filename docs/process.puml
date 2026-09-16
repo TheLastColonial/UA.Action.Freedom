@@ -22,9 +22,10 @@ group Administration {
 group Execution {
 
     :Prepare Boxes;
+    :Place Boxes in Bays;
     :Load Trucks;
     :Truck Departs;
-    
+
 }
 
 group Stock Ordering {

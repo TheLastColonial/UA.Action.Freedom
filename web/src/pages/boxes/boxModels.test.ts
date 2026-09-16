@@ -10,28 +10,12 @@ import {
 
 describe('boxFormToRequest', () => {
   it('omits every empty optional field', () => {
-    expect(
-      boxFormToRequest({
-        receiverRef: '',
-        house: '',
-        street: '',
-        city: '',
-        country: '',
-        postcode: '',
-      }),
-    ).toEqual({});
+    expect(boxFormToRequest({ receiverRef: '', locationId: '' })).toEqual({});
   });
 
   it('trims and keeps the fields that are set', () => {
-    const request = boxFormToRequest({
-      receiverRef: ' abc ',
-      house: '1',
-      street: '',
-      city: 'Lviv',
-      country: '',
-      postcode: '',
-    });
-    expect(request).toEqual({ receiverRef: 'abc', house: '1', city: 'Lviv' });
+    const request = boxFormToRequest({ receiverRef: ' abc ', locationId: '3' });
+    expect(request).toEqual({ receiverRef: 'abc', locationId: 3 });
   });
 });
 

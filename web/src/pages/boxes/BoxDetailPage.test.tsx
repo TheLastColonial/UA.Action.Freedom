@@ -3,8 +3,10 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 
 import { resetApiClient } from '../../api/client';
 import { makeBox } from '../../test/factories/box';
+import { makeBay, makeLocation } from '../../test/factories/location';
 import { makePerson } from '../../test/factories/person';
 import { boxApi } from '../../test/msw/boxes';
+import { locationApi } from '../../test/msw/locations';
 import { personApi } from '../../test/msw/people';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
@@ -88,4 +90,37 @@ test('rejects a confirmed weight outside 1..500', async () => {
   await expect
     .element(screen.getByText("'Weight' must be a whole number between 1 and 500"))
     .toBeInTheDocument();
+});
+
+test('a Dispatcher sees the box bay but not the controls to change it', async () => {
+  worker.use(...boxApi([makeBox({ id: 4, locationId: 3 })]).handlers, ...personApi([]).handlers);
+
+  const screen = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Dispatcher'] });
+
+  await expect.element(screen.getByText('Not currently in a bay.')).toBeInTheDocument();
+  await expect
+    .element(screen.getByRole('button', { name: 'Place in bay' }))
+    .not.toBeInTheDocument();
+});
+
+test('a loader places a box in a bay and then vacates it', async () => {
+  const location = makeLocation({ id: 3, name: 'Coventry Depot' });
+  const bay = makeBay({ id: 9, locationId: 3, code: 'A1' });
+  worker.use(
+    ...boxApi([makeBox({ id: 4, locationId: 3 })]).handlers,
+    ...personApi([makePerson({ id: 'v1', firstName: 'Val', lastName: 'Checker' })]).handlers,
+    ...locationApi([location], [bay]).handlers,
+  );
+
+  const screen = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+
+  await screen.getByLabelText('Bay').selectOptions('9');
+  await screen.getByLabelText('Placed by').selectOptions('v1');
+  await screen.getByRole('button', { name: 'Place in bay' }).click();
+
+  await expect.element(screen.getByText(/Currently in bay.*A1/)).toBeInTheDocument();
+
+  await screen.getByRole('button', { name: 'Vacate bay' }).click();
+
+  await expect.element(screen.getByText('Not currently in a bay.')).toBeInTheDocument();
 });

@@ -379,6 +379,54 @@ END
 GO
 
 -- --------------------------------------------------------------------------
+-- Distribution hubs — dbo.Location and dbo.Bay
+--
+-- A location is a distribution hub (a garage or warehouse). A bay is a 1m by 1m storage area
+-- within one, identified by a short code that only has to be unique within its own location —
+-- two depots may each have a bay called "A1". Boxes.LocationId (below) replaces the loose
+-- House/Street/City/Country/Postcode columns a box used to carry directly: that was good
+-- enough for "which depot", not for "which shelf", so it is now a real entity a bay can
+-- belong to.
+--
+-- freedom_app already holds full DML on SCHEMA::dbo (above), so no new grant.
+-- --------------------------------------------------------------------------
+
+IF OBJECT_ID('dbo.Location') IS NULL
+BEGIN
+    CREATE TABLE dbo.Location (
+        Id        int           NOT NULL IDENTITY(1,1) CONSTRAINT PK_Location PRIMARY KEY,
+        Name      nvarchar(200) NOT NULL,
+        House     nvarchar(100) NULL,
+        Street    nvarchar(200) NULL,
+        City      nvarchar(100) NULL,
+        Country   nvarchar(100) NULL,
+        Postcode  nvarchar(20)  NULL,
+        CreatedAt datetime2(0)  NOT NULL CONSTRAINT DF_Location_CreatedAt DEFAULT SYSUTCDATETIME(),
+        UpdatedAt datetime2(0)  NOT NULL CONSTRAINT DF_Location_UpdatedAt DEFAULT SYSUTCDATETIME()
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.Bay') IS NULL
+BEGIN
+    CREATE TABLE dbo.Bay (
+        Id         int          NOT NULL IDENTITY(1,1) CONSTRAINT PK_Bay PRIMARY KEY,
+        LocationId int          NOT NULL,
+        Code       nvarchar(20) NOT NULL,
+        CreatedAt  datetime2(0) NOT NULL CONSTRAINT DF_Bay_CreatedAt DEFAULT SYSUTCDATETIME(),
+
+        -- A location's bays go with it: there is no reason to keep an orphaned bay around.
+        CONSTRAINT FK_Bay_Location FOREIGN KEY (LocationId) REFERENCES dbo.Location (Id) ON DELETE CASCADE,
+
+        -- Per-location uniqueness, not global: "A1" at Coventry and "A1" at London are
+        -- different bays. A plain UNIQUE constraint, not a filtered index — this file runs
+        -- under sqlcmd with QUOTED_IDENTIFIER OFF (see the BoxQrCode note below).
+        CONSTRAINT UQ_Bay_Location_Code UNIQUE (LocationId, Code)
+    );
+END
+GO
+
+-- --------------------------------------------------------------------------
 -- Cargo — dbo.Box and dbo.BoxItem
 --
 -- A box is a packed container of items with a confirmed weight, a current location and a
@@ -390,7 +438,9 @@ GO
 -- ReceiverRef is the opaque reference into dbo.Receiver and nothing more. The delivery
 -- address lives in sensitive.ReceiverDetail and never comes near cargo (4.4).
 --
--- Location is the box's current whereabouts — a UK depot, routine, not sensitive.
+-- LocationId is the box's current whereabouts — a UK depot, routine, not sensitive — and is
+-- independent of which bay it has been shelved in (dbo.BoxBayAssignment, below): a box can be
+-- checked in at a location before a Loader gets round to placing it in a bay.
 --
 -- Item properties are open-ended (size, condition, expiry, whatever a donation needs), so
 -- they are stored as a JSON document rather than as a table nobody could keep up with.
@@ -409,11 +459,7 @@ BEGIN
         HeightCm            decimal(10,2)    NULL,
 
         ReceiverRef         uniqueidentifier NULL,
-        House               nvarchar(100)    NULL,
-        Street              nvarchar(200)    NULL,
-        City                nvarchar(100)    NULL,
-        Country             nvarchar(100)    NULL,
-        Postcode            nvarchar(20)     NULL,
+        LocationId          int              NULL,
         ValidatedByPersonId uniqueidentifier NULL,
         ValidatedAt         datetime2(0)     NULL,
         CreatedAt           datetime2(0)     NOT NULL CONSTRAINT DF_Box_CreatedAt DEFAULT SYSUTCDATETIME(),
@@ -421,6 +467,9 @@ BEGIN
 
         -- A receiver cannot be deleted out from under cargo already routed to it.
         CONSTRAINT FK_Box_Receiver FOREIGN KEY (ReceiverRef) REFERENCES dbo.Receiver (ReceiverRef),
+
+        -- Likewise a location: a depot cannot be deleted out from under boxes that are in it.
+        CONSTRAINT FK_Box_Location FOREIGN KEY (LocationId) REFERENCES dbo.Location (Id),
 
         -- The validator is a volunteer on file. NO ACTION on delete: a volunteer who leaves
         -- must not take the record of what they signed for with them.
@@ -431,6 +480,23 @@ BEGIN
             (ValidatedByPersonId IS NULL AND ValidatedAt IS NULL)
             OR (ValidatedByPersonId IS NOT NULL AND ValidatedAt IS NOT NULL))
     );
+END
+GO
+
+-- A database from before bay allocation has dbo.Box without LocationId, and with the loose
+-- House/Street/City/Country/Postcode columns LocationId replaces outright (no production data
+-- to preserve). Same pattern as the Receiver.UpdatedAt migration below: an idempotent ALTER
+-- guarded by COL_LENGTH, since CREATE TABLE IF OBJECT_ID IS NULL only runs once.
+IF COL_LENGTH('dbo.Box', 'LocationId') IS NULL
+BEGIN
+    ALTER TABLE dbo.Box ADD LocationId int NULL;
+    ALTER TABLE dbo.Box ADD CONSTRAINT FK_Box_Location FOREIGN KEY (LocationId) REFERENCES dbo.Location (Id);
+END
+GO
+
+IF COL_LENGTH('dbo.Box', 'House') IS NOT NULL
+BEGIN
+    ALTER TABLE dbo.Box DROP COLUMN House, Street, City, Country, Postcode;
 END
 GO
 
@@ -478,6 +544,43 @@ BEGIN
     );
 
     CREATE INDEX IX_BoxQrCode_BoxId ON dbo.BoxQrCode (BoxId);
+END
+GO
+
+-- --------------------------------------------------------------------------
+-- Bay allocation — dbo.BoxBayAssignment
+--
+-- Where a box currently sits within its location, and the history of where it has sat.
+-- Mirrors dbo.BoxQrCode's issue/revoke shape: assigning a bay vacates whatever bay the box
+-- was already in, so at most one row per box has VacatedAt IS NULL, and that is enforced the
+-- same way — a transaction in BoxRepository.AssignBayAsync, not a filtered unique index (this
+-- file runs under sqlcmd with QUOTED_IDENTIFIER OFF). Vacated rows are kept, not deleted: a
+-- Loader asking "where has this box been" is a real question once a convoy is being packed.
+--
+-- A bay may hold several boxes at once — there is no uniqueness on BayId here, only on BoxId
+-- among the active (VacatedAt IS NULL) rows.
+-- --------------------------------------------------------------------------
+
+IF OBJECT_ID('dbo.BoxBayAssignment') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoxBayAssignment (
+        Id                 int              NOT NULL IDENTITY(1,1) CONSTRAINT PK_BoxBayAssignment PRIMARY KEY,
+        BoxId              int              NOT NULL,
+        BayId              int              NOT NULL,
+        AssignedByPersonId uniqueidentifier NOT NULL,
+        AssignedAt         datetime2(0)     NOT NULL CONSTRAINT DF_BoxBayAssignment_AssignedAt DEFAULT SYSUTCDATETIME(),
+        VacatedAt          datetime2(0)     NULL,
+
+        -- An assignment has no life outside its box: deleting the box takes its bay history
+        -- with it. Bays, unlike boxes, are not deleted casually, so NO ACTION there — deleting
+        -- a bay that still has history should fail loudly rather than silently orphan rows.
+        CONSTRAINT FK_BoxBayAssignment_Box FOREIGN KEY (BoxId) REFERENCES dbo.Box (Id) ON DELETE CASCADE,
+        CONSTRAINT FK_BoxBayAssignment_Bay FOREIGN KEY (BayId) REFERENCES dbo.Bay (Id),
+        CONSTRAINT FK_BoxBayAssignment_Person FOREIGN KEY (AssignedByPersonId) REFERENCES dbo.Person (Id)
+    );
+
+    CREATE INDEX IX_BoxBayAssignment_BoxId ON dbo.BoxBayAssignment (BoxId);
+    CREATE INDEX IX_BoxBayAssignment_BayId ON dbo.BoxBayAssignment (BayId);
 END
 GO
 

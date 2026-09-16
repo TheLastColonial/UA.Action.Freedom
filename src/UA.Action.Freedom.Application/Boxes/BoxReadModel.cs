@@ -11,6 +11,10 @@ namespace UA.Action.Freedom.Application.Boxes;
 ///
 /// <see cref="ReceiverRef"/> is the opaque reference only. The delivery address lives behind
 /// the Ground Officer role and never comes near a box.
+///
+/// <see cref="LocationId"/> is the distribution hub the box currently sits in, if it has
+/// arrived at one — independent of which bay it has been shelved in (see
+/// <see cref="BoxBayAssignmentReadModel"/>), which tracks its own history.
 /// </remarks>
 public sealed record BoxReadModel(
     int Id,
@@ -19,11 +23,7 @@ public sealed record BoxReadModel(
     decimal? DepthCm,
     decimal? HeightCm,
     Guid? ReceiverRef,
-    string? House,
-    string? Street,
-    string? City,
-    string? Country,
-    string? Postcode,
+    int? LocationId,
     Guid? ValidatedByPersonId,
     DateTime? ValidatedAt)
 {
@@ -60,4 +60,20 @@ public sealed record BoxQrCodeReadModel(
 {
     /// <summary>Whether this is the code a scan currently resolves to.</summary>
     public bool Active => this.RevokedAt is null;
+}
+
+/// <summary>
+/// A record of a box having been placed in a bay: who put it there, and when. At most one row
+/// per box is active; earlier rows are kept as history rather than deleted.
+/// </summary>
+public sealed record BoxBayAssignmentReadModel(
+    int Id,
+    int BoxId,
+    int BayId,
+    Guid AssignedByPersonId,
+    DateTime AssignedAt,
+    DateTime? VacatedAt)
+{
+    /// <summary>Whether the box is currently in this bay.</summary>
+    public bool Active => this.VacatedAt is null;
 }

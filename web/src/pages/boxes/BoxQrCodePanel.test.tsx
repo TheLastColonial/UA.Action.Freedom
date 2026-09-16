@@ -85,7 +85,7 @@ test('a purchaser with no label is pointed at someone who can issue one', async 
 });
 
 test('the label never carries the box destination', async () => {
-  const api = boxApi([makeBox({ id: 8, city: 'Coventry' })]);
+  const api = boxApi([makeBox({ id: 8 })]);
   api.qr.set(8, { token: 'cccccccc-0000-0000-0000-000000000009', issuedAt: '2026-05-01T09:00:00' });
   worker.use(...api.handlers);
 

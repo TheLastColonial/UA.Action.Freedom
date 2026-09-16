@@ -24,7 +24,11 @@ public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
             return;
         }
 
-        foreach (var (resource, key) in state.CreatedResources)
+        // Boxes before everything else: a box's bay assignment carries a foreign key to
+        // dbo.Bay that is NO ACTION (bay history is not casually deleted, docs/domain/
+        // key-concepts.md § Bay), so a location's bays cannot be removed by cascade while a
+        // box still references one. Deleting the box first clears that reference.
+        foreach (var (resource, key) in state.CreatedResources.OrderBy(r => r.Resource == "boxes" ? 0 : 1))
         {
             try
             {

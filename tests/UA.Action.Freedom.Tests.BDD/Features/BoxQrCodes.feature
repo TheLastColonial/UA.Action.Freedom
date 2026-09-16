@@ -29,7 +29,7 @@ Scenario: An operator issues a QR code and it resolves to the box
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry", "postcode": "CV1 2AB" }
+        {}
         """
     Then the response status is 201
     Given I remember the box
@@ -38,13 +38,13 @@ Scenario: An operator issues a QR code and it resolves to the box
     Given I remember the issued QR token
     When I GET "/boxes/scan/{id}" for the remembered QR token
     Then the response status is 200
-    And the response body field "city" is "Coventry"
+    And the response body field "weightKg" is "0"
 
 Scenario: Re-issuing a QR code revokes the previous label
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     Given I remember the box
@@ -56,25 +56,24 @@ Scenario: Re-issuing a QR code revokes the previous label
     When I GET "/boxes/scan/{id}" for the remembered QR token
     Then the response status is 404
 
-Scenario: The printable label does not carry receiver detail
-    Given I am authenticated as "operator"
-    When I POST "/boxes" with body:
-        """
-        { "city": "Coventry", "postcode": "CV1 2AB" }
-        """
+Scenario: The printable label does not carry the box's location
+    Given I am authenticated as "admin"
+    And a location exists
+    When I POST "/boxes" at the remembered location
     Then the response status is 201
     Given I remember the box
+    Given I am authenticated as "operator"
     When I POST "/boxes/{id}/qr-code" on the remembered box
     Then the response status is 201
     When I GET "/boxes/{id}/label" on the remembered box
     Then the response status is 200
-    And the response body does not mention "Coventry"
+    And the response body does not mention "BDD Depot"
 
 Scenario: A label needs a QR code first
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     Given I remember the box
@@ -85,7 +84,7 @@ Scenario: Revoking a QR code makes it unresolvable
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     Given I remember the box

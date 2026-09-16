@@ -45,6 +45,38 @@ public sealed class BoxesSteps(FreedomApiClient api, ScenarioState state)
     [Given("I remember the box")]
     public void GivenIRememberTheBox() => state.Remember("box");
 
+    [When("I POST \"(.*)\" at the remembered location")]
+    public async Task WhenIPostAtTheRememberedLocation(string path)
+    {
+        var body = $$"""{ "locationId": {{state.Pinned(LocationsSteps.LocationKey)}} }""";
+        var response = await api.SendAsync(HttpMethod.Post, path, state.CurrentToken, body);
+
+        if (response.StatusCode == HttpStatusCode.Created && response.Headers.Location is not null)
+        {
+            var location = response.Headers.Location;
+            var resolved = location.IsAbsoluteUri ? location.AbsolutePath : location.ToString();
+            var id = resolved.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
+
+            state.CreatedResources.Add(("boxes", id));
+            state.LastCreatedKey = id;
+        }
+    }
+
+    [When("I PUT \"(.*)\" on the remembered box with the remembered bay and volunteer")]
+    public Task WhenIPutTheRememberedBoxInTheRememberedBay(string template)
+    {
+        var body = $$"""
+            { "bayId": {{state.Pinned(LocationsSteps.BayKey)}}, "assignedByPersonId": "{{state.Pinned(ValidatorKey)}}" }
+            """;
+
+        return api.SendAsync(HttpMethod.Put, state.Recall("box", template), state.CurrentToken, body);
+    }
+
+    [Then("the response body field \"(.*)\" is the remembered bay")]
+    public void ThenTheResponseBodyFieldIsTheRememberedBay(string field) =>
+        JsonDocument.Parse(api.LastBody).RootElement.GetProperty(field).GetInt32()
+            .Should().Be(int.Parse(state.Pinned(LocationsSteps.BayKey)));
+
     [When("I GET \"(.*)\" on the remembered box")]
     public Task WhenIGetOnTheRememberedBox(string template) =>
         api.SendAsync(HttpMethod.Get, state.Recall("box", template), state.CurrentToken, null);

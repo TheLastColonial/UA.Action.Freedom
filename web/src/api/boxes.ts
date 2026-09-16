@@ -17,12 +17,15 @@ import { ApiNotFound } from './problem';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
 import {
+  boxBayAssignmentReadModelSchema,
   boxItemReadModelSchema,
   boxQrCodeReadModelSchema,
   boxReadModelSchema,
 } from './schemas/boxes';
 import type {
   AddBoxItemRequest,
+  AssignBoxBayRequest,
+  BoxBayAssignmentReadModel,
   BoxItemReadModel,
   BoxQrCodeReadModel,
   BoxReadModel,
@@ -97,6 +100,31 @@ export function revokeBoxQrCode(id: number): Promise<void> {
 /** The printable label as an SVG document. */
 export function fetchBoxLabel(id: number): Promise<string> {
   return getText(`${idPath(id)}/label`);
+}
+
+/** The bay this box currently occupies, or `null` when it is not in one. */
+export async function fetchBoxBay(id: number): Promise<BoxBayAssignmentReadModel | null> {
+  try {
+    return await getJson(`${idPath(id)}/bay`, boxBayAssignmentReadModelSchema);
+  } catch (error) {
+    if (error instanceof ApiNotFound) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export function fetchBoxBayHistory(id: number): Promise<readonly BoxBayAssignmentReadModel[]> {
+  return getJson(`${idPath(id)}/bay/history`, z.array(boxBayAssignmentReadModelSchema));
+}
+
+/** Place (or move) the box in a bay. Assigning a new bay vacates whatever it was already in. */
+export function assignBoxBay(id: number, body: AssignBoxBayRequest): Promise<void> {
+  return put204(`${idPath(id)}/bay`, body);
+}
+
+export function vacateBoxBay(id: number): Promise<void> {
+  return delete204(`${idPath(id)}/bay`);
 }
 
 export function useBoxes(params: PageParams): UseQueryResult<readonly BoxReadModel[]> {
@@ -196,4 +224,34 @@ export function useIssueBoxQrCode(id: number): UseMutationResult<unknown, Error,
 
 export function useRevokeBoxQrCode(id: number): UseMutationResult<unknown, Error, void> {
   return useQrCodeMutation(id, () => revokeBoxQrCode(id));
+}
+
+export function useBoxBay(id: number): UseQueryResult<BoxBayAssignmentReadModel | null> {
+  return useQuery({ queryKey: qk.boxes.bay(id), queryFn: () => fetchBoxBay(id) });
+}
+
+export function useBoxBayHistory(id: number): UseQueryResult<readonly BoxBayAssignmentReadModel[]> {
+  return useQuery({ queryKey: qk.boxes.bayHistory(id), queryFn: () => fetchBoxBayHistory(id) });
+}
+
+export function useAssignBoxBay(id: number): UseMutationResult<void, Error, AssignBoxBayRequest> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AssignBoxBayRequest) => assignBoxBay(id, body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.boxes.bay(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.boxes.bayHistory(id) });
+    },
+  });
+}
+
+export function useVacateBoxBay(id: number): UseMutationResult<void, Error, void> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => vacateBoxBay(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.boxes.bay(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.boxes.bayHistory(id) });
+    },
+  });
 }

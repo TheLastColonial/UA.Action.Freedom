@@ -36,10 +36,10 @@ as `Authorization: Bearer`. Sign in as one of the seed logins (`admin` / `operat
 
 ```
 src/
-  auth/        oidc config, useAuth, policyMatrix (mirrors the 15-policy matrix; API still enforces)
+  auth/        oidc config, useAuth, policyMatrix (mirrors the 18-policy matrix; API still enforces)
   api/         apiFetch wrapper + typed verbs, Zod schemas, per-slice query/mutation hooks
   components/  app shell, data table, pagination, form/fields, error/cold-start UX
-  pages/       one folder per slice (vehicles, people, convoys, receivers, boxes, manifests)
+  pages/       one folder per slice (vehicles, people, convoys, receivers, boxes, manifests, locations)
   styles/      tokens.css (light + dark) + global.css
   test/        renderWithProviders, MSW handlers + factories
 e2e/           auth.setup.ts (one PKCE login per seed user), per-role + per-slice @smoke specs
@@ -106,6 +106,15 @@ route, roles })`): list renders/empty/error/pagination/role-gated "New"; create 
   the `.qr-panel__print` region. A `GET /boxes/{id}/qr-code` that 404s means "no label", not an
   error — `fetchBoxQrCode` maps it to `null`. Issue/revoke are behind `Gate policy="boxes:write"`;
   print is visible to any `boxes:read` role.
+
+- **A panel that composes another slice's sub-resource** (`boxes` bay allocation) —
+  `BoxBayPanel` calls `useBays(box.locationId, { enabled: box.locationId !== null })` from the
+  `locations` slice alongside its own `useBoxBay`/`useBoxBayHistory`, so the bay `<select>` is
+  scoped to the box's _own_ current location rather than every bay in the system. The
+  assign/vacate controls sit behind a policy narrower than the panel's own read (`boxes:read`
+  shows current bay + history; `Gate policy="boxes:allocate-bay"` — Loader only — wraps the
+  form). A query hook that takes an `{ enabled }` option (see `useBays`, `useConvoy`) is the
+  pattern for "fetch this, but only once a prerequisite id is known".
 
 ## Receiver delivery detail (Ground Officer only)
 

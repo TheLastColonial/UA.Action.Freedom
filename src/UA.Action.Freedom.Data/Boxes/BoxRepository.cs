@@ -11,9 +11,11 @@ namespace UA.Action.Freedom.Data.Boxes;
 public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBoxRepository
 {
     private const string Columns =
-        "Id, WeightKg, WidthCm, DepthCm, HeightCm, ReceiverRef, House, Street, City, Country, Postcode, ValidatedByPersonId, ValidatedAt";
+        "Id, WeightKg, WidthCm, DepthCm, HeightCm, ReceiverRef, LocationId, ValidatedByPersonId, ValidatedAt";
 
     private const string QrCodeColumns = "Token, BoxId, IssuedAt, RevokedAt";
+
+    private const string BayAssignmentColumns = "Id, BoxId, BayId, AssignedByPersonId, AssignedAt, VacatedAt";
 
     /// <summary>
     /// Item properties are an open-ended bag stored as JSON, so they cannot be hydrated by
@@ -74,8 +76,8 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
         // nothing, and the only way past that is ValidateAsync.
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """
-            INSERT INTO dbo.Box (ReceiverRef, House, Street, City, Country, Postcode)
-            VALUES (@ReceiverRef, @House, @Street, @City, @Country, @Postcode);
+            INSERT INTO dbo.Box (ReceiverRef, LocationId)
+            VALUES (@ReceiverRef, @LocationId);
             SELECT CAST(SCOPE_IDENTITY() AS int);
             """,
             box,
@@ -92,11 +94,7 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
             """
             UPDATE dbo.Box SET
                 ReceiverRef = @ReceiverRef,
-                House = @House,
-                Street = @Street,
-                City = @City,
-                Country = @Country,
-                Postcode = @Postcode,
+                LocationId = @LocationId,
                 UpdatedAt = SYSUTCDATETIME()
             WHERE Id = @Id
             """,
@@ -248,6 +246,72 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
 
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "UPDATE dbo.BoxQrCode SET RevokedAt = SYSUTCDATETIME() WHERE BoxId = @boxId AND RevokedAt IS NULL",
+            new { boxId },
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<BoxBayAssignmentReadModel?> GetActiveBayAssignmentAsync(int boxId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<BoxBayAssignmentReadModel>(new CommandDefinition(
+            $"SELECT {BayAssignmentColumns} FROM dbo.BoxBayAssignment WHERE BoxId = @boxId AND VacatedAt IS NULL",
+            new { boxId },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<IReadOnlyList<BoxBayAssignmentReadModel>> ListBayAssignmentHistoryAsync(int boxId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var rows = await connection.QueryAsync<BoxBayAssignmentReadModel>(new CommandDefinition(
+            $"SELECT {BayAssignmentColumns} FROM dbo.BoxBayAssignment WHERE BoxId = @boxId ORDER BY AssignedAt DESC, Id DESC",
+            new { boxId },
+            cancellationToken: cancellationToken));
+
+        return rows.ToList();
+    }
+
+    public async Task<BoxBayAssignmentReadModel> AssignBayAsync(
+        int boxId, int bayId, Guid assignedByPersonId, DateTime assignedAt, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+
+        // Mirrors IssueQrCodeAsync: vacating the old assignment and inserting the new one is one
+        // act, so the box is never briefly in two bays at once. The vacate is conditional on
+        // VacatedAt IS NULL so the database settles a concurrent double-assign.
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE dbo.BoxBayAssignment SET VacatedAt = @assignedAt WHERE BoxId = @boxId AND VacatedAt IS NULL",
+            new { boxId, assignedAt },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        var id = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            """
+            INSERT INTO dbo.BoxBayAssignment (BoxId, BayId, AssignedByPersonId, AssignedAt)
+            VALUES (@boxId, @bayId, @assignedByPersonId, @assignedAt);
+            SELECT CAST(SCOPE_IDENTITY() AS int);
+            """,
+            new { boxId, bayId, assignedByPersonId, assignedAt },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return new BoxBayAssignmentReadModel(id, boxId, bayId, assignedByPersonId, assignedAt, VacatedAt: null);
+    }
+
+    public async Task<bool> VacateActiveBayAssignmentAsync(int boxId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE dbo.BoxBayAssignment SET VacatedAt = SYSUTCDATETIME() WHERE BoxId = @boxId AND VacatedAt IS NULL",
             new { boxId },
             cancellationToken: cancellationToken));
 

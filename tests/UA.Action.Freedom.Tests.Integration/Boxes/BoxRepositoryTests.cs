@@ -51,8 +51,7 @@ public class BoxRepositoryTests
 
     private static BoxReadModel ANewBox() => new(
         Id: 0, WeightKg: 0, WidthCm: null, DepthCm: null, HeightCm: null, ReceiverRef: null,
-        House: "Unit 4", Street: "Cross Road", City: "Coventry", Country: "United Kingdom", Postcode: "CV1 2AB",
-        ValidatedByPersonId: null, ValidatedAt: null);
+        LocationId: null, ValidatedByPersonId: null, ValidatedAt: null);
 
     private static async Task ExecuteAsync(string sql, params (string Name, object Value)[] parameters)
     {
@@ -84,6 +83,20 @@ public class BoxRepositoryTests
 
     private static Task RemoveVolunteerAsync(Guid id) =>
         ExecuteAsync("DELETE FROM dbo.Person WHERE Id = @id", ("@id", id));
+
+    /// <summary>A location to point a box at, since LocationId is a real foreign key.</summary>
+    private static async Task<int> AddLocationAsync()
+    {
+        await using var connection = new SqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "INSERT INTO dbo.Location (Name) VALUES ('Integration Depot'); SELECT CAST(SCOPE_IDENTITY() AS int);";
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    private static Task RemoveLocationAsync(int id) =>
+        ExecuteAsync("DELETE FROM dbo.Location WHERE Id = @id", ("@id", id));
 
     private static Task RemoveBoxAsync(int id) =>
         ExecuteAsync("DELETE FROM dbo.Box WHERE Id = @id", ("@id", id));
@@ -149,23 +162,26 @@ public class BoxRepositoryTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var loader = await AddVolunteerAsync();
+        var location = await AddLocationAsync();
         var id = await repository.AddAsync(ANewBox(), cancellationToken);
 
         try
         {
             await repository.ValidateAsync(id, loader, 24, 40m, 30m, 20m, DateTime.UtcNow, cancellationToken);
 
-            // Even asked directly, the UPDATE statement has no columns for these.
+            // Even asked directly, the UPDATE statement has no columns for weight/dimensions.
+            // LocationId is an ordinary editable field, so it is included to prove the update
+            // still goes through for what it is allowed to touch.
             await repository.UpdateAsync(
                 ANewBox() with
                 {
-                    Id = id, City = "Dover", WeightKg = 999, WidthCm = 1m, DepthCm = 1m, HeightCm = 1m,
+                    Id = id, LocationId = location, WeightKg = 999, WidthCm = 1m, DepthCm = 1m, HeightCm = 1m,
                     ValidatedByPersonId = null, ValidatedAt = null,
                 },
                 cancellationToken);
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
-            stored!.City.Should().Be("Dover");
+            stored!.LocationId.Should().Be(location);
             stored.WeightKg.Should().Be(24);
             stored.WidthCm.Should().Be(40m);
             stored.DepthCm.Should().Be(30m);
@@ -176,6 +192,7 @@ public class BoxRepositoryTests
         {
             await RemoveBoxAsync(id);
             await RemoveVolunteerAsync(loader);
+            await RemoveLocationAsync(location);
         }
     }
 

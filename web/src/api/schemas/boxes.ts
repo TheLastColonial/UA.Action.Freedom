@@ -8,16 +8,24 @@ export const boxReadModelSchema = z.object({
   depthCm: z.number().nullable(),
   heightCm: z.number().nullable(),
   receiverRef: z.string().nullable(),
-  house: z.string().nullable(),
-  street: z.string().nullable(),
-  city: z.string().nullable(),
-  country: z.string().nullable(),
-  postcode: z.string().nullable(),
+  locationId: z.number().int().nullable(),
   validatedByPersonId: z.string().nullable(),
   validatedAt: z.string().nullable(),
   validated: z.boolean(),
 });
 export type BoxReadModel = z.infer<typeof boxReadModelSchema>;
+
+// The box's current (or historical) bay assignment.
+export const boxBayAssignmentReadModelSchema = z.object({
+  id: z.number().int(),
+  boxId: z.number().int(),
+  bayId: z.number().int(),
+  assignedByPersonId: z.string(),
+  assignedAt: z.string(),
+  vacatedAt: z.string().nullable(),
+  active: z.boolean(),
+});
+export type BoxBayAssignmentReadModel = z.infer<typeof boxBayAssignmentReadModelSchema>;
 
 export const boxItemReadModelSchema = z.object({
   id: z.string(),
@@ -39,13 +47,14 @@ export type BoxQrCodeReadModel = z.infer<typeof boxQrCodeReadModelSchema>;
 // Request shapes — src/UA.Action.Freedom.Api/Boxes/BoxRequests.cs.
 export interface CreateBoxRequest {
   receiverRef?: string;
-  house?: string;
-  street?: string;
-  city?: string;
-  country?: string;
-  postcode?: string;
+  locationId?: number;
 }
 export type UpdateBoxRequest = CreateBoxRequest;
+
+export interface AssignBoxBayRequest {
+  bayId: number;
+  assignedByPersonId: string;
+}
 
 export interface ValidateBoxRequest {
   validatedByPersonId: string;

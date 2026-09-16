@@ -200,12 +200,18 @@ Core resource endpoints:
   - `GET|PUT /manifests/{id}/teams/{leg}` — Driver team assignment
   - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo assignment
   - `POST /manifests/{id}/{transition}` — State transitions: `propose`, `approve`, `reject`, `prepare`, `ready`, `depart`, `deliver`, `lose`, `return`
+- `GET|POST /locations` — Distribution hubs (garages/warehouses); writes are **Administrator only**
+  - `PUT|DELETE /locations/{id}` — Rename or remove a location
+  - `GET|POST /locations/{id}/bays` — Bays within a location (code unique per location, not globally)
+  - `PUT|DELETE /locations/{id}/bays/{bayId}` — Rename or remove a bay
+- `PUT|GET|DELETE /boxes/{id}/bay` — Place, read or vacate a box's bay assignment (`PUT`/`DELETE` are **Loader only** — `boxes:allocate-bay`, narrower than `boxes:write`; `GET` is `boxes:read`)
+  - `GET /boxes/{id}/bay/history` — Every bay the box has occupied, most recent first (`boxes:read`)
 
 See `docs/local-authentication.md` for the full role/policy matrix.
 
-The **operator UI (`web/`) covers every endpoint above** — all six slices, every sub-resource
-(convoy route/vehicles, box items/validate, box QR label issue/print/revoke, manifest
-teams/boxes/weight), all nine manifest transitions, and the reason-gated receiver-detail flow —
+The **operator UI (`web/`) covers every endpoint above** — all seven slices, every sub-resource
+(convoy route/vehicles, box items/validate/bay, box QR label issue/print/revoke, location bays,
+manifest teams/boxes/weight), all nine manifest transitions, and the reason-gated receiver-detail flow —
 with nav and actions gated by the same policy matrix (the API stays the enforcement point). The
 box detail page's **QR label** panel issues a label, shows it inline and prints it (a print
 stylesheet reveals the label alone); `/boxes/scan/{token}` is consumed by whatever scans the
@@ -223,7 +229,7 @@ printed label, not the operator UI.
 - Sign-in is **Authorization Code + PKCE** against the public Keycloak client `freedom-spa`
   (`iac/tofu/keycloak.tf`); the resulting JWT is sent as `Authorization: Bearer`. The API is
   unchanged — still a pure JWT resource server.
-- Nav and actions are gated by the same 15-policy matrix the API enforces
+- Nav and actions are gated by the same 18-policy matrix the API enforces
   (`docs/local-authentication.md`); the API remains the enforcement point. Receiver street
   addresses are never rendered on any print/verification view.
 
@@ -277,6 +283,21 @@ Manifests follow a 10-state model (see `docs/manifest-status.puml`):
   environment-only config; when unset each request's own scheme + host are used (fine for
   `dotnet run`, wrong behind a proxy — the local simulation sets `App__PublicBaseUrl`
   explicitly).
+
+### Bay allocation
+
+- `Location` (a distribution hub) and `Bay` (a 1m by 1m storage area within one) are a new
+  vertical slice, `dbo.Location` / `dbo.Bay`, that `dbo.Box.LocationId` now points at — replacing
+  the loose `House`/`Street`/`City`/`Country`/`Postcode` columns a box used to carry directly. A
+  bay's `Code` is unique per location, not globally (`UQ_Bay_Location_Code`).
+- `dbo.BoxBayAssignment` records where a box currently sits (and has sat): mirrors
+  `dbo.BoxQrCode`'s issue/revoke shape exactly. Assigning a box to a new bay vacates any bay it
+  already occupied, as one transaction (`BoxRepository.AssignBayAsync`), so a box is never
+  recorded as being in two bays at once; vacated rows are kept as history, not deleted.
+- Placing or vacating a box's bay is **Loader only** (`boxes:allocate-bay`) — narrower even than
+  `boxes:validate`, because this is the on-site, physical act of shelving a box, not a
+  coordination task. `Location`/`Bay` CRUD (setting up a depot) is Administrator only
+  (`locations:write`); reading either is open to every operational role.
 
 ## Development
 

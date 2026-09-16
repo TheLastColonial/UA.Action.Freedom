@@ -8,6 +8,7 @@ import {
   PeopleIcon,
   RouteIcon,
   VehicleIcon,
+  WarehouseIcon,
 } from './dashboardIcons';
 
 export interface DashboardCardEntry {
@@ -74,5 +75,14 @@ export const DASHBOARD_CARD_ENTRIES: readonly DashboardCardEntry[] = [
     actionLabel: 'New Receiver',
     actionTo: '/receivers/new',
     actionPolicy: 'receivers:write',
+  },
+  {
+    label: 'Locations',
+    to: '/locations',
+    policy: 'locations:read',
+    icon: WarehouseIcon,
+    actionLabel: 'New Location',
+    actionTo: '/locations/new',
+    actionPolicy: 'locations:write',
   },
 ];

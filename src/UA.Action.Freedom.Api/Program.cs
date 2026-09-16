@@ -1,5 +1,7 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using Azure.Storage.Queues;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using FluentValidation;
 using Scalar.AspNetCore;
@@ -7,6 +9,7 @@ using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Api.Boxes;
 using UA.Action.Freedom.Api.Convoys;
 using UA.Action.Freedom.Api.Health;
+using UA.Action.Freedom.Api.Locations;
 using UA.Action.Freedom.Api.Manifests;
 using UA.Action.Freedom.Api.Messaging;
 using UA.Action.Freedom.Api.Receivers;
@@ -47,6 +50,7 @@ builder.Services.AddFreedomDataProtection(storage);
 builder.Services.AddFreedomHealthChecks();
 
 builder.Services.AddProblemDetails();
+
 builder.Services.AddFreedomAuthentication(oidc, builder.Environment.IsDevelopment());
 builder.Services.AddFreedomAuthorization();
 
@@ -63,9 +67,98 @@ builder.Services.AddScoped<IManifestWorkQueue>(provider => new AzureManifestWork
     provider.GetRequiredService<IOptions<StorageOptions>>(),
     provider.GetRequiredService<IOptions<CustomsOptions>>()));
 
+static string ExtractJsonErrorMessage(string errorMessage)
+{
+    // Check for specific type conversion errors
+    if (errorMessage.Contains("System.Guid", StringComparison.OrdinalIgnoreCase) ||
+        errorMessage.Contains("GUID", StringComparison.OrdinalIgnoreCase) ||
+        errorMessage.Contains("Guid", StringComparison.OrdinalIgnoreCase))
+    {
+        return "One or more fields contain invalid GUID values. GUIDs must be in the format: 550e8400-e29b-41d4-a716-446655440000";
+    }
+
+    if (errorMessage.Contains("System.Int32", StringComparison.OrdinalIgnoreCase) ||
+        errorMessage.Contains("Int32", StringComparison.OrdinalIgnoreCase))
+    {
+        return "One or more fields contain non-integer values. Please provide valid integers.";
+    }
+
+    if (errorMessage.Contains("System.Decimal", StringComparison.OrdinalIgnoreCase) ||
+        errorMessage.Contains("Decimal", StringComparison.OrdinalIgnoreCase))
+    {
+        return "One or more fields contain invalid decimal values. Please provide valid numbers.";
+    }
+
+    // Default message for unidentified JSON errors
+    return "Request body contains invalid data. Check that fields are using the correct types (e.g., GUIDs for ID fields).";
+}
+
 var app = builder.Build();
 
-app.UseExceptionHandler();
+app.UseExceptionHandler(exceptionHandlerApp =>
+{
+    exceptionHandlerApp.Run(async context =>
+    {
+        var exceptionHandler = context.Features.Get<IExceptionHandlerFeature>();
+        if (exceptionHandler?.Error is BadHttpRequestException badHttpEx)
+        {
+            // Check if this is a JSON deserialization error
+            var isJsonError = badHttpEx.InnerException is JsonException ||
+                              badHttpEx.Message.Contains("JSON", StringComparison.OrdinalIgnoreCase) ||
+                              (badHttpEx.InnerException != null &&
+                               badHttpEx.InnerException.Message.Contains("could not be converted", StringComparison.OrdinalIgnoreCase));
+
+            if (!isJsonError)
+            {
+                // Not a JSON error, fall through to default handling
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                context.Response.ContentType = "application/json";
+
+                var problem = new
+                {
+                    type = "https://httpwg.org/specs/rfc9110.html#status.500",
+                    title = "Internal Server Error",
+                    status = StatusCodes.Status500InternalServerError,
+                    detail = "An unexpected error occurred."
+                };
+
+                await context.Response.WriteAsJsonAsync(problem);
+                return;
+            }
+
+            var errorMessage = badHttpEx.InnerException?.Message ?? badHttpEx.Message;
+            var detail = ExtractJsonErrorMessage(errorMessage);
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "application/json";
+
+            var problemDetails = new
+            {
+                type = "https://httpwg.org/specs/rfc9110.html#status.400",
+                title = "Bad Request",
+                status = StatusCodes.Status400BadRequest,
+                detail = detail
+            };
+
+            await context.Response.WriteAsJsonAsync(problemDetails);
+        }
+        else
+        {
+            // Not a BadHttpRequestException - default exception handling
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/json";
+
+            var problemDetails = new
+            {
+                type = "https://httpwg.org/specs/rfc9110.html#status.500",
+                title = "Internal Server Error",
+                status = StatusCodes.Status500InternalServerError,
+                detail = "An unexpected error occurred."
+            };
+
+            await context.Response.WriteAsJsonAsync(problemDetails);
+        }
+    });
+});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -104,6 +197,7 @@ app.MapFreedomConvoys();
 app.MapFreedomReceivers();
 app.MapFreedomBoxes();
 app.MapFreedomManifests();
+app.MapFreedomLocations();
 
 // Only paths under /app that are not a real static asset reach here — the SPA's own router
 // then takes over. Scoped to /app, so no API route, health probe or OpenAPI document is

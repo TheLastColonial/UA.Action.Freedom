@@ -76,6 +76,25 @@ public static class AuthenticationExtensions
     /// </remarks>
     public const string BoxesValidate = "boxes:validate";
 
+    /// <summary>
+    /// Place or move a box within a bay — <strong>Loader only</strong>.
+    /// </summary>
+    /// <remarks>
+    /// Narrower even than <see cref="BoxesValidate"/>: this is the on-site, physical act of
+    /// shelving a box, not a coordination task, so it excludes Administrator and Dispatcher as
+    /// well (docs/domain/key-concepts.md § Loader).
+    /// </remarks>
+    public const string BoxesAllocateBay = "boxes:allocate-bay";
+
+    /// <summary>Read distribution hubs and their bays — every operational role.</summary>
+    public const string LocationsRead = "locations:read";
+
+    /// <summary>
+    /// Create, change or remove a location or its bays — Administrator only. Setting up a depot
+    /// is infrastructure, not day-to-day box handling.
+    /// </summary>
+    public const string LocationsWrite = "locations:write";
+
     /// <summary>Read manifests, their teams, their cargo and their weight — every operational role.</summary>
     public const string ManifestsRead = "manifests:read";
 
@@ -175,6 +194,12 @@ public static class AuthenticationExtensions
                 policy.RequireRole(Administrator, Dispatcher, Loader))
             .AddPolicy(BoxesValidate, policy =>
                 policy.RequireRole(Administrator, Loader))
+            .AddPolicy(BoxesAllocateBay, policy =>
+                policy.RequireRole(Loader))
+            .AddPolicy(LocationsRead, policy =>
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
+            .AddPolicy(LocationsWrite, policy =>
+                policy.RequireRole(Administrator))
             .AddPolicy(ManifestsRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(ManifestsWrite, policy =>

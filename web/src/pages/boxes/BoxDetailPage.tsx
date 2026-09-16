@@ -2,15 +2,24 @@ import type { JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useBox, useDeleteBox } from '../../api/boxes';
+import { useLocation } from '../../api/locations';
 import { ApiNotFound } from '../../api/problem';
 import { Button, LinkButton } from '../../components/Button';
 import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
+import { BoxBayPanel } from './BoxBayPanel';
 import { BoxItemsPanel } from './BoxItemsPanel';
 import { BoxQrCodePanel } from './BoxQrCodePanel';
 import { BoxValidatePanel } from './BoxValidatePanel';
+
+function BoxLocationName({ locationId }: { locationId: number }): JSX.Element {
+  const query = useLocation(locationId);
+  if (query.isPending) return <>Loading…</>;
+  if (query.isError) return <>—</>;
+  return <>{query.data.name}</>;
+}
 
 export function BoxDetailPage(): JSX.Element {
   const { id = '' } = useParams();
@@ -44,12 +53,8 @@ export function BoxDetailPage(): JSX.Element {
           <dd>{box.validated ? `${box.weightKg} kg` : 'Not yet confirmed'}</dd>
           <dt>Receiver</dt>
           <dd>{box.receiverRef ?? '—'}</dd>
-          <dt>Destination</dt>
-          <dd>
-            {[box.house, box.street, box.city, box.country, box.postcode]
-              .filter(Boolean)
-              .join(', ') || '—'}
-          </dd>
+          <dt>Location</dt>
+          <dd>{box.locationId === null ? '—' : <BoxLocationName locationId={box.locationId} />}</dd>
         </dl>
       </DetailCard>
 
@@ -80,6 +85,8 @@ export function BoxDetailPage(): JSX.Element {
       <BoxItemsPanel boxId={box.id} frozen={box.validated} />
 
       <BoxQrCodePanel boxId={box.id} />
+
+      <BoxBayPanel boxId={box.id} locationId={box.locationId} />
 
       {!box.validated ? (
         <Gate policy="boxes:validate">

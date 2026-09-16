@@ -46,6 +46,9 @@ Responsible for being on site, verifying the contents of donations and loading t
 Contents must be verified to weigh them for border checks and to assure the contents, as this is a trust
 boundary between the donor and Ukrainian Action.
 
+Also the only role that may place a [Box](#box) in a [Bay](#bay) — narrower even than validating a box,
+because it is the physical, on-site act of shelving one so it can be found again for loading.
+
 ### Purchaser
 
 Responsible for the sourcing of vehicles, equipment and other sundries consumed in a convoy.
@@ -117,9 +120,13 @@ transit — they are tracked as the contents of a [Box](#box).
 
 ### Box
 
-A packed container of [Items](#item) with a confirmed weight, a current location, and a target
+A packed container of [Items](#item) with a confirmed weight, a current [Location](#location), and a target
 [Receiver](#receiver). A box is **validated** when a [Loader](#loader) has confirmed its contents and weight;
 the system records who validated it and when.
+
+A box's `LocationId` records which distribution hub it has arrived at — set independently of, and
+before, which [Bay](#bay) it has been shelved in. A box can be checked in at a location before a
+Loader gets round to placing it in a specific bay.
 
 Validation is the trust boundary between the donor and Ukrainian Action, and the weight it produces is what the
 border check relies on. Both facts make the validation record an audit artefact, not just a status flag.
@@ -136,6 +143,31 @@ inspected at a border, so it names no [Receiver](#receiver), region or [Address]
 [Data Sensitivity](#data-sensitivity). Issuing or reprinting a label is allowed at any point in a box's life,
 including after validation — a label is not box contents, so the freeze that protects the confirmed weight does
 not apply to it.
+
+### Location
+
+A distribution hub — a garage or warehouse — where [Boxes](#box) are stored between arriving and being
+loaded for a convoy. Subdivided into [Bays](#bay). A location is a first-class entity (name plus an
+[Address](#address)), not the loose free-text field a box used to carry directly — that was good enough
+for "which depot", not for "which shelf", which is the problem bay allocation solves.
+
+Creating, renaming or removing a location or its bays is Administrator only: setting up a depot is
+infrastructure, not day-to-day box handling.
+
+### Bay
+
+A 1m by 1m storage area within a [Location](#location), identified by a short code (e.g. "A3") that
+only has to be unique **within its own location** — two depots may each have a bay called "A1". A bay
+may hold several boxes at once; what is enforced is the other direction: a box may only be in one bay,
+within one location, at a time — assigning a bay whose location does not match the box's current
+`LocationId` is refused.
+
+Placing (or moving) a box in a bay is **Loader only** — narrower even than
+[box validation](#box), because this is the on-site, physical act of shelving a box so it can be found
+again, not a coordination task. The system keeps a full history of a box's bay assignments (who placed
+it, when, and when it moved on), mirroring the QR label's issue/revoke shape: assigning a new bay
+vacates whatever bay the box was already in, as one transactional act, so a box is never recorded as
+being in two bays at once.
 
 ### Receiver
 
