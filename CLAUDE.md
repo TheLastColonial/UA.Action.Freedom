@@ -75,6 +75,16 @@ The **README.md is the primary onboarding document** for new developers. Keep it
 
 **These updates are part of the feature work, not follow-up cleanup** — they go in the same commit as the code change, and any PR that touches code but not the README is incomplete.
 
+### UI development (`web/`)
+
+After making changes to any files in the `web/` directory, **always run Prettier formatting before committing**:
+
+```
+cd web && npm run format:write
+```
+
+The CI pipeline will fail the `frontend` → `format check` step if formatting is not applied. Running this command ensures all code adheres to the project's Prettier configuration and prevents formatting-related CI failures.
+
 ### Domain model (`src/UA.Action.Freedom.Domain`)
 
 Core entities and how they relate:
