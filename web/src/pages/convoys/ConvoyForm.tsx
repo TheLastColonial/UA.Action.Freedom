@@ -2,6 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { JSX } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
+import { FormCard } from '../../components/form/FormCard';
 import { TextField } from '../../components/form/fields';
 import { convoyFormSchema } from './convoyFormModel';
 import type { ConvoyFormValues } from './convoyFormModel';
@@ -43,22 +45,24 @@ export function ConvoyForm({
         </p>
       ) : null}
 
-      <TextField
-        label="Departs"
-        type="datetime-local"
-        error={errors.start?.message}
-        {...register('start')}
-      />
-      <TextField
-        label="Expected arrival"
-        type="datetime-local"
-        error={errors.expectedEnd?.message}
-        {...register('expectedEnd')}
-      />
+      <FormCard title="Convoy details">
+        <TextField
+          label="Departs"
+          type="datetime-local"
+          error={errors.start?.message}
+          {...register('start')}
+        />
+        <TextField
+          label="Expected arrival"
+          type="datetime-local"
+          error={errors.expectedEnd?.message}
+          {...register('expectedEnd')}
+        />
+      </FormCard>
 
-      <button type="submit" disabled={submitting}>
+      <Button type="submit" disabled={submitting}>
         {submitting ? 'Saving…' : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -2,6 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { JSX } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
+import { FormCard } from '../../components/form/FormCard';
 import { TextField } from '../../components/form/fields';
 import { boxFormSchema } from './boxModels';
 import type { BoxFormValues } from './boxModels';
@@ -43,21 +45,26 @@ export function BoxForm({
         </p>
       ) : null}
 
-      <TextField
-        label="Receiver reference"
-        hint="The receiver's opaque reference, if known."
-        error={errors.receiverRef?.message}
-        {...register('receiverRef')}
-      />
-      <TextField label="House" error={errors.house?.message} {...register('house')} />
-      <TextField label="Street" error={errors.street?.message} {...register('street')} />
-      <TextField label="City" error={errors.city?.message} {...register('city')} />
-      <TextField label="Country" error={errors.country?.message} {...register('country')} />
-      <TextField label="Postcode" error={errors.postcode?.message} {...register('postcode')} />
+      <FormCard title="Receiver">
+        <TextField
+          label="Receiver reference"
+          hint="The receiver's opaque reference, if known."
+          error={errors.receiverRef?.message}
+          {...register('receiverRef')}
+        />
+      </FormCard>
 
-      <button type="submit" disabled={submitting}>
+      <FormCard title="Destination">
+        <TextField label="House" error={errors.house?.message} {...register('house')} />
+        <TextField label="Street" error={errors.street?.message} {...register('street')} />
+        <TextField label="City" error={errors.city?.message} {...register('city')} />
+        <TextField label="Country" error={errors.country?.message} {...register('country')} />
+        <TextField label="Postcode" error={errors.postcode?.message} {...register('postcode')} />
+      </FormCard>
+
+      <Button type="submit" disabled={submitting}>
         {submitting ? 'Saving…' : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

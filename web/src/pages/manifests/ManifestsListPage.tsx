@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import { useManifests } from '../../api/manifests';
 import type { ManifestReadModel } from '../../api/schemas/manifests';
+import { LinkButton } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
@@ -39,7 +40,7 @@ export function ManifestsListPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>Manifests</h1>
         <Gate policy="manifests:write">
-          <Link to="/manifests/new">New manifest</Link>
+          <LinkButton to="/manifests/new">New manifest</LinkButton>
         </Gate>
       </header>
 

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAttachManifestBox, useDetachManifestBox, useManifestBoxes } from '../../api/manifests';
 import { ApiDomainProblem } from '../../api/problem';
 import type { ManifestBoxReadModel } from '../../api/schemas/manifests';
+import { Button } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { PageSkeleton } from '../../components/PageSkeleton';
@@ -38,15 +39,16 @@ export function ManifestBoxesPanel({ manifestId, frozen }: ManifestBoxesPanelPro
     {
       header: '',
       cell: (b) => (
-        <button
+        <Button
           type="button"
+          variant="danger"
           disabled={frozen || detach.isPending}
           onClick={() => {
             detach.mutate(b.boxId);
           }}
         >
           Remove
-        </button>
+        </Button>
       ),
     },
   ];
@@ -94,9 +96,9 @@ export function ManifestBoxesPanel({ manifestId, frozen }: ManifestBoxesPanelPro
               }}
             />
           </label>
-          <button type="submit" disabled={attach.isPending}>
+          <Button type="submit" disabled={attach.isPending}>
             Add box
-          </button>
+          </Button>
         </form>
       ) : null}
     </div>

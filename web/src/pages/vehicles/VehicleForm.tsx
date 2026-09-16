@@ -6,6 +6,7 @@ import type { FieldPath } from 'react-hook-form';
 
 import { fuelTypeSchema, transmissionSchema } from '../../api/schemas/common';
 import { problemFieldToFormPath } from '../../api/problem';
+import { Button } from '../../components/Button';
 import { FormCard } from '../../components/form/FormCard';
 import { SelectField, TextField } from '../../components/form/fields';
 import { vehicleFormSchema } from './vehicleFormModel';
@@ -194,9 +195,9 @@ export function VehicleForm({
         <TextField label="Notes" error={errors.notes?.message} {...register('notes')} />
       </FormCard>
 
-      <button type="submit" disabled={submitting}>
+      <Button type="submit" disabled={submitting}>
         {submitting ? 'Saving…' : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

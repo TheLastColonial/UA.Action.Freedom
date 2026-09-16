@@ -1,8 +1,9 @@
 import type { JSX } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { ApiNotFound } from '../../api/problem';
 import { useDeleteVehicle, useVehicle } from '../../api/vehicles';
+import { Button, LinkButton } from '../../components/Button';
 import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
@@ -31,12 +32,16 @@ export function VehicleDetailPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>{vehicle.vin}</h1>
         <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <Link to={`/vehicles/${encodeURIComponent(vehicle.vin)}/servicing`}>Servicing</Link>
+          <LinkButton to={`/vehicles/${encodeURIComponent(vehicle.vin)}/servicing`} variant="secondary">
+            Servicing
+          </LinkButton>
           <Gate policy="vehicles:write">
             <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <Link to={`/vehicles/${encodeURIComponent(vehicle.vin)}/edit`}>Edit</Link>
-              <button
-                type="button"
+              <LinkButton to={`/vehicles/${encodeURIComponent(vehicle.vin)}/edit`} variant="secondary">
+                Edit
+              </LinkButton>
+              <Button
+                variant="danger"
                 disabled={remove.isPending}
                 onClick={() => {
                   remove.mutate(vehicle.vin, {
@@ -47,7 +52,7 @@ export function VehicleDetailPage(): JSX.Element {
                 }}
               >
                 Delete
-              </button>
+              </Button>
             </span>
           </Gate>
         </span>

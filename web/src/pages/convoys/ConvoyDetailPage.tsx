@@ -1,8 +1,10 @@
 import type { JSX } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 
 import { useConvoy, usePublishTruckList } from '../../api/convoys';
 import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
+import { Button, LinkButton } from '../../components/Button';
+import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
@@ -71,20 +73,24 @@ export function ConvoyDetailPage(): JSX.Element {
 
       {tab === 'overview' ? (
         <div>
-          <dl>
-            <dt>Departs</dt>
-            <dd>{convoy.start.slice(0, 16).replace('T', ' ')}</dd>
-            <dt>Expected arrival</dt>
-            <dd>{convoy.expectedEnd.slice(0, 16).replace('T', ' ')}</dd>
-            <dt>Truck list</dt>
-            <dd>{published ? `Published ${convoy.truckListPublishedAt ?? ''}` : 'Open'}</dd>
-          </dl>
+          <DetailCard title="Convoy details">
+            <dl>
+              <dt>Departs</dt>
+              <dd>{convoy.start.slice(0, 16).replace('T', ' ')}</dd>
+              <dt>Expected arrival</dt>
+              <dd>{convoy.expectedEnd.slice(0, 16).replace('T', ' ')}</dd>
+              <dt>Truck list</dt>
+              <dd>{published ? `Published ${convoy.truckListPublishedAt ?? ''}` : 'Open'}</dd>
+            </dl>
+          </DetailCard>
 
           <Gate policy="convoys:write">
             <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <Link to={`/convoys/${String(convoy.id)}/edit`}>Edit</Link>
+              <LinkButton to={`/convoys/${String(convoy.id)}/edit`} variant="secondary">
+                Edit
+              </LinkButton>
               {!published ? (
-                <button
+                <Button
                   type="button"
                   disabled={publish.isPending}
                   onClick={() => {
@@ -92,7 +98,7 @@ export function ConvoyDetailPage(): JSX.Element {
                   }}
                 >
                   Publish truck list
-                </button>
+                </Button>
               ) : null}
             </span>
           </Gate>

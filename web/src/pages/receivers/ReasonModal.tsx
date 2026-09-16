@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { Button } from '../../components/Button';
 import './ReasonModal.css';
 
 interface ReasonModalProps {
@@ -102,17 +103,18 @@ export function ReasonModal({
             ) : null}
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 onOpenChange(false);
               }}
             >
               Cancel
-            </button>
-            <button type="submit" disabled={submitting}>
+            </Button>
+            <Button type="submit" disabled={submitting}>
               {submitting ? 'Revealing…' : 'Reveal detail'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

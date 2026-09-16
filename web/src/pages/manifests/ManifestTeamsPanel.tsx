@@ -7,6 +7,7 @@ import { usePeople } from '../../api/people';
 import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
 import type { ManifestLeg } from '../../api/schemas/common';
 import type { ManifestDriverTeamReadModel } from '../../api/schemas/manifests';
+import { Button } from '../../components/Button';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { SelectField } from '../../components/form/fields';
 import { emptyTeamForm, teamFormSchema, teamFormToRequest } from './manifestModels';
@@ -127,9 +128,9 @@ function LegForm({
           error={errors.secondaryPersonId?.message}
           {...register('secondaryPersonId')}
         />
-        <button type="submit" disabled={setTeam.isPending}>
+        <Button type="submit" disabled={setTeam.isPending}>
           Save {label} team
-        </button>
+        </Button>
       </fieldset>
     </form>
   );

@@ -2,6 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { JSX } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
+import { FormCard } from '../../components/form/FormCard';
 import { TextField } from '../../components/form/fields';
 import { receiverFormSchema } from './receiverModels';
 import type { ReceiverFormValues } from './receiverModels';
@@ -43,21 +45,23 @@ export function ReceiverForm({
         </p>
       ) : null}
 
-      <TextField
-        label="Organisation"
-        error={errors.organisation?.message}
-        {...register('organisation')}
-      />
-      <TextField
-        label="Region"
-        hint="Region-level only — as precise as anything that crosses a border gets."
-        error={errors.region?.message}
-        {...register('region')}
-      />
+      <FormCard title="Receiver details">
+        <TextField
+          label="Organisation"
+          error={errors.organisation?.message}
+          {...register('organisation')}
+        />
+        <TextField
+          label="Region"
+          hint="Region-level only — as precise as anything that crosses a border gets."
+          error={errors.region?.message}
+          {...register('region')}
+        />
+      </FormCard>
 
-      <button type="submit" disabled={submitting}>
+      <Button type="submit" disabled={submitting}>
         {submitting ? 'Saving…' : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

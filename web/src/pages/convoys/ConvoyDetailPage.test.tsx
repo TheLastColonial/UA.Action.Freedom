@@ -34,6 +34,14 @@ test('shows the overview and Not found for an unknown id', async () => {
   await expect.element(missing.getByRole('heading', { name: 'Not found' })).toBeInTheDocument();
 });
 
+test('groups overview fields into a named card', async () => {
+  worker.use(...convoyApi([makeConvoy({ id: 7 })]).handlers);
+
+  const screen = renderWithProviders(null, { routes, route: '/convoys/7', roles: ['Loader'] });
+
+  await expect.element(screen.getByRole('region', { name: 'Convoy details' })).toBeInTheDocument();
+});
+
 test('publishing the truck list flips the badge and removes the button', async () => {
   worker.use(...convoyApi([makeConvoy({ id: 7, truckListPublished: false })]).handlers);
 

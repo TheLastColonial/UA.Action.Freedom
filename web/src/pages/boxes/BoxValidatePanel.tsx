@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { useValidateBox } from '../../api/boxes';
 import { usePeople } from '../../api/people';
 import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
+import { Button } from '../../components/Button';
 import { SelectField, TextField } from '../../components/form/fields';
 import { emptyValidateForm, validateFormSchema, validateFormToRequest } from './boxModels';
 import type { ValidateFormValues } from './boxModels';
@@ -97,9 +98,9 @@ export function BoxValidatePanel({ boxId }: BoxValidatePanelProps): JSX.Element 
           {...register('heightCm')}
         />
 
-        <button type="submit" disabled={validate.isPending}>
+        <Button type="submit" disabled={validate.isPending}>
           Validate box
-        </button>
+        </Button>
       </form>
     </div>
   );

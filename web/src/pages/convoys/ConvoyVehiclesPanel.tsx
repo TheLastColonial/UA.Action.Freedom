@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { useAssignVehicle, useConvoyVehicles, useUnassignVehicle } from '../../api/convoys';
 import { ApiDomainProblem } from '../../api/problem';
+import { Button } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { PageSkeleton } from '../../components/PageSkeleton';
@@ -39,15 +40,16 @@ export function ConvoyVehiclesPanel({ convoyId, disabled }: ConvoyVehiclesPanelP
     {
       header: '',
       cell: (v) => (
-        <button
+        <Button
           type="button"
+          variant="danger"
           disabled={disabled || unassign.isPending}
           onClick={() => {
             unassign.mutate(v.vin);
           }}
         >
           Remove
-        </button>
+        </Button>
       ),
     },
   ];
@@ -92,9 +94,9 @@ export function ConvoyVehiclesPanel({ convoyId, disabled }: ConvoyVehiclesPanelP
               }}
             />
           </label>
-          <button type="submit" disabled={assign.isPending}>
+          <Button type="submit" disabled={assign.isPending}>
             Assign vehicle
-          </button>
+          </Button>
         </form>
       ) : null}
     </div>

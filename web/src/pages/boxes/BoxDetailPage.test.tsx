@@ -32,6 +32,14 @@ test('renders the box and Not found for an unknown id', async () => {
   await expect.element(missing.getByRole('heading', { name: 'Not found' })).toBeInTheDocument();
 });
 
+test('groups fields into a named card', async () => {
+  worker.use(...boxApi([makeBox({ id: 4 })]).handlers);
+
+  const screen = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+
+  await expect.element(screen.getByRole('region', { name: 'Box details' })).toBeInTheDocument();
+});
+
 test('a Dispatcher can pack a box but sees no validate panel', async () => {
   worker.use(...boxApi([makeBox({ id: 4 })]).handlers, ...personApi([]).handlers);
 
