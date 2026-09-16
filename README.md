@@ -181,7 +181,7 @@ to force a run.
 ### API Endpoints
 
 Core resource endpoints:
-- `GET|POST /vehicles` — Vehicle inventory (natural key: VIN)
+- `GET|POST /vehicles` — Vehicle inventory (natural key: VIN), including optional cargo capacity (max weight, dimensions)
 - `GET|POST /people` — Volunteers & drivers
 - `GET|POST /convoys` — Convoy groups with routes
   - `PUT|GET /convoys/{id}/route` — Ordered stop list
@@ -191,7 +191,7 @@ Core resource endpoints:
   - `GET|PUT /receivers/{ref}/detail` — **GroundOfficer only**: delivery address + contact
 - `GET|POST /boxes` — Packing containers
   - `GET|POST|DELETE /boxes/{id}/items` — Item inventory
-  - `POST /boxes/{id}/validate` — Lock box weight
+  - `POST /boxes/{id}/validate` — Lock box weight and optional dimensions
   - `POST|GET|DELETE /boxes/{id}/qr-code` — Issue / read / revoke the box's QR label (`boxes:write` to issue and revoke, `boxes:read` to read)
   - `GET /boxes/{id}/qr-code/image` (`?format=svg\|png`) — The QR image alone (`boxes:read`)
   - `GET /boxes/{id}/label` — Printable SVG label: QR + box number, no receiver detail (`boxes:read`)

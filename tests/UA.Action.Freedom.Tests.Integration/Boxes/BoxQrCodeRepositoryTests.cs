@@ -50,7 +50,7 @@ public class BoxQrCodeRepositoryTests
     }
 
     private static BoxReadModel ANewBox() => new(
-        Id: 0, WeightKg: 0, ReceiverRef: null,
+        Id: 0, WeightKg: 0, WidthCm: null, DepthCm: null, HeightCm: null, ReceiverRef: null,
         House: "Unit 4", Street: "Cross Road", City: "Coventry", Country: "United Kingdom", Postcode: "CV1 2AB",
         ValidatedByPersonId: null, ValidatedAt: null);
 

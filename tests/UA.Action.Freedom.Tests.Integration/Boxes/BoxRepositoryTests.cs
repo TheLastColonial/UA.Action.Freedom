@@ -50,7 +50,7 @@ public class BoxRepositoryTests
     }
 
     private static BoxReadModel ANewBox() => new(
-        Id: 0, WeightKg: 0, ReceiverRef: null,
+        Id: 0, WeightKg: 0, WidthCm: null, DepthCm: null, HeightCm: null, ReceiverRef: null,
         House: "Unit 4", Street: "Cross Road", City: "Coventry", Country: "United Kingdom", Postcode: "CV1 2AB",
         ValidatedByPersonId: null, ValidatedAt: null);
 
@@ -123,13 +123,16 @@ public class BoxRepositoryTests
         {
             var validatedAt = new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc);
 
-            (await repository.ValidateAsync(id, loader, 24, validatedAt, cancellationToken)).Should().BeTrue();
+            (await repository.ValidateAsync(id, loader, 24, 40m, 30m, 20m, validatedAt, cancellationToken)).Should().BeTrue();
 
             // Conditional on ValidatedAt IS NULL, so the database settles the race.
-            (await repository.ValidateAsync(id, loader, 99, validatedAt, cancellationToken)).Should().BeFalse();
+            (await repository.ValidateAsync(id, loader, 99, 1m, 1m, 1m, validatedAt, cancellationToken)).Should().BeFalse();
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
             stored!.WeightKg.Should().Be(24);
+            stored.WidthCm.Should().Be(40m);
+            stored.DepthCm.Should().Be(30m);
+            stored.HeightCm.Should().Be(20m);
             stored.ValidatedByPersonId.Should().Be(loader);
             stored.Validated.Should().BeTrue();
         }
@@ -150,16 +153,23 @@ public class BoxRepositoryTests
 
         try
         {
-            await repository.ValidateAsync(id, loader, 24, DateTime.UtcNow, cancellationToken);
+            await repository.ValidateAsync(id, loader, 24, 40m, 30m, 20m, DateTime.UtcNow, cancellationToken);
 
             // Even asked directly, the UPDATE statement has no columns for these.
             await repository.UpdateAsync(
-                ANewBox() with { Id = id, City = "Dover", WeightKg = 999, ValidatedByPersonId = null, ValidatedAt = null },
+                ANewBox() with
+                {
+                    Id = id, City = "Dover", WeightKg = 999, WidthCm = 1m, DepthCm = 1m, HeightCm = 1m,
+                    ValidatedByPersonId = null, ValidatedAt = null,
+                },
                 cancellationToken);
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
             stored!.City.Should().Be("Dover");
             stored.WeightKg.Should().Be(24);
+            stored.WidthCm.Should().Be(40m);
+            stored.DepthCm.Should().Be(30m);
+            stored.HeightCm.Should().Be(20m);
             stored.ValidatedByPersonId.Should().Be(loader);
         }
         finally

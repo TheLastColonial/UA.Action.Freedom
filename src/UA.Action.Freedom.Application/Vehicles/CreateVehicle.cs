@@ -19,7 +19,11 @@ public sealed record CreateVehicleCommand(
     int? ConvoyId,
     string? PurchaserName,
     DateTime? PurchaseDate,
-    int WeightKg);
+    int WeightKg,
+    decimal? MaxCargoWeightKg,
+    decimal? CargoWidthCm,
+    decimal? CargoDepthCm,
+    decimal? CargoHeightCm);
 
 public enum CreateVehicleOutcome
 {
@@ -53,7 +57,11 @@ public sealed class CreateVehicleHandler(IVehicleRepository repository)
                 command.ConvoyId,
                 command.PurchaserName,
                 command.PurchaseDate,
-                command.WeightKg),
+                command.WeightKg,
+                command.MaxCargoWeightKg,
+                command.CargoWidthCm,
+                command.CargoDepthCm,
+                command.CargoHeightCm),
             cancellationToken);
 
         return CreateVehicleOutcome.Created;

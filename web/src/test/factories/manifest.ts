@@ -35,5 +35,13 @@ export function makeManifestTeam(
 export function makeManifestBox(
   overrides: Partial<ManifestBoxReadModel> = {},
 ): ManifestBoxReadModel {
-  return { boxId: 1, weightKg: 12, validated: true, ...overrides };
+  return {
+    boxId: 1,
+    weightKg: 12,
+    validated: true,
+    widthCm: null,
+    depthCm: null,
+    heightCm: null,
+    ...overrides,
+  };
 }

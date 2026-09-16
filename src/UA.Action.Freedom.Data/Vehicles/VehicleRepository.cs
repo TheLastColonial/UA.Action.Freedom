@@ -11,7 +11,7 @@ namespace UA.Action.Freedom.Data.Vehicles;
 public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : IVehicleRepository
 {
     private const string Columns =
-        "Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg";
+        "Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm";
 
     public async Task<VehicleReadModel?> GetByVinAsync(string vin, CancellationToken cancellationToken)
     {
@@ -54,9 +54,9 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
         await connection.ExecuteAsync(new CommandDefinition(
             """
             INSERT INTO dbo.Vehicle
-                (Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg)
+                (Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm)
             VALUES
-                (@Vin, @Plate, @Brand, @Model, @Colour, @Transmission, @Notes, @Mileage, @Servicing, @Year, @Fuel, @ConvoyId, @PurchaserName, @PurchaseDate, @WeightKg)
+                (@Vin, @Plate, @Brand, @Model, @Colour, @Transmission, @Notes, @Mileage, @Servicing, @Year, @Fuel, @ConvoyId, @PurchaserName, @PurchaseDate, @WeightKg, @MaxCargoWeightKg, @CargoWidthCm, @CargoDepthCm, @CargoHeightCm)
             """,
             vehicle,
             cancellationToken: cancellationToken));
@@ -83,6 +83,10 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
                 PurchaserName = @PurchaserName,
                 PurchaseDate = @PurchaseDate,
                 WeightKg = @WeightKg,
+                MaxCargoWeightKg = @MaxCargoWeightKg,
+                CargoWidthCm = @CargoWidthCm,
+                CargoDepthCm = @CargoDepthCm,
+                CargoHeightCm = @CargoHeightCm,
                 UpdatedAt = SYSUTCDATETIME()
             WHERE Vin = @Vin
             """,

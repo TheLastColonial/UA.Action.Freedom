@@ -13,7 +13,11 @@ internal static class VehicleTestData
         string vin = "WVWZZZ1JZXW000001",
         string plate = "AB12CDE",
         int? convoyId = null,
-        string? purchaserName = "operator") => new(
+        string? purchaserName = "operator",
+        decimal? maxCargoWeightKg = 800.50m,
+        decimal? cargoWidthCm = 150.25m,
+        decimal? cargoDepthCm = 300.00m,
+        decimal? cargoHeightCm = 180.75m) => new(
         Vin: vin,
         Plate: plate,
         Brand: "Volkswagen",
@@ -28,12 +32,20 @@ internal static class VehicleTestData
         ConvoyId: convoyId,
         PurchaserName: purchaserName,
         PurchaseDate: new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
-        WeightKg: 1_400);
+        WeightKg: 1_400,
+        MaxCargoWeightKg: maxCargoWeightKg,
+        CargoWidthCm: cargoWidthCm,
+        CargoDepthCm: cargoDepthCm,
+        CargoHeightCm: cargoHeightCm);
 
     internal static UpdateVehicleCommand AnUpdateCommand(
         string vin = "WVWZZZ1JZXW000001",
         string plate = "ZZ99ZZZ",
-        int weightKg = 1_500) => new(
+        int weightKg = 1_500,
+        decimal? maxCargoWeightKg = 800.50m,
+        decimal? cargoWidthCm = 150.25m,
+        decimal? cargoDepthCm = 300.00m,
+        decimal? cargoHeightCm = 180.75m) => new(
         Vin: vin,
         Plate: plate,
         Brand: "Volkswagen",
@@ -48,7 +60,11 @@ internal static class VehicleTestData
         ConvoyId: null,
         PurchaserName: "operator",
         PurchaseDate: new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
-        WeightKg: weightKg);
+        WeightKg: weightKg,
+        MaxCargoWeightKg: maxCargoWeightKg,
+        CargoWidthCm: cargoWidthCm,
+        CargoDepthCm: cargoDepthCm,
+        CargoHeightCm: cargoHeightCm);
 
     internal static VehicleReadModel AReadModel(string vin = "WVWZZZ1JZXW000001") => new(
         Vin: vin,
@@ -65,5 +81,9 @@ internal static class VehicleTestData
         ConvoyId: null,
         PurchaserName: "operator",
         PurchaseDate: new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
-        WeightKg: 1_400);
+        WeightKg: 1_400,
+        MaxCargoWeightKg: 800.50m,
+        CargoWidthCm: 150.25m,
+        CargoDepthCm: 300.00m,
+        CargoHeightCm: 180.75m);
 }

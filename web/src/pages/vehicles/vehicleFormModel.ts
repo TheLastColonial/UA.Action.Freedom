@@ -26,6 +26,10 @@ export interface VehicleFormValues {
   purchaserName: string;
   purchaseDate: string;
   weightKg: string;
+  maxCargoWeightKg: string;
+  cargoWidthCm: string;
+  cargoDepthCm: string;
+  cargoHeightCm: string;
 }
 
 export function emptyVehicleForm(): VehicleFormValues {
@@ -45,6 +49,10 @@ export function emptyVehicleForm(): VehicleFormValues {
     purchaserName: '',
     purchaseDate: '',
     weightKg: '',
+    maxCargoWeightKg: '',
+    cargoWidthCm: '',
+    cargoDepthCm: '',
+    cargoHeightCm: '',
   };
 }
 
@@ -65,6 +73,10 @@ export function vehicleToFormValues(vehicle: VehicleReadModel): VehicleFormValue
     purchaserName: vehicle.purchaserName ?? '',
     purchaseDate: vehicle.purchaseDate ? vehicle.purchaseDate.slice(0, 10) : '',
     weightKg: String(vehicle.weightKg),
+    maxCargoWeightKg: vehicle.maxCargoWeightKg === null ? '' : String(vehicle.maxCargoWeightKg),
+    cargoWidthCm: vehicle.cargoWidthCm === null ? '' : String(vehicle.cargoWidthCm),
+    cargoDepthCm: vehicle.cargoDepthCm === null ? '' : String(vehicle.cargoDepthCm),
+    cargoHeightCm: vehicle.cargoHeightCm === null ? '' : String(vehicle.cargoHeightCm),
   };
 }
 
@@ -74,6 +86,11 @@ function trimmed(value: string): string | undefined {
 }
 
 function wholeNumber(value: string): number | undefined {
+  const t = value.trim();
+  return t.length > 0 ? Number(t) : undefined;
+}
+
+function decimalNumber(value: string): number | undefined {
   const t = value.trim();
   return t.length > 0 ? Number(t) : undefined;
 }
@@ -107,6 +124,15 @@ export function vehicleFormToRequest(values: VehicleFormValues): CreateVehicleRe
   const convoyId = wholeNumber(values.convoyId);
   if (convoyId !== undefined) request.convoyId = convoyId;
 
+  const maxCargoWeightKg = decimalNumber(values.maxCargoWeightKg);
+  if (maxCargoWeightKg !== undefined) request.maxCargoWeightKg = maxCargoWeightKg;
+  const cargoWidthCm = decimalNumber(values.cargoWidthCm);
+  if (cargoWidthCm !== undefined) request.cargoWidthCm = cargoWidthCm;
+  const cargoDepthCm = decimalNumber(values.cargoDepthCm);
+  if (cargoDepthCm !== undefined) request.cargoDepthCm = cargoDepthCm;
+  const cargoHeightCm = decimalNumber(values.cargoHeightCm);
+  if (cargoHeightCm !== undefined) request.cargoHeightCm = cargoHeightCm;
+
   return request;
 }
 
@@ -126,6 +152,15 @@ const optionalNonNegativeInteger = (message: string) =>
     if (raw.trim().length === 0) return true;
     const n = Number(raw.trim());
     return Number.isInteger(n) && n >= 0;
+  }, message);
+
+// Allows up to 2 decimal places (cargo capacity is measured to the nearest cm/hundredth of a
+// kg), unlike the whole-number fields above.
+const optionalNonNegativeDecimal = (message: string) =>
+  z.string().refine((raw) => {
+    const t = raw.trim();
+    if (t.length === 0) return true;
+    return /^\d+(\.\d{1,2})?$/.test(t);
   }, message);
 
 // Validation only — the resolver output type equals its input type (no transform), so
@@ -150,4 +185,8 @@ export const vehicleFormSchema = z.object({
   purchaserName: z.string().max(200, 'Purchaser must be 200 characters or fewer'),
   purchaseDate: z.string(),
   weightKg: integerInRange(0, 1_000_000, 'Weight must be a whole number of 0 or more'),
+  maxCargoWeightKg: optionalNonNegativeDecimal('Maximum weight must be a number of 0 or more, with up to 2 decimal places'),
+  cargoWidthCm: optionalNonNegativeDecimal('Width must be a number of 0 or more, with up to 2 decimal places'),
+  cargoDepthCm: optionalNonNegativeDecimal('Depth must be a number of 0 or more, with up to 2 decimal places'),
+  cargoHeightCm: optionalNonNegativeDecimal('Height must be a number of 0 or more, with up to 2 decimal places'),
 });

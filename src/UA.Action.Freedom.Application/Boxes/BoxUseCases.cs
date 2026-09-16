@@ -17,6 +17,9 @@ public sealed class CreateBoxHandler(IBoxRepository repository)
             new BoxReadModel(
                 Id: 0,
                 WeightKg: 0,
+                WidthCm: null,
+                DepthCm: null,
+                HeightCm: null,
                 command.ReceiverRef,
                 command.House,
                 command.Street,
@@ -63,6 +66,9 @@ public sealed class UpdateBoxHandler(IBoxRepository repository)
             new BoxReadModel(
                 command.Id,
                 box.WeightKg,
+                box.WidthCm,
+                box.DepthCm,
+                box.HeightCm,
                 command.ReceiverRef,
                 command.House,
                 command.Street,
@@ -133,7 +139,9 @@ public sealed class ListBoxesHandler(IBoxRepository repository)
 /// record of who did it and when is the artefact that makes that vouching mean something
 /// (docs/domain/key-concepts.md § Box). It happens once.
 /// </remarks>
-public sealed record ValidateBoxCommand(int Id, Guid ValidatedByPersonId, int WeightKg);
+public sealed record ValidateBoxCommand(
+    int Id, Guid ValidatedByPersonId, int WeightKg,
+    decimal? WidthCm = null, decimal? DepthCm = null, decimal? HeightCm = null);
 
 public enum ValidateBoxOutcome
 {
@@ -158,7 +166,8 @@ public sealed class ValidateBoxHandler(IBoxRepository repository, IPersonReposit
         // Conditional on the box not already being validated, so two Loaders checking the same
         // box at once cannot both record themselves as the one who did it.
         if (await repository.ValidateAsync(
-                command.Id, command.ValidatedByPersonId, command.WeightKg, DateTime.UtcNow, cancellationToken))
+                command.Id, command.ValidatedByPersonId, command.WeightKg,
+                command.WidthCm, command.DepthCm, command.HeightCm, DateTime.UtcNow, cancellationToken))
         {
             return ValidateBoxOutcome.Validated;
         }

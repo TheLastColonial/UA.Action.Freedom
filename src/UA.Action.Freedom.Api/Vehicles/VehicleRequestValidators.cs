@@ -21,6 +21,10 @@ public sealed class CreateVehicleRequestValidator : AbstractValidator<CreateVehi
         RuleFor(r => r.Year).InclusiveBetween(1950, 2100);
         RuleFor(r => r.Mileage).GreaterThanOrEqualTo(0).When(r => r.Mileage is not null);
         RuleFor(r => r.WeightKg).GreaterThanOrEqualTo(0);
+        RuleFor(r => r.MaxCargoWeightKg).GreaterThanOrEqualTo(0).When(r => r.MaxCargoWeightKg is not null);
+        RuleFor(r => r.CargoWidthCm).GreaterThanOrEqualTo(0).When(r => r.CargoWidthCm is not null);
+        RuleFor(r => r.CargoDepthCm).GreaterThanOrEqualTo(0).When(r => r.CargoDepthCm is not null);
+        RuleFor(r => r.CargoHeightCm).GreaterThanOrEqualTo(0).When(r => r.CargoHeightCm is not null);
         RuleFor(r => r.Transmission).IsInEnum();
         RuleFor(r => r.Fuel).IsInEnum();
     }
@@ -39,6 +43,10 @@ public sealed class UpdateVehicleRequestValidator : AbstractValidator<UpdateVehi
         RuleFor(r => r.Year).InclusiveBetween(1950, 2100);
         RuleFor(r => r.Mileage).GreaterThanOrEqualTo(0).When(r => r.Mileage is not null);
         RuleFor(r => r.WeightKg).GreaterThanOrEqualTo(0);
+        RuleFor(r => r.MaxCargoWeightKg).GreaterThanOrEqualTo(0).When(r => r.MaxCargoWeightKg is not null);
+        RuleFor(r => r.CargoWidthCm).GreaterThanOrEqualTo(0).When(r => r.CargoWidthCm is not null);
+        RuleFor(r => r.CargoDepthCm).GreaterThanOrEqualTo(0).When(r => r.CargoDepthCm is not null);
+        RuleFor(r => r.CargoHeightCm).GreaterThanOrEqualTo(0).When(r => r.CargoHeightCm is not null);
         RuleFor(r => r.Transmission).IsInEnum();
         RuleFor(r => r.Fuel).IsInEnum();
     }

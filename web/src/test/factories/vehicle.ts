@@ -20,6 +20,10 @@ export function makeVehicle(overrides: Partial<VehicleReadModel> = {}): VehicleR
     purchaserName: null,
     purchaseDate: null,
     weightKg: 2000,
+    maxCargoWeightKg: null,
+    cargoWidthCm: null,
+    cargoDepthCm: null,
+    cargoHeightCm: null,
     ...overrides,
   };
 }

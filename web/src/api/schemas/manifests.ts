@@ -26,9 +26,15 @@ export const manifestBoxReadModelSchema = z.object({
   boxId: z.number().int(),
   weightKg: z.number().int(),
   validated: z.boolean(),
+  widthCm: z.number().nullable(),
+  depthCm: z.number().nullable(),
+  heightCm: z.number().nullable(),
 });
 export type ManifestBoxReadModel = z.infer<typeof manifestBoxReadModelSchema>;
 
+// MaxCargoWeightKg, CargoOverweight and OversizedBoxIds are advisory only — this endpoint never
+// rejects anything, they just surface whether the cargo would exceed the vehicle's stated
+// capacity (docs/domain/key-concepts.md § Manifest weight).
 export const manifestWeightReadModelSchema = z.object({
   vehicleKg: z.number().int(),
   cargoKg: z.number().int(),
@@ -36,6 +42,9 @@ export const manifestWeightReadModelSchema = z.object({
   fuelKg: z.number().int(),
   totalKg: z.number().int(),
   unvalidatedBoxCount: z.number().int(),
+  maxCargoWeightKg: z.number().nullable(),
+  cargoOverweight: z.boolean(),
+  oversizedBoxIds: z.array(z.number().int()),
 });
 export type ManifestWeightReadModel = z.infer<typeof manifestWeightReadModelSchema>;
 

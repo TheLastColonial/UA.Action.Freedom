@@ -19,7 +19,8 @@ public class VehicleEndpointTests
     private static VehicleReadModel AStoredVehicle(string vin = Vin) => new(
         vin, "AB12CDE", "Volkswagen", "Transporter", "White",
         TransmissionType.Manual, null, 92_000, false, 2016, FuelType.Diesel,
-        null, "operator", new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), 1_400);
+        null, "operator", new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), 1_400,
+        900.50m, 150.25m, 300.00m, 180.75m);
 
     private static object ACreateBody(string vin = Vin) => new
     {
@@ -89,6 +90,63 @@ public class VehicleEndpointTests
         var response = await client.PostAsJsonAsync("/vehicles", ACreateBody(), TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task A_purchaser_creates_a_vehicle_with_cargo_capacity()
+    {
+        var repository = new InMemoryVehicleRepository();
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Purchaser");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/vehicles",
+            new
+            {
+                vin = Vin,
+                plate = "AB12CDE",
+                year = 2016,
+                fuel = "Diesel",
+                transmission = "Manual",
+                weightKg = 1_400,
+                maxCargoWeightKg = 900.25m,
+                cargoWidthCm = 100m,
+                cargoDepthCm = 200m,
+                cargoHeightCm = 150m,
+            },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var stored = await repository.GetByVinAsync(Vin, CancellationToken.None);
+        stored!.MaxCargoWeightKg.Should().Be(900.25m);
+        stored.CargoWidthCm.Should().Be(100m);
+        stored.CargoDepthCm.Should().Be(200m);
+        stored.CargoHeightCm.Should().Be(150m);
+    }
+
+    [Fact]
+    public async Task Creating_a_vehicle_with_a_negative_cargo_weight_is_a_validation_problem()
+    {
+        var repository = new InMemoryVehicleRepository();
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Purchaser");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/vehicles",
+            new
+            {
+                vin = Vin,
+                plate = "AB12CDE",
+                year = 2016,
+                fuel = "Diesel",
+                transmission = "Manual",
+                weightKg = 1_400,
+                maxCargoWeightKg = -1,
+            },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        repository.Count.Should().Be(0);
     }
 
     [Fact]

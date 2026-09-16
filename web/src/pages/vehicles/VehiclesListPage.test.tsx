@@ -31,6 +31,16 @@ test('renders a row per vehicle from the list endpoint', async () => {
   await expect.element(screen.getByRole('link', { name: 'VIN-B' })).toBeInTheDocument();
 });
 
+test('links each row into the servicing stub page', async () => {
+  worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-A', servicing: true })]).handlers);
+
+  const screen = renderWithProviders(null, { routes, route: '/vehicles', roles: ['Purchaser'] });
+
+  await expect
+    .element(screen.getByRole('link', { name: 'Yes' }))
+    .toHaveAttribute('href', '/vehicles/VIN-A/servicing');
+});
+
 test('shows an empty message when there are no vehicles', async () => {
   worker.use(...vehicleApi([]).handlers);
 

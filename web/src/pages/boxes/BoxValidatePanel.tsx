@@ -72,6 +72,30 @@ export function BoxValidatePanel({ boxId }: BoxValidatePanelProps): JSX.Element 
           error={errors.weightKg?.message}
           {...register('weightKg')}
         />
+        <TextField
+          label="Width (cm)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.widthCm?.message}
+          {...register('widthCm')}
+        />
+        <TextField
+          label="Depth (cm)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.depthCm?.message}
+          {...register('depthCm')}
+        />
+        <TextField
+          label="Height (cm)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.heightCm?.message}
+          {...register('heightCm')}
+        />
 
         <button type="submit" disabled={validate.isPending}>
           Validate box

@@ -71,24 +71,54 @@ describe('addItemFormSchema', () => {
 
 describe('validate a box', () => {
   it('coerces the weight to a number', () => {
-    expect(validateFormToRequest({ validatedByPersonId: 'p1', weightKg: '12' })).toEqual({
+    expect(
+      validateFormToRequest({ validatedByPersonId: 'p1', weightKg: '12', widthCm: '', depthCm: '', heightCm: '' }),
+    ).toEqual({
       validatedByPersonId: 'p1',
       weightKg: 12,
     });
   });
 
+  it('coerces the dimensions when given, and omits them when blank', () => {
+    const request = validateFormToRequest({
+      validatedByPersonId: 'p1',
+      weightKg: '12',
+      widthCm: '40',
+      depthCm: '30.5',
+      heightCm: '',
+    });
+    expect(request.widthCm).toBe(40);
+    expect(request.depthCm).toBe(30.5);
+    expect('heightCm' in request).toBe(false);
+  });
+
+  const blankDimensions = { widthCm: '', depthCm: '', heightCm: '' };
+
   it('needs a volunteer and a weight in 1..500', () => {
-    expect(validateFormSchema.safeParse({ validatedByPersonId: '', weightKg: '12' }).success).toBe(
-      false,
-    );
-    expect(validateFormSchema.safeParse({ validatedByPersonId: 'p1', weightKg: '0' }).success).toBe(
-      false,
-    );
     expect(
-      validateFormSchema.safeParse({ validatedByPersonId: 'p1', weightKg: '501' }).success,
+      validateFormSchema.safeParse({ validatedByPersonId: '', weightKg: '12', ...blankDimensions })
+        .success,
     ).toBe(false);
     expect(
-      validateFormSchema.safeParse({ validatedByPersonId: 'p1', weightKg: '250' }).success,
+      validateFormSchema.safeParse({ validatedByPersonId: 'p1', weightKg: '0', ...blankDimensions })
+        .success,
+    ).toBe(false);
+    expect(
+      validateFormSchema.safeParse({ validatedByPersonId: 'p1', weightKg: '501', ...blankDimensions })
+        .success,
+    ).toBe(false);
+    expect(
+      validateFormSchema.safeParse({ validatedByPersonId: 'p1', weightKg: '250', ...blankDimensions })
+        .success,
     ).toBe(true);
+  });
+
+  it('leaves dimensions optional but bounded to 1..1000 with up to 2 decimal places', () => {
+    const base = { validatedByPersonId: 'p1', weightKg: '250', ...blankDimensions };
+    expect(validateFormSchema.safeParse({ ...base, widthCm: '' }).success).toBe(true);
+    expect(validateFormSchema.safeParse({ ...base, widthCm: '40.25' }).success).toBe(true);
+    expect(validateFormSchema.safeParse({ ...base, widthCm: '40.256' }).success).toBe(false);
+    expect(validateFormSchema.safeParse({ ...base, widthCm: '0' }).success).toBe(false);
+    expect(validateFormSchema.safeParse({ ...base, widthCm: '1001' }).success).toBe(false);
   });
 });

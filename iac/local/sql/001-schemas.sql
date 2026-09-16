@@ -241,6 +241,15 @@ BEGIN
         PurchaserName nvarchar(200)  NULL,
         PurchaseDate  datetime2(0)   NULL,
         WeightKg      int            NOT NULL CONSTRAINT DF_Vehicle_WeightKg DEFAULT 0,
+
+        -- Cargo capacity: optional, and nothing back-fills it. Decimal, not int, because
+        -- these are measured to the nearest centimetre/hundredth of a kilogram, unlike the
+        -- whole-number WeightKg/Mileage columns above.
+        MaxCargoWeightKg decimal(10,2) NULL,
+        CargoWidthCm     decimal(10,2) NULL,
+        CargoDepthCm     decimal(10,2) NULL,
+        CargoHeightCm    decimal(10,2) NULL,
+
         CreatedAt     datetime2(0)   NOT NULL CONSTRAINT DF_Vehicle_CreatedAt DEFAULT SYSUTCDATETIME(),
         UpdatedAt     datetime2(0)   NOT NULL CONSTRAINT DF_Vehicle_UpdatedAt DEFAULT SYSUTCDATETIME()
     );
@@ -392,6 +401,13 @@ BEGIN
     CREATE TABLE dbo.Box (
         Id                  int              NOT NULL IDENTITY(1,1) CONSTRAINT PK_Box PRIMARY KEY,
         WeightKg            int              NOT NULL CONSTRAINT DF_Box_WeightKg DEFAULT 0,
+
+        -- Dimensions: optional, set alongside WeightKg at validation (a Loader is physically
+        -- looking at the box then). Decimal, not int, to the nearest hundredth of a centimetre.
+        WidthCm             decimal(10,2)    NULL,
+        DepthCm             decimal(10,2)    NULL,
+        HeightCm            decimal(10,2)    NULL,
+
         ReceiverRef         uniqueidentifier NULL,
         House               nvarchar(100)    NULL,
         Street              nvarchar(200)    NULL,

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import { useVehicles } from '../../api/vehicles';
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
+import { LinkButton } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
@@ -21,7 +22,14 @@ const columns: readonly Column<VehicleReadModel>[] = [
   { header: 'Year', cell: (v) => v.year },
   { header: 'Fuel', cell: (v) => v.fuel },
   { header: 'Weight (kg)', cell: (v) => v.weightKg },
-  { header: 'Servicing', cell: (v) => (v.servicing ? 'Yes' : 'No') },
+  {
+    header: 'Servicing',
+    cell: (v) => (
+      <Link to={`/vehicles/${encodeURIComponent(v.vin)}/servicing`}>
+        {v.servicing ? 'Yes' : 'No'}
+      </Link>
+    ),
+  },
 ];
 
 export function VehiclesListPage(): JSX.Element {
@@ -41,7 +49,7 @@ export function VehiclesListPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>Vehicles</h1>
         <Gate policy="vehicles:write">
-          <Link to="/vehicles/new">New vehicle</Link>
+          <LinkButton to="/vehicles/new">New vehicle</LinkButton>
         </Gate>
       </header>
 

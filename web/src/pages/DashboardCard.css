@@ -43,13 +43,4 @@
 .dashboard-card__action {
   position: relative;
   z-index: 1;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--color-accent);
-  text-decoration: none;
-}
-
-.dashboard-card__action:hover,
-.dashboard-card__action:focus-visible {
-  text-decoration: underline;
 }

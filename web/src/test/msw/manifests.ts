@@ -30,9 +30,17 @@ const EDGES: readonly EdgeRule[] = [
   { verb: 'return', from: ['Delivered'], to: 'Returned' },
 ];
 
+export interface VehicleCargoCapacity {
+  maxCargoWeightKg?: number | null;
+  cargoWidthCm?: number | null;
+  cargoDepthCm?: number | null;
+  cargoHeightCm?: number | null;
+}
+
 export interface ManifestApiOptions {
   publishedConvoyIds?: readonly number[];
   knownDriverIds?: readonly string[];
+  vehicleCargoCapacity?: VehicleCargoCapacity;
 }
 
 export interface ManifestApi {
@@ -40,6 +48,23 @@ export interface ManifestApi {
   teams: Map<string, ManifestDriverTeamReadModel[]>;
   boxes: Map<string, ManifestBoxReadModel[]>;
   handlers: RequestHandler[];
+}
+
+// Mirrors GetManifestWeightHandler.FitsCargoSpace: fits (i.e. not flagged) whenever either side
+// has no recorded dimensions, and otherwise compares both sets sorted largest-to-smallest so a
+// box can be flagged as fitting in any rotation.
+function fitsCargoSpace(box: ManifestBoxReadModel, capacity: VehicleCargoCapacity): boolean {
+  const boxDims = [box.widthCm, box.depthCm, box.heightCm];
+  if (boxDims.some((d) => d === null)) {
+    return true;
+  }
+  const cargoDims = [capacity.cargoWidthCm ?? null, capacity.cargoDepthCm ?? null, capacity.cargoHeightCm ?? null];
+  if (cargoDims.some((d) => d === null)) {
+    return true;
+  }
+  const bSorted = [...(boxDims as number[])].sort((a, b) => b - a);
+  const cSorted = [...(cargoDims as number[])].sort((a, b) => b - a);
+  return bSorted.every((dim, i) => dim <= (cSorted[i] ?? Number.POSITIVE_INFINITY));
 }
 
 const FREEZE_MESSAGE =
@@ -176,7 +201,7 @@ export function manifestApi(
       const boxId = Number(params['boxId']);
       const list = boxes.get(id) ?? [];
       if (!list.some((b) => b.boxId === boxId)) {
-        list.push({ boxId, weightKg: 15, validated: true });
+        list.push({ boxId, weightKg: 15, validated: true, widthCm: null, depthCm: null, heightCm: null });
       }
       boxes.set(id, list);
       return new HttpResponse(null, { status: 204 });
@@ -209,6 +234,12 @@ export function manifestApi(
       const list = boxes.get(id) ?? [];
       const cargoKg = list.reduce((total, b) => total + b.weightKg, 0);
       const unvalidatedBoxCount = list.filter((b) => !b.validated).length;
+
+      const capacity = options.vehicleCargoCapacity ?? {};
+      const maxCargoWeightKg = capacity.maxCargoWeightKg ?? null;
+      const cargoOverweight = maxCargoWeightKg !== null && cargoKg > maxCargoWeightKg;
+      const oversizedBoxIds = list.filter((box) => !fitsCargoSpace(box, capacity)).map((box) => box.boxId);
+
       return HttpResponse.json({
         vehicleKg: 2000,
         cargoKg,
@@ -216,6 +247,9 @@ export function manifestApi(
         fuelKg: 45,
         totalKg: 2000 + cargoKg + 200 + 45,
         unvalidatedBoxCount,
+        maxCargoWeightKg,
+        cargoOverweight,
+        oversizedBoxIds,
       });
     }),
 

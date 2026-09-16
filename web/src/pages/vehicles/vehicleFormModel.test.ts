@@ -26,6 +26,10 @@ const filledForm = {
   purchaserName: 'A. Buyer',
   purchaseDate: '2026-01-15',
   weightKg: '1800',
+  maxCargoWeightKg: '900.50',
+  cargoWidthCm: '150.25',
+  cargoDepthCm: '300',
+  cargoHeightCm: '180.75',
 };
 
 describe('vehicleFormToRequest', () => {
@@ -53,6 +57,30 @@ describe('vehicleFormToRequest', () => {
 
     expect(request.transmission).toBe('Manual');
     expect(request.fuel).toBe('Diesel');
+  });
+
+  it('coerces the cargo capacity fields, decimal places included', () => {
+    const request = vehicleFormToRequest(filledForm);
+
+    expect(request.maxCargoWeightKg).toBe(900.5);
+    expect(request.cargoWidthCm).toBe(150.25);
+    expect(request.cargoDepthCm).toBe(300);
+    expect(request.cargoHeightCm).toBe(180.75);
+  });
+
+  it('omits cargo capacity fields left blank', () => {
+    const request = vehicleFormToRequest({
+      ...filledForm,
+      maxCargoWeightKg: '',
+      cargoWidthCm: '',
+      cargoDepthCm: '',
+      cargoHeightCm: '',
+    });
+
+    expect('maxCargoWeightKg' in request).toBe(false);
+    expect('cargoWidthCm' in request).toBe(false);
+    expect('cargoDepthCm' in request).toBe(false);
+    expect('cargoHeightCm' in request).toBe(false);
   });
 });
 
@@ -83,6 +111,10 @@ describe('vehicleToFormValues', () => {
       purchaserName: null,
       purchaseDate: '2025-11-02T00:00:00Z',
       weightKg: 1500,
+      maxCargoWeightKg: null,
+      cargoWidthCm: null,
+      cargoDepthCm: null,
+      cargoHeightCm: null,
     };
 
     const values = vehicleToFormValues(vehicle);
@@ -92,6 +124,8 @@ describe('vehicleToFormValues', () => {
     expect(values.convoyId).toBe('');
     expect(values.purchaseDate).toBe('2025-11-02');
     expect(values.year).toBe('2020');
+    expect(values.maxCargoWeightKg).toBe('');
+    expect(values.cargoWidthCm).toBe('');
   });
 });
 
@@ -118,6 +152,32 @@ describe('vehicleFormSchema', () => {
 
   it('rejects a negative weight', () => {
     const result = vehicleFormSchema.safeParse({ ...filledForm, weightKg: '-5' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts blank cargo capacity fields — they are optional', () => {
+    const result = vehicleFormSchema.safeParse({
+      ...filledForm,
+      maxCargoWeightKg: '',
+      cargoWidthCm: '',
+      cargoDepthCm: '',
+      cargoHeightCm: '',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts cargo capacity values with up to 2 decimal places', () => {
+    const result = vehicleFormSchema.safeParse({ ...filledForm, maxCargoWeightKg: '900.5' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a cargo capacity value with more than 2 decimal places', () => {
+    const result = vehicleFormSchema.safeParse({ ...filledForm, cargoWidthCm: '150.256' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a negative cargo capacity value', () => {
+    const result = vehicleFormSchema.safeParse({ ...filledForm, cargoHeightCm: '-10' });
     expect(result.success).toBe(false);
   });
 });

@@ -111,3 +111,55 @@ test('weight panel shows the border-check total and a provisional warning', asyn
     .element(screen.getByText('1 box(es) are not yet validated — this total is provisional.'))
     .toBeInTheDocument();
 });
+
+test('weight panel warns when cargo exceeds the vehicle\'s stated capacity, without blocking anything', async () => {
+  const api = manifestApi([makeManifest({ id: 'W2' })], {
+    vehicleCargoCapacity: { maxCargoWeightKg: 15 },
+  });
+  api.boxes.set('W2', [makeManifestBox({ boxId: 1, weightKg: 20, validated: true })]);
+  worker.use(...api.handlers);
+
+  const screen = renderWithProviders(<ManifestWeightPanel manifestId="W2" />, {
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByText("Cargo is over the vehicle's stated capacity of 15 kg. This is advisory only — nothing is blocked."))
+    .toBeInTheDocument();
+});
+
+test('weight panel warns about an oversized box without blocking anything', async () => {
+  const api = manifestApi([makeManifest({ id: 'W3' })], {
+    vehicleCargoCapacity: { cargoWidthCm: 100, cargoDepthCm: 100, cargoHeightCm: 30 },
+  });
+  api.boxes.set('W3', [
+    makeManifestBox({ boxId: 1, weightKg: 20, validated: true, widthCm: 200, depthCm: 50, heightCm: 50 }),
+  ]);
+  worker.use(...api.handlers);
+
+  const screen = renderWithProviders(<ManifestWeightPanel manifestId="W3" />, {
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(
+      screen.getByText(
+        "Box(es) #1 may not fit the vehicle's cargo space. This is advisory only — nothing is blocked.",
+      ),
+    )
+    .toBeInTheDocument();
+});
+
+test('weight panel shows no capacity warning when nobody has measured anything', async () => {
+  const api = manifestApi([makeManifest({ id: 'W4' })]);
+  api.boxes.set('W4', [makeManifestBox({ boxId: 1, weightKg: 20, validated: true })]);
+  worker.use(...api.handlers);
+
+  const screen = renderWithProviders(<ManifestWeightPanel manifestId="W4" />, {
+    roles: ['Loader'],
+  });
+
+  await expect.element(screen.getByText('2265 kg')).toBeInTheDocument();
+  await expect.element(screen.getByText(/stated capacity/)).not.toBeInTheDocument();
+  await expect.element(screen.getByText(/cargo space/)).not.toBeInTheDocument();
+});

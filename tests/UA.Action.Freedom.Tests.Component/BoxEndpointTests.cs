@@ -25,6 +25,9 @@ public class BoxEndpointTests
     private static BoxReadModel ABox(bool validated = false) => new(
         BoxId,
         WeightKg: validated ? 24 : 0,
+        WidthCm: validated ? 40 : null,
+        DepthCm: validated ? 30 : null,
+        HeightCm: validated ? 20 : null,
         ReceiverRef: null,
         House: "Unit 4",
         Street: "Cross Road",
@@ -143,6 +146,25 @@ public class BoxEndpointTests
         box.GetProperty("validated").GetBoolean().Should().BeTrue();
         box.GetProperty("weightKg").GetInt32().Should().Be(24);
         box.GetProperty("validatedByPersonId").GetGuid().Should().Be(Loader);
+    }
+
+    [Fact]
+    public async Task A_loader_validates_a_box_and_records_its_dimensions()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/validate",
+            new { validatedByPersonId = Loader, weightKg = 24, widthCm = 40m, depthCm = 30m, heightCm = 20m },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var box = await client.GetFromJsonAsync<JsonElement>($"/boxes/{BoxId}", TestContext.Current.CancellationToken);
+        box.GetProperty("widthCm").GetDecimal().Should().Be(40m);
+        box.GetProperty("depthCm").GetDecimal().Should().Be(30m);
+        box.GetProperty("heightCm").GetDecimal().Should().Be(20m);
     }
 
     [Fact]

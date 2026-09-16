@@ -55,6 +55,9 @@ export function boxApi(
       db.set(mintedBox, {
         id: mintedBox,
         weightKg: 0,
+        widthCm: null,
+        depthCm: null,
+        heightCm: null,
         receiverRef: body.receiverRef ?? null,
         house: body.house ?? null,
         street: body.street ?? null,
@@ -169,6 +172,9 @@ export function boxApi(
         validatedByPersonId: body.validatedByPersonId,
         validatedAt: '2026-04-01T00:00:00',
         weightKg: body.weightKg,
+        widthCm: body.widthCm ?? null,
+        depthCm: body.depthCm ?? null,
+        heightCm: body.heightCm ?? null,
       });
       return new HttpResponse(null, { status: 204 });
     }),

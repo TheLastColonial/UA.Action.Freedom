@@ -6,7 +6,8 @@ import type { FieldPath } from 'react-hook-form';
 
 import { fuelTypeSchema, transmissionSchema } from '../../api/schemas/common';
 import { problemFieldToFormPath } from '../../api/problem';
-import { CheckboxField, SelectField, TextField } from '../../components/form/fields';
+import { FormCard } from '../../components/form/FormCard';
+import { SelectField, TextField } from '../../components/form/fields';
 import { vehicleFormSchema } from './vehicleFormModel';
 import type { VehicleFormValues } from './vehicleFormModel';
 
@@ -28,6 +29,10 @@ const FORM_FIELDS = new Set<string>([
   'purchaserName',
   'purchaseDate',
   'weightKg',
+  'maxCargoWeightKg',
+  'cargoWidthCm',
+  'cargoDepthCm',
+  'cargoHeightCm',
 ]);
 
 interface VehicleFormProps {
@@ -87,74 +92,107 @@ export function VehicleForm({
         </p>
       ) : null}
 
-      {mode === 'create' ? (
-        <TextField label="VIN" error={errors.vin?.message} {...register('vin')} />
-      ) : (
-        <TextField label="VIN" value={initialValues.vin} readOnly disabled />
-      )}
+      <FormCard title="Vehicle details">
+        {mode === 'create' ? (
+          <TextField label="VIN" error={errors.vin?.message} {...register('vin')} />
+        ) : (
+          <TextField label="VIN" value={initialValues.vin} readOnly disabled />
+        )}
 
-      <TextField label="Number plate" error={errors.plate?.message} {...register('plate')} />
-      <TextField label="Make" error={errors.brand?.message} {...register('brand')} />
-      <TextField label="Model" error={errors.model?.message} {...register('model')} />
-      <TextField label="Colour" error={errors.colour?.message} {...register('colour')} />
+        <TextField label="Number plate" error={errors.plate?.message} {...register('plate')} />
+        <TextField label="Make" error={errors.brand?.message} {...register('brand')} />
+        <TextField label="Model" error={errors.model?.message} {...register('model')} />
+        <TextField label="Colour" error={errors.colour?.message} {...register('colour')} />
+        <TextField
+          label="Year"
+          type="number"
+          inputMode="numeric"
+          error={errors.year?.message}
+          {...register('year')}
+        />
+      </FormCard>
 
-      <SelectField
-        label="Transmission"
-        options={toOptions(transmissionSchema.options)}
-        error={errors.transmission?.message}
-        {...register('transmission')}
-      />
-      <SelectField
-        label="Fuel"
-        options={toOptions(fuelTypeSchema.options)}
-        error={errors.fuel?.message}
-        {...register('fuel')}
-      />
+      <FormCard title="Engine details">
+        <SelectField
+          label="Transmission"
+          options={toOptions(transmissionSchema.options)}
+          error={errors.transmission?.message}
+          {...register('transmission')}
+        />
+        <SelectField
+          label="Fuel"
+          options={toOptions(fuelTypeSchema.options)}
+          error={errors.fuel?.message}
+          {...register('fuel')}
+        />
+        <TextField
+          label="Kerb weight (kg)"
+          type="number"
+          inputMode="numeric"
+          error={errors.weightKg?.message}
+          {...register('weightKg')}
+        />
+        <TextField
+          label="Mileage"
+          type="number"
+          inputMode="numeric"
+          error={errors.mileage?.message}
+          {...register('mileage')}
+        />
+      </FormCard>
 
-      <TextField
-        label="Year"
-        type="number"
-        inputMode="numeric"
-        error={errors.year?.message}
-        {...register('year')}
-      />
-      <TextField
-        label="Kerb weight (kg)"
-        type="number"
-        inputMode="numeric"
-        error={errors.weightKg?.message}
-        {...register('weightKg')}
-      />
-      <TextField
-        label="Mileage"
-        type="number"
-        inputMode="numeric"
-        error={errors.mileage?.message}
-        {...register('mileage')}
-      />
-      <TextField
-        label="Convoy id"
-        type="number"
-        inputMode="numeric"
-        hint="Leave blank until the vehicle is assigned to a convoy."
-        error={errors.convoyId?.message}
-        {...register('convoyId')}
-      />
+      <FormCard title="Cargo capacity">
+        <TextField
+          label="Maximum weight (kg)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.maxCargoWeightKg?.message}
+          {...register('maxCargoWeightKg')}
+        />
+        <TextField
+          label="Width (cm)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.cargoWidthCm?.message}
+          {...register('cargoWidthCm')}
+        />
+        <TextField
+          label="Depth (cm)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.cargoDepthCm?.message}
+          {...register('cargoDepthCm')}
+        />
+        <TextField
+          label="Height (cm)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.cargoHeightCm?.message}
+          {...register('cargoHeightCm')}
+        />
+      </FormCard>
 
-      <CheckboxField label="In for servicing" {...register('servicing')} />
+      <FormCard title="Purchase information">
+        <TextField
+          label="Purchaser"
+          error={errors.purchaserName?.message}
+          {...register('purchaserName')}
+        />
+        <TextField
+          label="Purchase date"
+          type="date"
+          error={errors.purchaseDate?.message}
+          {...register('purchaseDate')}
+        />
+      </FormCard>
 
-      <TextField
-        label="Purchaser"
-        error={errors.purchaserName?.message}
-        {...register('purchaserName')}
-      />
-      <TextField
-        label="Purchase date"
-        type="date"
-        error={errors.purchaseDate?.message}
-        {...register('purchaseDate')}
-      />
-      <TextField label="Notes" error={errors.notes?.message} {...register('notes')} />
+      <FormCard title="Notes">
+        <TextField label="Notes" error={errors.notes?.message} {...register('notes')} />
+      </FormCard>
 
       <button type="submit" disabled={submitting}>
         {submitting ? 'Saving…' : submitLabel}

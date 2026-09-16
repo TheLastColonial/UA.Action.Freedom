@@ -57,6 +57,12 @@ public interface IManifestRepository
     Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken);
 
     /// <summary>
+    /// The manifest's vehicle's cargo capacity, all-null when no vehicle is assigned yet or its
+    /// capacity has never been measured.
+    /// </summary>
+    Task<VehicleCargoCapacityReadModel> GetVehicleCargoCapacityAsync(string id, CancellationToken cancellationToken);
+
+    /// <summary>
     /// One line per box for the document that travels with the vehicle: what is being carried,
     /// and roughly where to.
     /// </summary>

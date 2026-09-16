@@ -23,6 +23,9 @@ public class BoxQrCodeEndpointTests
     private static BoxReadModel ABox(bool validated = false, Guid? receiverRef = null) => new(
         BoxId,
         WeightKg: validated ? 24 : 0,
+        WidthCm: null,
+        DepthCm: null,
+        HeightCm: null,
         ReceiverRef: receiverRef,
         House: "Unit 4",
         Street: "Cross Road",

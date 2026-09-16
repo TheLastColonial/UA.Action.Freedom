@@ -1,0 +1,14 @@
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent);
+  color: #ffffff;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.link-button:hover {
+  background: var(--color-accent-strong);
+}

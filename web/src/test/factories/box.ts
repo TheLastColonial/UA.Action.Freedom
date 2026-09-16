@@ -9,6 +9,9 @@ export function makeBox(overrides: Partial<BoxReadModel> = {}): BoxReadModel {
   return {
     id: boxSeq,
     weightKg: 0,
+    widthCm: null,
+    depthCm: null,
+    heightCm: null,
     receiverRef: null,
     house: null,
     street: null,

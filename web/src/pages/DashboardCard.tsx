@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
 
+import { LinkButton } from '../components/Button';
 import { Gate } from '../components/Gate';
 import './DashboardCard.css';
 import type { DashboardCardEntry } from './dashboardCards';
@@ -19,9 +20,9 @@ export function DashboardCard({ entry }: DashboardCardProps): JSX.Element {
         {entry.label}
       </Link>
       <Gate policy={entry.actionPolicy}>
-        <Link to={entry.actionTo} className="dashboard-card__action">
-          {entry.actionLabel}
-        </Link>
+        <div className="dashboard-card__action">
+          <LinkButton to={entry.actionTo}>{entry.actionLabel}</LinkButton>
+        </div>
       </Gate>
     </div>
   );

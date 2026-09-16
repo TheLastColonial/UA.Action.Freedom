@@ -14,6 +14,7 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
     private readonly HashSet<int> knownBoxes = [];
 
     private int vehicleWeightKg;
+    private VehicleCargoCapacityReadModel vehicleCargoCapacity = new(null, null, null, null);
 
     public InMemoryManifestRepository(params ManifestReadModel[] seed)
     {
@@ -26,6 +27,12 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
     public InMemoryManifestRepository WithVehicleWeight(int weightKg)
     {
         vehicleWeightKg = weightKg;
+        return this;
+    }
+
+    public InMemoryManifestRepository WithVehicleCargoCapacity(VehicleCargoCapacityReadModel capacity)
+    {
+        vehicleCargoCapacity = capacity;
         return this;
     }
 
@@ -159,6 +166,9 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
 
     public Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult(vehicleWeightKg);
+
+    public Task<VehicleCargoCapacityReadModel> GetVehicleCargoCapacityAsync(string id, CancellationToken cancellationToken) =>
+        Task.FromResult(vehicleCargoCapacity);
 
     public Task<IReadOnlyList<ManifestDocumentLineReadModel>> GetDocumentLinesAsync(
         string id, CancellationToken cancellationToken) =>

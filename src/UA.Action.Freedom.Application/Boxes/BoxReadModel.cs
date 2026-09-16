@@ -15,6 +15,9 @@ namespace UA.Action.Freedom.Application.Boxes;
 public sealed record BoxReadModel(
     int Id,
     int WeightKg,
+    decimal? WidthCm,
+    decimal? DepthCm,
+    decimal? HeightCm,
     Guid? ReceiverRef,
     string? House,
     string? Street,

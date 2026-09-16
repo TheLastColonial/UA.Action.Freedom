@@ -84,23 +84,42 @@ public class ManifestRepositoryTests
         return id;
     }
 
-    private static async Task<int> AddBoxAsync(int weightKg, bool validated, Guid? validatedBy)
+    private static async Task<int> AddBoxAsync(
+        int weightKg, bool validated, Guid? validatedBy, decimal? widthCm = null, decimal? depthCm = null, decimal? heightCm = null)
     {
         await using var connection = new SqlConnection(ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO dbo.Box (WeightKg, ValidatedByPersonId, ValidatedAt)
-            VALUES (@weightKg, @validatedBy, @validatedAt);
+            INSERT INTO dbo.Box (WeightKg, WidthCm, DepthCm, HeightCm, ValidatedByPersonId, ValidatedAt)
+            VALUES (@weightKg, @widthCm, @depthCm, @heightCm, @validatedBy, @validatedAt);
             SELECT CAST(SCOPE_IDENTITY() AS int);
             """;
         command.Parameters.AddWithValue("@weightKg", weightKg);
+        command.Parameters.AddWithValue("@widthCm", (object?)widthCm ?? DBNull.Value);
+        command.Parameters.AddWithValue("@depthCm", (object?)depthCm ?? DBNull.Value);
+        command.Parameters.AddWithValue("@heightCm", (object?)heightCm ?? DBNull.Value);
         command.Parameters.AddWithValue("@validatedBy", validated ? validatedBy! : DBNull.Value);
         command.Parameters.AddWithValue("@validatedAt", validated ? DateTime.UtcNow : DBNull.Value);
 
         return (int)(await command.ExecuteScalarAsync())!;
     }
+
+    private static Task AddVehicleAsync(string vin, decimal? maxCargoWeightKg, decimal? widthCm, decimal? depthCm, decimal? heightCm) =>
+        ExecuteAsync(
+            """
+            INSERT INTO dbo.Vehicle (Vin, Plate, [Year], MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm)
+            VALUES (@vin, 'IT12ABC', 2016, @maxCargoWeightKg, @widthCm, @depthCm, @heightCm)
+            """,
+            ("@vin", vin),
+            ("@maxCargoWeightKg", (object?)maxCargoWeightKg ?? DBNull.Value),
+            ("@widthCm", (object?)widthCm ?? DBNull.Value),
+            ("@depthCm", (object?)depthCm ?? DBNull.Value),
+            ("@heightCm", (object?)heightCm ?? DBNull.Value));
+
+    private static Task RemoveVehicleAsync(string vin) =>
+        ExecuteAsync("DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
 
     private static Task RemoveManifestAsync(string id) =>
         ExecuteAsync("DELETE FROM dbo.Manifest WHERE Id = @id", ("@id", id));
@@ -288,7 +307,7 @@ public class ManifestRepositoryTests
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var id = NewId();
         var loader = await AddVolunteerAsync();
-        var weighed = await AddBoxAsync(30, validated: true, validatedBy: loader);
+        var weighed = await AddBoxAsync(30, validated: true, validatedBy: loader, widthCm: 40m, depthCm: 30m, heightCm: 20m);
         var unweighed = await AddBoxAsync(0, validated: false, validatedBy: null);
 
         try
@@ -302,7 +321,11 @@ public class ManifestRepositoryTests
             cargo.Should().HaveCount(2);
             cargo.Single(box => box.BoxId == weighed).Validated.Should().BeTrue();
             cargo.Single(box => box.BoxId == weighed).WeightKg.Should().Be(30);
+            cargo.Single(box => box.BoxId == weighed).WidthCm.Should().Be(40m);
+            cargo.Single(box => box.BoxId == weighed).DepthCm.Should().Be(30m);
+            cargo.Single(box => box.BoxId == weighed).HeightCm.Should().Be(20m);
             cargo.Single(box => box.BoxId == unweighed).Validated.Should().BeFalse();
+            cargo.Single(box => box.BoxId == unweighed).WidthCm.Should().BeNull();
         }
         finally
         {
@@ -310,6 +333,40 @@ public class ManifestRepositoryTests
             await RemoveBoxAsync(weighed);
             await RemoveBoxAsync(unweighed);
             await RemoveVolunteerAsync(loader);
+        }
+    }
+
+    [Fact]
+    public async Task Vehicle_cargo_capacity_comes_from_the_assigned_vehicle_or_all_null_when_none_is_assigned()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = NewId();
+        var unassigned = NewId();
+        var vin = "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
+
+        try
+        {
+            await AddVehicleAsync(vin, maxCargoWeightKg: 900.50m, widthCm: 150.25m, depthCm: 300m, heightCm: 180.75m);
+            await repository.AddAsync(AManifest(id) with { Vin = vin }, cancellationToken);
+            await repository.AddAsync(AManifest(unassigned), cancellationToken);
+
+            var capacity = await repository.GetVehicleCargoCapacityAsync(id, cancellationToken);
+            var noVehicle = await repository.GetVehicleCargoCapacityAsync(unassigned, cancellationToken);
+
+            capacity.MaxCargoWeightKg.Should().Be(900.50m);
+            capacity.CargoWidthCm.Should().Be(150.25m);
+            capacity.CargoDepthCm.Should().Be(300m);
+            capacity.CargoHeightCm.Should().Be(180.75m);
+
+            noVehicle.MaxCargoWeightKg.Should().BeNull();
+            noVehicle.CargoWidthCm.Should().BeNull();
+        }
+        finally
+        {
+            await RemoveManifestAsync(id);
+            await RemoveManifestAsync(unassigned);
+            await RemoveVehicleAsync(vin);
         }
     }
 

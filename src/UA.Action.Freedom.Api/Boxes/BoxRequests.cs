@@ -20,9 +20,11 @@ public sealed record UpdateBoxRequest(
 /// <summary>
 /// Body of <c>POST /boxes/{id}/validate</c> — the Loader's confirmation of contents and weight.
 /// </summary>
-public sealed record ValidateBoxRequest(Guid ValidatedByPersonId, int WeightKg)
+public sealed record ValidateBoxRequest(
+    Guid ValidatedByPersonId, int WeightKg,
+    decimal? WidthCm = null, decimal? DepthCm = null, decimal? HeightCm = null)
 {
-    public ValidateBoxCommand ToCommand(int id) => new(id, ValidatedByPersonId, WeightKg);
+    public ValidateBoxCommand ToCommand(int id) => new(id, ValidatedByPersonId, WeightKg, WidthCm, DepthCm, HeightCm);
 }
 
 /// <summary>Body of <c>POST /boxes/{id}/items</c>.</summary>
@@ -67,12 +69,24 @@ public sealed class ValidateBoxRequestValidator : AbstractValidator<ValidateBoxR
     /// </summary>
     private const int MaxBoxWeightKg = 500;
 
+    /// <summary>
+    /// A box a volunteer can carry. Like <see cref="MaxBoxWeightKg"/>, a typo guard rather than
+    /// a real bound — a box over 10 metres in any dimension is a data-entry mistake.
+    /// </summary>
+    private const int MaxBoxDimensionCm = 1000;
+
     public ValidateBoxRequestValidator()
     {
         RuleFor(r => r.ValidatedByPersonId).NotEmpty()
             .WithMessage("'Validated By Person Id' must name the volunteer who checked the box.");
         RuleFor(r => r.WeightKg).InclusiveBetween(1, MaxBoxWeightKg)
             .WithMessage($"'Weight Kg' must be between 1 and {MaxBoxWeightKg}.");
+        RuleFor(r => r.WidthCm).InclusiveBetween(1, MaxBoxDimensionCm).When(r => r.WidthCm is not null)
+            .WithMessage($"'Width Cm' must be between 1 and {MaxBoxDimensionCm}.");
+        RuleFor(r => r.DepthCm).InclusiveBetween(1, MaxBoxDimensionCm).When(r => r.DepthCm is not null)
+            .WithMessage($"'Depth Cm' must be between 1 and {MaxBoxDimensionCm}.");
+        RuleFor(r => r.HeightCm).InclusiveBetween(1, MaxBoxDimensionCm).When(r => r.HeightCm is not null)
+            .WithMessage($"'Height Cm' must be between 1 and {MaxBoxDimensionCm}.");
     }
 }
 
