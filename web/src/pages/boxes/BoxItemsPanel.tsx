@@ -4,6 +4,7 @@ import { useFieldArray, useForm } from 'react-hook-form';
 
 import { useAddBoxItem, useBoxItems, useRemoveBoxItem } from '../../api/boxes';
 import { ApiDomainProblem } from '../../api/problem';
+import { Button } from '../../components/Button';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TextField } from '../../components/form/fields';
 import { addItemFormSchema, addItemFormToRequest, emptyAddItemForm } from './boxModels';
@@ -63,15 +64,16 @@ export function BoxItemsPanel({ boxId, frozen }: BoxItemsPanelProps): JSX.Elemen
                 </span>
               ) : null}
               {!frozen ? (
-                <button
+                <Button
                   type="button"
+                  variant="danger"
                   disabled={removeItem.isPending}
                   onClick={() => {
                     removeItem.mutate(item.id);
                   }}
                 >
                   Remove
-                </button>
+                </Button>
               ) : null}
             </li>
           ))}
@@ -118,29 +120,31 @@ export function BoxItemsPanel({ boxId, frozen }: BoxItemsPanelProps): JSX.Elemen
                   label={`Property ${String(index + 1)} value`}
                   {...register(`properties.${index}.value`)}
                 />
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => {
                     properties.remove(index);
                   }}
                 >
                   Remove property
-                </button>
+                </Button>
               </div>
             ))}
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 properties.append({ key: '', value: '' });
               }}
             >
               Add property
-            </button>
+            </Button>
           </fieldset>
 
-          <button type="submit" disabled={add.isPending}>
+          <Button type="submit" disabled={add.isPending}>
             Add item
-          </button>
+          </Button>
         </form>
       )}
     </div>

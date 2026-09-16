@@ -1,8 +1,10 @@
 import type { JSX } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { ApiNotFound } from '../../api/problem';
 import { useReceiver } from '../../api/receivers';
+import { LinkButton } from '../../components/Button';
+import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
@@ -30,14 +32,21 @@ export function ReceiverDetailPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>{receiver.organisation}</h1>
         <Gate policy="receivers:write">
-          <Link to={`/receivers/${encodeURIComponent(receiver.ref)}/edit`}>Edit</Link>
+          <LinkButton
+            to={`/receivers/${encodeURIComponent(receiver.ref)}/edit`}
+            variant="secondary"
+          >
+            Edit
+          </LinkButton>
         </Gate>
       </header>
 
-      <dl>
-        <dt>Region</dt>
-        <dd>{receiver.region}</dd>
-      </dl>
+      <DetailCard title="Receiver details">
+        <dl>
+          <dt>Region</dt>
+          <dd>{receiver.region}</dd>
+        </dl>
+      </DetailCard>
 
       <Gate
         policy="receivers:detail"

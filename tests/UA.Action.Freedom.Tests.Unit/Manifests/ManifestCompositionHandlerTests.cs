@@ -34,10 +34,15 @@ public class ManifestCompositionHandlerTests
         return people;
     }
 
+    private static readonly VehicleCargoCapacityReadModel NoCapacityData = new(null, null, null, null);
+
     private static IManifestRepository ARepositoryHolding(ManifestReadModel? manifest)
     {
         var repository = Substitute.For<IManifestRepository>();
         repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(manifest);
+        // Default to "nobody has measured anything" so weight tests that do not care about
+        // cargo capacity are not tripped up by an unconfigured mock returning null.
+        repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>()).Returns(NoCapacityData);
         return repository;
     }
 
@@ -182,6 +187,107 @@ public class ManifestCompositionHandlerTests
         weight.FuelKg.Should().Be(45);
         weight.TotalKg.Should().Be(1_687);
         weight.UnvalidatedBoxCount.Should().Be(0);
+        weight.MaxCargoWeightKg.Should().BeNull();
+        weight.CargoOverweight.Should().BeFalse();
+        weight.OversizedBoxIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Flags_the_cargo_as_overweight_against_the_vehicles_stated_capacity()
+    {
+        var repository = ARepositoryHolding(AManifest());
+        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
+        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+            new List<ManifestBoxReadModel> { new(1, 30, Validated: true), new(2, 12, Validated: true) });
+        repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
+            .Returns(new VehicleCargoCapacityReadModel(40m, null, null, null));
+        var handler = new GetManifestWeightHandler(repository);
+
+        var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
+
+        // 42 kg of cargo against a stated 40 kg maximum.
+        weight!.CargoOverweight.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Does_not_flag_cargo_within_the_vehicles_stated_capacity()
+    {
+        var repository = ARepositoryHolding(AManifest());
+        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
+        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+            new List<ManifestBoxReadModel> { new(1, 30, Validated: true), new(2, 12, Validated: true) });
+        repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
+            .Returns(new VehicleCargoCapacityReadModel(100m, null, null, null));
+        var handler = new GetManifestWeightHandler(repository);
+
+        var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
+
+        weight!.CargoOverweight.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Flags_a_box_that_does_not_fit_the_vehicles_cargo_space()
+    {
+        var repository = ARepositoryHolding(AManifest());
+        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
+        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+            new List<ManifestBoxReadModel>
+            {
+                new(1, 30, Validated: true, WidthCm: 200m, DepthCm: 50m, HeightCm: 50m),
+                new(2, 12, Validated: true, WidthCm: 40m, DepthCm: 30m, HeightCm: 20m),
+            });
+        repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
+            .Returns(new VehicleCargoCapacityReadModel(null, 150m, 100m, 100m));
+        var handler = new GetManifestWeightHandler(repository);
+
+        var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
+
+        // Box 1 is 200x50x50 against a 150x100x100 cargo space — too long in its longest
+        // dimension no matter how it is rotated. Box 2 fits easily.
+        weight!.OversizedBoxIds.Should().BeEquivalentTo([1]);
+    }
+
+    [Fact]
+    public async Task A_box_that_fits_only_when_rotated_is_not_flagged()
+    {
+        // A box measuring 100x40x30 does not fit a 100x100x30 space along the same axes, but it
+        // fits once turned on its side — which is why the comparison sorts both sets of
+        // dimensions rather than assuming a fixed width/depth/height mapping.
+        var repository = ARepositoryHolding(AManifest());
+        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
+        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+            new List<ManifestBoxReadModel>
+            {
+                new(1, 30, Validated: true, WidthCm: 100m, DepthCm: 40m, HeightCm: 30m),
+            });
+        repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
+            .Returns(new VehicleCargoCapacityReadModel(null, 100m, 100m, 30m));
+        var handler = new GetManifestWeightHandler(repository);
+
+        var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
+
+        weight!.OversizedBoxIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_box_with_no_recorded_dimensions_is_never_flagged_as_oversized()
+    {
+        var repository = ARepositoryHolding(AManifest());
+        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
+        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+            new List<ManifestBoxReadModel> { new(1, 30, Validated: false) });
+        repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
+            .Returns(new VehicleCargoCapacityReadModel(null, 1m, 1m, 1m));
+        var handler = new GetManifestWeightHandler(repository);
+
+        var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
+
+        weight!.OversizedBoxIds.Should().BeEmpty();
     }
 
     [Fact]

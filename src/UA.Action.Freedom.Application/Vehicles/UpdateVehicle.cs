@@ -19,7 +19,11 @@ public sealed record UpdateVehicleCommand(
     int? ConvoyId,
     string? PurchaserName,
     DateTime? PurchaseDate,
-    int WeightKg);
+    int WeightKg,
+    decimal? MaxCargoWeightKg,
+    decimal? CargoWidthCm,
+    decimal? CargoDepthCm,
+    decimal? CargoHeightCm);
 
 public enum UpdateVehicleOutcome
 {
@@ -48,7 +52,11 @@ public sealed class UpdateVehicleHandler(IVehicleRepository repository)
                 command.ConvoyId,
                 command.PurchaserName,
                 command.PurchaseDate,
-                command.WeightKg),
+                command.WeightKg,
+                command.MaxCargoWeightKg,
+                command.CargoWidthCm,
+                command.CargoDepthCm,
+                command.CargoHeightCm),
             cancellationToken);
 
         return updated ? UpdateVehicleOutcome.Updated : UpdateVehicleOutcome.NotFound;

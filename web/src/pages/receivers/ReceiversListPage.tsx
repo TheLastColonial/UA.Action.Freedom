@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import { useReceivers } from '../../api/receivers';
 import type { ReceiverReadModel } from '../../api/schemas/receivers';
+import { LinkButton } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
@@ -36,7 +37,7 @@ export function ReceiversListPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>Receivers</h1>
         <Gate policy="receivers:write">
-          <Link to="/receivers/new">New receiver</Link>
+          <LinkButton to="/receivers/new">New receiver</LinkButton>
         </Gate>
       </header>
       <p>Delivery addresses and contacts are held separately and shown only to a Ground Officer.</p>

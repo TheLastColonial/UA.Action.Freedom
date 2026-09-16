@@ -199,7 +199,10 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             """
             SELECT b.Id AS BoxId,
                    b.WeightKg,
-                   CAST(CASE WHEN b.ValidatedAt IS NULL THEN 0 ELSE 1 END AS bit) AS Validated
+                   CAST(CASE WHEN b.ValidatedAt IS NULL THEN 0 ELSE 1 END AS bit) AS Validated,
+                   b.WidthCm,
+                   b.DepthCm,
+                   b.HeightCm
             FROM dbo.ManifestBox AS mb
             INNER JOIN dbo.Box AS b ON b.Id = mb.BoxId
             WHERE mb.ManifestId = @id
@@ -258,6 +261,24 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             """,
             new { id },
             cancellationToken: cancellationToken)) ?? 0;
+    }
+
+    public async Task<VehicleCargoCapacityReadModel> GetVehicleCargoCapacityAsync(
+        string id, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // All-null when no vehicle is assigned yet, same reasoning as GetVehicleWeightKgAsync —
+        // this is a partial answer, not a failure.
+        return await connection.QuerySingleOrDefaultAsync<VehicleCargoCapacityReadModel>(new CommandDefinition(
+            """
+            SELECT v.MaxCargoWeightKg, v.CargoWidthCm, v.CargoDepthCm, v.CargoHeightCm
+            FROM dbo.Manifest AS m
+            INNER JOIN dbo.Vehicle AS v ON v.Vin = m.Vin
+            WHERE m.Id = @id
+            """,
+            new { id },
+            cancellationToken: cancellationToken)) ?? new VehicleCargoCapacityReadModel(null, null, null, null);
     }
 
     public async Task<IReadOnlyList<ManifestDocumentLineReadModel>> GetDocumentLinesAsync(

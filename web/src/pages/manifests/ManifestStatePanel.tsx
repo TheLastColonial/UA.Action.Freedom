@@ -5,6 +5,7 @@ import { useTransitionManifest } from '../../api/manifests';
 import { ApiDomainProblem } from '../../api/problem';
 import type { ManifestReadModel } from '../../api/schemas/manifests';
 import { useAuth } from '../../auth/useAuth';
+import { Button } from '../../components/Button';
 import { availableTransitions } from './transitions';
 
 interface ManifestStatePanelProps {
@@ -56,7 +57,7 @@ export function ManifestStatePanel({ manifest }: ManifestStatePanelProps): JSX.E
       >
         {options.map((option) => (
           <li key={option.verb}>
-            <button
+            <Button
               type="button"
               disabled={option.disabledReason !== null || transition.isPending}
               onClick={() => {
@@ -64,7 +65,7 @@ export function ManifestStatePanel({ manifest }: ManifestStatePanelProps): JSX.E
               }}
             >
               {option.label}
-            </button>
+            </Button>
             {option.disabledReason ? <p className="field__hint">{option.disabledReason}</p> : null}
           </li>
         ))}

@@ -1,8 +1,10 @@
 import type { JSX } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { useBox, useDeleteBox } from '../../api/boxes';
 import { ApiNotFound } from '../../api/problem';
+import { Button, LinkButton } from '../../components/Button';
+import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
@@ -36,24 +38,30 @@ export function BoxDetailPage(): JSX.Element {
         <span>{box.validated ? 'Validated' : 'Open'}</span>
       </header>
 
-      <dl>
-        <dt>Weight</dt>
-        <dd>{box.validated ? `${box.weightKg} kg` : 'Not yet confirmed'}</dd>
-        <dt>Receiver</dt>
-        <dd>{box.receiverRef ?? '—'}</dd>
-        <dt>Destination</dt>
-        <dd>
-          {[box.house, box.street, box.city, box.country, box.postcode]
-            .filter(Boolean)
-            .join(', ') || '—'}
-        </dd>
-      </dl>
+      <DetailCard title="Box details">
+        <dl>
+          <dt>Weight</dt>
+          <dd>{box.validated ? `${box.weightKg} kg` : 'Not yet confirmed'}</dd>
+          <dt>Receiver</dt>
+          <dd>{box.receiverRef ?? '—'}</dd>
+          <dt>Destination</dt>
+          <dd>
+            {[box.house, box.street, box.city, box.country, box.postcode]
+              .filter(Boolean)
+              .join(', ') || '—'}
+          </dd>
+        </dl>
+      </DetailCard>
 
       <Gate policy="boxes:write">
         <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          {!box.validated ? <Link to={`/boxes/${String(box.id)}/edit`}>Edit</Link> : null}
-          <button
-            type="button"
+          {!box.validated ? (
+            <LinkButton to={`/boxes/${String(box.id)}/edit`} variant="secondary">
+              Edit
+            </LinkButton>
+          ) : null}
+          <Button
+            variant="danger"
             disabled={remove.isPending}
             onClick={() => {
               remove.mutate(box.id, {
@@ -64,7 +72,7 @@ export function BoxDetailPage(): JSX.Element {
             }}
           >
             Delete
-          </button>
+          </Button>
         </span>
       </Gate>
       {remove.isError ? <p role="alert">The box could not be removed.</p> : null}

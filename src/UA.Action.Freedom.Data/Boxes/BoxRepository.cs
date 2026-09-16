@@ -11,7 +11,7 @@ namespace UA.Action.Freedom.Data.Boxes;
 public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBoxRepository
 {
     private const string Columns =
-        "Id, WeightKg, ReceiverRef, House, Street, City, Country, Postcode, ValidatedByPersonId, ValidatedAt";
+        "Id, WeightKg, WidthCm, DepthCm, HeightCm, ReceiverRef, House, Street, City, Country, Postcode, ValidatedByPersonId, ValidatedAt";
 
     private const string QrCodeColumns = "Token, BoxId, IssuedAt, RevokedAt";
 
@@ -120,7 +120,9 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
     }
 
     public async Task<bool> ValidateAsync(
-        int id, Guid validatedByPersonId, int weightKg, DateTime validatedAt, CancellationToken cancellationToken)
+        int id, Guid validatedByPersonId, int weightKg,
+        decimal? widthCm, decimal? depthCm, decimal? heightCm,
+        DateTime validatedAt, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
@@ -130,12 +132,15 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
             """
             UPDATE dbo.Box SET
                 WeightKg = @weightKg,
+                WidthCm = @widthCm,
+                DepthCm = @depthCm,
+                HeightCm = @heightCm,
                 ValidatedByPersonId = @validatedByPersonId,
                 ValidatedAt = @validatedAt,
                 UpdatedAt = SYSUTCDATETIME()
             WHERE Id = @id AND ValidatedAt IS NULL
             """,
-            new { id, validatedByPersonId, weightKg, validatedAt },
+            new { id, validatedByPersonId, weightKg, widthCm, depthCm, heightCm, validatedAt },
             cancellationToken: cancellationToken));
 
         return affected > 0;

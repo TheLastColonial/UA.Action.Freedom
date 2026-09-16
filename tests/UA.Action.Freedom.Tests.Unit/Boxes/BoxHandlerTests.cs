@@ -24,6 +24,9 @@ public class BoxHandlerTests
     private static BoxReadModel ABox(bool validated = false) => new(
         BoxId,
         WeightKg: validated ? 24 : 0,
+        WidthCm: validated ? 40 : null,
+        DepthCm: validated ? 30 : null,
+        HeightCm: validated ? 20 : null,
         ReceiverRef: null,
         House: "Unit 4",
         Street: "Cross Road",
@@ -61,7 +64,9 @@ public class BoxHandlerTests
     public async Task A_loader_validates_a_box_and_confirms_its_weight()
     {
         var repository = Substitute.For<IBoxRepository>();
-        repository.ValidateAsync(BoxId, Loader, 24, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        repository.ValidateAsync(
+                BoxId, Loader, 24, Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(),
+                Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(true);
         var handler = new ValidateBoxHandler(repository, AKnownLoader());
 
@@ -72,12 +77,32 @@ public class BoxHandlerTests
     }
 
     [Fact]
+    public async Task A_loader_validates_a_box_and_records_its_dimensions()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.ValidateAsync(
+                BoxId, Loader, 24, 40m, 30m, 20m, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        var handler = new ValidateBoxHandler(repository, AKnownLoader());
+
+        var outcome = await handler.HandleAsync(
+            new ValidateBoxCommand(BoxId, Loader, 24, WidthCm: 40m, DepthCm: 30m, HeightCm: 20m),
+            CancellationToken.None);
+
+        outcome.Should().Be(ValidateBoxOutcome.Validated);
+        await repository.Received(1).ValidateAsync(
+            BoxId, Loader, 24, 40m, 30m, 20m, Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Refuses_to_validate_a_box_twice()
     {
         // Re-validating would overwrite the record of who checked it and when, which is the
         // audit artefact the whole exercise exists to produce.
         var repository = Substitute.For<IBoxRepository>();
-        repository.ValidateAsync(BoxId, Loader, 24, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        repository.ValidateAsync(
+                BoxId, Loader, 24, Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(),
+                Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(false);
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
         var handler = new ValidateBoxHandler(repository, AKnownLoader());
@@ -92,7 +117,9 @@ public class BoxHandlerTests
     public async Task Reports_not_found_when_validating_a_box_that_does_not_exist()
     {
         var repository = Substitute.For<IBoxRepository>();
-        repository.ValidateAsync(BoxId, Loader, 24, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        repository.ValidateAsync(
+                BoxId, Loader, 24, Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(),
+                Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(false);
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns((BoxReadModel?)null);
         var handler = new ValidateBoxHandler(repository, AKnownLoader());
@@ -118,7 +145,9 @@ public class BoxHandlerTests
 
         outcome.Should().Be(ValidateBoxOutcome.NoSuchValidator);
         await repository.DidNotReceive().ValidateAsync(
-            Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+            Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<int>(),
+            Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(),
+            Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

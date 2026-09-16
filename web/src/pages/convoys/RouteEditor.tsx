@@ -5,6 +5,7 @@ import { useFieldArray, useForm } from 'react-hook-form';
 
 import { useConvoyRoute, useReplaceConvoyRoute } from '../../api/convoys';
 import { ApiDomainProblem } from '../../api/problem';
+import { Button } from '../../components/Button';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TextField } from '../../components/form/fields';
 import {
@@ -89,32 +90,35 @@ export function RouteEditor({ convoyId, disabled }: RouteEditorProps): JSX.Eleme
                 {...register(`stops.${index}.postcode`)}
               />
               <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   disabled={index === 0}
                   onClick={() => {
                     move(index, index - 1);
                   }}
                 >
                   Move up
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="secondary"
                   disabled={index === fields.length - 1}
                   onClick={() => {
                     move(index, index + 1);
                   }}
                 >
                   Move down
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="danger"
                   onClick={() => {
                     remove(index);
                   }}
                 >
                   Remove stop
-                </button>
+                </Button>
               </div>
             </fieldset>
           </li>
@@ -123,17 +127,18 @@ export function RouteEditor({ convoyId, disabled }: RouteEditorProps): JSX.Eleme
 
       {!disabled ? (
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => {
               append(emptyRouteStop());
             }}
           >
             Add stop
-          </button>
-          <button type="submit" disabled={save.isPending}>
+          </Button>
+          <Button type="submit" disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save route'}
-          </button>
+          </Button>
         </div>
       ) : null}
     </form>

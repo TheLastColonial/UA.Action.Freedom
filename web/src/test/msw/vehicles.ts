@@ -33,6 +33,10 @@ function toReadModel(
     purchaserName: body.purchaserName ?? null,
     purchaseDate: body.purchaseDate ?? null,
     weightKg: body.weightKg,
+    maxCargoWeightKg: body.maxCargoWeightKg ?? null,
+    cargoWidthCm: body.cargoWidthCm ?? null,
+    cargoDepthCm: body.cargoDepthCm ?? null,
+    cargoHeightCm: body.cargoHeightCm ?? null,
   };
 }
 

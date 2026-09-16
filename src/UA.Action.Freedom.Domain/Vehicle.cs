@@ -80,6 +80,21 @@ public class Vehicle
     /// Kerb Weight in Kilograms
     /// </summary>
     public int WeightKg { get; init; }
+
+    /// <summary>
+    /// Maximum cargo weight the vehicle can carry, in kilograms. Distinct from
+    /// <see cref="WeightKg"/>, which is the vehicle's own kerb weight. Null until measured.
+    /// </summary>
+    public decimal? MaxCargoWeightKg { get; init; }
+
+    /// <summary>Width of the cargo space, in centimetres. Null until measured.</summary>
+    public decimal? CargoWidthCm { get; init; }
+
+    /// <summary>Depth of the cargo space, in centimetres. Null until measured.</summary>
+    public decimal? CargoDepthCm { get; init; }
+
+    /// <summary>Height of the cargo space, in centimetres. Null until measured.</summary>
+    public decimal? CargoHeightCm { get; init; }
 }
 
 /// <summary>

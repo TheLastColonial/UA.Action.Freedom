@@ -5,6 +5,7 @@ import { revealReceiverDetail, setReceiverDetail } from '../../api/receiverDetai
 import type { ReceiverDetailReadModel } from '../../api/receiverDetail';
 import { ApiNotFound } from '../../api/problem';
 import { useDeleteReceiver } from '../../api/receivers';
+import { Button } from '../../components/Button';
 import { ReasonModal } from './ReasonModal';
 import { ReceiverDetailForm } from './ReceiverDetailForm';
 import { detailFormToRequest } from './receiverModels';
@@ -87,14 +88,14 @@ export function ReceiverSensitivePanel({
       <p>Ground Officer access only. Every view is written to the receiver access log.</p>
 
       {status === 'hidden' && !editing ? (
-        <button
+        <Button
           type="button"
           onClick={() => {
             setModalOpen(true);
           }}
         >
           Reveal delivery detail
-        </button>
+        </Button>
       ) : null}
 
       <ReasonModal
@@ -108,14 +109,14 @@ export function ReceiverSensitivePanel({
       {status === 'no-detail' && !editing ? (
         <div>
           <p>No delivery detail has been recorded for this receiver.</p>
-          <button
+          <Button
             type="button"
             onClick={() => {
               setEditing(true);
             }}
           >
             Add delivery detail
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -134,17 +135,18 @@ export function ReceiverSensitivePanel({
             </dd>
           </dl>
           <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 setEditing(true);
               }}
             >
               Edit delivery detail
-            </button>
-            <button type="button" onClick={forget}>
+            </Button>
+            <Button type="button" variant="secondary" onClick={forget}>
               Hide
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -162,15 +164,16 @@ export function ReceiverSensitivePanel({
       ) : null}
 
       <hr />
-      <button
+      <Button
         type="button"
+        variant="danger"
         disabled={remove.isPending}
         onClick={() => {
           remove.mutate(receiverRef, { onSuccess: onDeleted });
         }}
       >
         Delete receiver
-      </button>
+      </Button>
       {remove.isError ? <p role="alert">The receiver could not be removed.</p> : null}
     </section>
   );

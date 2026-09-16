@@ -46,7 +46,22 @@ public sealed record ManifestDriverTeamReadModel(
     Guid? SecondaryPersonId);
 
 /// <summary>A box on the manifest, with enough of its state to add up a border weight.</summary>
-public sealed record ManifestBoxReadModel(int BoxId, int WeightKg, bool Validated);
+/// <remarks>
+/// <see cref="WidthCm"/>, <see cref="DepthCm"/> and <see cref="HeightCm"/> are set alongside the
+/// box's confirmed weight at validation, and default to null for callers that do not care about
+/// them (most existing tests): a box with no recorded dimensions simply cannot be judged
+/// oversized (see <see cref="GetManifestWeightHandler"/>).
+/// </remarks>
+public sealed record ManifestBoxReadModel(
+    int BoxId, int WeightKg, bool Validated,
+    decimal? WidthCm = null, decimal? DepthCm = null, decimal? HeightCm = null);
+
+/// <summary>
+/// The manifest's vehicle's cargo capacity, or all-null when no vehicle is assigned yet or the
+/// vehicle has never had its capacity measured.
+/// </summary>
+public sealed record VehicleCargoCapacityReadModel(
+    decimal? MaxCargoWeightKg, decimal? CargoWidthCm, decimal? CargoDepthCm, decimal? CargoHeightCm);
 
 /// <summary>
 /// The weight a border check is given, broken into its parts.
@@ -61,10 +76,19 @@ public sealed record ManifestBoxReadModel(int BoxId, int WeightKg, bool Validate
 /// boxes a Loader has actually weighed, so a total containing unvalidated boxes is provisional
 /// and says so.
 /// </remarks>
+/// <remarks>
+/// <see cref="MaxCargoWeightKg"/>, <see cref="CargoOverweight"/> and
+/// <see cref="OversizedBoxIds"/> are advisory only: this endpoint never rejects anything, and a
+/// vehicle or box with no capacity/dimension data recorded simply cannot be flagged (see
+/// <see cref="GetManifestWeightHandler"/>).
+/// </remarks>
 public sealed record ManifestWeightReadModel(
     int VehicleKg,
     int CargoKg,
     int CrewAndBagsKg,
     int FuelKg,
     int TotalKg,
-    int UnvalidatedBoxCount);
+    int UnvalidatedBoxCount,
+    decimal? MaxCargoWeightKg,
+    bool CargoOverweight,
+    IReadOnlyList<int> OversizedBoxIds);

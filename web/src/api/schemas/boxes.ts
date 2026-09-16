@@ -4,6 +4,9 @@ import { z } from 'zod';
 export const boxReadModelSchema = z.object({
   id: z.number().int(),
   weightKg: z.number().int(),
+  widthCm: z.number().nullable(),
+  depthCm: z.number().nullable(),
+  heightCm: z.number().nullable(),
   receiverRef: z.string().nullable(),
   house: z.string().nullable(),
   street: z.string().nullable(),
@@ -47,6 +50,9 @@ export type UpdateBoxRequest = CreateBoxRequest;
 export interface ValidateBoxRequest {
   validatedByPersonId: string;
   weightKg: number;
+  widthCm?: number;
+  depthCm?: number;
+  heightCm?: number;
 }
 
 export interface AddBoxItemRequest {

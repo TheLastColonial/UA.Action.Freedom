@@ -26,6 +26,40 @@ public class CreateVehicleHandlerTests
     }
 
     [Fact]
+    public async Task Persists_the_vehicles_cargo_capacity_when_provided()
+    {
+        var repository = Substitute.For<IVehicleRepository>();
+        repository.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        var handler = new CreateVehicleHandler(repository);
+
+        await handler.HandleAsync(
+            VehicleTestData.ACreateCommand(maxCargoWeightKg: 900.25m, cargoWidthCm: 100m, cargoDepthCm: 200m, cargoHeightCm: 150m),
+            CancellationToken.None);
+
+        await repository.Received(1).AddAsync(
+            Arg.Is<VehicleReadModel>(v =>
+                v.MaxCargoWeightKg == 900.25m && v.CargoWidthCm == 100m && v.CargoDepthCm == 200m && v.CargoHeightCm == 150m),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Persists_the_vehicle_with_no_cargo_capacity_when_none_is_given()
+    {
+        var repository = Substitute.For<IVehicleRepository>();
+        repository.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        var handler = new CreateVehicleHandler(repository);
+
+        await handler.HandleAsync(
+            VehicleTestData.ACreateCommand(maxCargoWeightKg: null, cargoWidthCm: null, cargoDepthCm: null, cargoHeightCm: null),
+            CancellationToken.None);
+
+        await repository.Received(1).AddAsync(
+            Arg.Is<VehicleReadModel>(v =>
+                v.MaxCargoWeightKg == null && v.CargoWidthCm == null && v.CargoDepthCm == null && v.CargoHeightCm == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Reports_a_conflict_and_does_not_write_when_the_VIN_is_taken()
     {
         var repository = Substitute.For<IVehicleRepository>();

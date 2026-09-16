@@ -23,6 +23,18 @@ export function ManifestWeightPanel({ manifestId }: { manifestId: string }): JSX
           {weight.unvalidatedBoxCount} box(es) are not yet validated — this total is provisional.
         </p>
       ) : null}
+      {weight.cargoOverweight ? (
+        <p role="status">
+          Cargo is over the vehicle's stated capacity of {weight.maxCargoWeightKg} kg. This is
+          advisory only — nothing is blocked.
+        </p>
+      ) : null}
+      {weight.oversizedBoxIds.length > 0 ? (
+        <p role="status">
+          Box(es) {weight.oversizedBoxIds.map((id) => `#${String(id)}`).join(', ')} may not fit the
+          vehicle's cargo space. This is advisory only — nothing is blocked.
+        </p>
+      ) : null}
       <dl>
         <dt>Vehicle</dt>
         <dd>{weight.vehicleKg} kg</dd>
@@ -36,6 +48,12 @@ export function ManifestWeightPanel({ manifestId }: { manifestId: string }): JSX
         <dd>
           <strong>{weight.totalKg} kg</strong>
         </dd>
+        {weight.maxCargoWeightKg !== null ? (
+          <>
+            <dt>Vehicle's maximum cargo weight</dt>
+            <dd>{weight.maxCargoWeightKg} kg</dd>
+          </>
+        ) : null}
       </dl>
     </div>
   );

@@ -20,6 +20,10 @@ export const vehicleReadModelSchema = z.object({
   purchaserName: z.string().nullable(),
   purchaseDate: z.string().nullable(),
   weightKg: z.number().int(),
+  maxCargoWeightKg: z.number().nullable(),
+  cargoWidthCm: z.number().nullable(),
+  cargoDepthCm: z.number().nullable(),
+  cargoHeightCm: z.number().nullable(),
 });
 
 export type VehicleReadModel = z.infer<typeof vehicleReadModelSchema>;
@@ -42,6 +46,10 @@ export interface CreateVehicleRequest {
   purchaserName?: string;
   purchaseDate?: string;
   weightKg: number;
+  maxCargoWeightKg?: number;
+  cargoWidthCm?: number;
+  cargoDepthCm?: number;
+  cargoHeightCm?: number;
 }
 
 export type UpdateVehicleRequest = Omit<CreateVehicleRequest, 'vin'>;

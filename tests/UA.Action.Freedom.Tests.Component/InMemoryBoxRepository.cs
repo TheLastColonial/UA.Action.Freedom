@@ -57,7 +57,11 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
     public Task<int> AddAsync(BoxReadModel box, CancellationToken cancellationToken)
     {
         var id = nextId++;
-        boxes[id] = box with { Id = id, WeightKg = 0, ValidatedByPersonId = null, ValidatedAt = null };
+        boxes[id] = box with
+        {
+            Id = id, WeightKg = 0, WidthCm = null, DepthCm = null, HeightCm = null,
+            ValidatedByPersonId = null, ValidatedAt = null,
+        };
         return Task.FromResult(id);
     }
 
@@ -68,10 +72,13 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
             return Task.FromResult(false);
         }
 
-        // Mirrors the SQL, which cannot touch weight or the validation record on an update.
+        // Mirrors the SQL, which cannot touch weight, dimensions or the validation record on an update.
         boxes[box.Id] = box with
         {
             WeightKg = existing.WeightKg,
+            WidthCm = existing.WidthCm,
+            DepthCm = existing.DepthCm,
+            HeightCm = existing.HeightCm,
             ValidatedByPersonId = existing.ValidatedByPersonId,
             ValidatedAt = existing.ValidatedAt,
         };
@@ -86,7 +93,9 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
     }
 
     public Task<bool> ValidateAsync(
-        int id, Guid validatedByPersonId, int weightKg, DateTime validatedAt, CancellationToken cancellationToken)
+        int id, Guid validatedByPersonId, int weightKg,
+        decimal? widthCm, decimal? depthCm, decimal? heightCm,
+        DateTime validatedAt, CancellationToken cancellationToken)
     {
         if (!boxes.TryGetValue(id, out var box) || box.Validated)
         {
@@ -96,6 +105,9 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
         boxes[id] = box with
         {
             WeightKg = weightKg,
+            WidthCm = widthCm,
+            DepthCm = depthCm,
+            HeightCm = heightCm,
             ValidatedByPersonId = validatedByPersonId,
             ValidatedAt = validatedAt,
         };

@@ -178,8 +178,17 @@ public sealed class GetManifestWeightHandler(IManifestRepository repository)
 
         var vehicleKg = await repository.GetVehicleWeightKgAsync(query.Id, cancellationToken);
         var boxes = await repository.ListBoxesAsync(query.Id, cancellationToken);
+        var capacity = await repository.GetVehicleCargoCapacityAsync(query.Id, cancellationToken);
 
         var cargoKg = boxes.Sum(box => box.WeightKg);
+
+        // Advisory only: this never rejects anything, and either side missing data just means
+        // nothing can be flagged for that box (docs/domain/key-concepts.md § Manifest weight).
+        var cargoOverweight = capacity.MaxCargoWeightKg is { } maxCargoWeightKg && cargoKg > maxCargoWeightKg;
+        var oversizedBoxIds = boxes
+            .Where(box => !FitsCargoSpace(box, capacity))
+            .Select(box => box.BoxId)
+            .ToList();
 
         return new ManifestWeightReadModel(
             vehicleKg,
@@ -189,6 +198,38 @@ public sealed class GetManifestWeightHandler(IManifestRepository repository)
             vehicleKg + cargoKg + CrewAndBagsKg + FuelKg,
             // Unvalidated boxes weigh zero until a Loader says otherwise, so a total that
             // includes any of them is provisional and has to say so.
-            boxes.Count(box => !box.Validated));
+            boxes.Count(box => !box.Validated),
+            capacity.MaxCargoWeightKg,
+            cargoOverweight,
+            oversizedBoxIds);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="box"/> fits within the vehicle's cargo space, ignoring which way
+    /// round it is packed. Fits (i.e. cannot be flagged) whenever either side has no recorded
+    /// dimensions — a box or vehicle nobody has measured cannot be judged oversized. This is a
+    /// heuristic, not a guarantee of a physical fit: comparing the two sets of dimensions sorted
+    /// largest-to-smallest allows for any rotation without doing full 3-D packing.
+    /// </summary>
+    private static bool FitsCargoSpace(ManifestBoxReadModel box, VehicleCargoCapacityReadModel capacity)
+    {
+        if (box.WidthCm is not { } boxWidth || box.DepthCm is not { } boxDepth || box.HeightCm is not { } boxHeight)
+        {
+            return true;
+        }
+
+        if (capacity.CargoWidthCm is not { } cargoWidth
+            || capacity.CargoDepthCm is not { } cargoDepth
+            || capacity.CargoHeightCm is not { } cargoHeight)
+        {
+            return true;
+        }
+
+        var boxDimensions = new[] { boxWidth, boxDepth, boxHeight }.OrderDescending().ToArray();
+        var cargoDimensions = new[] { cargoWidth, cargoDepth, cargoHeight }.OrderDescending().ToArray();
+
+        return boxDimensions[0] <= cargoDimensions[0]
+            && boxDimensions[1] <= cargoDimensions[1]
+            && boxDimensions[2] <= cargoDimensions[2];
     }
 }

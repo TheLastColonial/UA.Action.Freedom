@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 
 import { useBoxLabel, useBoxQrCode, useIssueBoxQrCode, useRevokeBoxQrCode } from '../../api/boxes';
+import { Button } from '../../components/Button';
 import { Gate } from '../../components/Gate';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import './BoxQrCodePanel.css';
@@ -36,7 +37,7 @@ export function BoxQrCodePanel({ boxId }: BoxQrCodePanelProps): JSX.Element {
         <>
           <p>This box has no QR label.</p>
           <Gate policy="boxes:write" fallback={<p>Ask a dispatcher or loader to issue one.</p>}>
-            <button
+            <Button
               type="button"
               disabled={issue.isPending}
               onClick={() => {
@@ -44,7 +45,7 @@ export function BoxQrCodePanel({ boxId }: BoxQrCodePanelProps): JSX.Element {
               }}
             >
               Issue label
-            </button>
+            </Button>
           </Gate>
         </>
       ) : (
@@ -64,17 +65,18 @@ export function BoxQrCodePanel({ boxId }: BoxQrCodePanelProps): JSX.Element {
           ) : null}
 
           <div className="qr-panel__actions">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               disabled={label.data === undefined}
               onClick={() => {
                 window.print();
               }}
             >
               Print label
-            </button>
+            </Button>
             <Gate policy="boxes:write">
-              <button
+              <Button
                 type="button"
                 disabled={issue.isPending}
                 onClick={() => {
@@ -82,16 +84,17 @@ export function BoxQrCodePanel({ boxId }: BoxQrCodePanelProps): JSX.Element {
                 }}
               >
                 Reissue label
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="danger"
                 disabled={revoke.isPending}
                 onClick={() => {
                   revoke.mutate();
                 }}
               >
                 Revoke label
-              </button>
+              </Button>
             </Gate>
           </div>
 

@@ -22,11 +22,16 @@ public sealed record CreateVehicleRequest(
     int? ConvoyId,
     string? PurchaserName,
     DateTime? PurchaseDate,
-    int WeightKg)
+    int WeightKg,
+    decimal? MaxCargoWeightKg = null,
+    decimal? CargoWidthCm = null,
+    decimal? CargoDepthCm = null,
+    decimal? CargoHeightCm = null)
 {
     public CreateVehicleCommand ToCommand() => new(
         Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing,
-        Year, Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg);
+        Year, Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg,
+        MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm);
 }
 
 /// <summary>Body of <c>PUT /vehicles/{vin}</c>. The route supplies the VIN.</summary>
@@ -44,9 +49,14 @@ public sealed record UpdateVehicleRequest(
     int? ConvoyId,
     string? PurchaserName,
     DateTime? PurchaseDate,
-    int WeightKg)
+    int WeightKg,
+    decimal? MaxCargoWeightKg = null,
+    decimal? CargoWidthCm = null,
+    decimal? CargoDepthCm = null,
+    decimal? CargoHeightCm = null)
 {
     public UpdateVehicleCommand ToCommand(string vin) => new(
         vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing,
-        Year, Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg);
+        Year, Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg,
+        MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm);
 }

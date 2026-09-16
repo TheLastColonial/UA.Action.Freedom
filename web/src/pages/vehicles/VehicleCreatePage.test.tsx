@@ -42,13 +42,44 @@ test('renders a labelled field for every part of the request', async () => {
     'Number plate',
     'Make',
     'Model',
+    'Colour',
+    'Year',
     'Transmission',
     'Fuel',
-    'Year',
     'Kerb weight (kg)',
+    'Mileage',
+    'Maximum weight (kg)',
+    'Width (cm)',
+    'Depth (cm)',
+    'Height (cm)',
+    'Purchaser',
+    'Purchase date',
+    'Notes',
   ]) {
     await expect.element(screen.getByLabelText(label)).toBeInTheDocument();
   }
+});
+
+test('groups fields into named cards and drops Convoy id and servicing', async () => {
+  worker.use(...vehicleApi([]).handlers);
+  const screen = renderWithProviders(null, {
+    routes,
+    route: '/vehicles/new',
+    roles: ['Purchaser'],
+  });
+
+  for (const name of [
+    'Vehicle details',
+    'Engine details',
+    'Cargo capacity',
+    'Purchase information',
+    'Notes',
+  ]) {
+    await expect.element(screen.getByRole('group', { name })).toBeInTheDocument();
+  }
+
+  await expect.element(screen.getByLabelText('Convoy id')).not.toBeInTheDocument();
+  await expect.element(screen.getByLabelText('In for servicing')).not.toBeInTheDocument();
 });
 
 test('shows client-side validation messages on an invalid submit', async () => {

@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { useValidateBox } from '../../api/boxes';
 import { usePeople } from '../../api/people';
 import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
+import { Button } from '../../components/Button';
 import { SelectField, TextField } from '../../components/form/fields';
 import { emptyValidateForm, validateFormSchema, validateFormToRequest } from './boxModels';
 import type { ValidateFormValues } from './boxModels';
@@ -72,10 +73,34 @@ export function BoxValidatePanel({ boxId }: BoxValidatePanelProps): JSX.Element 
           error={errors.weightKg?.message}
           {...register('weightKg')}
         />
+        <TextField
+          label="Width (cm)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.widthCm?.message}
+          {...register('widthCm')}
+        />
+        <TextField
+          label="Depth (cm)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.depthCm?.message}
+          {...register('depthCm')}
+        />
+        <TextField
+          label="Height (cm)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          error={errors.heightCm?.message}
+          {...register('heightCm')}
+        />
 
-        <button type="submit" disabled={validate.isPending}>
+        <Button type="submit" disabled={validate.isPending}>
           Validate box
-        </button>
+        </Button>
       </form>
     </div>
   );

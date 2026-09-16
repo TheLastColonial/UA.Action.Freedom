@@ -70,6 +70,20 @@ test('a non–Ground Officer never sees the delivery-detail panel', async () => 
     .toBeInTheDocument();
 });
 
+test('groups fields into a named card', async () => {
+  worker.use(...receiverApi([makeReceiver({ ref: 'r1', organisation: 'Kyiv Aid' })]).handlers);
+
+  const screen = renderWithProviders(null, {
+    routes,
+    route: '/receivers/r1',
+    roles: ['Dispatcher'],
+  });
+
+  await expect
+    .element(screen.getByRole('region', { name: 'Receiver details' }))
+    .toBeInTheDocument();
+});
+
 test('a Ground Officer sees the reveal control', async () => {
   worker.use(...receiverApi([makeReceiver({ ref: 'r1', organisation: 'Kyiv Aid' })]).handlers);
 

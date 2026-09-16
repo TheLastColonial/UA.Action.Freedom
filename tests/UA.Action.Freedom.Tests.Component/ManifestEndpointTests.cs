@@ -420,6 +420,27 @@ public class ManifestEndpointTests
     }
 
     [Fact]
+    public async Task The_border_weight_flags_cargo_over_the_vehicles_stated_capacity_without_rejecting_anything()
+    {
+        var manifests = new InMemoryManifestRepository(AManifest())
+            .WithVehicleWeight(1_400)
+            .WithVehicleCargoCapacity(new VehicleCargoCapacityReadModel(20m, null, null, null))
+            .WithBoxOn(Id, new ManifestBoxReadModel(1, 30, Validated: true));
+        await using var api = FreedomApi.WithManifests(
+            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.GetAsync($"/manifests/{Id}/weight", TestContext.Current.CancellationToken);
+        var weight = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+
+        // Advisory only: still a 200, never a rejection.
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        weight.GetProperty("maxCargoWeightKg").GetDecimal().Should().Be(20m);
+        weight.GetProperty("cargoOverweight").GetBoolean().Should().BeTrue();
+        weight.GetProperty("oversizedBoxIds").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Putting_an_unknown_box_on_a_manifest_is_a_404()
     {
         var manifests = new InMemoryManifestRepository(AManifest());

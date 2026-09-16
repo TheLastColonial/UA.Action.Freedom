@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import { useBoxes } from '../../api/boxes';
 import type { BoxReadModel } from '../../api/schemas/boxes';
+import { LinkButton } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
@@ -35,7 +36,7 @@ export function BoxesListPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>Boxes</h1>
         <Gate policy="boxes:write">
-          <Link to="/boxes/new">New box</Link>
+          <LinkButton to="/boxes/new">New box</LinkButton>
         </Gate>
       </header>
 

@@ -31,6 +31,16 @@ test('renders the volunteer', async () => {
   await expect.element(screen.getByRole('heading', { name: 'Olena K' })).toBeInTheDocument();
 });
 
+test('groups fields into named cards', async () => {
+  worker.use(...personApi([makePerson({ id: 'p1', firstName: 'Olena', lastName: 'K' })]).handlers);
+
+  const screen = renderWithProviders(null, { routes, route: '/people/p1', roles: ['Loader'] });
+
+  for (const name of ['Personal details', 'Volunteering']) {
+    await expect.element(screen.getByRole('region', { name })).toBeInTheDocument();
+  }
+});
+
 test('renders Not found for an unknown id', async () => {
   worker.use(...personApi([]).handlers);
 

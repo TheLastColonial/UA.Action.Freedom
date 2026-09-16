@@ -92,6 +92,12 @@ A truck or car that has been donated, and which is itself part of the aid — ve
 not driven back. Identified by VIN and licence plate, and carrying the detail a border check needs: kerb weight,
 fuel type, transmission, year, and condition notes.
 
+A vehicle may also carry an optional **cargo capacity**: a maximum cargo weight and the width, depth and height of
+its cargo space. Nothing back-fills this — it starts unset and is measured whenever someone gets round to it. It
+is distinct from the kerb weight above (the vehicle's own weight) and exists to help a dispatcher judge, before a
+convoy leaves, whether the [Boxes](#box) assigned to a [Manifest](#manifest) are too heavy or too large for the
+vehicle carrying them — see the note under Manifest.
+
 > **Naming:** the domain type was renamed from `Veichle` to `Vehicle`. The rename is complete across the
 > solution.
 
@@ -117,6 +123,10 @@ the system records who validated it and when.
 
 Validation is the trust boundary between the donor and Ukrainian Action, and the weight it produces is what the
 border check relies on. Both facts make the validation record an audit artefact, not just a status flag.
+
+A box may also carry optional **dimensions** (width, depth, height), set at the same moment as the confirmed
+weight — a Loader is physically looking at the box then. Like the weight, dimensions start unset and are only
+ever written by validation.
 
 A box carries a **QR label**: an opaque, non-enumerable token that a scan resolves back to the box's record
 (`GET /boxes/scan/{token}`). A box can be re-labelled — issuing a new code revokes the previous one, so a label
@@ -156,6 +166,12 @@ weight, plus the sum of box weights, plus a fixed allowance of 200 kg (two drive
 
 > **The fixed 200 kg + 45 kg padding is deliberate**, not a bug. It is the border-check estimate Ukrainian Action
 > uses. Do not "correct" it without asking.
+
+`GET /manifests/{id}/weight` also reports whether the cargo would exceed the vehicle's stated capacity — total
+box weight against the vehicle's maximum cargo weight, and each box's own dimensions (set at validation) against
+the vehicle's cargo space. **This is advisory only.** Nothing is ever rejected because of it, and a vehicle or box
+with no capacity/dimension data recorded simply cannot be flagged. Do not turn this into an enforcement rule
+without asking — it exists to help a dispatcher notice a problem before a convoy leaves, not to block one.
 
 The manifest is what a [Border Guard](#border-guard-external) is shown, which is why the question of what
 appears on it is a security question — see [Data Sensitivity](#data-sensitivity).

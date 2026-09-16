@@ -20,6 +20,15 @@ public class Box
     /// </summary>
     public int WeightKg { get; init; }
 
+    /// <summary>Width of the box, in centimetres. Set alongside <see cref="WeightKg"/> at validation. Null until then.</summary>
+    public decimal? WidthCm { get; init; }
+
+    /// <summary>Depth of the box, in centimetres. Set alongside <see cref="WeightKg"/> at validation. Null until then.</summary>
+    public decimal? DepthCm { get; init; }
+
+    /// <summary>Height of the box, in centimetres. Set alongside <see cref="WeightKg"/> at validation. Null until then.</summary>
+    public decimal? HeightCm { get; init; }
+
     /// <summary>
     /// The contents of the box have been validated
     /// </summary>

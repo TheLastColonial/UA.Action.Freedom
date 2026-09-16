@@ -1,8 +1,10 @@
 import type { JSX } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { useDeletePerson, usePerson } from '../../api/people';
 import { ApiNotFound } from '../../api/problem';
+import { Button, LinkButton } from '../../components/Button';
+import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
@@ -33,9 +35,11 @@ export function PersonDetailPage(): JSX.Element {
         </h1>
         <Gate policy="people:write">
           <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
-            <Link to={`/people/${encodeURIComponent(person.id)}/edit`}>Edit</Link>
-            <button
-              type="button"
+            <LinkButton to={`/people/${encodeURIComponent(person.id)}/edit`} variant="secondary">
+              Edit
+            </LinkButton>
+            <Button
+              variant="danger"
               disabled={remove.isPending}
               onClick={() => {
                 remove.mutate(person.id, {
@@ -46,25 +50,32 @@ export function PersonDetailPage(): JSX.Element {
               }}
             >
               Delete
-            </button>
+            </Button>
           </span>
         </Gate>
       </header>
 
       {remove.isError ? <p role="alert">The volunteer could not be removed.</p> : null}
 
-      <dl>
-        <dt>Date of birth</dt>
-        <dd>{person.dateOfBirth.slice(0, 10)}</dd>
-        <dt>Joined</dt>
-        <dd>{person.joined.slice(0, 10)}</dd>
-        <dt>Phone</dt>
-        <dd>{person.phone ?? '—'}</dd>
-        <dt>Volunteers to drive</dt>
-        <dd>{person.isDriver ? 'Yes' : 'No'}</dd>
-        <dt>Committed to a convoy</dt>
-        <dd>{person.committed ? 'Yes' : 'No'}</dd>
-      </dl>
+      <DetailCard title="Personal details">
+        <dl>
+          <dt>Date of birth</dt>
+          <dd>{person.dateOfBirth.slice(0, 10)}</dd>
+          <dt>Phone</dt>
+          <dd>{person.phone ?? '—'}</dd>
+        </dl>
+      </DetailCard>
+
+      <DetailCard title="Volunteering">
+        <dl>
+          <dt>Joined</dt>
+          <dd>{person.joined.slice(0, 10)}</dd>
+          <dt>Volunteers to drive</dt>
+          <dd>{person.isDriver ? 'Yes' : 'No'}</dd>
+          <dt>Committed to a convoy</dt>
+          <dd>{person.committed ? 'Yes' : 'No'}</dd>
+        </dl>
+      </DetailCard>
     </section>
   );
 }

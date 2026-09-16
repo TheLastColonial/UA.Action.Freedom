@@ -28,7 +28,9 @@ public interface IBoxRepository
     /// the caller distinguishes those by reading the box.
     /// </summary>
     Task<bool> ValidateAsync(
-        int id, Guid validatedByPersonId, int weightKg, DateTime validatedAt, CancellationToken cancellationToken);
+        int id, Guid validatedByPersonId, int weightKg,
+        decimal? widthCm, decimal? depthCm, decimal? heightCm,
+        DateTime validatedAt, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<BoxItemReadModel>> ListItemsAsync(int boxId, CancellationToken cancellationToken);
 

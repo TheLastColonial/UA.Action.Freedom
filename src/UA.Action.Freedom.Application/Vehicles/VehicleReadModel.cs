@@ -25,4 +25,8 @@ public sealed record VehicleReadModel(
     int? ConvoyId,
     string? PurchaserName,
     DateTime? PurchaseDate,
-    int WeightKg);
+    int WeightKg,
+    decimal? MaxCargoWeightKg,
+    decimal? CargoWidthCm,
+    decimal? CargoDepthCm,
+    decimal? CargoHeightCm);

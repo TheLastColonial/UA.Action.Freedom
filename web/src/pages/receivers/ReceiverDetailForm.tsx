@@ -3,6 +3,8 @@ import type { JSX } from 'react';
 import { useForm } from 'react-hook-form';
 
 import type { ReceiverDetailReadModel } from '../../api/receiverDetail';
+import { Button } from '../../components/Button';
+import { FormCard } from '../../components/form/FormCard';
 import { TextField } from '../../components/form/fields';
 import { detailFormSchema, emptyDetailForm } from './receiverModels';
 import type { DetailFormValues } from './receiverModels';
@@ -57,36 +59,38 @@ export function ReceiverDetailForm({
           {errorMessage}
         </p>
       ) : null}
-      <TextField
-        label="Contact name"
-        error={errors.contactName?.message}
-        {...register('contactName')}
-      />
-      <TextField
-        label="Contact phone"
-        error={errors.contactPhone?.message}
-        {...register('contactPhone')}
-      />
-      <TextField
-        label="Address line 1"
-        error={errors.addressLine1?.message}
-        {...register('addressLine1')}
-      />
-      <TextField
-        label="Address line 2"
-        error={errors.addressLine2?.message}
-        {...register('addressLine2')}
-      />
-      <TextField label="City" error={errors.city?.message} {...register('city')} />
-      <TextField label="Postcode" error={errors.postCode?.message} {...register('postCode')} />
+      <FormCard title="Delivery detail">
+        <TextField
+          label="Contact name"
+          error={errors.contactName?.message}
+          {...register('contactName')}
+        />
+        <TextField
+          label="Contact phone"
+          error={errors.contactPhone?.message}
+          {...register('contactPhone')}
+        />
+        <TextField
+          label="Address line 1"
+          error={errors.addressLine1?.message}
+          {...register('addressLine1')}
+        />
+        <TextField
+          label="Address line 2"
+          error={errors.addressLine2?.message}
+          {...register('addressLine2')}
+        />
+        <TextField label="City" error={errors.city?.message} {...register('city')} />
+        <TextField label="Postcode" error={errors.postCode?.message} {...register('postCode')} />
+      </FormCard>
 
       <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-        <button type="button" onClick={onCancel}>
+        <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
-        </button>
-        <button type="submit" disabled={submitting}>
+        </Button>
+        <Button type="submit" disabled={submitting}>
           {submitting ? 'Saving…' : 'Save delivery detail'}
-        </button>
+        </Button>
       </div>
     </form>
   );

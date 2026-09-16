@@ -1,8 +1,10 @@
 import type { JSX } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useDeleteManifest, useManifest } from '../../api/manifests';
 import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
+import { Button, LinkButton } from '../../components/Button';
+import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
@@ -81,23 +83,30 @@ export function ManifestDetailPage(): JSX.Element {
 
       {tab === 'overview' ? (
         <div>
-          <dl>
-            <dt>Vehicle</dt>
-            <dd>{manifest.vin ?? '—'}</dd>
-            <dt>Convoy</dt>
-            <dd>{manifest.convoyId ?? 'Not linked'}</dd>
-            <dt>Ferry booking</dt>
-            <dd>{manifest.ferryBookingComplete ? 'Complete' : 'Outstanding'}</dd>
-            <dt>Delivery notes</dt>
-            <dd>{manifest.deliveryNotes ?? '—'}</dd>
-          </dl>
+          <DetailCard title="Manifest details">
+            <dl>
+              <dt>Vehicle</dt>
+              <dd>{manifest.vin ?? '—'}</dd>
+              <dt>Convoy</dt>
+              <dd>{manifest.convoyId ?? 'Not linked'}</dd>
+              <dt>Ferry booking</dt>
+              <dd>{manifest.ferryBookingComplete ? 'Complete' : 'Outstanding'}</dd>
+              <dt>Delivery notes</dt>
+              <dd>{manifest.deliveryNotes ?? '—'}</dd>
+            </dl>
+          </DetailCard>
           <Gate policy="manifests:write">
             <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
               {!manifest.frozen ? (
-                <Link to={`/manifests/${encodeURIComponent(manifest.id)}/edit`}>Edit</Link>
+                <LinkButton
+                  to={`/manifests/${encodeURIComponent(manifest.id)}/edit`}
+                  variant="secondary"
+                >
+                  Edit
+                </LinkButton>
               ) : null}
-              <button
-                type="button"
+              <Button
+                variant="danger"
                 disabled={remove.isPending}
                 onClick={() => {
                   remove.mutate(manifest.id, {
@@ -108,7 +117,7 @@ export function ManifestDetailPage(): JSX.Element {
                 }}
               >
                 Delete
-              </button>
+              </Button>
             </span>
           </Gate>
           {deleteError ? (

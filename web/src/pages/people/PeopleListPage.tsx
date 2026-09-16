@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import { usePeople } from '../../api/people';
 import type { PersonReadModel } from '../../api/schemas/people';
+import { LinkButton } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
@@ -56,7 +57,7 @@ export function PeopleListPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>Volunteers</h1>
         <Gate policy="people:write">
-          <Link to="/people/new">New volunteer</Link>
+          <LinkButton to="/people/new">New volunteer</LinkButton>
         </Gate>
       </header>
 

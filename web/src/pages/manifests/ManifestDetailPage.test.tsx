@@ -38,6 +38,16 @@ test('renders the overview and Not found for an unknown reference', async () => 
   await expect.element(missing.getByRole('heading', { name: 'Not found' })).toBeInTheDocument();
 });
 
+test('groups overview fields into a named card', async () => {
+  worker.use(...manifestApi([makeManifest({ id: 'D1', vin: 'VIN9' })]).handlers);
+
+  const screen = renderWithProviders(null, { routes, route: '/manifests/D1', roles: ['Loader'] });
+
+  await expect
+    .element(screen.getByRole('region', { name: 'Manifest details' }))
+    .toBeInTheDocument();
+});
+
 test('a frozen manifest offers no Edit link and the edit page explains why', async () => {
   worker.use(
     ...manifestApi([makeManifest({ id: 'D2', frozen: true, status: 'Confirmed' })]).handlers,

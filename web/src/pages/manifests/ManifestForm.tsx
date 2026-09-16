@@ -2,6 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { JSX } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
+import { FormCard } from '../../components/form/FormCard';
 import { CheckboxField, TextField } from '../../components/form/fields';
 import { manifestFormSchema } from './manifestModels';
 import type { ManifestFormValues } from './manifestModels';
@@ -45,30 +47,32 @@ export function ManifestForm({
         </p>
       ) : null}
 
-      {mode === 'create' ? (
-        <TextField label="Reference" error={errors.id?.message} {...register('id')} />
-      ) : (
-        <TextField label="Reference" value={initialValues.id} readOnly disabled />
-      )}
+      <FormCard title="Manifest details">
+        {mode === 'create' ? (
+          <TextField label="Reference" error={errors.id?.message} {...register('id')} />
+        ) : (
+          <TextField label="Reference" value={initialValues.id} readOnly disabled />
+        )}
 
-      <TextField label="Vehicle VIN" error={errors.vin?.message} {...register('vin')} />
-      <TextField
-        label="Convoy id"
-        type="number"
-        inputMode="numeric"
-        error={errors.convoyId?.message}
-        {...register('convoyId')}
-      />
-      <TextField
-        label="Delivery notes"
-        error={errors.deliveryNotes?.message}
-        {...register('deliveryNotes')}
-      />
-      <CheckboxField label="Ferry booking complete" {...register('ferryBookingComplete')} />
+        <TextField label="Vehicle VIN" error={errors.vin?.message} {...register('vin')} />
+        <TextField
+          label="Convoy id"
+          type="number"
+          inputMode="numeric"
+          error={errors.convoyId?.message}
+          {...register('convoyId')}
+        />
+        <TextField
+          label="Delivery notes"
+          error={errors.deliveryNotes?.message}
+          {...register('deliveryNotes')}
+        />
+        <CheckboxField label="Ferry booking complete" {...register('ferryBookingComplete')} />
+      </FormCard>
 
-      <button type="submit" disabled={submitting}>
+      <Button type="submit" disabled={submitting}>
         {submitting ? 'Saving…' : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

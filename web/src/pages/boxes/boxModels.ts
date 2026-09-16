@@ -117,18 +117,44 @@ export const addItemFormSchema = z.object({
 export interface ValidateFormValues {
   validatedByPersonId: string;
   weightKg: string;
+  widthCm: string;
+  depthCm: string;
+  heightCm: string;
 }
 
 export function emptyValidateForm(): ValidateFormValues {
-  return { validatedByPersonId: '', weightKg: '' };
+  return { validatedByPersonId: '', weightKg: '', widthCm: '', depthCm: '', heightCm: '' };
+}
+
+function decimalNumber(value: string): number | undefined {
+  const t = value.trim();
+  return t.length > 0 ? Number(t) : undefined;
 }
 
 export function validateFormToRequest(values: ValidateFormValues): ValidateBoxRequest {
-  return {
+  const request: ValidateBoxRequest = {
     validatedByPersonId: values.validatedByPersonId,
     weightKg: Number(values.weightKg),
   };
+
+  const widthCm = decimalNumber(values.widthCm);
+  if (widthCm !== undefined) request.widthCm = widthCm;
+  const depthCm = decimalNumber(values.depthCm);
+  if (depthCm !== undefined) request.depthCm = depthCm;
+  const heightCm = decimalNumber(values.heightCm);
+  if (heightCm !== undefined) request.heightCm = heightCm;
+
+  return request;
 }
+
+// A dimension a volunteer can carry. Like the 1..500 weight bound, a typo guard rather than a
+// real bound — mirrors ValidateBoxRequestValidator.MaxBoxDimensionCm.
+const optionalNonNegativeDecimal = (message: string) =>
+  z.string().refine((raw) => {
+    const t = raw.trim();
+    if (t.length === 0) return true;
+    return /^\d+(\.\d{1,2})?$/.test(t) && Number(t) >= 1 && Number(t) <= 1000;
+  }, message);
 
 export const validateFormSchema = z.object({
   validatedByPersonId: z.string().min(1, 'Name the volunteer who checked the box'),
@@ -136,4 +162,13 @@ export const validateFormSchema = z.object({
     const n = Number(raw.trim());
     return raw.trim().length > 0 && Number.isInteger(n) && n >= 1 && n <= 500;
   }, "'Weight' must be a whole number between 1 and 500"),
+  widthCm: optionalNonNegativeDecimal(
+    "'Width' must be a number between 1 and 1000, with up to 2 decimal places",
+  ),
+  depthCm: optionalNonNegativeDecimal(
+    "'Depth' must be a number between 1 and 1000, with up to 2 decimal places",
+  ),
+  heightCm: optionalNonNegativeDecimal(
+    "'Height' must be a number between 1 and 1000, with up to 2 decimal places",
+  ),
 });

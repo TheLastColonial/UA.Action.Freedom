@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import { useConvoys } from '../../api/convoys';
 import type { ConvoyReadModel } from '../../api/schemas/convoys';
+import { LinkButton } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
@@ -41,7 +42,7 @@ export function ConvoysListPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>Convoys</h1>
         <Gate policy="convoys:write">
-          <Link to="/convoys/new">New convoy</Link>
+          <LinkButton to="/convoys/new">New convoy</LinkButton>
         </Gate>
       </header>
 

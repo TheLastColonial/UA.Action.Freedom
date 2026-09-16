@@ -5,6 +5,8 @@ import { useForm } from 'react-hook-form';
 import type { FieldPath } from 'react-hook-form';
 
 import { problemFieldToFormPath } from '../../api/problem';
+import { Button } from '../../components/Button';
+import { FormCard } from '../../components/form/FormCard';
 import { CheckboxField, TextField } from '../../components/form/fields';
 import { personFormSchema } from './personFormModel';
 import type { PersonFormValues } from './personFormModel';
@@ -81,33 +83,41 @@ export function PersonForm({
         </p>
       ) : null}
 
-      <TextField label="First name" error={errors.firstName?.message} {...register('firstName')} />
-      <TextField label="Last name" error={errors.lastName?.message} {...register('lastName')} />
-      <TextField
-        label="Date of birth"
-        type="date"
-        error={errors.dateOfBirth?.message}
-        {...register('dateOfBirth')}
-      />
-      <TextField
-        label="Joined"
-        type="date"
-        error={errors.joined?.message}
-        {...register('joined')}
-      />
-      <TextField label="Phone" error={errors.phone?.message} {...register('phone')} />
+      <FormCard title="Personal details">
+        <TextField
+          label="First name"
+          error={errors.firstName?.message}
+          {...register('firstName')}
+        />
+        <TextField label="Last name" error={errors.lastName?.message} {...register('lastName')} />
+        <TextField
+          label="Date of birth"
+          type="date"
+          error={errors.dateOfBirth?.message}
+          {...register('dateOfBirth')}
+        />
+        <TextField label="Phone" error={errors.phone?.message} {...register('phone')} />
+      </FormCard>
 
-      <CheckboxField label="Volunteers to drive" {...register('isDriver')} />
-      <CheckboxField
-        label="Committed to a convoy"
-        disabled={!isDriver}
-        error={errors.committed?.message}
-        {...register('committed')}
-      />
+      <FormCard title="Volunteering">
+        <TextField
+          label="Joined"
+          type="date"
+          error={errors.joined?.message}
+          {...register('joined')}
+        />
+        <CheckboxField label="Volunteers to drive" {...register('isDriver')} />
+        <CheckboxField
+          label="Committed to a convoy"
+          disabled={!isDriver}
+          error={errors.committed?.message}
+          {...register('committed')}
+        />
+      </FormCard>
 
-      <button type="submit" disabled={submitting}>
+      <Button type="submit" disabled={submitting}>
         {submitting ? 'Saving…' : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

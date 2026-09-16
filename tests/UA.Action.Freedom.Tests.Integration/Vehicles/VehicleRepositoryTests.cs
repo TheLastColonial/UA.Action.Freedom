@@ -61,7 +61,11 @@ public class VehicleRepositoryTests
         ConvoyId: null,
         PurchaserName: "operator",
         PurchaseDate: new DateTime(2026, 6, 15, 0, 0, 0, DateTimeKind.Utc),
-        WeightKg: 1_800);
+        WeightKg: 1_800,
+        MaxCargoWeightKg: 900.50m,
+        CargoWidthCm: 150.25m,
+        CargoDepthCm: 300.00m,
+        CargoHeightCm: 180.75m);
 
     private static string NewVin() => "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
 
