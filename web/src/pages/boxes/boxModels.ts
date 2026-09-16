@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type {
   AddBoxItemRequest,
+  AssignBoxBayRequest,
   BoxReadModel,
   CreateBoxRequest,
   UpdateBoxRequest,
@@ -12,25 +13,17 @@ import type {
 
 export interface BoxFormValues {
   receiverRef: string;
-  house: string;
-  street: string;
-  city: string;
-  country: string;
-  postcode: string;
+  locationId: string;
 }
 
 export function emptyBoxForm(): BoxFormValues {
-  return { receiverRef: '', house: '', street: '', city: '', country: '', postcode: '' };
+  return { receiverRef: '', locationId: '' };
 }
 
 export function boxToFormValues(box: BoxReadModel): BoxFormValues {
   return {
     receiverRef: box.receiverRef ?? '',
-    house: box.house ?? '',
-    street: box.street ?? '',
-    city: box.city ?? '',
-    country: box.country ?? '',
-    postcode: box.postcode ?? '',
+    locationId: box.locationId === null ? '' : String(box.locationId),
   };
 }
 
@@ -43,16 +36,8 @@ export function boxFormToRequest(values: BoxFormValues): CreateBoxRequest {
   const request: CreateBoxRequest = {};
   const receiverRef = trimmed(values.receiverRef);
   if (receiverRef !== undefined) request.receiverRef = receiverRef;
-  const house = trimmed(values.house);
-  if (house !== undefined) request.house = house;
-  const street = trimmed(values.street);
-  if (street !== undefined) request.street = street;
-  const city = trimmed(values.city);
-  if (city !== undefined) request.city = city;
-  const country = trimmed(values.country);
-  if (country !== undefined) request.country = country;
-  const postcode = trimmed(values.postcode);
-  if (postcode !== undefined) request.postcode = postcode;
+  const locationId = trimmed(values.locationId);
+  if (locationId !== undefined) request.locationId = Number(locationId);
   return request;
 }
 
@@ -62,11 +47,7 @@ export function boxFormToUpdateRequest(values: BoxFormValues): UpdateBoxRequest 
 
 export const boxFormSchema = z.object({
   receiverRef: z.string().max(64, 'Receiver reference must be 64 characters or fewer'),
-  house: z.string().max(100, 'House must be 100 characters or fewer'),
-  street: z.string().max(200, 'Street must be 200 characters or fewer'),
-  city: z.string().max(100, 'City must be 100 characters or fewer'),
-  country: z.string().max(100, 'Country must be 100 characters or fewer'),
-  postcode: z.string().max(20, 'Postcode must be 20 characters or fewer'),
+  locationId: z.string(),
 });
 
 // ---- Add an item ---------------------------------------------------------
@@ -171,4 +152,24 @@ export const validateFormSchema = z.object({
   heightCm: optionalNonNegativeDecimal(
     "'Height' must be a number between 1 and 1000, with up to 2 decimal places",
   ),
+});
+
+// ---- Assign a bay -----------------------------------------------------
+
+export interface AssignBayFormValues {
+  bayId: string;
+  assignedByPersonId: string;
+}
+
+export function emptyAssignBayForm(): AssignBayFormValues {
+  return { bayId: '', assignedByPersonId: '' };
+}
+
+export function assignBayFormToRequest(values: AssignBayFormValues): AssignBoxBayRequest {
+  return { bayId: Number(values.bayId), assignedByPersonId: values.assignedByPersonId };
+}
+
+export const assignBayFormSchema = z.object({
+  bayId: z.string().min(1, 'Choose a bay'),
+  assignedByPersonId: z.string().min(1, 'Name the volunteer placing the box'),
 });

@@ -19,6 +19,8 @@ public class BoxHandlerTests
 {
     private const int BoxId = 7;
 
+    private const int LocationId = 3;
+
     private static readonly Guid Loader = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
 
     private static BoxReadModel ABox(bool validated = false) => new(
@@ -28,11 +30,7 @@ public class BoxHandlerTests
         DepthCm: validated ? 30 : null,
         HeightCm: validated ? 20 : null,
         ReceiverRef: null,
-        House: "Unit 4",
-        Street: "Cross Road",
-        City: "Coventry",
-        Country: "United Kingdom",
-        Postcode: "CV1 2AB",
+        LocationId: LocationId,
         ValidatedByPersonId: validated ? Loader : null,
         ValidatedAt: validated ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null);
 
@@ -52,7 +50,7 @@ public class BoxHandlerTests
         var handler = new CreateBoxHandler(repository);
 
         await handler.HandleAsync(
-            new CreateBoxCommand(null, "Unit 4", "Cross Road", "Coventry", "United Kingdom", "CV1 2AB"),
+            new CreateBoxCommand(null, LocationId),
             CancellationToken.None);
 
         await repository.Received(1).AddAsync(
@@ -210,7 +208,7 @@ public class BoxHandlerTests
         var handler = new UpdateBoxHandler(repository);
 
         var outcome = await handler.HandleAsync(
-            new UpdateBoxCommand(BoxId, Guid.NewGuid(), null, null, "Lviv", "Ukraine", null),
+            new UpdateBoxCommand(BoxId, Guid.NewGuid(), LocationId),
             CancellationToken.None);
 
         outcome.Should().Be(UpdateBoxOutcome.AlreadyValidated);
@@ -227,12 +225,14 @@ public class BoxHandlerTests
         repository.UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
         var handler = new UpdateBoxHandler(repository);
 
+        const int newLocationId = 9;
+
         await handler.HandleAsync(
-            new UpdateBoxCommand(BoxId, null, null, null, "Dover", "United Kingdom", "CT16 1JA"),
+            new UpdateBoxCommand(BoxId, null, newLocationId),
             CancellationToken.None);
 
         await repository.Received(1).UpdateAsync(
-            Arg.Is<BoxReadModel>(box => box.City == "Dover" && !box.Validated && box.WeightKg == 0),
+            Arg.Is<BoxReadModel>(box => box.LocationId == newLocationId && !box.Validated && box.WeightKg == 0),
             Arg.Any<CancellationToken>());
     }
 

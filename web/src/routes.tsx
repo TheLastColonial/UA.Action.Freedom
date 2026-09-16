@@ -7,6 +7,7 @@ import { RouteError } from './components/RouteError';
 import { Dashboard } from './pages/Dashboard';
 import { boxRoutes } from './pages/boxes/routes';
 import { convoyRoutes } from './pages/convoys/routes';
+import { locationRoutes } from './pages/locations/routes';
 import { manifestRoutes } from './pages/manifests/routes';
 import { peopleRoutes } from './pages/people/routes';
 import { receiverRoutes } from './pages/receivers/routes';
@@ -28,6 +29,7 @@ export const routes: RouteObject[] = [
           { path: 'boxes', children: boxRoutes },
           { path: 'manifests', children: manifestRoutes },
           { path: 'receivers', children: receiverRoutes },
+          { path: 'locations', children: locationRoutes },
           { path: '*', element: <NotFound /> },
         ],
       },

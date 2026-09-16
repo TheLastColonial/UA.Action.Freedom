@@ -184,6 +184,9 @@ token lacking the role is **403**.
 | `boxes:read` | ✓ | ✓ | ✓ | ✓ | |
 | `boxes:write` | ✓ | ✓ | ✓ | | |
 | `boxes:validate` | ✓ | | ✓ | | |
+| `boxes:allocate-bay` | | | ✓ | | |
+| `locations:read` | ✓ | ✓ | ✓ | ✓ | |
+| `locations:write` | ✓ | | | | |
 | `manifests:read` | ✓ | ✓ | ✓ | ✓ | |
 | `manifests:write` | ✓ | ✓ | | | |
 | `manifests:approve` | ✓ | | | | |
@@ -198,6 +201,9 @@ Three rows are worth understanding rather than memorising:
   manifest permanently. The person who builds a manifest is not the person who signs it off.
 - **`boxes:validate` is separate from `boxes:write`** for the same kind of reason: packing a box
   and vouching for what is in it are different acts, and the Loader is the one who opens it.
+- **`boxes:allocate-bay` is Loader alone** — narrower even than `boxes:validate`, since Administrator
+  is excluded too. Placing a box in a bay is the on-site, physical act of shelving it, not a
+  coordination task, so it belongs to whoever is standing in the warehouse.
 - **`receivers:detail` is the narrowest policy in the API** and the only one an Administrator is
   excluded from. `DELETE /receivers/{ref}` sits behind it too, because removing a receiver removes
   its address. See [`gotchas-and-open-questions.md`](gotchas-and-open-questions.md) §3.

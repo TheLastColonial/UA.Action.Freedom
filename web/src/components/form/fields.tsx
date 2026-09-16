@@ -93,15 +93,17 @@ type SelectProps = Omit<ComponentPropsWithRef<'select'>, 'id'>;
 export function SelectField({
   label,
   error,
+  hint,
   options,
   ...select
 }: {
   label: string;
   error?: string | undefined;
+  hint?: string | undefined;
   options: readonly { value: string; label: string }[];
 } & SelectProps): JSX.Element {
   return (
-    <FieldShell label={label} error={error}>
+    <FieldShell label={label} error={error} hint={hint}>
       {({ inputId, describedBy }) => (
         <select
           id={inputId}

@@ -27,11 +27,7 @@ public class BoxQrCodeEndpointTests
         DepthCm: null,
         HeightCm: null,
         ReceiverRef: receiverRef,
-        House: "Unit 4",
-        Street: "Cross Road",
-        City: "Coventry",
-        Country: "United Kingdom",
-        Postcode: "CV1 2AB",
+        LocationId: 3,
         ValidatedByPersonId: validated ? Guid.NewGuid() : null,
         ValidatedAt: validated ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null);
 

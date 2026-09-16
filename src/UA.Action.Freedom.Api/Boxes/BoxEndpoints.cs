@@ -24,6 +24,12 @@ public static class BoxEndpoints
     private const string NoQrCodeProblem =
         "This box has no QR code. Issue one with POST /boxes/{id}/qr-code before printing a label.";
 
+    private const string BayLocationMismatchProblem =
+        "This bay does not belong to the location the box is currently at.";
+
+    private const string BayNoSuchAssignerProblem =
+        "The volunteer named as having placed this box is not on file.";
+
     public static WebApplication MapFreedomBoxes(this WebApplication app)
     {
         var boxes = app.MapGroup("/boxes").WithTags("Boxes");
@@ -211,6 +217,63 @@ public static class BoxEndpoints
             return string.Equals(format, "png", StringComparison.OrdinalIgnoreCase)
                 ? Results.Bytes(QrCodeRenderer.ToPng(code.Token, baseUrl), "image/png")
                 : Results.Text(QrCodeRenderer.ToSvg(code.Token, baseUrl), "image/svg+xml");
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesRead);
+
+        // Bay allocation. Placing or moving a box is Loader-only — narrower than boxes:write —
+        // because this is the on-site, physical act of shelving a box, not coordination
+        // (docs/domain/key-concepts.md § Loader). Reading the current bay or its history is an
+        // ordinary box read.
+        boxes.MapPut("/{id:int}/bay", async (
+            int id,
+            AssignBoxBayRequest request,
+            ICommandHandler<AssignBoxBayCommand, AssignBoxBayOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
+
+            return outcome switch
+            {
+                AssignBoxBayOutcome.Assigned => Results.NoContent(),
+                AssignBoxBayOutcome.BoxNotFound => Results.NotFound(),
+                AssignBoxBayOutcome.BayNotFound => Results.Problem(
+                    detail: "No such bay.", statusCode: StatusCodes.Status404NotFound),
+                AssignBoxBayOutcome.NoSuchAssigner => Results.Problem(
+                    detail: BayNoSuchAssignerProblem, statusCode: StatusCodes.Status404NotFound),
+                _ => Results.Problem(
+                    detail: BayLocationMismatchProblem, statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .AddEndpointFilter<ValidationFilter<AssignBoxBayRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.BoxesAllocateBay);
+
+        boxes.MapGet("/{id:int}/bay", async (
+            int id,
+            IQueryHandler<GetBoxBayQuery, BoxBayAssignmentReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var assignment = await handler.HandleAsync(new GetBoxBayQuery(id), cancellationToken);
+            return assignment is null ? Results.NotFound() : Results.Ok(assignment);
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesRead);
+
+        boxes.MapDelete("/{id:int}/bay", async (
+            int id,
+            ICommandHandler<VacateBoxBayCommand, VacateBoxBayOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new VacateBoxBayCommand(id), cancellationToken);
+            return outcome == VacateBoxBayOutcome.Vacated ? Results.NoContent() : Results.NotFound();
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesAllocateBay);
+
+        boxes.MapGet("/{id:int}/bay/history", async (
+            int id,
+            IQueryHandler<GetBoxBayHistoryQuery, IReadOnlyList<BoxBayAssignmentReadModel>> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var history = await handler.HandleAsync(new GetBoxBayHistoryQuery(id), cancellationToken);
+            return Results.Ok(history);
         })
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 

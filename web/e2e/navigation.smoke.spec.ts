@@ -7,7 +7,15 @@ test.beforeEach(async () => {
   test.skip(!(await stackIsUp()), 'the local stack is not up (docker compose + tofu apply)');
 });
 
-const OPERATIONAL = ['Vehicles', 'Volunteers', 'Convoys', 'Boxes', 'Manifests', 'Receivers'];
+const OPERATIONAL = [
+  'Vehicles',
+  'Volunteers',
+  'Convoys',
+  'Boxes',
+  'Manifests',
+  'Receivers',
+  'Locations',
+];
 
 test.describe('operator (Dispatcher + Loader + Purchaser)', () => {
   test.use({ storageState: authFile('operator') });
@@ -45,7 +53,7 @@ test.describe('ground officer', () => {
     const nav = page.getByRole('navigation', { name: 'Sections' });
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Receivers' })).toBeVisible();
-    for (const hidden of ['Vehicles', 'Volunteers', 'Convoys', 'Boxes', 'Manifests']) {
+    for (const hidden of ['Vehicles', 'Volunteers', 'Convoys', 'Boxes', 'Manifests', 'Locations']) {
       await expect(nav.getByRole('link', { name: hidden })).toBeHidden();
     }
   });

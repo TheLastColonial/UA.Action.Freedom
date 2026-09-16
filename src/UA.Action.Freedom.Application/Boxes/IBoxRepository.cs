@@ -60,4 +60,24 @@ public interface IBoxRepository
     /// active code (whether or not the box itself exists).
     /// </summary>
     Task<bool> RevokeActiveQrCodeAsync(int boxId, CancellationToken cancellationToken);
+
+    /// <summary>The bay this box currently occupies, or <c>null</c> if it is not in one.</summary>
+    Task<BoxBayAssignmentReadModel?> GetActiveBayAssignmentAsync(int boxId, CancellationToken cancellationToken);
+
+    /// <summary>Every bay this box has occupied, most recent first.</summary>
+    Task<IReadOnlyList<BoxBayAssignmentReadModel>> ListBayAssignmentHistoryAsync(int boxId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Vacates any bay the box currently occupies and assigns it to <paramref name="bayId"/>, as
+    /// one act — the two statements run in a transaction, mirroring
+    /// <see cref="IssueQrCodeAsync"/>, so the box is never briefly in two bays at once.
+    /// </summary>
+    Task<BoxBayAssignmentReadModel> AssignBayAsync(
+        int boxId, int bayId, Guid assignedByPersonId, DateTime assignedAt, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Vacates the box's active bay assignment without assigning another. Returns false when the
+    /// box has no active assignment (whether or not the box itself exists).
+    /// </summary>
+    Task<bool> VacateActiveBayAssignmentAsync(int boxId, CancellationToken cancellationToken);
 }

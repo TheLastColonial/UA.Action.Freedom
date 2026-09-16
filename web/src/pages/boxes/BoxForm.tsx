@@ -2,9 +2,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { JSX } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { useLocations } from '../../api/locations';
 import { Button } from '../../components/Button';
 import { FormCard } from '../../components/form/FormCard';
-import { TextField } from '../../components/form/fields';
+import { SelectField, TextField } from '../../components/form/fields';
 import { boxFormSchema } from './boxModels';
 import type { BoxFormValues } from './boxModels';
 
@@ -23,6 +24,8 @@ export function BoxForm({
   errorMessage,
   onSubmit,
 }: BoxFormProps): JSX.Element {
+  const locations = useLocations({ page: 1, pageSize: 200 });
+
   const {
     register,
     handleSubmit,
@@ -31,6 +34,14 @@ export function BoxForm({
     resolver: zodResolver(boxFormSchema),
     defaultValues: initialValues,
   });
+
+  const locationOptions = [
+    { value: '', label: 'Not yet at a depot' },
+    ...(locations.data ?? []).map((location) => ({
+      value: String(location.id),
+      label: location.name,
+    })),
+  ];
 
   return (
     <form
@@ -54,12 +65,14 @@ export function BoxForm({
         />
       </FormCard>
 
-      <FormCard title="Destination">
-        <TextField label="House" error={errors.house?.message} {...register('house')} />
-        <TextField label="Street" error={errors.street?.message} {...register('street')} />
-        <TextField label="City" error={errors.city?.message} {...register('city')} />
-        <TextField label="Country" error={errors.country?.message} {...register('country')} />
-        <TextField label="Postcode" error={errors.postcode?.message} {...register('postcode')} />
+      <FormCard title="Location">
+        <SelectField
+          label="Distribution hub"
+          hint="Which depot the box is currently at, if it has arrived at one. A Loader places it in a specific bay separately."
+          options={locationOptions}
+          error={errors.locationId?.message}
+          {...register('locationId')}
+        />
       </FormCard>
 
       <Button type="submit" disabled={submitting}>

@@ -10,8 +10,10 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
     private readonly Dictionary<int, BoxReadModel> boxes = [];
     private readonly Dictionary<int, List<BoxItemReadModel>> items = [];
     private readonly List<BoxQrCodeReadModel> qrCodes = [];
+    private readonly List<BoxBayAssignmentReadModel> bayAssignments = [];
 
     private int nextId = 1;
+    private int nextBayAssignmentId = 1;
 
     public InMemoryBoxRepository(params BoxReadModel[] seed)
     {
@@ -41,6 +43,13 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
     public InMemoryBoxRepository WithQrCode(BoxQrCodeReadModel code)
     {
         qrCodes.Add(code);
+        return this;
+    }
+
+    public InMemoryBoxRepository WithBayAssignment(BoxBayAssignmentReadModel assignment)
+    {
+        bayAssignments.Add(assignment);
+        nextBayAssignmentId = Math.Max(nextBayAssignmentId, assignment.Id + 1);
         return this;
     }
 
@@ -173,5 +182,50 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
         }
 
         return Task.FromResult(revoked);
+    }
+
+    public Task<BoxBayAssignmentReadModel?> GetActiveBayAssignmentAsync(int boxId, CancellationToken cancellationToken) =>
+        Task.FromResult(bayAssignments.SingleOrDefault(assignment => assignment.BoxId == boxId && assignment.Active));
+
+    public Task<IReadOnlyList<BoxBayAssignmentReadModel>> ListBayAssignmentHistoryAsync(int boxId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<BoxBayAssignmentReadModel>>(
+            bayAssignments.Where(assignment => assignment.BoxId == boxId)
+                .OrderByDescending(assignment => assignment.AssignedAt)
+                .ThenByDescending(assignment => assignment.Id)
+                .ToList());
+
+    public Task<BoxBayAssignmentReadModel> AssignBayAsync(
+        int boxId, int bayId, Guid assignedByPersonId, DateTime assignedAt, CancellationToken cancellationToken)
+    {
+        // Mirrors the SQL transaction: any live assignment for the box is vacated before the new
+        // one is added, so exactly one stays active.
+        for (var i = 0; i < bayAssignments.Count; i++)
+        {
+            if (bayAssignments[i].BoxId == boxId && bayAssignments[i].Active)
+            {
+                bayAssignments[i] = bayAssignments[i] with { VacatedAt = assignedAt };
+            }
+        }
+
+        var assignment = new BoxBayAssignmentReadModel(
+            nextBayAssignmentId++, boxId, bayId, assignedByPersonId, assignedAt, VacatedAt: null);
+        bayAssignments.Add(assignment);
+        return Task.FromResult(assignment);
+    }
+
+    public Task<bool> VacateActiveBayAssignmentAsync(int boxId, CancellationToken cancellationToken)
+    {
+        var vacated = false;
+
+        for (var i = 0; i < bayAssignments.Count; i++)
+        {
+            if (bayAssignments[i].BoxId == boxId && bayAssignments[i].Active)
+            {
+                bayAssignments[i] = bayAssignments[i] with { VacatedAt = DateTime.UtcNow };
+                vacated = true;
+            }
+        }
+
+        return Task.FromResult(vacated);
     }
 }

@@ -28,7 +28,7 @@ Scenario: A loader packs a box, which starts with no confirmed weight
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "house": "Unit 4", "street": "Cross Road", "city": "Coventry", "country": "United Kingdom", "postcode": "CV1 2AB" }
+        {}
         """
     Then the response status is 201
     When I GET "/boxes/{id}"
@@ -40,7 +40,7 @@ Scenario: Items packed into an open box keep their open-ended properties
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry", "postcode": "CV1 2AB" }
+        {}
         """
     Then the response status is 201
     When I POST "/boxes/{id}/items" with body:
@@ -56,7 +56,7 @@ Scenario: An item with no description is rejected
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     When I POST "/boxes/{id}/items" with body:
@@ -70,7 +70,7 @@ Scenario: A box with no contents yet has an empty list, not a missing one
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     When I GET "/boxes/{id}/items"
@@ -82,7 +82,7 @@ Scenario: A loader validates a box and the weight becomes authoritative
     And a volunteer exists who can validate boxes
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry", "postcode": "CV1 2AB" }
+        {}
         """
     Then the response status is 201
     Given I remember the box
@@ -97,7 +97,7 @@ Scenario: A validated box will not take another item
     And a volunteer exists who can validate boxes
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     Given I remember the box
@@ -114,7 +114,7 @@ Scenario: A box cannot be validated twice
     And a volunteer exists who can validate boxes
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     Given I remember the box
@@ -130,7 +130,7 @@ Scenario: A validated box cannot be moved or re-pointed
     And a volunteer exists who can validate boxes
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     Given I remember the box
@@ -138,7 +138,7 @@ Scenario: A validated box cannot be moved or re-pointed
     Then the response status is 204
     When I PUT "/boxes/{id}" on the remembered box with body:
         """
-        { "city": "Lviv", "country": "Ukraine" }
+        { "receiverRef": null }
         """
     Then the response status is 409
 
@@ -146,7 +146,7 @@ Scenario: Naming a validator who is not a volunteer on file is refused
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     When I POST "/boxes/{id}/validate" with body:
@@ -159,7 +159,7 @@ Scenario: A box validated at an implausible weight is rejected
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
-        { "city": "Coventry" }
+        {}
         """
     Then the response status is 201
     When I POST "/boxes/{id}/validate" with body:
@@ -167,6 +167,48 @@ Scenario: A box validated at an implausible weight is rejected
         { "validatedByPersonId": "6f9619ff-8b86-d011-b42d-00cf4fc964ff", "weightKg": 9999 }
         """
     Then the response status is 400
+
+Scenario: A loader places a box in a bay and can find it there again
+    Given I am authenticated as "admin"
+    And a location exists
+    And a bay exists at the location
+    And a volunteer exists who can validate boxes
+    When I POST "/boxes" at the remembered location
+    Then the response status is 201
+    Given I remember the box
+    Given I am authenticated as "operator"
+    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay and volunteer
+    Then the response status is 204
+    When I GET "/boxes/{id}/bay" on the remembered box
+    Then the response status is 200
+    And the response body field "bayId" is the remembered bay
+
+Scenario: An administrator cannot place a box in a bay
+    Given I am authenticated as "admin"
+    And a location exists
+    And a bay exists at the location
+    And a volunteer exists who can validate boxes
+    When I POST "/boxes" at the remembered location
+    Then the response status is 201
+    Given I remember the box
+    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay and volunteer
+    Then the response status is 403
+
+Scenario: A loader vacates a box from its bay
+    Given I am authenticated as "admin"
+    And a location exists
+    And a bay exists at the location
+    And a volunteer exists who can validate boxes
+    When I POST "/boxes" at the remembered location
+    Then the response status is 201
+    Given I remember the box
+    Given I am authenticated as "operator"
+    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay and volunteer
+    Then the response status is 204
+    When I DELETE "/boxes/{id}/bay" on the remembered box
+    Then the response status is 204
+    When I GET "/boxes/{id}/bay" on the remembered box
+    Then the response status is 404
 
 Scenario: Fetching an unknown box is a 404
     Given I am authenticated as "operator"

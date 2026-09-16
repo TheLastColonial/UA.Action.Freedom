@@ -3,6 +3,8 @@ import type { RequestHandler } from 'msw';
 
 import type {
   AddBoxItemRequest,
+  AssignBoxBayRequest,
+  BoxBayAssignmentReadModel,
   BoxItemReadModel,
   BoxReadModel,
   CreateBoxRequest,
@@ -19,12 +21,14 @@ export interface BoxApi {
   db: Map<number, BoxReadModel>;
   items: Map<number, BoxItemReadModel[]>;
   qr: Map<number, ActiveQrCode>;
+  bayHistory: Map<number, BoxBayAssignmentReadModel[]>;
   handlers: RequestHandler[];
 }
 
 let mintedBox = 500;
 let mintedItem = 0;
 let mintedToken = 0;
+let mintedBayAssignment = 0;
 
 export function boxApi(
   seed: readonly BoxReadModel[] = [],
@@ -33,8 +37,10 @@ export function boxApi(
   const db = new Map<number, BoxReadModel>(seed.map((b) => [b.id, b]));
   const items = new Map<number, BoxItemReadModel[]>();
   const qr = new Map<number, ActiveQrCode>();
+  const bayHistory = new Map<number, BoxBayAssignmentReadModel[]>();
   const idFrom = (raw: string | readonly string[] | undefined) => Number(String(raw));
   const validators = new Set(knownVolunteerIds);
+  const activeBay = (id: number) => (bayHistory.get(id) ?? []).find((a) => a.active);
 
   const validatedGuard = (box: BoxReadModel | undefined) =>
     box?.validated
@@ -59,11 +65,7 @@ export function boxApi(
         depthCm: null,
         heightCm: null,
         receiverRef: body.receiverRef ?? null,
-        house: body.house ?? null,
-        street: body.street ?? null,
-        city: body.city ?? null,
-        country: body.country ?? null,
-        postcode: body.postcode ?? null,
+        locationId: body.locationId ?? null,
         validatedByPersonId: null,
         validatedAt: null,
         validated: false,
@@ -88,11 +90,7 @@ export function boxApi(
       db.set(id, {
         ...box,
         receiverRef: body.receiverRef ?? null,
-        house: body.house ?? null,
-        street: body.street ?? null,
-        city: body.city ?? null,
-        country: body.country ?? null,
-        postcode: body.postcode ?? null,
+        locationId: body.locationId ?? null,
       });
       return new HttpResponse(null, { status: 204 });
     }),
@@ -239,7 +237,65 @@ export function boxApi(
         headers: { 'Content-Type': 'image/svg+xml' },
       });
     }),
+
+    http.get('/boxes/:id/bay', ({ params }) => {
+      const id = idFrom(params['id']);
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const active = activeBay(id);
+      return active ? HttpResponse.json(active) : new HttpResponse(null, { status: 404 });
+    }),
+
+    http.get('/boxes/:id/bay/history', ({ params }) => {
+      const id = idFrom(params['id']);
+      return HttpResponse.json(bayHistory.get(id) ?? []);
+    }),
+
+    http.put('/boxes/:id/bay', async ({ params, request }) => {
+      const id = idFrom(params['id']);
+      const box = db.get(id);
+      if (!box) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const body = (await request.json()) as AssignBoxBayRequest;
+      if (validators.size > 0 && !validators.has(body.assignedByPersonId)) {
+        return problem(404, 'The volunteer named as having placed this box is not on file.');
+      }
+      const now = '2026-05-01T09:00:00';
+      const history = (bayHistory.get(id) ?? []).map((a) =>
+        a.active ? { ...a, vacatedAt: now, active: false } : a,
+      );
+      mintedBayAssignment += 1;
+      history.push({
+        id: mintedBayAssignment,
+        boxId: id,
+        bayId: body.bayId,
+        assignedByPersonId: body.assignedByPersonId,
+        assignedAt: now,
+        vacatedAt: null,
+        active: true,
+      });
+      bayHistory.set(id, history);
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.delete('/boxes/:id/bay', ({ params }) => {
+      const id = idFrom(params['id']);
+      const active = activeBay(id);
+      if (!active) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const now = '2026-05-01T09:00:00';
+      bayHistory.set(
+        id,
+        (bayHistory.get(id) ?? []).map((a) =>
+          a.id === active.id ? { ...a, vacatedAt: now, active: false } : a,
+        ),
+      );
+      return new HttpResponse(null, { status: 204 });
+    }),
   ];
 
-  return { db, items, qr, handlers };
+  return { db, items, qr, bayHistory, handlers };
 }

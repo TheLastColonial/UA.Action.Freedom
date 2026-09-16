@@ -4,8 +4,7 @@ using UA.Action.Freedom.Application.People;
 namespace UA.Action.Freedom.Application.Boxes;
 
 /// <summary>Start a box: where it is, and who it is ultimately for.</summary>
-public sealed record CreateBoxCommand(
-    Guid? ReceiverRef, string? House, string? Street, string? City, string? Country, string? Postcode);
+public sealed record CreateBoxCommand(Guid? ReceiverRef, int? LocationId);
 
 public sealed class CreateBoxHandler(IBoxRepository repository)
     : ICommandHandler<CreateBoxCommand, int>
@@ -21,19 +20,14 @@ public sealed class CreateBoxHandler(IBoxRepository repository)
                 DepthCm: null,
                 HeightCm: null,
                 command.ReceiverRef,
-                command.House,
-                command.Street,
-                command.City,
-                command.Country,
-                command.Postcode,
+                command.LocationId,
                 ValidatedByPersonId: null,
                 ValidatedAt: null),
             cancellationToken);
 }
 
-/// <summary>Move a box, or point it at a different receiver.</summary>
-public sealed record UpdateBoxCommand(
-    int Id, Guid? ReceiverRef, string? House, string? Street, string? City, string? Country, string? Postcode);
+/// <summary>Move a box to a different location, or point it at a different receiver.</summary>
+public sealed record UpdateBoxCommand(int Id, Guid? ReceiverRef, int? LocationId);
 
 public enum UpdateBoxOutcome
 {
@@ -70,11 +64,7 @@ public sealed class UpdateBoxHandler(IBoxRepository repository)
                 box.DepthCm,
                 box.HeightCm,
                 command.ReceiverRef,
-                command.House,
-                command.Street,
-                command.City,
-                command.Country,
-                command.Postcode,
+                command.LocationId,
                 box.ValidatedByPersonId,
                 box.ValidatedAt),
             cancellationToken);

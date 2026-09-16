@@ -41,6 +41,14 @@ export const qk = {
     items: (id: number) => ['boxes', id, 'items'] as const,
     qrCode: (id: number) => ['boxes', id, 'qr-code'] as const,
     label: (id: number) => ['boxes', id, 'label'] as const,
+    bay: (id: number) => ['boxes', id, 'bay'] as const,
+    bayHistory: (id: number) => ['boxes', id, 'bay', 'history'] as const,
+  },
+  locations: {
+    all: ['locations'] as const,
+    list: (params: PageParams) => ['locations', 'list', params] as const,
+    detail: (id: number) => ['locations', 'detail', id] as const,
+    bays: (id: number) => ['locations', id, 'bays'] as const,
   },
   manifests: {
     all: ['manifests'] as const,

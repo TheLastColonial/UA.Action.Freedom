@@ -2,6 +2,7 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
@@ -62,6 +63,20 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RevokeBoxQrCodeCommand, RevokeBoxQrCodeOutcome>, RevokeBoxQrCodeHandler>();
         services.AddScoped<IQueryHandler<GetBoxQrCodeQuery, BoxQrCodeReadModel?>, GetBoxQrCodeHandler>();
         services.AddScoped<IQueryHandler<ResolveBoxByQrCodeQuery, BoxReadModel?>, ResolveBoxByQrCodeHandler>();
+        services.AddScoped<ICommandHandler<AssignBoxBayCommand, AssignBoxBayOutcome>, AssignBoxBayHandler>();
+        services.AddScoped<ICommandHandler<VacateBoxBayCommand, VacateBoxBayOutcome>, VacateBoxBayHandler>();
+        services.AddScoped<IQueryHandler<GetBoxBayQuery, BoxBayAssignmentReadModel?>, GetBoxBayHandler>();
+        services.AddScoped<IQueryHandler<GetBoxBayHistoryQuery, IReadOnlyList<BoxBayAssignmentReadModel>>, GetBoxBayHistoryHandler>();
+
+        services.AddScoped<ICommandHandler<CreateLocationCommand, int>, CreateLocationHandler>();
+        services.AddScoped<ICommandHandler<UpdateLocationCommand, UpdateLocationOutcome>, UpdateLocationHandler>();
+        services.AddScoped<ICommandHandler<DeleteLocationCommand, DeleteLocationOutcome>, DeleteLocationHandler>();
+        services.AddScoped<IQueryHandler<GetLocationByIdQuery, LocationReadModel?>, GetLocationByIdHandler>();
+        services.AddScoped<IQueryHandler<ListLocationsQuery, IReadOnlyList<LocationReadModel>>, ListLocationsHandler>();
+        services.AddScoped<ICommandHandler<CreateBayCommand, CreateBayResult>, CreateBayHandler>();
+        services.AddScoped<ICommandHandler<UpdateBayCommand, UpdateBayOutcome>, UpdateBayHandler>();
+        services.AddScoped<ICommandHandler<DeleteBayCommand, DeleteBayOutcome>, DeleteBayHandler>();
+        services.AddScoped<IQueryHandler<ListBaysQuery, IReadOnlyList<BayReadModel>?>, ListBaysHandler>();
 
         services.AddScoped<ICommandHandler<CreateManifestCommand, CreateManifestOutcome>, CreateManifestHandler>();
         services.AddScoped<ICommandHandler<UpdateManifestCommand, UpdateManifestOutcome>, UpdateManifestHandler>();

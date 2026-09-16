@@ -13,6 +13,7 @@ test('an administrator sees a card linking to every operational section', async 
     Boxes: '/boxes',
     Manifests: '/manifests',
     Receivers: '/receivers',
+    Locations: '/locations',
   };
 
   for (const [name, href] of Object.entries(expected)) {
@@ -29,12 +30,21 @@ test('a ground officer, who can only read receivers, sees only the Receivers car
   await expect.element(screen.getByRole('link', { name: 'Convoys' })).not.toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'Boxes' })).not.toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'Manifests' })).not.toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: 'Locations' })).not.toBeInTheDocument();
 });
 
 test('a signed-in user with no roles sees no section cards', async () => {
   const screen = renderWithProviders(<Dashboard />, { roles: [] });
 
-  for (const name of ['Vehicles', 'Volunteers', 'Convoys', 'Boxes', 'Manifests', 'Receivers']) {
+  for (const name of [
+    'Vehicles',
+    'Volunteers',
+    'Convoys',
+    'Boxes',
+    'Manifests',
+    'Receivers',
+    'Locations',
+  ]) {
     await expect.element(screen.getByRole('link', { name })).not.toBeInTheDocument();
   }
 });
@@ -61,6 +71,7 @@ test('an administrator, who holds every write policy, sees a quick-action for ev
     'New Box': '/boxes/new',
     'New Manifest': '/manifests/new',
     'New Receiver': '/receivers/new',
+    'New Location': '/locations/new',
   };
 
   for (const [name, href] of Object.entries(expected)) {
@@ -77,9 +88,18 @@ test('a purchaser, who can read everything but only write vehicles, sees only on
   await expect.element(screen.getByRole('link', { name: 'New Box' })).not.toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'New Manifest' })).not.toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'New Receiver' })).not.toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: 'New Location' })).not.toBeInTheDocument();
 
   // still sees every read-only section card
-  for (const name of ['Vehicles', 'Volunteers', 'Convoys', 'Boxes', 'Manifests', 'Receivers']) {
+  for (const name of [
+    'Vehicles',
+    'Volunteers',
+    'Convoys',
+    'Boxes',
+    'Manifests',
+    'Receivers',
+    'Locations',
+  ]) {
     await expect.element(screen.getByRole('link', { name })).toBeInTheDocument();
   }
 });

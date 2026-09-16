@@ -120,3 +120,22 @@ export function MapPinIcon({ className }: IconProps): JSX.Element {
     </svg>
   );
 }
+
+export function WarehouseIcon({ className }: IconProps): JSX.Element {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H4a1 1 0 0 1-1-1V10.5Z"
+      />
+    </svg>
+  );
+}

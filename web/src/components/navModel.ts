@@ -15,4 +15,5 @@ export const NAV: readonly NavEntry[] = [
   { label: 'Boxes', to: '/boxes', policy: 'boxes:read' },
   { label: 'Manifests', to: '/manifests', policy: 'manifests:read' },
   { label: 'Receivers', to: '/receivers', policy: 'receivers:read' },
+  { label: 'Locations', to: '/locations', policy: 'locations:read' },
 ];

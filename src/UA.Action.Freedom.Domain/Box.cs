@@ -50,9 +50,11 @@ public class Box
     public DateTime? ValidatedAt { get; init; }
 
     /// <summary>
-    /// Current location of the <see cref="Box"/>
+    /// The distribution hub the <see cref="Box"/> currently sits in, if it has arrived at one.
+    /// Independent of which <see cref="Bay"/> it has been placed in, if any — a box can be
+    /// checked in at a location before a Loader shelves it (see <see cref="BoxBayAssignment"/>).
     /// </summary>
-    public Address? Location { get; init; }
+    public LocationId? LocationId { get; init; }
 
     /// <summary>
     /// Ultimate <see cref="Domain.Receiver"/> of the box contents
