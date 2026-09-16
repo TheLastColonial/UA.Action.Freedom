@@ -31,9 +31,7 @@ test('lists locations by name', async () => {
   const screen = renderWithProviders(null, { routes, route: '/locations', roles: ['Dispatcher'] });
 
   await expect.element(screen.getByRole('link', { name: 'Coventry Depot' })).toBeInTheDocument();
-  await expect
-    .element(screen.getByRole('link', { name: 'London Warehouse' }))
-    .toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: 'London Warehouse' })).toBeInTheDocument();
 });
 
 test('only an administrator sees "New location"', async () => {

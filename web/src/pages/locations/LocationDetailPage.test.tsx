@@ -24,9 +24,7 @@ test('renders a known location', async () => {
   worker.use(...locationApi([makeLocation({ id: 3, name: 'Coventry Depot' })]).handlers);
 
   const screen = renderWithProviders(null, { routes, route: '/locations/3', roles: ['Loader'] });
-  await expect
-    .element(screen.getByRole('heading', { name: 'Coventry Depot' }))
-    .toBeInTheDocument();
+  await expect.element(screen.getByRole('heading', { name: 'Coventry Depot' })).toBeInTheDocument();
 });
 
 test('an unknown location is a Not found page', async () => {

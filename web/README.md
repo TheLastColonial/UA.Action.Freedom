@@ -110,7 +110,7 @@ route, roles })`): list renders/empty/error/pagination/role-gated "New"; create 
 - **A panel that composes another slice's sub-resource** (`boxes` bay allocation) —
   `BoxBayPanel` calls `useBays(box.locationId, { enabled: box.locationId !== null })` from the
   `locations` slice alongside its own `useBoxBay`/`useBoxBayHistory`, so the bay `<select>` is
-  scoped to the box's *own* current location rather than every bay in the system. The
+  scoped to the box's _own_ current location rather than every bay in the system. The
   assign/vacate controls sit behind a policy narrower than the panel's own read (`boxes:read`
   shows current bay + history; `Gate policy="boxes:allocate-bay"` — Loader only — wraps the
   form). A query hook that takes an `{ enabled }` option (see `useBays`, `useConvoy`) is the
