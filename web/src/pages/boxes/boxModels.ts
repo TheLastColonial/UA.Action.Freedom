@@ -162,7 +162,13 @@ export const validateFormSchema = z.object({
     const n = Number(raw.trim());
     return raw.trim().length > 0 && Number.isInteger(n) && n >= 1 && n <= 500;
   }, "'Weight' must be a whole number between 1 and 500"),
-  widthCm: optionalNonNegativeDecimal("'Width' must be a number between 1 and 1000, with up to 2 decimal places"),
-  depthCm: optionalNonNegativeDecimal("'Depth' must be a number between 1 and 1000, with up to 2 decimal places"),
-  heightCm: optionalNonNegativeDecimal("'Height' must be a number between 1 and 1000, with up to 2 decimal places"),
+  widthCm: optionalNonNegativeDecimal(
+    "'Width' must be a number between 1 and 1000, with up to 2 decimal places",
+  ),
+  depthCm: optionalNonNegativeDecimal(
+    "'Depth' must be a number between 1 and 1000, with up to 2 decimal places",
+  ),
+  heightCm: optionalNonNegativeDecimal(
+    "'Height' must be a number between 1 and 1000, with up to 2 decimal places",
+  ),
 });

@@ -16,9 +16,7 @@ test('an administrator sees a card linking to every operational section', async 
   };
 
   for (const [name, href] of Object.entries(expected)) {
-    await expect
-      .element(screen.getByRole('link', { name }))
-      .toHaveAttribute('href', href);
+    await expect.element(screen.getByRole('link', { name })).toHaveAttribute('href', href);
   }
 });
 
@@ -66,9 +64,7 @@ test('an administrator, who holds every write policy, sees a quick-action for ev
   };
 
   for (const [name, href] of Object.entries(expected)) {
-    await expect
-      .element(screen.getByRole('link', { name }))
-      .toHaveAttribute('href', href);
+    await expect.element(screen.getByRole('link', { name })).toHaveAttribute('href', href);
   }
 });
 

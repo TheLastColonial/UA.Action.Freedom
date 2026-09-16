@@ -29,7 +29,9 @@ test('renders a stub page showing the current servicing status', async () => {
     roles: ['Loader'],
   });
 
-  await expect.element(screen.getByRole('heading', { name: 'Servicing — VIN-X' })).toBeInTheDocument();
+  await expect
+    .element(screen.getByRole('heading', { name: 'Servicing — VIN-X' }))
+    .toBeInTheDocument();
   await expect.element(screen.getByText('In for servicing: Yes')).toBeInTheDocument();
   await expect
     .element(screen.getByRole('link', { name: 'Back to vehicle' }))

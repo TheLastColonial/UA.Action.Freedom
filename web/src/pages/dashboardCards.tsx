@@ -1,7 +1,14 @@
 import type { JSX } from 'react';
 
 import type { Policy } from '../auth/policyMatrix';
-import { BoxIcon, DocumentIcon, MapPinIcon, PeopleIcon, RouteIcon, VehicleIcon } from './dashboardIcons';
+import {
+  BoxIcon,
+  DocumentIcon,
+  MapPinIcon,
+  PeopleIcon,
+  RouteIcon,
+  VehicleIcon,
+} from './dashboardIcons';
 
 export interface DashboardCardEntry {
   readonly label: string;

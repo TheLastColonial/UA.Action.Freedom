@@ -32,7 +32,10 @@ export function ReceiverDetailPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>{receiver.organisation}</h1>
         <Gate policy="receivers:write">
-          <LinkButton to={`/receivers/${encodeURIComponent(receiver.ref)}/edit`} variant="secondary">
+          <LinkButton
+            to={`/receivers/${encodeURIComponent(receiver.ref)}/edit`}
+            variant="secondary"
+          >
             Edit
           </LinkButton>
         </Gate>

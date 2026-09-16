@@ -5,9 +5,7 @@ import { Button, LinkButton } from './Button';
 
 test('renders as a button and fires onClick', async () => {
   const onClick = vi.fn();
-  const screen = renderWithProviders(
-    <Button onClick={onClick}>Save</Button>,
-  );
+  const screen = renderWithProviders(<Button onClick={onClick}>Save</Button>);
 
   await screen.getByRole('button', { name: 'Save' }).click();
 
@@ -23,7 +21,9 @@ test('respects the disabled prop', async () => {
 test('defaults to type="button" so it never submits a form by accident', async () => {
   const screen = renderWithProviders(<Button>Save</Button>);
 
-  await expect.element(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('type', 'button');
+  await expect
+    .element(screen.getByRole('button', { name: 'Save' }))
+    .toHaveAttribute('type', 'button');
 });
 
 test('renders as a link to the given destination', async () => {

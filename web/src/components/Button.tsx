@@ -9,7 +9,11 @@ interface ButtonProps extends Omit<ComponentPropsWithoutRef<'button'>, 'classNam
   variant?: ButtonVariant;
 }
 
-export function Button({ variant = 'primary', type = 'button', ...rest }: ButtonProps): JSX.Element {
+export function Button({
+  variant = 'primary',
+  type = 'button',
+  ...rest
+}: ButtonProps): JSX.Element {
   return <button type={type} className={`btn btn--${variant}`} {...rest} />;
 }
 

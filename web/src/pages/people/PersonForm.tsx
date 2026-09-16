@@ -84,7 +84,11 @@ export function PersonForm({
       ) : null}
 
       <FormCard title="Personal details">
-        <TextField label="First name" error={errors.firstName?.message} {...register('firstName')} />
+        <TextField
+          label="First name"
+          error={errors.firstName?.message}
+          {...register('firstName')}
+        />
         <TextField label="Last name" error={errors.lastName?.message} {...register('lastName')} />
         <TextField
           label="Date of birth"

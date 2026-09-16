@@ -185,8 +185,16 @@ export const vehicleFormSchema = z.object({
   purchaserName: z.string().max(200, 'Purchaser must be 200 characters or fewer'),
   purchaseDate: z.string(),
   weightKg: integerInRange(0, 1_000_000, 'Weight must be a whole number of 0 or more'),
-  maxCargoWeightKg: optionalNonNegativeDecimal('Maximum weight must be a number of 0 or more, with up to 2 decimal places'),
-  cargoWidthCm: optionalNonNegativeDecimal('Width must be a number of 0 or more, with up to 2 decimal places'),
-  cargoDepthCm: optionalNonNegativeDecimal('Depth must be a number of 0 or more, with up to 2 decimal places'),
-  cargoHeightCm: optionalNonNegativeDecimal('Height must be a number of 0 or more, with up to 2 decimal places'),
+  maxCargoWeightKg: optionalNonNegativeDecimal(
+    'Maximum weight must be a number of 0 or more, with up to 2 decimal places',
+  ),
+  cargoWidthCm: optionalNonNegativeDecimal(
+    'Width must be a number of 0 or more, with up to 2 decimal places',
+  ),
+  cargoDepthCm: optionalNonNegativeDecimal(
+    'Depth must be a number of 0 or more, with up to 2 decimal places',
+  ),
+  cargoHeightCm: optionalNonNegativeDecimal(
+    'Height must be a number of 0 or more, with up to 2 decimal places',
+  ),
 });

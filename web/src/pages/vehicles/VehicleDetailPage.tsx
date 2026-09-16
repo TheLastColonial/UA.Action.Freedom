@@ -32,12 +32,18 @@ export function VehicleDetailPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>{vehicle.vin}</h1>
         <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <LinkButton to={`/vehicles/${encodeURIComponent(vehicle.vin)}/servicing`} variant="secondary">
+          <LinkButton
+            to={`/vehicles/${encodeURIComponent(vehicle.vin)}/servicing`}
+            variant="secondary"
+          >
             Servicing
           </LinkButton>
           <Gate policy="vehicles:write">
             <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <LinkButton to={`/vehicles/${encodeURIComponent(vehicle.vin)}/edit`} variant="secondary">
+              <LinkButton
+                to={`/vehicles/${encodeURIComponent(vehicle.vin)}/edit`}
+                variant="secondary"
+              >
                 Edit
               </LinkButton>
               <Button
@@ -92,7 +98,9 @@ export function VehicleDetailPage(): JSX.Element {
           <dd>{vehicle.maxCargoWeightKg === null ? '—' : `${vehicle.maxCargoWeightKg} kg`}</dd>
           <dt>Cargo dimensions (W × D × H)</dt>
           <dd>
-            {vehicle.cargoWidthCm === null && vehicle.cargoDepthCm === null && vehicle.cargoHeightCm === null
+            {vehicle.cargoWidthCm === null &&
+            vehicle.cargoDepthCm === null &&
+            vehicle.cargoHeightCm === null
               ? '—'
               : `${vehicle.cargoWidthCm ?? '—'} × ${vehicle.cargoDepthCm ?? '—'} × ${vehicle.cargoHeightCm ?? '—'} cm`}
           </dd>

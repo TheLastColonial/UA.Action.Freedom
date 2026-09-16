@@ -112,7 +112,7 @@ test('weight panel shows the border-check total and a provisional warning', asyn
     .toBeInTheDocument();
 });
 
-test('weight panel warns when cargo exceeds the vehicle\'s stated capacity, without blocking anything', async () => {
+test("weight panel warns when cargo exceeds the vehicle's stated capacity, without blocking anything", async () => {
   const api = manifestApi([makeManifest({ id: 'W2' })], {
     vehicleCargoCapacity: { maxCargoWeightKg: 15 },
   });
@@ -124,7 +124,11 @@ test('weight panel warns when cargo exceeds the vehicle\'s stated capacity, with
   });
 
   await expect
-    .element(screen.getByText("Cargo is over the vehicle's stated capacity of 15 kg. This is advisory only — nothing is blocked."))
+    .element(
+      screen.getByText(
+        "Cargo is over the vehicle's stated capacity of 15 kg. This is advisory only — nothing is blocked.",
+      ),
+    )
     .toBeInTheDocument();
 });
 
@@ -133,7 +137,14 @@ test('weight panel warns about an oversized box without blocking anything', asyn
     vehicleCargoCapacity: { cargoWidthCm: 100, cargoDepthCm: 100, cargoHeightCm: 30 },
   });
   api.boxes.set('W3', [
-    makeManifestBox({ boxId: 1, weightKg: 20, validated: true, widthCm: 200, depthCm: 50, heightCm: 50 }),
+    makeManifestBox({
+      boxId: 1,
+      weightKg: 20,
+      validated: true,
+      widthCm: 200,
+      depthCm: 50,
+      heightCm: 50,
+    }),
   ]);
   worker.use(...api.handlers);
 

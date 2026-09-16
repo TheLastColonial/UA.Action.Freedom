@@ -72,7 +72,13 @@ describe('addItemFormSchema', () => {
 describe('validate a box', () => {
   it('coerces the weight to a number', () => {
     expect(
-      validateFormToRequest({ validatedByPersonId: 'p1', weightKg: '12', widthCm: '', depthCm: '', heightCm: '' }),
+      validateFormToRequest({
+        validatedByPersonId: 'p1',
+        weightKg: '12',
+        widthCm: '',
+        depthCm: '',
+        heightCm: '',
+      }),
     ).toEqual({
       validatedByPersonId: 'p1',
       weightKg: 12,
@@ -104,12 +110,18 @@ describe('validate a box', () => {
         .success,
     ).toBe(false);
     expect(
-      validateFormSchema.safeParse({ validatedByPersonId: 'p1', weightKg: '501', ...blankDimensions })
-        .success,
+      validateFormSchema.safeParse({
+        validatedByPersonId: 'p1',
+        weightKg: '501',
+        ...blankDimensions,
+      }).success,
     ).toBe(false);
     expect(
-      validateFormSchema.safeParse({ validatedByPersonId: 'p1', weightKg: '250', ...blankDimensions })
-        .success,
+      validateFormSchema.safeParse({
+        validatedByPersonId: 'p1',
+        weightKg: '250',
+        ...blankDimensions,
+      }).success,
     ).toBe(true);
   });
 

@@ -58,7 +58,11 @@ function fitsCargoSpace(box: ManifestBoxReadModel, capacity: VehicleCargoCapacit
   if (boxDims.some((d) => d === null)) {
     return true;
   }
-  const cargoDims = [capacity.cargoWidthCm ?? null, capacity.cargoDepthCm ?? null, capacity.cargoHeightCm ?? null];
+  const cargoDims = [
+    capacity.cargoWidthCm ?? null,
+    capacity.cargoDepthCm ?? null,
+    capacity.cargoHeightCm ?? null,
+  ];
   if (cargoDims.some((d) => d === null)) {
     return true;
   }
@@ -201,7 +205,14 @@ export function manifestApi(
       const boxId = Number(params['boxId']);
       const list = boxes.get(id) ?? [];
       if (!list.some((b) => b.boxId === boxId)) {
-        list.push({ boxId, weightKg: 15, validated: true, widthCm: null, depthCm: null, heightCm: null });
+        list.push({
+          boxId,
+          weightKg: 15,
+          validated: true,
+          widthCm: null,
+          depthCm: null,
+          heightCm: null,
+        });
       }
       boxes.set(id, list);
       return new HttpResponse(null, { status: 204 });
@@ -238,7 +249,9 @@ export function manifestApi(
       const capacity = options.vehicleCargoCapacity ?? {};
       const maxCargoWeightKg = capacity.maxCargoWeightKg ?? null;
       const cargoOverweight = maxCargoWeightKg !== null && cargoKg > maxCargoWeightKg;
-      const oversizedBoxIds = list.filter((box) => !fitsCargoSpace(box, capacity)).map((box) => box.boxId);
+      const oversizedBoxIds = list
+        .filter((box) => !fitsCargoSpace(box, capacity))
+        .map((box) => box.boxId);
 
       return HttpResponse.json({
         vehicleKg: 2000,

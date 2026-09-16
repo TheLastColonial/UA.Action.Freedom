@@ -78,7 +78,11 @@ test('groups fields into named cards', async () => {
 test('renders purchase information when recorded', async () => {
   worker.use(
     ...vehicleApi([
-      makeVehicle({ vin: 'VIN-X', purchaserName: 'A. Buyer', purchaseDate: '2026-01-15T00:00:00Z' }),
+      makeVehicle({
+        vin: 'VIN-X',
+        purchaserName: 'A. Buyer',
+        purchaseDate: '2026-01-15T00:00:00Z',
+      }),
     ]).handlers,
   );
 
