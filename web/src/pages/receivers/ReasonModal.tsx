@@ -26,6 +26,9 @@ export function ReasonModal({
 
   useEffect(() => {
     if (isOpen) {
+      // The modal stays mounted between opens (it returns null rather than being
+      // unmounted by the parent), so local state must be reset here on each open.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReason('');
       setTouchedEmpty(false);
       textareaRef.current?.focus();

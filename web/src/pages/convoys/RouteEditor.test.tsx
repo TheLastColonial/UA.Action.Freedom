@@ -18,7 +18,7 @@ test('adds a stop, requires a postcode, then saves the whole route', async () =>
   const api = convoyApi([makeConvoy({ id: 3 })]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<RouteEditor convoyId={3} disabled={false} />, {
+  const screen = await renderWithProviders(<RouteEditor convoyId={3} disabled={false} />, {
     roles: ['Dispatcher'],
   });
 
@@ -38,7 +38,7 @@ test('is read-only once the truck list is published', async () => {
   api.routes.set(3, [makeRouteStop({ sequence: 1, postcode: 'SW1A 1AA' })]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<RouteEditor convoyId={3} disabled />, {
+  const screen = await renderWithProviders(<RouteEditor convoyId={3} disabled />, {
     roles: ['Dispatcher'],
   });
 

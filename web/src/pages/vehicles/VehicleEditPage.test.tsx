@@ -23,7 +23,7 @@ afterEach(() => {
 test('pre-populates the form from the vehicle', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X', plate: 'ED11 TME' })]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/VIN-X/edit',
     roles: ['Purchaser'],
@@ -36,7 +36,7 @@ test('saves changes and returns to the detail page', async () => {
   const api = vehicleApi([makeVehicle({ vin: 'VIN-X', plate: 'OLD 111' })]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/VIN-X/edit',
     roles: ['Purchaser'],
@@ -54,7 +54,7 @@ test('preserves an existing convoy assignment and servicing flag on unrelated ed
   const vehicle = makeVehicle({ vin: 'VIN-X', convoyId: 7, servicing: true, colour: 'blue' });
   worker.use(...vehicleApi([vehicle]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/VIN-X/edit',
     roles: ['Purchaser'],
@@ -73,7 +73,7 @@ test('pre-populates and can change the cargo capacity fields', async () => {
   const vehicle = makeVehicle({ vin: 'VIN-X', maxCargoWeightKg: 800, cargoWidthCm: 100 });
   worker.use(...vehicleApi([vehicle]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/VIN-X/edit',
     roles: ['Purchaser'],
@@ -90,7 +90,7 @@ test('pre-populates and can change the cargo capacity fields', async () => {
 test('renders Not found when editing a VIN that does not exist', async () => {
   worker.use(...vehicleApi([]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/GONE/edit',
     roles: ['Purchaser'],

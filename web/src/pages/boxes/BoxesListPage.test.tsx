@@ -28,7 +28,7 @@ test('lists boxes with their validation state', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/boxes', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, { routes, route: '/boxes', roles: ['Loader'] });
 
   await expect.element(screen.getByRole('link', { name: '#1' })).toBeInTheDocument();
   await expect.element(screen.getByText('Validated')).toBeInTheDocument();
@@ -38,10 +38,14 @@ test('lists boxes with their validation state', async () => {
 test('a Loader can add boxes but a Purchaser cannot', async () => {
   worker.use(...boxApi([]).handlers);
 
-  const asPurchaser = renderWithProviders(null, { routes, route: '/boxes', roles: ['Purchaser'] });
+  const asPurchaser = await renderWithProviders(null, {
+    routes,
+    route: '/boxes',
+    roles: ['Purchaser'],
+  });
   await expect.element(asPurchaser.getByText('No boxes packed yet.')).toBeInTheDocument();
   await expect.element(asPurchaser.getByRole('link', { name: 'New box' })).not.toBeInTheDocument();
 
-  const asLoader = renderWithProviders(null, { routes, route: '/boxes', roles: ['Loader'] });
+  const asLoader = await renderWithProviders(null, { routes, route: '/boxes', roles: ['Loader'] });
   await expect.element(asLoader.getByRole('link', { name: 'New box' })).toBeInTheDocument();
 });

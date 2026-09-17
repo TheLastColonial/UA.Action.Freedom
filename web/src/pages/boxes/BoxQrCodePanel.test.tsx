@@ -18,7 +18,7 @@ afterEach(() => {
 test('a loader issues a label and then sees it, ready to print', async () => {
   worker.use(...boxApi([makeBox({ id: 8 })]).handlers);
 
-  const screen = renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Loader'] });
+  const screen = await renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Loader'] });
 
   await expect.element(screen.getByText('This box has no QR label.')).toBeInTheDocument();
 
@@ -36,7 +36,7 @@ test('Print label triggers the browser print dialog', async () => {
 
   const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
 
-  const screen = renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Loader'] });
+  const screen = await renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Loader'] });
 
   const print = screen.getByRole('button', { name: 'Print label' });
   await expect.element(print).toBeEnabled();
@@ -50,7 +50,7 @@ test('revoking a label returns the box to having none', async () => {
   api.qr.set(8, { token: 'cccccccc-0000-0000-0000-000000000009', issuedAt: '2026-05-01T09:00:00' });
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Loader'] });
+  const screen = await renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Loader'] });
 
   await screen.getByRole('button', { name: 'Revoke label' }).click();
 
@@ -62,7 +62,7 @@ test('a purchaser may print an existing label but not issue, reissue or revoke',
   api.qr.set(8, { token: 'cccccccc-0000-0000-0000-000000000009', issuedAt: '2026-05-01T09:00:00' });
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Purchaser'] });
+  const screen = await renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Purchaser'] });
 
   await expect.element(screen.getByRole('button', { name: 'Print label' })).toBeInTheDocument();
   await expect
@@ -76,7 +76,7 @@ test('a purchaser may print an existing label but not issue, reissue or revoke',
 test('a purchaser with no label is pointed at someone who can issue one', async () => {
   worker.use(...boxApi([makeBox({ id: 8 })]).handlers);
 
-  const screen = renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Purchaser'] });
+  const screen = await renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Purchaser'] });
 
   await expect
     .element(screen.getByText('Ask a dispatcher or loader to issue one.'))
@@ -89,7 +89,7 @@ test('the label never carries the box destination', async () => {
   api.qr.set(8, { token: 'cccccccc-0000-0000-0000-000000000009', issuedAt: '2026-05-01T09:00:00' });
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Loader'] });
+  const screen = await renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Loader'] });
 
   const image = screen.getByRole('img', { name: 'QR label for box 8' });
   await expect.element(image).toBeInTheDocument();

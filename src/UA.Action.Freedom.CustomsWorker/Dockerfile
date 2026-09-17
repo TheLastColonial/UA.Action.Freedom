@@ -8,7 +8,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /source
 
-COPY global.json ./
+COPY global.json Directory.Packages.props ./
 COPY src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.CustomsWorker.csproj src/UA.Action.Freedom.CustomsWorker/
 COPY src/HMRC.GVMS/HMRC.GVMS.csproj                                            src/HMRC.GVMS/
 COPY src/HMRC.PushPullNotifications/HMRC.PushPullNotifications.csproj          src/HMRC.PushPullNotifications/

@@ -4,7 +4,7 @@ import { renderWithProviders } from '../test/render';
 import { Dashboard } from './Dashboard';
 
 test('an administrator sees a card linking to every operational section', async () => {
-  const screen = renderWithProviders(<Dashboard />, { roles: ['Administrator'] });
+  const screen = await renderWithProviders(<Dashboard />, { roles: ['Administrator'] });
 
   const expected: Record<string, string> = {
     Vehicles: '/vehicles',
@@ -22,7 +22,7 @@ test('an administrator sees a card linking to every operational section', async 
 });
 
 test('a ground officer, who can only read receivers, sees only the Receivers card', async () => {
-  const screen = renderWithProviders(<Dashboard />, { roles: ['GroundOfficer'] });
+  const screen = await renderWithProviders(<Dashboard />, { roles: ['GroundOfficer'] });
 
   await expect.element(screen.getByRole('link', { name: 'Receivers' })).toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'Vehicles' })).not.toBeInTheDocument();
@@ -34,7 +34,7 @@ test('a ground officer, who can only read receivers, sees only the Receivers car
 });
 
 test('a signed-in user with no roles sees no section cards', async () => {
-  const screen = renderWithProviders(<Dashboard />, { roles: [] });
+  const screen = await renderWithProviders(<Dashboard />, { roles: [] });
 
   for (const name of [
     'Vehicles',
@@ -50,7 +50,7 @@ test('a signed-in user with no roles sees no section cards', async () => {
 });
 
 test('does not display the signed-in identity GUID anywhere on the page', async () => {
-  const screen = renderWithProviders(<Dashboard />, {
+  const screen = await renderWithProviders(<Dashboard />, {
     roles: ['Administrator'],
     sub: '11111111-2222-3333-4444-555555555555',
   });
@@ -62,7 +62,7 @@ test('does not display the signed-in identity GUID anywhere on the page', async 
 });
 
 test('an administrator, who holds every write policy, sees a quick-action for every card', async () => {
-  const screen = renderWithProviders(<Dashboard />, { roles: ['Administrator'] });
+  const screen = await renderWithProviders(<Dashboard />, { roles: ['Administrator'] });
 
   const expected: Record<string, string> = {
     'New Vehicle': '/vehicles/new',
@@ -80,7 +80,7 @@ test('an administrator, who holds every write policy, sees a quick-action for ev
 });
 
 test('a purchaser, who can read everything but only write vehicles, sees only one quick-action', async () => {
-  const screen = renderWithProviders(<Dashboard />, { roles: ['Purchaser'] });
+  const screen = await renderWithProviders(<Dashboard />, { roles: ['Purchaser'] });
 
   await expect.element(screen.getByRole('link', { name: 'New Vehicle' })).toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'New Volunteer' })).not.toBeInTheDocument();

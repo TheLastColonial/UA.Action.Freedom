@@ -21,7 +21,7 @@ test('the reveal modal carries the audit warning and blocks an empty reason', as
   );
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(
+  const screen = await renderWithProviders(
     <ReceiverSensitivePanel receiverRef="r1" onDeleted={() => undefined} />,
     { roles: ['GroundOfficer'] },
   );
@@ -43,7 +43,7 @@ test('a stated reason reveals the detail and is recorded against the access log'
   );
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(
+  const screen = await renderWithProviders(
     <ReceiverSensitivePanel receiverRef="r1" onDeleted={() => undefined} />,
     { roles: ['GroundOfficer'] },
   );
@@ -61,7 +61,7 @@ test('when no detail is recorded, the panel offers to add it', async () => {
   const api = receiverApi([makeReceiver({ ref: 'r1' })]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(
+  const screen = await renderWithProviders(
     <ReceiverSensitivePanel receiverRef="r1" onDeleted={() => undefined} />,
     { roles: ['GroundOfficer'] },
   );
@@ -90,7 +90,7 @@ test('delete receiver invokes the onDeleted callback', async () => {
   worker.use(...api.handlers);
   let deleted = false;
 
-  const screen = renderWithProviders(
+  const screen = await renderWithProviders(
     <ReceiverSensitivePanel
       receiverRef="r1"
       onDeleted={() => {

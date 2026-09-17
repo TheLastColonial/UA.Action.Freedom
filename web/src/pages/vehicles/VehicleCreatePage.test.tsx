@@ -22,7 +22,7 @@ afterEach(() => {
   resetApiClient();
 });
 
-async function fillMinimum(screen: ReturnType<typeof renderWithProviders>): Promise<void> {
+async function fillMinimum(screen: Awaited<ReturnType<typeof renderWithProviders>>): Promise<void> {
   await screen.getByLabelText('VIN').fill('WVWZZZ1KZAW000009');
   await screen.getByLabelText('Number plate').fill('AB12 CDE');
   await screen.getByLabelText('Year').fill('2016');
@@ -31,7 +31,7 @@ async function fillMinimum(screen: ReturnType<typeof renderWithProviders>): Prom
 
 test('renders a labelled field for every part of the request', async () => {
   worker.use(...vehicleApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/new',
     roles: ['Purchaser'],
@@ -62,7 +62,7 @@ test('renders a labelled field for every part of the request', async () => {
 
 test('groups fields into named cards and drops Convoy id and servicing', async () => {
   worker.use(...vehicleApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/new',
     roles: ['Purchaser'],
@@ -84,7 +84,7 @@ test('groups fields into named cards and drops Convoy id and servicing', async (
 
 test('shows client-side validation messages on an invalid submit', async () => {
   worker.use(...vehicleApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/new',
     roles: ['Purchaser'],
@@ -100,7 +100,7 @@ test('maps a 400 problem+json error onto the named field', async () => {
   worker.use(
     http.post('/vehicles', () => validationProblem({ Plate: ['That plate is already on file.'] })),
   );
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/new',
     roles: ['Purchaser'],
@@ -114,7 +114,7 @@ test('maps a 400 problem+json error onto the named field', async () => {
 
 test('creates the vehicle and navigates to it, reading the id from Location', async () => {
   worker.use(...vehicleApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/new',
     roles: ['Purchaser'],
@@ -130,7 +130,7 @@ test('creates the vehicle and navigates to it, reading the id from Location', as
 
 test('surfaces a 409 detail verbatim and stays on the form', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'WVWZZZ1KZAW000009' })]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/new',
     roles: ['Purchaser'],

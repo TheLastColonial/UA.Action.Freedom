@@ -26,7 +26,7 @@ test('renders organisation and region, and Not found for an unknown ref', async 
       .handlers,
   );
 
-  const found = renderWithProviders(null, {
+  const found = await renderWithProviders(null, {
     routes,
     route: '/receivers/r1',
     roles: ['Dispatcher'],
@@ -34,7 +34,7 @@ test('renders organisation and region, and Not found for an unknown ref', async 
   await expect.element(found.getByRole('heading', { name: 'Kyiv Aid' })).toBeInTheDocument();
   await expect.element(found.getByText('Kyiv Oblast')).toBeInTheDocument();
 
-  const missing = renderWithProviders(null, {
+  const missing = await renderWithProviders(null, {
     routes,
     route: '/receivers/nope',
     roles: ['Dispatcher'],
@@ -50,7 +50,7 @@ test('a non–Ground Officer never sees the delivery-detail panel', async () => 
     ).handlers,
   );
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/receivers/r1',
     roles: ['Dispatcher'],
@@ -73,7 +73,7 @@ test('a non–Ground Officer never sees the delivery-detail panel', async () => 
 test('groups fields into a named card', async () => {
   worker.use(...receiverApi([makeReceiver({ ref: 'r1', organisation: 'Kyiv Aid' })]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/receivers/r1',
     roles: ['Dispatcher'],
@@ -87,7 +87,7 @@ test('groups fields into a named card', async () => {
 test('a Ground Officer sees the reveal control', async () => {
   worker.use(...receiverApi([makeReceiver({ ref: 'r1', organisation: 'Kyiv Aid' })]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/receivers/r1',
     roles: ['GroundOfficer'],

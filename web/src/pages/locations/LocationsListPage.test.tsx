@@ -28,7 +28,11 @@ test('lists locations by name', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/locations', roles: ['Dispatcher'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/locations',
+    roles: ['Dispatcher'],
+  });
 
   await expect.element(screen.getByRole('link', { name: 'Coventry Depot' })).toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'London Warehouse' })).toBeInTheDocument();
@@ -37,13 +41,17 @@ test('lists locations by name', async () => {
 test('only an administrator sees "New location"', async () => {
   worker.use(...locationApi([]).handlers);
 
-  const asLoader = renderWithProviders(null, { routes, route: '/locations', roles: ['Loader'] });
+  const asLoader = await renderWithProviders(null, {
+    routes,
+    route: '/locations',
+    roles: ['Loader'],
+  });
   await expect.element(asLoader.getByText('No locations recorded yet.')).toBeInTheDocument();
   await expect
     .element(asLoader.getByRole('link', { name: 'New location' }))
     .not.toBeInTheDocument();
 
-  const asAdmin = renderWithProviders(null, {
+  const asAdmin = await renderWithProviders(null, {
     routes,
     route: '/locations',
     roles: ['Administrator'],

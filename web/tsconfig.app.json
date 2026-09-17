@@ -8,7 +8,6 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "types": ["@vitest/browser/providers/playwright"],
 
     "resolveJsonModule": true,
     "isolatedModules": true,

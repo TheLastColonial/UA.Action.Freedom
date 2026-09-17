@@ -23,7 +23,11 @@ afterEach(() => {
 test('renders the vehicle from the detail endpoint', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X', plate: 'ZZ99 ZZZ' })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/vehicles/VIN-X', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByRole('heading', { name: 'VIN-X' })).toBeInTheDocument();
   await expect.element(screen.getByText('ZZ99 ZZZ')).toBeInTheDocument();
@@ -42,7 +46,11 @@ test('renders cargo capacity when it has been recorded', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/vehicles/VIN-X', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByText('900.5 kg')).toBeInTheDocument();
   await expect.element(screen.getByText('150.25 × 300 × 180.75 cm')).toBeInTheDocument();
@@ -51,7 +59,11 @@ test('renders cargo capacity when it has been recorded', async () => {
 test('renders a dash for cargo capacity that has never been measured', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-Y' })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/vehicles/VIN-Y', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-Y',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByRole('heading', { name: 'VIN-Y' })).toBeInTheDocument();
   await expect.element(screen.getByText('Maximum cargo weight')).toBeInTheDocument();
@@ -61,7 +73,11 @@ test('renders a dash for cargo capacity that has never been measured', async () 
 test('groups fields into named cards', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X' })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/vehicles/VIN-X', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Loader'],
+  });
 
   for (const name of [
     'Vehicle details',
@@ -86,7 +102,11 @@ test('renders purchase information when recorded', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/vehicles/VIN-X', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByText('A. Buyer')).toBeInTheDocument();
   await expect.element(screen.getByText('2026-01-15')).toBeInTheDocument();
@@ -95,7 +115,7 @@ test('renders purchase information when recorded', async () => {
 test('renders Not found for a VIN that does not exist', async () => {
   worker.use(...vehicleApi([]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/UNKNOWN',
     roles: ['Loader'],
@@ -107,7 +127,11 @@ test('renders Not found for a VIN that does not exist', async () => {
 test('links to the servicing stub page', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X' })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/vehicles/VIN-X', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Loader'],
+  });
 
   await expect
     .element(screen.getByRole('link', { name: 'Servicing' }))
@@ -117,7 +141,11 @@ test('links to the servicing stub page', async () => {
 test('hides Edit and Delete from a read-only role', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X' })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/vehicles/VIN-X', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByRole('heading', { name: 'VIN-X' })).toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'Edit' })).not.toBeInTheDocument();
@@ -127,7 +155,7 @@ test('hides Edit and Delete from a read-only role', async () => {
 test('deletes the vehicle and returns to the list', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X' })]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/VIN-X',
     roles: ['Purchaser'],

@@ -19,9 +19,12 @@ afterEach(() => {
 test('from Created without a convoy: Reject is offered, Propose is disabled with a reason', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'M1', status: 'Created' })]).handlers);
 
-  const screen = renderWithProviders(<ManifestStatePanel manifest={makeManifest({ id: 'M1' })} />, {
-    roles: ['Dispatcher'],
-  });
+  const screen = await renderWithProviders(
+    <ManifestStatePanel manifest={makeManifest({ id: 'M1' })} />,
+    {
+      roles: ['Dispatcher'],
+    },
+  );
 
   await expect.element(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
   await expect.element(screen.getByRole('button', { name: 'Propose' })).toBeDisabled();
@@ -38,7 +41,7 @@ test('propose is enabled and moves the manifest to Proposed when the convoy is p
     ...convoyApi([makeConvoy({ id: 7, truckListPublished: true })]).handlers,
   );
 
-  const screen = renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
+  const screen = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
     roles: ['Dispatcher'],
   });
 
@@ -56,14 +59,14 @@ test('approve is hidden from a Dispatcher and shown to an Administrator', async 
     ...convoyApi([makeConvoy({ id: 7, truckListPublished: true })]).handlers,
   );
 
-  const asDispatcher = renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
+  const asDispatcher = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
     roles: ['Dispatcher'],
   });
   await expect
     .element(asDispatcher.getByRole('button', { name: 'Approve' }))
     .not.toBeInTheDocument();
 
-  const asAdmin = renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
+  const asAdmin = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
     roles: ['Administrator'],
   });
   await expect.element(asAdmin.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
@@ -77,7 +80,7 @@ test('approving shows the GMR-submitted confirmation and freezes the manifest', 
     ...convoyApi([makeConvoy({ id: 7, truckListPublished: true })]).handlers,
   );
 
-  const screen = renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
+  const screen = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
     roles: ['Administrator'],
   });
 
@@ -95,7 +98,7 @@ test('an illegal transition surfaces the API detail', async () => {
   const server = makeManifest({ id: 'M5', status: 'Created' });
   worker.use(...manifestApi([server]).handlers);
 
-  const screen = renderWithProviders(<ManifestStatePanel manifest={stale} />, {
+  const screen = await renderWithProviders(<ManifestStatePanel manifest={stale} />, {
     roles: ['Dispatcher'],
   });
 

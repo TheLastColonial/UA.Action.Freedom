@@ -26,7 +26,7 @@ test('teams panel assigns a lead driver for the UK leg', async () => {
       .handlers,
   );
 
-  const screen = renderWithProviders(<ManifestTeamsPanel manifestId="T1" frozen={false} />, {
+  const screen = await renderWithProviders(<ManifestTeamsPanel manifestId="T1" frozen={false} />, {
     roles: ['Dispatcher'],
   });
 
@@ -45,7 +45,7 @@ test('teams panel rejects the same volunteer on both seats', async () => {
       .handlers,
   );
 
-  const screen = renderWithProviders(<ManifestTeamsPanel manifestId="T2" frozen={false} />, {
+  const screen = await renderWithProviders(<ManifestTeamsPanel manifestId="T2" frozen={false} />, {
     roles: ['Dispatcher'],
   });
 
@@ -64,7 +64,7 @@ test('teams panel rejects the same volunteer on both seats', async () => {
 test('cargo panel adds and removes a box', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'C1' })]).handlers);
 
-  const screen = renderWithProviders(<ManifestBoxesPanel manifestId="C1" frozen={false} />, {
+  const screen = await renderWithProviders(<ManifestBoxesPanel manifestId="C1" frozen={false} />, {
     roles: ['Dispatcher'],
   });
 
@@ -83,7 +83,7 @@ test('cargo panel is read-only when the manifest is frozen', async () => {
   api.boxes.set('C2', [makeManifestBox({ boxId: 3 })]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<ManifestBoxesPanel manifestId="C2" frozen />, {
+  const screen = await renderWithProviders(<ManifestBoxesPanel manifestId="C2" frozen />, {
     roles: ['Dispatcher'],
   });
 
@@ -102,7 +102,7 @@ test('weight panel shows the border-check total and a provisional warning', asyn
   ]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<ManifestWeightPanel manifestId="W1" />, {
+  const screen = await renderWithProviders(<ManifestWeightPanel manifestId="W1" />, {
     roles: ['Loader'],
   });
 
@@ -119,7 +119,7 @@ test("weight panel warns when cargo exceeds the vehicle's stated capacity, witho
   api.boxes.set('W2', [makeManifestBox({ boxId: 1, weightKg: 20, validated: true })]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<ManifestWeightPanel manifestId="W2" />, {
+  const screen = await renderWithProviders(<ManifestWeightPanel manifestId="W2" />, {
     roles: ['Loader'],
   });
 
@@ -148,7 +148,7 @@ test('weight panel warns about an oversized box without blocking anything', asyn
   ]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<ManifestWeightPanel manifestId="W3" />, {
+  const screen = await renderWithProviders(<ManifestWeightPanel manifestId="W3" />, {
     roles: ['Loader'],
   });
 
@@ -166,7 +166,7 @@ test('weight panel shows no capacity warning when nobody has measured anything',
   api.boxes.set('W4', [makeManifestBox({ boxId: 1, weightKg: 20, validated: true })]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<ManifestWeightPanel manifestId="W4" />, {
+  const screen = await renderWithProviders(<ManifestWeightPanel manifestId="W4" />, {
     roles: ['Loader'],
   });
 

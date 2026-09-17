@@ -26,7 +26,11 @@ test('renders the volunteer', async () => {
       .handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/people/p1', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/people/p1',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByRole('heading', { name: 'Olena K' })).toBeInTheDocument();
 });
@@ -34,7 +38,11 @@ test('renders the volunteer', async () => {
 test('groups fields into named cards', async () => {
   worker.use(...personApi([makePerson({ id: 'p1', firstName: 'Olena', lastName: 'K' })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/people/p1', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/people/p1',
+    roles: ['Loader'],
+  });
 
   for (const name of ['Personal details', 'Volunteering']) {
     await expect.element(screen.getByRole('region', { name })).toBeInTheDocument();
@@ -44,7 +52,11 @@ test('groups fields into named cards', async () => {
 test('renders Not found for an unknown id', async () => {
   worker.use(...personApi([]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/people/gone', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/people/gone',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByRole('heading', { name: 'Not found' })).toBeInTheDocument();
 });
@@ -52,7 +64,11 @@ test('renders Not found for an unknown id', async () => {
 test('hides Edit and Delete from a non-administrator', async () => {
   worker.use(...personApi([makePerson({ id: 'p1', firstName: 'Olena', lastName: 'K' })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/people/p1', roles: ['Dispatcher'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/people/p1',
+    roles: ['Dispatcher'],
+  });
 
   await expect.element(screen.getByRole('heading', { name: 'Olena K' })).toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'Edit' })).not.toBeInTheDocument();
@@ -62,7 +78,7 @@ test('hides Edit and Delete from a non-administrator', async () => {
 test('an administrator can delete and return to the list', async () => {
   worker.use(...personApi([makePerson({ id: 'p1', firstName: 'Olena', lastName: 'K' })]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/people/p1',
     roles: ['Administrator'],

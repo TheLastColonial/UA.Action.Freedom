@@ -28,7 +28,11 @@ test('lists manifests with status and freeze state', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/manifests', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/manifests',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByRole('link', { name: 'UA-1' })).toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'UA-2' })).toBeInTheDocument();
@@ -38,13 +42,17 @@ test('lists manifests with status and freeze state', async () => {
 test('only Admin/Dispatcher see "New manifest"', async () => {
   worker.use(...manifestApi([]).handlers);
 
-  const asLoader = renderWithProviders(null, { routes, route: '/manifests', roles: ['Loader'] });
+  const asLoader = await renderWithProviders(null, {
+    routes,
+    route: '/manifests',
+    roles: ['Loader'],
+  });
   await expect.element(asLoader.getByText('No manifests yet.')).toBeInTheDocument();
   await expect
     .element(asLoader.getByRole('link', { name: 'New manifest' }))
     .not.toBeInTheDocument();
 
-  const asDispatcher = renderWithProviders(null, {
+  const asDispatcher = await renderWithProviders(null, {
     routes,
     route: '/manifests',
     roles: ['Dispatcher'],
