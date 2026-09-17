@@ -1,36 +1,28 @@
-import { zodResolver } from '@hookform/resolvers/zod';
+import { Fragment, useState } from 'react';
 import type { JSX } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
 
-import { useAddBoxItem, useBoxItems, useRemoveBoxItem } from '../../api/boxes';
+import type { BoxItemReadModel } from '../../api/schemas/boxes';
+import { useAddBoxItem, useBoxItems, useRemoveBoxItem, useUpdateBoxItem } from '../../api/boxes';
 import { ApiDomainProblem } from '../../api/problem';
 import { Button } from '../../components/Button';
+import { DetailCard } from '../../components/DetailCard';
 import { PageSkeleton } from '../../components/PageSkeleton';
-import { TextField } from '../../components/form/fields';
-import { addItemFormSchema, addItemFormToRequest, emptyAddItemForm } from './boxModels';
-import type { AddItemFormValues } from './boxModels';
+import { ItemModal } from './ItemModal';
+import { addItemFormToRequest, emptyAddItemForm, itemToFormValues } from './boxModels';
 
 interface BoxItemsPanelProps {
   boxId: number;
   frozen: boolean;
 }
 
+type ModalState = { mode: 'add' } | { mode: 'edit'; item: BoxItemReadModel } | null;
+
 export function BoxItemsPanel({ boxId, frozen }: BoxItemsPanelProps): JSX.Element {
   const query = useBoxItems(boxId);
   const add = useAddBoxItem(boxId);
+  const update = useUpdateBoxItem(boxId);
   const removeItem = useRemoveBoxItem(boxId);
-
-  const {
-    register,
-    control,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<AddItemFormValues>({
-    resolver: zodResolver(addItemFormSchema),
-    defaultValues: emptyAddItemForm(),
-  });
-  const properties = useFieldArray({ control, name: 'properties' });
+  const [modal, setModal] = useState<ModalState>(null);
 
   if (query.isPending) {
     return <PageSkeleton />;
@@ -40,40 +32,54 @@ export function BoxItemsPanel({ boxId, frozen }: BoxItemsPanelProps): JSX.Elemen
   }
 
   const items = 'parentMissing' in query.data ? [] : query.data;
-  const addError =
-    add.error instanceof ApiDomainProblem ? (add.error.detail ?? add.error.message) : undefined;
+  const editing = modal?.mode === 'edit' ? modal.item : null;
+  const mutation = editing ? update : add;
+  const mutationError =
+    mutation.error instanceof ApiDomainProblem
+      ? (mutation.error.detail ?? mutation.error.message)
+      : undefined;
 
   return (
-    <div>
-      <h2>Contents</h2>
+    <DetailCard title="Contents">
       {items.length === 0 ? (
         <p>Nothing packed yet.</p>
       ) : (
         <ul>
           {items.map((item) => (
             <li key={item.id}>
-              {item.description}
+              <p>{item.description}</p>
               {Object.keys(item.properties).length > 0 ? (
-                <span>
-                  {' '}
-                  (
-                  {Object.entries(item.properties)
-                    .map(([key, value]) => `${key}: ${value}`)
-                    .join(', ')}
-                  )
-                </span>
+                <dl>
+                  {Object.entries(item.properties).map(([key, value]) => (
+                    <Fragment key={key}>
+                      <dt>{key}</dt>
+                      <dd>{value}</dd>
+                    </Fragment>
+                  ))}
+                </dl>
               ) : null}
               {!frozen ? (
-                <Button
-                  type="button"
-                  variant="danger"
-                  disabled={removeItem.isPending}
-                  onClick={() => {
-                    removeItem.mutate(item.id);
-                  }}
-                >
-                  Remove
-                </Button>
+                <span style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setModal({ mode: 'edit', item });
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    disabled={removeItem.isPending}
+                    onClick={() => {
+                      removeItem.mutate(item.id);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </span>
               ) : null}
             </li>
           ))}
@@ -83,70 +89,46 @@ export function BoxItemsPanel({ boxId, frozen }: BoxItemsPanelProps): JSX.Elemen
       {frozen ? (
         <p role="status">This box has been validated — its contents are now fixed.</p>
       ) : (
-        <form
-          noValidate
-          onSubmit={(event) => {
-            void handleSubmit((values) => {
-              add.mutate(addItemFormToRequest(values), {
-                onSuccess: () => {
-                  reset(emptyAddItemForm());
-                },
-              });
-            })(event);
+        <Button
+          type="button"
+          onClick={() => {
+            setModal({ mode: 'add' });
           }}
         >
-          {addError ? (
-            <p role="alert" className="field__error">
-              {addError}
-            </p>
-          ) : null}
-
-          <TextField
-            label="Description"
-            error={errors.description?.message}
-            {...register('description')}
-          />
-
-          <fieldset>
-            <legend>Properties</legend>
-            {properties.fields.map((field, index) => (
-              <div key={field.id} style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                <TextField
-                  label={`Property ${String(index + 1)} name`}
-                  error={errors.properties?.[index]?.key?.message}
-                  {...register(`properties.${index}.key`)}
-                />
-                <TextField
-                  label={`Property ${String(index + 1)} value`}
-                  {...register(`properties.${index}.value`)}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    properties.remove(index);
-                  }}
-                >
-                  Remove property
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                properties.append({ key: '', value: '' });
-              }}
-            >
-              Add property
-            </Button>
-          </fieldset>
-
-          <Button type="submit" disabled={add.isPending}>
-            Add item
-          </Button>
-        </form>
+          Add item
+        </Button>
       )}
-    </div>
+
+      {modal !== null ? (
+        <ItemModal
+          mode={modal.mode}
+          initialValues={editing ? itemToFormValues(editing) : emptyAddItemForm()}
+          submitting={mutation.isPending}
+          errorMessage={mutationError}
+          onClose={() => {
+            setModal(null);
+          }}
+          onSubmit={(values) => {
+            const body = addItemFormToRequest(values);
+            if (editing) {
+              update.mutate(
+                { itemId: editing.id, body },
+                {
+                  onSuccess: () => {
+                    setModal(null);
+                  },
+                },
+              );
+            } else {
+              add.mutate(body, {
+                onSuccess: () => {
+                  setModal(null);
+                },
+              });
+            }
+          }}
+        />
+      ) : null}
+    </DetailCard>
   );
 }

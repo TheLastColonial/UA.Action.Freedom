@@ -126,7 +126,9 @@ test('a loader places a box in a bay and then vacates it', async () => {
 
   const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
 
-  await screen.getByLabelText('Bay').selectOptions('9');
+  // getByLabelText('Bay') would also match the "Bay" card's own section (labelled by its
+  // heading via aria-labelledby), so the select needs a role-scoped query here.
+  await screen.getByRole('combobox', { name: 'Bay' }).selectOptions('9');
   await screen.getByLabelText('Placed by').selectOptions('v1');
   await screen.getByRole('button', { name: 'Place in bay' }).click();
 

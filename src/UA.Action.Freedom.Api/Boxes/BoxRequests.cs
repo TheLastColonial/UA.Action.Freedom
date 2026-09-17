@@ -37,6 +37,12 @@ public sealed record AddBoxItemRequest(string Description, Dictionary<string, st
     public AddBoxItemCommand ToCommand(int boxId) => new(boxId, Description, Properties ?? []);
 }
 
+/// <summary>Body of <c>PUT /boxes/{id}/items/{itemId}</c> — correcting a packed item.</summary>
+public sealed record UpdateBoxItemRequest(string Description, Dictionary<string, string>? Properties)
+{
+    public UpdateBoxItemCommand ToCommand(int boxId, Guid itemId) => new(boxId, itemId, Description, Properties ?? []);
+}
+
 /// <summary>Written out for each body rather than shared, matching the vehicle and volunteer validators.</summary>
 public sealed class CreateBoxRequestValidator : AbstractValidator<CreateBoxRequest>
 {
@@ -99,6 +105,23 @@ public sealed class AddBoxItemRequestValidator : AbstractValidator<AddBoxItemReq
     private const int MaxProperties = 50;
 
     public AddBoxItemRequestValidator()
+    {
+        RuleFor(r => r.Description).NotEmpty().MaximumLength(400);
+        RuleFor(r => r.Properties)
+            .Must(properties => properties is null || properties.Count <= MaxProperties)
+            .WithMessage($"An item may carry at most {MaxProperties} properties.");
+        RuleFor(r => r.Properties)
+            .Must(properties => properties is null || properties.Keys.All(key => key.Length <= 100))
+            .WithMessage("Property names must be 100 characters or fewer.");
+    }
+}
+
+/// <summary>Same rules as packing a new item — correcting one is not a lighter-touch write.</summary>
+public sealed class UpdateBoxItemRequestValidator : AbstractValidator<UpdateBoxItemRequest>
+{
+    private const int MaxProperties = 50;
+
+    public UpdateBoxItemRequestValidator()
     {
         RuleFor(r => r.Description).NotEmpty().MaximumLength(400);
         RuleFor(r => r.Properties)

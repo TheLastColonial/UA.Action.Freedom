@@ -1,0 +1,32 @@
+@startuml Box Status
+
+title Box Status
+
+state "Pending" as Pending : The box has been created but not populated completely.
+state "Intake" as Intake : The box has been received at the distribution centre but not validated or confirmed.
+state "Validated" as Validated : The box has been validated by volunteers and is ready to be assigned to a manifest.
+state "Ready" as Ready : The box has been assigned to a manifest and is ready for the next convoy.
+state "In Transit" as InTransit : The box is on a convoy.
+state "Delivered" as Delivered : The box has arrived at the ultimate destination.
+state "Lost" as Lost : The box has been lost during transit.
+state "Returned" as Returned : The box has been returned by the destination.
+
+note right of Pending
+  The box is in the system but has not been received at the distribution centre yet.
+  OR
+  The box is being compiled together with items at the distribution centre but has not been validated yet.
+end note
+
+[*] --> Pending
+Pending --> Intake
+Intake --> Validated
+Validated --> Ready
+Ready --> InTransit
+InTransit --> Delivered
+InTransit --> Lost
+Delivered <-- Returned
+Lost -->[*]
+Returned -->[*]
+Delivered -->[*]
+
+@enduml

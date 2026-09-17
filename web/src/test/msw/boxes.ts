@@ -8,6 +8,7 @@ import type {
   BoxItemReadModel,
   BoxReadModel,
   CreateBoxRequest,
+  UpdateBoxItemRequest,
   ValidateBoxRequest,
 } from '../../api/schemas/boxes';
 import { problem } from './problem';
@@ -127,6 +128,28 @@ export function boxApi(
         description: body.description,
         properties: body.properties,
       });
+      items.set(id, list);
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.put('/boxes/:id/items/:itemId', async ({ params, request }) => {
+      const id = idFrom(params['id']);
+      const box = db.get(id);
+      if (!box) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const frozen = validatedGuard(box);
+      if (frozen) {
+        return frozen;
+      }
+      const itemId = String(params['itemId']);
+      const list = items.get(id) ?? [];
+      const index = list.findIndex((i) => i.id === itemId);
+      if (index < 0) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const body = (await request.json()) as UpdateBoxItemRequest;
+      list[index] = { id: itemId, description: body.description, properties: body.properties };
       items.set(id, list);
       return new HttpResponse(null, { status: 204 });
     }),

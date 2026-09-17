@@ -1,0 +1,368 @@
+@startuml Box Flow
+
+title Box Lifecycle: API Calls, Handlers, and Repository Operations
+
+actor Operator as operator
+participant "BoxEndpoints\n(Api)" as api
+participant "Handler\n(Application)" as handler
+participant "Repository\n(Data)" as repo
+participant "SQL\ndbo.Box*" as db
+participant "Other\nRepository" as other_repo
+
+== Pending: Box Created ==
+
+operator -> api: POST /boxes\n(CreateBoxCommand)
+activate api
+api -> handler: CreateBoxHandler
+activate handler
+handler -> repo: AddAsync(receiverRef, locationId)
+activate repo
+repo -> db: INSERT INTO dbo.Box\n(ReceiverRef, LocationId)
+db -> db: Box.Id assigned
+deactivate db
+deactivate repo
+handler -> api: BoxId
+deactivate handler
+api -> operator: 201 Created
+deactivate api
+
+note right of db
+  Box state: Pending
+  - WeightKg = 0 (default)
+  - ValidatedAt = NULL
+  - Dimensions = NULL
+end note
+
+== Pending: Items Added ==
+
+operator -> api: POST /boxes/{id}/items\n(AddBoxItemCommand)
+activate api
+api -> handler: AddBoxItemHandler
+activate handler
+handler -> repo: GetByIdAsync(id)
+activate repo
+repo -> db: SELECT * FROM dbo.Box
+db -> repo: Box (check not validated)
+deactivate db
+deactivate repo
+
+alt Box already validated
+    handler -> api: AlreadyValidated (400)
+else Box not yet validated
+    handler -> repo: AddItemAsync(itemId, description, properties)
+    activate repo
+    repo -> db: INSERT INTO dbo.BoxItem
+    deactivate repo
+    handler -> api: 200 OK
+end
+deactivate handler
+deactivate api
+
+note right of db
+  Box state: still Pending
+  - Items added to dbo.BoxItem
+  - Freeze check guards against post-validation edits
+end note
+
+== Intake: Box Assigned to Location ==
+
+operator -> api: PUT /boxes/{id}\n(UpdateBoxCommand, set LocationId)
+activate api
+api -> handler: UpdateBoxHandler
+activate handler
+handler -> repo: GetByIdAsync(id)
+activate repo
+repo -> db: SELECT * FROM dbo.Box
+db -> repo: Box
+deactivate db
+
+alt LocationId changes and box has active bay assignment
+    handler -> repo: GetActiveBayAssignmentAsync(id)
+    activate repo
+    repo -> db: SELECT * FROM dbo.BoxBayAssignment\nWHERE VacatedAt IS NULL
+    db -> repo: active assignment (or NULL)
+    deactivate repo
+    handler -> repo: VacateActiveBayAssignmentAsync\n(if bay no longer in new location)
+    activate repo
+    repo -> db: UPDATE dbo.BoxBayAssignment\nSET VacatedAt = NOW()
+    deactivate repo
+else No conflict
+end
+deactivate repo
+
+handler -> repo: UpdateAsync(id, receiverRef, locationId)
+activate repo
+repo -> db: UPDATE dbo.Box\nSET ReceiverRef, LocationId, UpdatedAt
+deactivate repo
+
+handler -> api: 200 OK
+deactivate handler
+deactivate api
+
+note right of db
+  Box state: Intake
+  - LocationId now set
+  - Ready for bay assignment & validation
+end note
+
+== Intake: QR Code Issued ==
+
+operator -> api: POST /boxes/{id}/qr-code\n(IssueBoxQrCodeCommand)
+activate api
+api -> handler: IssueBoxQrCodeHandler
+activate handler
+handler -> repo: ExistsAsync(id)
+activate repo
+repo -> db: SELECT 1 FROM dbo.Box WHERE Id = @id
+db -> repo: 1 or NULL
+deactivate db
+
+alt Box not found
+    handler -> api: NotFound (404)
+else Box exists
+    handler -> repo: IssueQrCodeAsync(id, token, issuedAt)
+    activate repo
+    repo -> db: BEGIN TRAN
+    repo -> db: UPDATE dbo.BoxQrCode\nSET RevokedAt = @issuedAt\nWHERE BoxId = @id AND RevokedAt IS NULL
+    repo -> db: INSERT INTO dbo.BoxQrCode\n(Token, BoxId, IssuedAt)
+    repo -> db: COMMIT
+    deactivate db
+    handler -> api: 200 OK (token, issuedAt)
+end
+deactivate repo
+deactivate handler
+deactivate api
+
+note right of db
+  QR code lifecycle (revoke-then-insert transactional):
+  - Revokes any prior active code atomically
+  - New code is immediately resolvable via GET /boxes/scan/{token}
+  - Can be re-issued anytime, even post-validation
+  - Reprint/replace flow: revoke old, issue new, in one transaction
+end note
+
+== Intake: Bay Assignment ==
+
+operator -> api: PUT /boxes/{id}/bay\n(AssignBoxBayCommand)
+activate api
+api -> handler: AssignBoxBayHandler
+activate handler
+handler -> repo: GetByIdAsync(id)
+activate repo
+repo -> db: SELECT * FROM dbo.Box
+db -> repo: Box (check LocationId is set)
+deactivate db
+deactivate repo
+
+handler -> other_repo: GetByIdAsync(bayId)
+activate other_repo
+other_repo -> db: SELECT * FROM dbo.Bay
+db -> other_repo: Bay
+deactivate other_repo
+
+alt Box.LocationId != Bay.LocationId
+    handler -> api: LocationMismatch (400)
+else Locations match
+    handler -> other_repo: ExistsAsync(assignedByPersonId)
+    activate other_repo
+    other_repo -> db: SELECT 1 FROM dbo.Person
+    db -> other_repo: 1 or NULL
+    deactivate other_repo
+
+    alt Assigner person not found
+        handler -> api: NotFound (404)
+    else Person exists
+        handler -> repo: AssignBayAsync(boxId, bayId, personId, assignedAt)
+        activate repo
+        repo -> db: BEGIN TRAN
+        repo -> db: UPDATE dbo.BoxBayAssignment\nSET VacatedAt = @assignedAt\nWHERE BoxId = @boxId AND VacatedAt IS NULL
+        repo -> db: INSERT INTO dbo.BoxBayAssignment\n(BoxId, BayId, AssignedByPersonId, AssignedAt)
+        repo -> db: COMMIT
+        deactivate db
+        handler -> api: 200 OK (assignmentId, bayId, assignedAt)
+    end
+end
+deactivate repo
+deactivate handler
+deactivate api
+
+note right of db
+  Bay assignment lifecycle (vacate-then-insert transactional):
+  - Revokes any prior active assignment for this box
+  - New assignment row inserted in same transaction
+  - History kept (VacatedAt != NULL marks old rows)
+  - Query by VacatedAt IS NULL finds current bay
+  - Policy: boxes:allocate-bay (Loader only)
+end note
+
+== Validated: Box Weight and Dimensions Confirmed ==
+
+operator -> api: POST /boxes/{id}/validate\n(ValidateBoxCommand, weight, dims)
+activate api
+api -> handler: ValidateBoxHandler
+activate handler
+handler -> other_repo: ExistsAsync(validatorPersonId)
+activate other_repo
+other_repo -> db: SELECT 1 FROM dbo.Person
+db -> other_repo: 1 or NULL
+deactivate other_repo
+
+alt Validator person not found
+    handler -> api: NotFound (404)
+else Person exists
+    handler -> repo: GetByIdAsync(id)
+    activate repo
+    repo -> db: SELECT * FROM dbo.Box
+    db -> repo: Box (check ValidatedAt is NULL for race safety)
+    deactivate repo
+    deactivate repo
+
+    handler -> repo: ValidateAsync(id, weightKg, widthCm, depthCm, heightCm, personId, validatedAt)
+    activate repo
+    repo -> db: UPDATE dbo.Box\nSET WeightKg, WidthCm, DepthCm, HeightCm,\n    ValidatedByPersonId, ValidatedAt, UpdatedAt\nWHERE Id = @id AND ValidatedAt IS NULL
+    db -> db: Conditional update (race-safe, or 0 rows affected)
+    deactivate db
+
+    alt Update succeeded (1 row affected)
+        handler -> api: 200 OK (validated box)
+    else Double-validate attempt
+        handler -> api: Conflict (409)
+    end
+end
+deactivate repo
+deactivate handler
+deactivate api
+
+note right of db
+  Box state: Validated
+  - WeightKg, dimensions, ValidatedBy, ValidatedAt now frozen
+  - UPDATE is conditional (WHERE ValidatedAt IS NULL)
+  - Protects against race between two validators pressing same button
+  - Policy: boxes:validate (Administrator, Loader)
+  - Post-validation: all edit handlers (items, bay, location, general update) refuse further changes
+end note
+
+== Post-Validated: Modifications Blocked ==
+
+note right of handler
+  All subsequent edit attempts check ''Validated'' property:
+
+  AddBoxItemHandler.HandleAsync():
+    if (box.Validated) return AlreadyValidated;
+
+  UpdateBoxItemHandler.HandleAsync():
+    if (box.Validated) return AlreadyValidated;
+
+  RemoveBoxItemHandler.HandleAsync():
+    if (box.Validated) return AlreadyValidated;
+
+  UpdateBoxHandler.HandleAsync():
+    if (box.Validated) return AlreadyValidated;
+
+  This freeze is structural, not a database trigger.
+end note
+
+== Ready: (Not Implemented) ==
+
+note right of handler
+  **ASPIRATIONAL STATE — NOT IMPLEMENTED IN CODE**
+
+  docs/processes/box-status.puml shows ''Ready'' as:
+  "The box has been assigned to a manifest and is ready for the next convoy."
+
+  Actual implementation:
+  - A Box is added to a Manifest via AddManifestBoxHandler (Manifests slice)
+  - This happens through ManifestCompositionUseCases.cs, not Box-level code
+  - No BoxStatus field is set; no Box.ReadyAt timestamp exists
+  - The implicit signal: box.Id ∈ manifest.Boxes[] (exists on dbo.ManifestBox)
+  - Manifest itself transitions through states (Created→Proposed→Confirmed→...)
+    but those are Manifest fields, not Box fields
+
+  To query "which boxes are ready for a convoy":
+  - Join Box to ManifestBox to Manifest
+  - Filter for Manifest.Status ∈ {Confirmed, Preparing, Ready, InTransit, ...}
+  - Or query: Box.Validated AND Box ∈ (SELECT BoxId FROM dbo.ManifestBox
+      JOIN dbo.Manifest ON ... WHERE Manifest.Status >= Confirmed)
+end note
+
+== GMR and ELO Generation ==
+
+note over operator, db
+  **TRIGGERED BY MANIFEST APPROVAL, NOT BOX STATE**
+
+  When Dispatcher calls POST /manifests/{id}/approve:
+  - ApproveManifestHandler (Manifests slice)
+
+  1. FREEZE MANIFEST: ManifestRepository.ConfirmAndFreezeAsync(id)
+     UPDATE dbo.Manifest SET Status = Confirmed, GmrSubmittedAt = NOW()
+     WHERE Id = @id AND Status = Proposed
+     (Conditional; prevents double-approve race)
+
+  2. ENQUEUE GMR SUBMISSION: queue.EnqueueGmrSubmissionAsync(
+       ManifestId, VehicleRegistration, DepartsAt)
+     → Serialized to JSON, sent to Azure Queue: ''customs-work''
+
+  3. ENQUEUE MANIFEST DOCUMENT: queue.EnqueueDocumentAsync(
+       ManifestId, VehicleRegistration, WeightKg, ..., LineItems[...])
+     → Serialized to JSON, sent to Azure Queue: ''manifest-documents''
+
+  **RELIABILITY NOTES (high-level; see src/ for full code):**
+
+  GMR Submission (CustomsWorker.GmrSubmissionProcessor):
+  - Dequeues message from ''customs-work'' (2-min visibility timeout = peek-lock)
+  - Calls HMRC Goods Vehicle Movement System API (GVMS)
+  - On success: message.CompleteAsync() → deletes from queue
+  - On 4xx (e.g., 400 Bad Request): message.DeadLetterAsync() → copies to ''customs-work-poison''
+  - On 5xx or timeout (transient): leaves message alone → visibility timeout expires → auto-requeued
+
+  GMR Outcome Collection (CustomsWorker.GmrOutcomeCollector, timer-triggered ~every 15s):
+  - Polls HMRC Push Pull Notifications box for PENDING notifications
+  - For each notification: parse gmrId, call documents.SaveAsync() → blob storage (gmr/ prefix)
+  - On success: notifications.AcknowledgeNotificationsAsync() → HMRC will not resend
+  - On storage failure: leave notification unacknowledged → stays PENDING → retried on next poll
+
+  **CRITICAL GAP (docs/gotchas-and-open-questions.md §9):**
+  - No code path writes GMR outcome (HMRC response) back into SQL
+  - Outcomes live only in blob storage (gmr/{gmrId}.json)
+  - Question: should Manifest.GmrStatus or similar exist, queryable from API?
+    Currently unanswered.
+
+  **ELO GENERATION: NOT IMPLEMENTED**
+  - docs/processes/convoy-creation-process.puml shows ''Generate ELO'' parallel to GMR
+  - No target government API has been identified (candidates: ENS, France's NCTS/DELTA)
+  - No queue, worker, or client code exists
+  - See docs/gotchas-and-open-questions.md §8: "Nothing is built."
+
+  **SEE ALSO:**
+  - docs/processes/manifest-status.puml (10-state manifest lifecycle)
+  - docs/processes/convoy-creation-process.puml (overall process including GMR/ELO fork)
+  - src/UA.Action.Freedom.CustomsWorker/ (GmrSubmissionProcessor, GmrOutcomeCollector)
+  - src/UA.Action.Freedom.ManifestWorker/ (ManifestDocumentProcessor)
+  - src/UA.Action.Freedom.Application/Manifests/ManifestTransitionUseCases.cs (ApproveManifestHandler)
+end note
+
+== InTransit, Delivered, Lost, Returned: (Not Implemented) ==
+
+note right of handler
+  **ASPIRATIONAL STATES — NOT IMPLEMENTED IN BOX CODE**
+
+  docs/processes/box-status.puml shows these as:
+  - InTransit: "The box is on a convoy."
+  - Delivered: "The box has arrived at the ultimate destination."
+  - Lost: "The box has been lost during transit."
+  - Returned: "The box has been returned by the destination."
+
+  **No Box.Status field, no transitions, no endpoints.**
+
+  If a load's status needs to be tracked end-to-end:
+  - Current implementation: track via Manifest.Status (Preparing→Ready→InTransit→Delivered/Lost→Returned)
+  - That is on the Manifest row, not on individual Box rows
+  - Box remains frozen at Validated (with its location, receiver, weight, validator recorded)
+
+  Future work (not decided):
+  - Could add BoxStatus field + transitions to mirror manifest lifecycle
+  - Could add Box-level events (e.g., BoxDeliveredEvent when manifest delivers)
+  - See docs/recommendations.md for architectural options
+end note
+
+@enduml

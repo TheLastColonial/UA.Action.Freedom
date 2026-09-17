@@ -2,10 +2,10 @@
 
 title Manifest Status
 
-state "Created" as Created : Initial state of the manifest. \nThe manifest has been created but not populated completely.
+state "Created" as Created : The manifest has been created but not populated completely.
 state "Proposed" as Proposed : Requesting approval for the manifest.
 state "Rejected" as Rejected : The manifest has been rejected.
-state "Confirmed" as Confirmed : The manifest has been confirmed.
+state "Approved" as Approved : The manifest has been approved by Ground Officers.
 state "Preparing" as Preparing : Volunteers are preparing the boxes for transit.
 state "Ready" as Ready : The manifest is ready for collection.
 state "In Transit" as InTransit : The manifest is on a convoy.
@@ -16,17 +16,19 @@ state "Returned" as Returned : The manifest has been returned by the destination
 [*] --> Created
 Created --> Proposed
 Created --> Rejected
-Proposed --> Rejected
-Rejected --> Proposed
-Proposed --> Confirmed
-Confirmed --> Preparing
+Proposed <-- Rejected
+Rejected <-- Proposed
+Proposed --> Approved
+Approved --> Preparing
 Preparing --> Ready
 Ready --> InTransit
 InTransit --> Delivered
 InTransit --> Lost
-Delivered --> Returned
-Lost -->[*]
-Returned -->[*]
-Delivered -->[*]
+Delivered <-- Returned
+Lost --> [*]
+Returned --> [*]
+Delivered --> [*]
+
+Rejected --> [*]
 
 @enduml

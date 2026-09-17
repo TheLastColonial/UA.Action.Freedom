@@ -146,6 +146,26 @@ public static class BoxEndpoints
         .AddEndpointFilter<ValidationFilter<AddBoxItemRequest>>()
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
+        boxes.MapPut("/{id:int}/items/{itemId:guid}", async (
+            int id,
+            Guid itemId,
+            UpdateBoxItemRequest request,
+            ICommandHandler<UpdateBoxItemCommand, UpdateBoxItemOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(request.ToCommand(id, itemId), cancellationToken);
+
+            return outcome switch
+            {
+                UpdateBoxItemOutcome.Updated => Results.NoContent(),
+                UpdateBoxItemOutcome.BoxNotFound => Results.NotFound(),
+                UpdateBoxItemOutcome.ItemNotFound => Results.NotFound(),
+                _ => Results.Problem(detail: ValidatedProblem, statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .AddEndpointFilter<ValidationFilter<UpdateBoxItemRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
+
         boxes.MapDelete("/{id:int}/items/{itemId:guid}", async (
             int id,
             Guid itemId,

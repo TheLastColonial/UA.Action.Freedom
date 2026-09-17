@@ -30,8 +30,9 @@ test('@smoke loader packs a box, adds an item and validates it', async ({ page }
   await page.getByRole('button', { name: 'Create box' }).click();
   await expect(page.getByRole('heading', { name: /Box #/ })).toBeVisible();
 
-  await page.getByLabel('Description').fill('Sleeping bags');
   await page.getByRole('button', { name: 'Add item' }).click();
+  await page.getByLabel('Description').fill('Sleeping bags');
+  await page.getByRole('button', { name: 'Save item' }).click();
   await expect(page.getByText('Sleeping bags')).toBeVisible();
 
   await page.getByLabel('Checked by').selectOption({ label: `Box ${checker}` });
@@ -104,7 +105,9 @@ test('@smoke a loader places a box in a bay and then finds it there', async ({ p
   await page.getByRole('button', { name: 'Create box' }).click();
   await expect(page.getByRole('heading', { name: /Box #/ })).toBeVisible();
 
-  await page.getByLabel('Bay').selectOption({ label: 'A1' });
+  // getByLabel('Bay') would also match the "Bay" card's own section (labelled by its heading
+  // via aria-labelledby), so the select needs a role-scoped query here.
+  await page.getByRole('combobox', { name: 'Bay' }).selectOption({ label: 'A1' });
   await page.getByLabel('Placed by').selectOption({ label: `Placed ${loaderName}` });
   await page.getByRole('button', { name: 'Place in bay' }).click();
 
@@ -112,4 +115,59 @@ test('@smoke a loader places a box in a bay and then finds it there', async ({ p
 
   await page.getByRole('button', { name: 'Vacate bay' }).click();
   await expect(page.getByText('Not currently in a bay.')).toBeVisible();
+});
+
+test('@smoke a loader places a new box in a bay straight from the create form', async ({
+  page,
+}) => {
+  await signIn(page, 'admin');
+  const adminNav = page.getByRole('navigation', { name: 'Sections' });
+  await adminNav.getByRole('link', { name: 'Locations' }).click();
+  await page.getByRole('link', { name: 'New location' }).click();
+  const depot = `Depot${String(Date.now())}`;
+  await page.getByLabel('Name').fill(depot);
+  await page.getByRole('button', { name: 'Create location' }).click();
+  await expect(page.getByRole('heading', { name: depot })).toBeVisible();
+
+  await page.getByLabel('Bay code').fill('A1');
+  await page.getByRole('button', { name: 'Add bay' }).click();
+  await expect(page.getByText('A1')).toBeVisible();
+
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('link', { name: 'Volunteers' })
+    .click();
+  await page.getByRole('link', { name: 'New volunteer' }).click();
+  const loaderName = `Create${String(Date.now())}`;
+  await page.getByLabel('First name').fill('Placed');
+  await page.getByLabel('Last name').fill(loaderName);
+  await page.getByLabel('Date of birth').fill('1991-03-03');
+  await page.getByRole('button', { name: 'Create volunteer' }).click();
+  await expect(page.getByRole('heading', { name: `Placed ${loaderName}` })).toBeVisible();
+
+  await signIn(page, 'operator');
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+  await nav.getByRole('link', { name: 'Boxes' }).click();
+  await page.getByRole('link', { name: 'New box' }).click();
+  await page.getByLabel('Distribution hub').selectOption({ label: depot });
+  await page.getByRole('combobox', { name: 'Bay' }).selectOption({ label: 'A1' });
+  await page.getByLabel('Placed by').selectOption({ label: `Placed ${loaderName}` });
+  await page.getByRole('button', { name: 'Create box' }).click();
+
+  await expect(page.getByRole('heading', { name: /Box #/ })).toBeVisible();
+  await expect(page.getByText(/Currently in bay.*A1/)).toBeVisible();
+
+  // Correct an item's properties through the edit modal — add + edit both in one pass.
+  await page.getByRole('button', { name: 'Add item' }).click();
+  await page.getByLabel('Description').fill('Blankets');
+  await page.getByRole('button', { name: 'Add property' }).click();
+  await page.getByLabel('Name').fill('size');
+  await page.getByLabel('Value').fill('M');
+  await page.getByRole('button', { name: 'Save item' }).click();
+  await expect(page.getByText('Blankets')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByLabel('Value').fill('L');
+  await page.getByRole('button', { name: 'Save item' }).click();
+  await expect(page.getByText('L', { exact: true })).toBeVisible();
 });

@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Tests.Unit.Boxes;
@@ -21,6 +22,8 @@ public class BoxHandlerTests
 
     private const int LocationId = 3;
 
+    private const int BayId = 9;
+
     private static readonly Guid Loader = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
 
     private static BoxReadModel ABox(bool validated = false) => new(
@@ -40,6 +43,13 @@ public class BoxHandlerTests
         people.ExistsAsync(Loader, Arg.Any<CancellationToken>()).Returns(true);
         return people;
     }
+
+    private static BoxBayAssignmentReadModel AnActiveBayAssignment() => new(
+        Id: 1, BoxId: BoxId, BayId: BayId, AssignedByPersonId: Loader,
+        AssignedAt: new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc), VacatedAt: null);
+
+    private static IBayRepository ABayRepositoryWithNoBays()
+        => Substitute.For<IBayRepository>();
 
     [Fact]
     public async Task A_new_box_starts_with_no_confirmed_weight()
@@ -200,12 +210,87 @@ public class BoxHandlerTests
     }
 
     [Fact]
+    public async Task An_items_description_and_properties_can_be_corrected()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        var itemId = Guid.NewGuid();
+        repository.UpdateItemAsync(
+                BoxId, itemId, "Blankets (large)", Arg.Any<IReadOnlyDictionary<string, string>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(true);
+        var handler = new UpdateBoxItemHandler(repository);
+
+        var outcome = await handler.HandleAsync(
+            new UpdateBoxItemCommand(BoxId, itemId, "Blankets (large)", new Dictionary<string, string> { ["size"] = "XL" }),
+            CancellationToken.None);
+
+        outcome.Should().Be(UpdateBoxItemOutcome.Updated);
+        await repository.Received(1).UpdateItemAsync(
+            BoxId, itemId, "Blankets (large)",
+            Arg.Is<IReadOnlyDictionary<string, string>>(p => p["size"] == "XL"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Editing_an_item_that_does_not_exist_is_reported()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        repository.UpdateItemAsync(
+                Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<string>(),
+                Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+        var handler = new UpdateBoxItemHandler(repository);
+
+        var outcome = await handler.HandleAsync(
+            new UpdateBoxItemCommand(BoxId, Guid.NewGuid(), "Blankets", new Dictionary<string, string>()),
+            CancellationToken.None);
+
+        outcome.Should().Be(UpdateBoxItemOutcome.ItemNotFound);
+    }
+
+    [Fact]
+    public async Task Editing_an_item_in_an_unknown_box_reports_not_found()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns((BoxReadModel?)null);
+        var handler = new UpdateBoxItemHandler(repository);
+
+        var outcome = await handler.HandleAsync(
+            new UpdateBoxItemCommand(BoxId, Guid.NewGuid(), "Blankets", new Dictionary<string, string>()),
+            CancellationToken.None);
+
+        outcome.Should().Be(UpdateBoxItemOutcome.BoxNotFound);
+        await repository.DidNotReceive().UpdateItemAsync(
+            Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<string>(),
+            Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Nothing_can_be_edited_in_a_validated_box()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
+        var handler = new UpdateBoxItemHandler(repository);
+
+        var outcome = await handler.HandleAsync(
+            new UpdateBoxItemCommand(BoxId, Guid.NewGuid(), "Blankets", new Dictionary<string, string>()),
+            CancellationToken.None);
+
+        outcome.Should().Be(UpdateBoxItemOutcome.AlreadyValidated);
+        await repository.DidNotReceive().UpdateItemAsync(
+            Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<string>(),
+            Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task A_validated_box_cannot_be_pointed_at_a_different_receiver()
     {
         // The Loader signed for this box going to this receiver.
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
-        var handler = new UpdateBoxHandler(repository);
+        var handler = new UpdateBoxHandler(repository, ABayRepositoryWithNoBays());
 
         var outcome = await handler.HandleAsync(
             new UpdateBoxCommand(BoxId, Guid.NewGuid(), LocationId),
@@ -223,7 +308,7 @@ public class BoxHandlerTests
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
         repository.UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
-        var handler = new UpdateBoxHandler(repository);
+        var handler = new UpdateBoxHandler(repository, ABayRepositoryWithNoBays());
 
         const int newLocationId = 9;
 
@@ -234,6 +319,84 @@ public class BoxHandlerTests
         await repository.Received(1).UpdateAsync(
             Arg.Is<BoxReadModel>(box => box.LocationId == newLocationId && !box.Validated && box.WeightKg == 0),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Moving_a_box_to_a_different_location_vacates_its_stale_bay()
+    {
+        // The box is shelved in a bay that belongs to its old location. Once the box is recorded
+        // as being somewhere else, that bay assignment describes a bay the box is not at.
+        var repository = Substitute.For<IBoxRepository>();
+        var bays = Substitute.For<IBayRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        repository.UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetActiveBayAssignmentAsync(BoxId, Arg.Any<CancellationToken>())
+            .Returns(AnActiveBayAssignment());
+        bays.GetByIdAsync(BayId, Arg.Any<CancellationToken>())
+            .Returns(new BayReadModel(BayId, LocationId, "A1"));
+        var handler = new UpdateBoxHandler(repository, bays);
+
+        const int newLocationId = 42;
+
+        await handler.HandleAsync(
+            new UpdateBoxCommand(BoxId, null, newLocationId), CancellationToken.None);
+
+        await repository.Received(1).VacateActiveBayAssignmentAsync(BoxId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Moving_a_box_to_its_bays_own_location_leaves_the_bay_alone()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        var bays = Substitute.For<IBayRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        repository.UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetActiveBayAssignmentAsync(BoxId, Arg.Any<CancellationToken>())
+            .Returns(AnActiveBayAssignment());
+        bays.GetByIdAsync(BayId, Arg.Any<CancellationToken>())
+            .Returns(new BayReadModel(BayId, LocationId, "A1"));
+        var handler = new UpdateBoxHandler(repository, bays);
+
+        await handler.HandleAsync(
+            new UpdateBoxCommand(BoxId, null, LocationId), CancellationToken.None);
+
+        await repository.DidNotReceive().VacateActiveBayAssignmentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Clearing_a_boxs_location_vacates_its_bay_too()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        var bays = Substitute.For<IBayRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        repository.UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetActiveBayAssignmentAsync(BoxId, Arg.Any<CancellationToken>())
+            .Returns(AnActiveBayAssignment());
+        bays.GetByIdAsync(BayId, Arg.Any<CancellationToken>())
+            .Returns(new BayReadModel(BayId, LocationId, "A1"));
+        var handler = new UpdateBoxHandler(repository, bays);
+
+        await handler.HandleAsync(
+            new UpdateBoxCommand(BoxId, null, null), CancellationToken.None);
+
+        await repository.Received(1).VacateActiveBayAssignmentAsync(BoxId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Moving_a_box_with_no_active_bay_does_not_try_to_vacate_one()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        var bays = Substitute.For<IBayRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        repository.UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetActiveBayAssignmentAsync(BoxId, Arg.Any<CancellationToken>())
+            .Returns((BoxBayAssignmentReadModel?)null);
+        var handler = new UpdateBoxHandler(repository, bays);
+
+        await handler.HandleAsync(
+            new UpdateBoxCommand(BoxId, null, 42), CancellationToken.None);
+
+        await repository.DidNotReceive().VacateActiveBayAssignmentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

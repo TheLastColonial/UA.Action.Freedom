@@ -14,6 +14,7 @@ namespace UA.Action.Freedom.Tests.BDD.Steps;
 public sealed class LocationsSteps(FreedomApiClient api, ScenarioState state)
 {
     internal const string LocationKey = "location";
+    internal const string OtherLocationKey = "otherLocation";
     internal const string BayKey = "bay";
 
     [Given("a location exists")]
@@ -30,6 +31,20 @@ public sealed class LocationsSteps(FreedomApiClient api, ScenarioState state)
         var id = LastPathSegment(response);
         state.CreatedResources.Add(("locations", id));
         state.Pin(LocationKey, id);
+    }
+
+    [Given("a second location exists")]
+    public async Task GivenASecondLocationExists()
+    {
+        var admin = await api.TokenForAsync("admin");
+
+        var response = await api.SendAsync(HttpMethod.Post, "/locations", admin, """{ "name": "BDD Depot 2" }""");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created, "the body was: {0}", api.LastBody);
+
+        var id = LastPathSegment(response);
+        state.CreatedResources.Add(("locations", id));
+        state.Pin(OtherLocationKey, id);
     }
 
     [Given("a bay exists at the location")]

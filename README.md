@@ -190,7 +190,7 @@ Core resource endpoints:
 - `GET|POST /receivers` — Delivery contacts (reference/org/region)
   - `GET|PUT /receivers/{ref}/detail` — **GroundOfficer only**: delivery address + contact
 - `GET|POST /boxes` — Packing containers
-  - `GET|POST|DELETE /boxes/{id}/items` — Item inventory
+  - `GET|POST|PUT|DELETE /boxes/{id}/items` — Item inventory; `PUT /boxes/{id}/items/{itemId}` corrects a packed item's description or properties, same write-once freeze as add/remove
   - `POST /boxes/{id}/validate` — Lock box weight and optional dimensions
   - `POST|GET|DELETE /boxes/{id}/qr-code` — Issue / read / revoke the box's QR label (`boxes:write` to issue and revoke, `boxes:read` to read)
   - `GET /boxes/{id}/qr-code/image` (`?format=svg\|png`) — The QR image alone (`boxes:read`)
@@ -215,7 +215,18 @@ manifest teams/boxes/weight), all nine manifest transitions, and the reason-gate
 with nav and actions gated by the same policy matrix (the API stays the enforcement point). The
 box detail page's **QR label** panel issues a label, shows it inline and prints it (a print
 stylesheet reveals the label alone); `/boxes/scan/{token}` is consumed by whatever scans the
-printed label, not the operator UI.
+printed label, not the operator UI. Every section of the box detail page (contents, QR label, bay,
+validation) renders as the same card component for a consistent layout. A box's contents are
+added and corrected through a single modal (`ItemModal`) shared by both actions — plain "Name"/
+"Value" labels per property row, not a positional "Property 1 name" — reusing the same request
+shape the add and correct endpoints both accept. The box creation form also offers an inline,
+optional **bay** section once a location is picked — shown only to a signed-in user who carries
+`boxes:allocate-bay` (a Loader), so a Dispatcher or Administrator creating a box never sees it.
+It is pure frontend orchestration: on submit the page calls `POST /boxes` and then, if a bay was
+chosen, the same `PUT /boxes/{id}/bay` a Loader would use from the box's own page afterwards — no
+combined backend endpoint, so the existing `boxes:write` / `boxes:allocate-bay` policy split is
+untouched. If the bay placement call fails, the box (already created) still opens on its own page,
+where the Loader can place it from `BoxBayPanel` as usual.
 
 ## Architecture
 
@@ -298,6 +309,11 @@ Manifests follow a 10-state model (see `docs/manifest-status.puml`):
   `boxes:validate`, because this is the on-site, physical act of shelving a box, not a
   coordination task. `Location`/`Bay` CRUD (setting up a depot) is Administrator only
   (`locations:write`); reading either is open to every operational role.
+- `PUT /boxes/{id}` (changing a box's location) also vacates its active bay assignment, if any,
+  when the new location doesn't match the bay it names — `UpdateBoxHandler` checks this the same
+  way `AssignBoxBayHandler` does, via `IBayRepository`. Without it, moving a box to a different
+  depot would leave it recorded as both "at" the new location and "in" a bay that belongs to the
+  old one, breaking the one-bay-one-matching-location invariant above.
 
 ## Development
 

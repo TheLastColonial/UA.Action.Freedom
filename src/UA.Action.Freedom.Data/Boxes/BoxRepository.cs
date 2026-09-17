@@ -175,6 +175,29 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
             cancellationToken: cancellationToken));
     }
 
+    public async Task<bool> UpdateItemAsync(
+        int boxId, Guid itemId, string description, IReadOnlyDictionary<string, string> properties,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // Scoped to the box, same reasoning as DeleteItemAsync: correcting an item that belongs
+        // to a different box is a caller mistake worth reporting, not a silent no-op.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE dbo.BoxItem SET Description = @description, PropertiesJson = @propertiesJson " +
+            "WHERE Id = @itemId AND BoxId = @boxId",
+            new
+            {
+                boxId,
+                itemId,
+                description,
+                propertiesJson = JsonSerializer.Serialize(properties),
+            },
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
     public async Task<bool> DeleteItemAsync(int boxId, Guid itemId, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();

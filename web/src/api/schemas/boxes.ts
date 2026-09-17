@@ -68,3 +68,4 @@ export interface AddBoxItemRequest {
   description: string;
   properties: Record<string, string>;
 }
+export type UpdateBoxItemRequest = AddBoxItemRequest;

@@ -4,7 +4,7 @@ The shared vocabulary for Freedom. Terms defined here should be the terms used i
 conversation with Ukrainian Action.
 
 Related: [System Context](../c4/1-system-context.puml) · [Containers](../c4/2-containers.puml) ·
-[Manifest creation process](../process.puml) · [Manifest status](../manifest-status.puml) ·
+[Convoy creation process](../processes/convoy-creation-process.puml) · [Manifest status](../processes/manifest-status.puml) · [Box status](../processes/box-status.puml) ·
 [Architecture recommendations](../recommendations.md)
 
 ---
@@ -118,7 +118,10 @@ Ukrainian delivery address is not. See [Data Sensitivity](#data-sensitivity).
 ### Item
 
 A single donated thing, with a description and open-ended properties. Items are not tracked individually in
-transit — they are tracked as the contents of a [Box](#box).
+transit — they are tracked as the contents of a [Box](#box). An item's description and properties can be
+corrected (`PUT /boxes/{id}/items/{itemId}`) up until the box is validated — the same write-once freeze that
+governs adding and removing an item, since a correction after validation would be just as much a change to
+what a Loader vouched for as an addition or removal would.
 
 ### Box
 
@@ -171,6 +174,15 @@ it, when, and when it moved on), mirroring the QR label's issue/revoke shape: as
 vacates whatever bay the box was already in, as one transactional act, so a box is never recorded as
 being in two bays at once.
 
+That same invariant holds when a box's *location* changes rather than its bay: pointing a box at a
+different [Location](#location) (`PUT /boxes/{id}`) vacates any active bay assignment that no longer
+matches, because a bay only means something as "this bay, at the box's current location" — a bay
+assignment left over from the box's previous depot would otherwise describe a shelf the box is nowhere
+near. A Loader can then place the box in a bay at its new location as usual, and can just as well name
+one while creating a box in the first place, if they already know where it is going — the operator UI
+offers this inline once a location is picked, but it is still the ordinary bay-placement act underneath
+(same policy, same endpoint), not a new kind of write.
+
 ### Receiver
 
 The destination of a box's contents: a responsible individual, an organisation, and an [Address](#address) in
@@ -213,18 +225,28 @@ appears on it is a security question — see [Data Sensitivity](#data-sensitivit
 ### Manifest Status
 
 The lifecycle a manifest moves through. `ManifestStatus` is a ten-state enum — `Created, Proposed, Rejected,
-Confirmed, Preparing, Ready, InTransit, Delivered, Lost, Returned` — kept in sync with
-[`manifest-status.puml`](../manifest-status.puml) edge-for-edge; the allowed transitions live as data in
+Approved, Preparing, Ready, InTransit, Delivered, Lost, Returned` — kept in sync with
+[`manifest-status.puml`](../processes/manifest-status.puml) edge-for-edge; the allowed transitions live as data in
 `ManifestTransitions.CanTransition` (`Manifest.cs`), pinned by
 `tests/UA.Action.Freedom.Tests.Unit/Domain/ManifestTransitionsTests.cs`. The happy path is linear; the only
-backward edge is `Rejected → Proposed`. GMR submission is triggered from the `Confirmed → approve` transition,
+backward edge is `Rejected → Proposed`. GMR submission is triggered from the `Approved → prepare` transition,
 which freezes the manifest in the same statement that stamps the GMR timestamp — see CLAUDE.md's manifest
 lifecycle section for the freeze semantics.
+
+### Box Status
+
+The lifecycle a box moves through from creation to final delivery or loss. `BoxStatus` progresses through eight states:
+`Pending, Intake, Validated, Ready, InTransit, Delivered, Lost, Returned` — kept in sync with
+[`box-status.puml`](../processes/box-status.puml). The states reflect both the physical location of a box
+(pre-arrival, at a depot, in transit) and its validation status. A box remains in `Pending` until received at a
+distribution hub (`Intake`), where a [Loader](#loader) can then validate its contents and weight (`Validated`).
+Once assigned to a [Manifest](#manifest), it moves to `Ready`. The happy path is linear: `Ready → InTransit → Delivered`.
+Boxes may be `Lost` or `Returned` during transit, terminal states that bypass `Delivered`.
 
 ### Truck List
 
 Produced at the start of the process: the set of vehicles committed to the next convoy, published so that
-manifests can be proposed against it. See [`process.puml`](../process.puml).
+manifests can be proposed against it. See [`convoy-creation-process.puml`](../processes/convoy-creation-process.puml).
 
 ---
 

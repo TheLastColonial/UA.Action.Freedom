@@ -3,19 +3,82 @@ import { describe, expect, it } from 'vitest';
 import {
   addItemFormSchema,
   addItemFormToRequest,
+  boxFormSchema,
   boxFormToRequest,
+  emptyBoxForm,
   validateFormSchema,
   validateFormToRequest,
 } from './boxModels';
 
 describe('boxFormToRequest', () => {
   it('omits every empty optional field', () => {
-    expect(boxFormToRequest({ receiverRef: '', locationId: '' })).toEqual({});
+    expect(
+      boxFormToRequest({ receiverRef: '', locationId: '', bayId: '', assignedByPersonId: '' }),
+    ).toEqual({});
   });
 
   it('trims and keeps the fields that are set', () => {
-    const request = boxFormToRequest({ receiverRef: ' abc ', locationId: '3' });
+    const request = boxFormToRequest({
+      receiverRef: ' abc ',
+      locationId: '3',
+      bayId: '',
+      assignedByPersonId: '',
+    });
     expect(request).toEqual({ receiverRef: 'abc', locationId: 3 });
+  });
+
+  it('never carries the create-time bay fields onto the box request', () => {
+    const request = boxFormToRequest({
+      receiverRef: '',
+      locationId: '3',
+      bayId: '9',
+      assignedByPersonId: 'p1',
+    });
+    expect(request).toEqual({ locationId: 3 });
+  });
+});
+
+describe('boxFormSchema', () => {
+  it('starts with both bay fields blank', () => {
+    expect(emptyBoxForm()).toEqual({
+      receiverRef: '',
+      locationId: '',
+      bayId: '',
+      assignedByPersonId: '',
+    });
+  });
+
+  it('allows no bay to be chosen at all', () => {
+    const result = boxFormSchema.safeParse({
+      receiverRef: '',
+      locationId: '',
+      bayId: '',
+      assignedByPersonId: '',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('requires the assigner once a bay is chosen', () => {
+    const result = boxFormSchema.safeParse({
+      receiverRef: '',
+      locationId: '3',
+      bayId: '9',
+      assignedByPersonId: '',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.message)).toContain(
+      'Name the volunteer placing the box',
+    );
+  });
+
+  it('accepts a bay named alongside its assigner', () => {
+    const result = boxFormSchema.safeParse({
+      receiverRef: '',
+      locationId: '3',
+      bayId: '9',
+      assignedByPersonId: 'p1',
+    });
+    expect(result.success).toBe(true);
   });
 });
 

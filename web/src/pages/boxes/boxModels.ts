@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type {
   AddBoxItemRequest,
   AssignBoxBayRequest,
+  BoxItemReadModel,
   BoxReadModel,
   CreateBoxRequest,
   UpdateBoxRequest,
@@ -14,16 +15,23 @@ import type {
 export interface BoxFormValues {
   receiverRef: string;
   locationId: string;
+  // Loader-only, create-time convenience: place the box straight in a bay. Never sent as part
+  // of the box request itself — see boxFormToRequest — the create page follows up with the
+  // ordinary PUT /boxes/{id}/bay call once the box exists.
+  bayId: string;
+  assignedByPersonId: string;
 }
 
 export function emptyBoxForm(): BoxFormValues {
-  return { receiverRef: '', locationId: '' };
+  return { receiverRef: '', locationId: '', bayId: '', assignedByPersonId: '' };
 }
 
 export function boxToFormValues(box: BoxReadModel): BoxFormValues {
   return {
     receiverRef: box.receiverRef ?? '',
     locationId: box.locationId === null ? '' : String(box.locationId),
+    bayId: '',
+    assignedByPersonId: '',
   };
 }
 
@@ -45,10 +53,20 @@ export function boxFormToUpdateRequest(values: BoxFormValues): UpdateBoxRequest 
   return boxFormToRequest(values);
 }
 
-export const boxFormSchema = z.object({
-  receiverRef: z.string().max(64, 'Receiver reference must be 64 characters or fewer'),
-  locationId: z.string(),
-});
+export const boxFormSchema = z
+  .object({
+    receiverRef: z.string().max(64, 'Receiver reference must be 64 characters or fewer'),
+    locationId: z.string(),
+    bayId: z.string(),
+    assignedByPersonId: z.string(),
+  })
+  .refine(
+    (values) => values.bayId.trim().length === 0 || values.assignedByPersonId.trim().length > 0,
+    {
+      message: 'Name the volunteer placing the box',
+      path: ['assignedByPersonId'],
+    },
+  );
 
 // ---- Add an item ---------------------------------------------------------
 
@@ -64,6 +82,13 @@ export interface AddItemFormValues {
 
 export function emptyAddItemForm(): AddItemFormValues {
   return { description: '', properties: [] };
+}
+
+export function itemToFormValues(item: BoxItemReadModel): AddItemFormValues {
+  return {
+    description: item.description,
+    properties: Object.entries(item.properties).map(([key, value]) => ({ key, value })),
+  };
 }
 
 export function addItemFormToRequest(values: AddItemFormValues): AddBoxItemRequest {

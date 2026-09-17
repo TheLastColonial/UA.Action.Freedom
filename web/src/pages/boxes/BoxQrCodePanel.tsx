@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import { useBoxLabel, useBoxQrCode, useIssueBoxQrCode, useRevokeBoxQrCode } from '../../api/boxes';
 import { Button } from '../../components/Button';
+import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import './BoxQrCodePanel.css';
@@ -20,17 +21,14 @@ export function BoxQrCodePanel({ boxId }: BoxQrCodePanelProps): JSX.Element {
 
   if (qrCode.isPending) {
     return (
-      <div className="qr-panel">
-        <h2>QR label</h2>
+      <DetailCard title="QR label" className="qr-panel">
         <PageSkeleton />
-      </div>
+      </DetailCard>
     );
   }
 
   return (
-    <div className="qr-panel">
-      <h2>QR label</h2>
-
+    <DetailCard title="QR label" className="qr-panel">
       {qrCode.isError ? <p role="alert">The QR label could not be loaded.</p> : null}
 
       {active === null ? (
@@ -106,6 +104,6 @@ export function BoxQrCodePanel({ boxId }: BoxQrCodePanelProps): JSX.Element {
 
       {issue.isError ? <p role="alert">The label could not be issued.</p> : null}
       {revoke.isError ? <p role="alert">The label could not be revoked.</p> : null}
-    </div>
+    </DetailCard>
   );
 }

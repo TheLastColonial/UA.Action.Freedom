@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Application.Boxes;
@@ -36,7 +37,7 @@ public enum UpdateBoxOutcome
     AlreadyValidated
 }
 
-public sealed class UpdateBoxHandler(IBoxRepository repository)
+public sealed class UpdateBoxHandler(IBoxRepository repository, IBayRepository bays)
     : ICommandHandler<UpdateBoxCommand, UpdateBoxOutcome>
 {
     public async Task<UpdateBoxOutcome> HandleAsync(UpdateBoxCommand command, CancellationToken cancellationToken)
@@ -69,7 +70,25 @@ public sealed class UpdateBoxHandler(IBoxRepository repository)
                 box.ValidatedAt),
             cancellationToken);
 
-        return updated ? UpdateBoxOutcome.Updated : UpdateBoxOutcome.NotFound;
+        if (!updated)
+        {
+            return UpdateBoxOutcome.NotFound;
+        }
+
+        // A bay only means something as "this bay, at the box's current location". Once the box
+        // is recorded as being somewhere else, a bay assignment from the old location is stale —
+        // it names a shelf the box is no longer anywhere near.
+        var activeBay = await repository.GetActiveBayAssignmentAsync(command.Id, cancellationToken);
+        if (activeBay is not null)
+        {
+            var bay = await bays.GetByIdAsync(activeBay.BayId, cancellationToken);
+            if (command.LocationId is null || bay is null || bay.LocationId != command.LocationId)
+            {
+                await repository.VacateActiveBayAssignmentAsync(command.Id, cancellationToken);
+            }
+        }
+
+        return UpdateBoxOutcome.Updated;
     }
 }
 
