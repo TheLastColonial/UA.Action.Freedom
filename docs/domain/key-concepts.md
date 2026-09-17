@@ -93,7 +93,9 @@ unit that is executed per vehicle.
 
 A truck or car that has been donated, and which is itself part of the aid — vehicles are handed over in Ukraine,
 not driven back. Identified by VIN and licence plate, and carrying the detail a border check needs: kerb weight,
-fuel type, transmission, year, and condition notes.
+fuel type, transmission, year, and condition notes — plus descriptive detail (brand, model, colour), mileage,
+and whether it has been serviced. A vehicle also optionally records who purchased it and when (`Purchaser`/
+`PurchaseDate`) — see [Purchaser](#roles) below for the role.
 
 A vehicle may also carry an optional **cargo capacity**: a maximum cargo weight and the width, depth and height of
 its cargo space. Nothing back-fills this — it starts unset and is measured whenever someone gets round to it. It
@@ -210,12 +212,14 @@ appears on it is a security question — see [Data Sensitivity](#data-sensitivit
 
 ### Manifest Status
 
-The lifecycle a manifest moves through. **There is a known inconsistency**: the code defines six states
-(Proposed, Confirmed, Prepared, Transit, Arrived, Lost) while [`manifest-status.puml`](../manifest-status.puml)
-documents ten (adding Created, Rejected, Ready, Delivered, Returned) with different transitions.
-
-Treat the `.puml` as the intended target design and the code as not yet caught up. This needs resolving before
-the workflow is built, because the status model determines where GMR submission is triggered from.
+The lifecycle a manifest moves through. `ManifestStatus` is a ten-state enum — `Created, Proposed, Rejected,
+Confirmed, Preparing, Ready, InTransit, Delivered, Lost, Returned` — kept in sync with
+[`manifest-status.puml`](../manifest-status.puml) edge-for-edge; the allowed transitions live as data in
+`ManifestTransitions.CanTransition` (`Manifest.cs`), pinned by
+`tests/UA.Action.Freedom.Tests.Unit/Domain/ManifestTransitionsTests.cs`. The happy path is linear; the only
+backward edge is `Rejected → Proposed`. GMR submission is triggered from the `Confirmed → approve` transition,
+which freezes the manifest in the same statement that stamps the GMR timestamp — see CLAUDE.md's manifest
+lifecycle section for the freeze semantics.
 
 ### Truck List
 

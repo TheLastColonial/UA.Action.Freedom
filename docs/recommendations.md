@@ -50,7 +50,8 @@ design, the cost model it is built to satisfy, and the security posture that fol
 | --- | --- | --- | --- |
 | Edge / WAF / CDN | Cloudflare Free | Unlimited requests, managed rules | **£0** |
 | Freedom Application | Container Apps (Consumption) | 180,000 vCPU-s · 360,000 GiB-s · 2M requests | **£0** within budget — see §2.2 |
-| Customs Worker | Azure Functions (Consumption) | 1M executions · 400,000 GB-s | **£0** |
+| Customs Worker | Azure Functions (Consumption) | 1M executions · 400,000 GB-s *(shared, see note)* | **£0** |
+| Manifest Worker | Azure Functions (Consumption) | shares the grant above | **£0** — renders one document per manifest per convoy, negligible next to the Customs Worker's polling |
 | Freedom Database | Azure SQL free offer (serverless) | 100,000 vCore-s · 32 GB data | **£0** within budget — see §2.3 |
 | Document Store | Blob Storage (Cool) | none | ~£0.10 at a few GB |
 | Customs Work Queue | Queue Storage | none | pennies |
@@ -62,6 +63,11 @@ design, the cost model it is built to satisfy, and the security posture that fol
 | Notifications | ACS Email | none | ~£0.10 at a few hundred emails |
 
 **Realistic floor: under £1–2/month**, dominated by storage and per-operation charges rather than compute.
+
+> The Consumption free grant (1M executions / 400,000 GB-s) is per subscription, not per function app —
+> the Customs Worker and Manifest Worker draw from the same pool. Both are queue-triggered and idle
+> between convoys, so this is nowhere near the limit, but a third Functions app would be worth re-checking
+> against it.
 Against the original design (Front Door + two App Service plans + ACR) this is roughly **£30–35/month saved,
 about £400/year** — real money for a charity.
 
