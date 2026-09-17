@@ -66,6 +66,48 @@ public sealed class AddBoxItemHandler(IBoxRepository repository)
     }
 }
 
+/// <summary>Correct a packed item's description or properties.</summary>
+public sealed record UpdateBoxItemCommand(
+    int BoxId, Guid ItemId, string Description, IReadOnlyDictionary<string, string> Properties);
+
+public enum UpdateBoxItemOutcome
+{
+    Updated,
+    BoxNotFound,
+    ItemNotFound,
+    AlreadyValidated
+}
+
+/// <summary>
+/// Same freeze as adding or removing an item: a validated box's confirmed weight covers exactly
+/// what a Loader saw, so nothing about its contents may change afterwards, including a
+/// description or property that was entered wrong.
+/// </summary>
+public sealed class UpdateBoxItemHandler(IBoxRepository repository)
+    : ICommandHandler<UpdateBoxItemCommand, UpdateBoxItemOutcome>
+{
+    public async Task<UpdateBoxItemOutcome> HandleAsync(
+        UpdateBoxItemCommand command, CancellationToken cancellationToken)
+    {
+        var box = await repository.GetByIdAsync(command.BoxId, cancellationToken);
+
+        if (box is null)
+        {
+            return UpdateBoxItemOutcome.BoxNotFound;
+        }
+
+        if (box.Validated)
+        {
+            return UpdateBoxItemOutcome.AlreadyValidated;
+        }
+
+        var updated = await repository.UpdateItemAsync(
+            command.BoxId, command.ItemId, command.Description, command.Properties, cancellationToken);
+
+        return updated ? UpdateBoxItemOutcome.Updated : UpdateBoxItemOutcome.ItemNotFound;
+    }
+}
+
 /// <summary>Take an item back out of a box.</summary>
 public sealed record RemoveBoxItemCommand(int BoxId, Guid ItemId);
 

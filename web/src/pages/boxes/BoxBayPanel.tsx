@@ -7,6 +7,7 @@ import { usePeople } from '../../api/people';
 import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
 import { useAssignBoxBay, useBoxBay, useBoxBayHistory, useVacateBoxBay } from '../../api/boxes';
 import { Button } from '../../components/Button';
+import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { SelectField } from '../../components/form/fields';
 import { assignBayFormSchema, assignBayFormToRequest, emptyAssignBayForm } from './boxModels';
@@ -58,9 +59,7 @@ export function BoxBayPanel({ boxId, locationId }: BoxBayPanelProps): JSX.Elemen
   ];
 
   return (
-    <div>
-      <h2>Bay</h2>
-
+    <DetailCard title="Bay">
       {current.isPending ? <p>Loading…</p> : null}
       {current.isSuccess ? (
         current.data ? (
@@ -138,6 +137,6 @@ export function BoxBayPanel({ boxId, locationId }: BoxBayPanelProps): JSX.Elemen
           </>
         )}
       </Gate>
-    </div>
+    </DetailCard>
   );
 }

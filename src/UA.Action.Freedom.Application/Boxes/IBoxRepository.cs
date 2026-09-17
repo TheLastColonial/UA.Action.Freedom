@@ -36,6 +36,14 @@ public interface IBoxRepository
 
     Task AddItemAsync(int boxId, BoxItemReadModel item, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Corrects an item's description and properties. Returns false when no item with that id
+    /// belongs to the box.
+    /// </summary>
+    Task<bool> UpdateItemAsync(
+        int boxId, Guid itemId, string description, IReadOnlyDictionary<string, string> properties,
+        CancellationToken cancellationToken);
+
     Task<bool> DeleteItemAsync(int boxId, Guid itemId, CancellationToken cancellationToken);
 
     /// <summary>The code a scan of this box currently resolves to, or <c>null</c> if it has none.</summary>

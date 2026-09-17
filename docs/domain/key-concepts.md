@@ -118,7 +118,10 @@ Ukrainian delivery address is not. See [Data Sensitivity](#data-sensitivity).
 ### Item
 
 A single donated thing, with a description and open-ended properties. Items are not tracked individually in
-transit — they are tracked as the contents of a [Box](#box).
+transit — they are tracked as the contents of a [Box](#box). An item's description and properties can be
+corrected (`PUT /boxes/{id}/items/{itemId}`) up until the box is validated — the same write-once freeze that
+governs adding and removing an item, since a correction after validation would be just as much a change to
+what a Loader vouched for as an addition or removal would.
 
 ### Box
 
@@ -170,6 +173,15 @@ again, not a coordination task. The system keeps a full history of a box's bay a
 it, when, and when it moved on), mirroring the QR label's issue/revoke shape: assigning a new bay
 vacates whatever bay the box was already in, as one transactional act, so a box is never recorded as
 being in two bays at once.
+
+That same invariant holds when a box's *location* changes rather than its bay: pointing a box at a
+different [Location](#location) (`PUT /boxes/{id}`) vacates any active bay assignment that no longer
+matches, because a bay only means something as "this bay, at the box's current location" — a bay
+assignment left over from the box's previous depot would otherwise describe a shelf the box is nowhere
+near. A Loader can then place the box in a bay at its new location as usual, and can just as well name
+one while creating a box in the first place, if they already know where it is going — the operator UI
+offers this inline once a location is picked, but it is still the ordinary bay-placement act underneath
+(same policy, same endpoint), not a new kind of write.
 
 ### Receiver
 

@@ -134,6 +134,25 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
         return Task.CompletedTask;
     }
 
+    public Task<bool> UpdateItemAsync(
+        int boxId, Guid itemId, string description, IReadOnlyDictionary<string, string> properties,
+        CancellationToken cancellationToken)
+    {
+        if (!items.TryGetValue(boxId, out var packed))
+        {
+            return Task.FromResult(false);
+        }
+
+        var index = packed.FindIndex(item => item.Id == itemId);
+        if (index < 0)
+        {
+            return Task.FromResult(false);
+        }
+
+        packed[index] = new BoxItemReadModel(itemId, description, properties);
+        return Task.FromResult(true);
+    }
+
     public Task<bool> DeleteItemAsync(int boxId, Guid itemId, CancellationToken cancellationToken)
     {
         if (!items.TryGetValue(boxId, out var packed))

@@ -30,6 +30,7 @@ import type {
   BoxQrCodeReadModel,
   BoxReadModel,
   CreateBoxRequest,
+  UpdateBoxItemRequest,
   UpdateBoxRequest,
   ValidateBoxRequest,
 } from './schemas/boxes';
@@ -66,6 +67,14 @@ export function fetchBoxItems(id: number): Promise<readonly BoxItemReadModel[] |
 
 export function addBoxItem(id: number, body: AddBoxItemRequest): Promise<void> {
   return post204(`${idPath(id)}/items`, body);
+}
+
+export function updateBoxItem(
+  id: number,
+  itemId: string,
+  body: UpdateBoxItemRequest,
+): Promise<void> {
+  return put204(`${idPath(id)}/items/${encodeURIComponent(itemId)}`, body);
 }
 
 export function removeBoxItem(id: number, itemId: string): Promise<void> {
@@ -172,6 +181,16 @@ export function useAddBoxItem(id: number): UseMutationResult<void, Error, AddBox
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: AddBoxItemRequest) => addBoxItem(id, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.boxes.items(id) }),
+  });
+}
+
+export function useUpdateBoxItem(
+  id: number,
+): UseMutationResult<void, Error, { itemId: string; body: UpdateBoxItemRequest }> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, body }) => updateBoxItem(id, itemId, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.boxes.items(id) }),
   });
 }

@@ -6,6 +6,7 @@ import { useValidateBox } from '../../api/boxes';
 import { usePeople } from '../../api/people';
 import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
 import { Button } from '../../components/Button';
+import { DetailCard } from '../../components/DetailCard';
 import { SelectField, TextField } from '../../components/form/fields';
 import { emptyValidateForm, validateFormSchema, validateFormToRequest } from './boxModels';
 import type { ValidateFormValues } from './boxModels';
@@ -43,8 +44,7 @@ export function BoxValidatePanel({ boxId }: BoxValidatePanelProps): JSX.Element 
   ];
 
   return (
-    <div>
-      <h2>Validate this box</h2>
+    <DetailCard title="Validate this box">
       <p>Confirming the contents and weight freezes the box.</p>
       <form
         noValidate
@@ -102,6 +102,6 @@ export function BoxValidatePanel({ boxId }: BoxValidatePanelProps): JSX.Element 
           Validate box
         </Button>
       </form>
-    </div>
+    </DetailCard>
   );
 }

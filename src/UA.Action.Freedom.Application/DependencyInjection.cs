@@ -58,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<ValidateBoxCommand, ValidateBoxOutcome>, ValidateBoxHandler>();
         services.AddScoped<IQueryHandler<ListBoxItemsQuery, IReadOnlyList<BoxItemReadModel>?>, ListBoxItemsHandler>();
         services.AddScoped<ICommandHandler<AddBoxItemCommand, AddBoxItemOutcome>, AddBoxItemHandler>();
+        services.AddScoped<ICommandHandler<UpdateBoxItemCommand, UpdateBoxItemOutcome>, UpdateBoxItemHandler>();
         services.AddScoped<ICommandHandler<RemoveBoxItemCommand, RemoveBoxItemOutcome>, RemoveBoxItemHandler>();
         services.AddScoped<ICommandHandler<IssueBoxQrCodeCommand, BoxQrCodeReadModel?>, IssueBoxQrCodeHandler>();
         services.AddScoped<ICommandHandler<RevokeBoxQrCodeCommand, RevokeBoxQrCodeOutcome>, RevokeBoxQrCodeHandler>();

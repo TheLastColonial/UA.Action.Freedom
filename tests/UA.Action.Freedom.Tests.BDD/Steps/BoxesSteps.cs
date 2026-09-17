@@ -85,6 +85,13 @@ public sealed class BoxesSteps(FreedomApiClient api, ScenarioState state)
     public Task WhenIPutOnTheRememberedBoxWithBody(string template, string body) =>
         api.SendAsync(HttpMethod.Put, state.Recall("box", template), state.CurrentToken, body);
 
+    [When("I PUT \"(.*)\" on the remembered box, moving it to the other location")]
+    public Task WhenIPutTheRememberedBoxMovingItToTheOtherLocation(string template)
+    {
+        var body = $$"""{ "locationId": {{state.Pinned(LocationsSteps.OtherLocationKey)}} }""";
+        return api.SendAsync(HttpMethod.Put, state.Recall("box", template), state.CurrentToken, body);
+    }
+
     [When("I POST \"(.*)\" on the remembered box with body:")]
     public Task WhenIPostOnTheRememberedBoxWithBody(string template, string body) =>
         api.SendAsync(HttpMethod.Post, state.Recall("box", template), state.CurrentToken, body);

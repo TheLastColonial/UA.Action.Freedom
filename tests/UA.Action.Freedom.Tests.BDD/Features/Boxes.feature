@@ -210,6 +210,23 @@ Scenario: A loader vacates a box from its bay
     When I GET "/boxes/{id}/bay" on the remembered box
     Then the response status is 404
 
+Scenario: Moving a box to a different location vacates its bay assignment
+    Given I am authenticated as "admin"
+    And a location exists
+    And a bay exists at the location
+    And a volunteer exists who can validate boxes
+    When I POST "/boxes" at the remembered location
+    Then the response status is 201
+    Given I remember the box
+    Given I am authenticated as "operator"
+    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay and volunteer
+    Then the response status is 204
+    Given a second location exists
+    When I PUT "/boxes/{id}" on the remembered box, moving it to the other location
+    Then the response status is 204
+    When I GET "/boxes/{id}/bay" on the remembered box
+    Then the response status is 404
+
 Scenario: Fetching an unknown box is a 404
     Given I am authenticated as "operator"
     When I GET "/boxes/99999999"

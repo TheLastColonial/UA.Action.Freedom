@@ -245,6 +245,23 @@ public class BoxEndpointTests
     }
 
     [Fact]
+    public async Task Nothing_in_a_validated_box_can_be_edited_either()
+    {
+        var item = new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>());
+        var boxes = new InMemoryBoxRepository(ABox(validated: true)).WithItem(BoxId, item);
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}/items/{item.Id}",
+            new { description = "Blankets (large)" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        boxes.Items(BoxId).Single().Description.Should().Be("Blankets");
+    }
+
+    [Fact]
     public async Task A_validated_box_cannot_be_pointed_at_another_receiver()
     {
         var boxes = new InMemoryBoxRepository(ABox(validated: true));
@@ -338,6 +355,72 @@ public class BoxEndpointTests
             $"/boxes/{BoxId}/items/{Guid.NewGuid()}", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_packed_items_description_and_properties_can_be_corrected()
+    {
+        var item = new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string> { ["size"] = "double" });
+        var boxes = new InMemoryBoxRepository(ABox()).WithItem(BoxId, item);
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}/items/{item.Id}",
+            new { description = "Blankets (large)", properties = new Dictionary<string, string> { ["size"] = "XL" } },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var updated = boxes.Items(BoxId).Single();
+        updated.Description.Should().Be("Blankets (large)");
+        updated.Properties["size"].Should().Be("XL");
+    }
+
+    [Fact]
+    public async Task Editing_an_item_that_does_not_exist_is_a_404()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}/items/{Guid.NewGuid()}",
+            new { description = "Blankets" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Editing_an_item_in_an_unknown_box_is_a_404()
+    {
+        var boxes = new InMemoryBoxRepository();
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/999/items/{Guid.NewGuid()}",
+            new { description = "Blankets" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task An_edited_item_with_no_description_is_a_validation_problem()
+    {
+        var item = new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>());
+        var boxes = new InMemoryBoxRepository(ABox()).WithItem(BoxId, item);
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}/items/{item.Id}",
+            new { description = "" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        boxes.Items(BoxId).Single().Description.Should().Be("Blankets");
     }
 
     private const int BayId = 9;
@@ -459,6 +542,27 @@ public class BoxEndpointTests
         var entry = history.EnumerateArray().Should().ContainSingle().Subject;
         entry.GetProperty("bayId").GetInt32().Should().Be(BayId);
         entry.GetProperty("active").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Moving_a_box_to_a_different_location_vacates_its_bay()
+    {
+        // The box is shelved in a bay at its original location. Once it is recorded as being
+        // somewhere else, that bay assignment no longer names anywhere the box actually is.
+        var assignment = new BoxBayAssignmentReadModel(1, BoxId, BayId, Loader, DateTime.UtcNow, VacatedAt: null);
+        var boxes = new InMemoryBoxRepository(ABox()).WithBayAssignment(assignment);
+        await using var api = FreedomApi.WithBoxes(
+            boxes, AKnownLoader(), new InMemoryBayRepository(AStoredBay()), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}",
+            new { locationId = 999 },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.GetAsync($"/boxes/{BoxId}/bay", TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

@@ -173,6 +173,22 @@ no label a scan resolves to, or in two bays at once.
 both filter `RevokedAt IS NULL`, so a revoked token reads as unknown rather than resolving to a
 box it no longer names.
 
+### `UpdateBoxHandler` depends on `IBayRepository` too — it vacates a stale bay on relocate
+
+`UpdateBoxHandler` (`src/UA.Action.Freedom.Application/Boxes/BoxUseCases.cs`) is not just a
+`IBoxRepository` consumer any more. After an ordinary `PUT /boxes/{id}` succeeds, it looks up the
+box's active bay assignment and, if the bay's `LocationId` no longer matches the box's new
+`LocationId` (including the box's location being cleared to `null`), vacates it via
+`IBoxRepository.VacateActiveBayAssignmentAsync` — the same repository method
+`VacateBoxBayHandler` already calls, and the same `IBayRepository.GetByIdAsync` lookup
+`AssignBoxBayHandler` already does. This is not a new transaction or a new repository method:
+it reuses what §2 above already relies on. The reasoning is the mirror image of that section — a
+bay assignment is only meaningful as "this bay, at the box's current location," so moving the box
+without touching the assignment would silently produce the same "in two places" inconsistency
+the transactional vacate-then-assign in `AssignBayAsync` exists to prevent, just approached from
+the other direction (location changes under the bay, rather than the bay changing under a fixed
+location).
+
 ### QRCoder is the first drawing dependency — use only its managed renderers
 
 `src/UA.Action.Freedom.Api` references `QRCoder` for the box QR image and label. Use
@@ -522,3 +538,4 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 | 7 | Manifest worker | No database access at all, by design. Plain text output. The integration-test deadlock and its fix (§1). CI's `acceptance` job now starts both workers — it previously started only `app edge website`, so the queue hand-offs were never exercised there. |
 | 8 | Operator UI (`web/`) | A React + Vite SPA co-served by the API under `/app` — see §7 for the load-bearing traps (`/app` not `/`, `UseStaticFiles` before `UseRouting`, in-memory token, Browser Mode config, the hand-rolled reason modal, the un-cached receiver-detail read). New `frontend` CI job (typecheck/lint/format/test/build) and Playwright `@smoke` specs in the `acceptance` job; `publish` needs both. A new public PKCE Keycloak client `freedom-spa` — the API's confidential client is unchanged. |
 | 9 | Box QR labels | `dbo.BoxQrCode` — opaque non-enumerable token, revoke/reissue, revoked rows kept. `IssueQrCodeAsync` holds a transaction, same shape as the others in §2. "One active label" enforced there, not by a filtered index (§1). `QRCoder` is the first drawing dependency — managed renderers only, never the `System.Drawing`-based `QRCode` (§2). The label renderer's signature carries no receiver data, so the "no delivery detail on a travelling label" rule is structural (§3). New `App:PublicBaseUrl` env-only config with a request-host fallback; the local sim sets `App__PublicBaseUrl` because the container sees the edge, not the browser host. BDD probes `/boxes/scan/{all-zero-guid}` — auth runs before the handler, so a present route answers 401 and an old image answers 404. |
+| 10 | Box flow improvements | `UpdateBoxHandler` now depends on `IBayRepository` and vacates a stale bay assignment when a box's location changes to one the bay doesn't match (§2). New `PUT /boxes/{id}/items/{itemId}` mirrors add/remove's box-not-found/already-validated guards exactly — correcting an item is not a lighter-touch write than adding one. The operator UI's item add/edit modal is mounted only while open (no `isOpen` prop kept-mounted-with-a-reset-effect) — that pattern raced a user's first keystroke against the reset effect in real (Playwright) timing, invisibly passing under Vitest's slower browser-mode locators; caught only by the Playwright `@smoke` spec, not the component test. Bay assignment at box creation is pure frontend orchestration — `POST /boxes` then the existing `PUT /boxes/{id}/bay` — deliberately not a combined endpoint, so `boxes:write` stays open to every operational role while `boxes:allocate-bay` stays Loader-only. |

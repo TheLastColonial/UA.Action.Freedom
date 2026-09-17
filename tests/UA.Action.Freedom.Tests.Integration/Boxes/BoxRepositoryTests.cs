@@ -247,6 +247,60 @@ public class BoxRepositoryTests
     }
 
     [Fact]
+    public async Task An_items_description_and_properties_can_be_corrected()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(ANewBox(), cancellationToken);
+
+        try
+        {
+            var item = new BoxItemReadModel(
+                Guid.NewGuid(), "Blankets", new Dictionary<string, string> { ["size"] = "double" });
+            await repository.AddItemAsync(id, item, cancellationToken);
+
+            var updated = await repository.UpdateItemAsync(
+                id, item.Id, "Blankets (large)", new Dictionary<string, string> { ["size"] = "XL" }, cancellationToken);
+
+            updated.Should().BeTrue();
+            var packed = (await repository.ListItemsAsync(id, cancellationToken)).Should().ContainSingle().Subject;
+            packed.Description.Should().Be("Blankets (large)");
+            packed.Properties.Should().BeEquivalentTo(new Dictionary<string, string> { ["size"] = "XL" });
+        }
+        finally
+        {
+            await RemoveBoxAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task Correcting_is_scoped_to_the_box_the_item_was_packed_into()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var first = await repository.AddAsync(ANewBox(), cancellationToken);
+        var second = await repository.AddAsync(ANewBox(), cancellationToken);
+
+        try
+        {
+            var item = new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>());
+            await repository.AddItemAsync(first, item, cancellationToken);
+
+            // Naming the wrong box must not silently edit somebody else's item, nor report success.
+            (await repository.UpdateItemAsync(
+                    second, item.Id, "Blankets (large)", new Dictionary<string, string>(), cancellationToken))
+                .Should().BeFalse();
+            (await repository.ListItemsAsync(first, cancellationToken)).Should().ContainSingle()
+                .Which.Description.Should().Be("Blankets");
+        }
+        finally
+        {
+            await RemoveBoxAsync(first);
+            await RemoveBoxAsync(second);
+        }
+    }
+
+    [Fact]
     public async Task Unpacking_is_scoped_to_the_box_it_was_packed_into()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
