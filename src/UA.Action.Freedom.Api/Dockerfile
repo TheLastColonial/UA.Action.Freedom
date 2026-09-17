@@ -9,7 +9,7 @@
 # reuses the npm install layer, and a C#-only change never re-runs npm at all. Typecheck,
 # lint and tests are CI's job (the frontend job in build-and-test.yml) — the image only
 # needs the production bundle.
-FROM node:22-bookworm-slim AS frontend
+FROM node:24-bookworm-slim AS frontend
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -24,7 +24,7 @@ WORKDIR /source
 # Project files first, so a code-only change reuses the restore layer. The Api project
 # references Application and Data, which reference Domain, so the whole graph is copied
 # before the restore.
-COPY global.json ./
+COPY global.json Directory.Packages.props ./
 COPY src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj          src/UA.Action.Freedom.Api/
 COPY src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj src/UA.Action.Freedom.Application/
 COPY src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj        src/UA.Action.Freedom.Data/
