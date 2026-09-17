@@ -155,13 +155,16 @@ created last time still exist and skips them, which is a *second* way to not tes
 A box travels on **at most one** manifest. The same box on two manifests would be declared twice
 at a border and arrive once. `AddBoxAsync` therefore *moves* a box rather than duplicating it.
 
-### `BoxRepository.IssueQrCodeAsync` is the second transaction in the codebase
+### `BoxRepository.IssueQrCodeAsync` and `AssignBayAsync` also hold a transaction
 
 Re-labelling a box is one act: the old token must stop resolving at the instant the new one
 starts. `IssueQrCodeAsync` revokes any active `dbo.BoxQrCode` row and inserts the new one inside
-`BeginTransactionAsync` — the same reasoning as `ConvoyRepository.ReplaceRouteAsync` (§ per-
-increment index), and the second and last transaction here. Do not "simplify" it into a revoke
-call followed by an insert: a failure between them leaves a box with no label a scan resolves to.
+`BeginTransactionAsync` — the same reasoning as `ConvoyRepository.ReplaceRouteAsync` and
+`ReceiverDetailRepository.ResolveAsync` (§ per-increment index): each transaction here is scoped
+to one aggregate's read-then-write. `BoxRepository.AssignBayAsync` follows the identical shape
+for shelving a box — vacating its current bay and writing the new assignment must not be split.
+Do not "simplify" any of these into two separate calls: a failure between them leaves a box with
+no label a scan resolves to, or in two bays at once.
 
 "At most one active label per box" is enforced by that method — the revoke is
 `WHERE BoxId = @boxId AND RevokedAt IS NULL`, so the database settles a concurrent double-issue —
@@ -279,7 +282,7 @@ anything takes today.
 ### Publishing a truck list closes the convoy's vehicle list
 
 Adding or removing a vehicle after publication is a `409`. **This is an inference, not a quoted
-requirement** — see §8.
+requirement** — see §9.
 
 ### A box cannot be changed after validation
 
@@ -512,10 +515,10 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 | --- | --- | --- |
 | 1 | Domain remediation | `ManifestStatus` was a `record` with a `protected` constructor and *instance* properties returning `new` — unobtainable and unusable; replaced with an enum plus `ManifestTransitions`. All 27 `CS8618` warnings cleared — **keep the build at zero warnings**. Identity deliberately **not** standardised: each entity keeps the id type that matches how it is referenced. Misspellings all corrected in one commit. `Box.ValidatedAt` became nullable — it previously claimed every unvalidated box was validated at `0001-01-01`. |
 | 2 | `/people` | Create returns a minted `Guid` rather than an outcome enum, because two volunteers can share a name and there is no conflict case. `Guid` not `IDENTITY` so a URL does not disclose how many volunteers the charity has. Removing the `/weatherforecast` template scaffolding broke two tests that were using it as a convenient unauthenticated route. The BDD harness was generalised here. |
-| 3 | `/convoys` | The truck-list freeze (§8 Q1). `dbo.Vehicle.ConvoyId` became a real FK. `ReplaceRouteAsync` is the only transaction in the codebase — a route is meaningful only as a whole journey. Stops are renumbered `1..n` in list order rather than trusting caller-supplied sequence numbers. The filtered-index/`QUOTED_IDENTIFIER` trap. |
+| 3 | `/convoys` | The truck-list freeze (§9 Q1). `dbo.Vehicle.ConvoyId` became a real FK. `ReplaceRouteAsync` was the first transaction in the codebase (more followed — see §2) — a route is meaningful only as a whole journey. Stops are renumbered `1..n` in list order rather than trusting caller-supplied sequence numbers. The filtered-index/`QUOTED_IDENTIFIER` trap. |
 | 4 | `/receivers` | The `sa` discovery (§3). Three layered controls. The audited read. `DELETE` behind `receivers:detail`. |
 | 5 | `/boxes` | Validation is write-once and freezes the box. `boxes:validate` is separate from `boxes:write` — packing and vouching are different acts. The validator must be a volunteer on file; a signature naming nobody is worse than no signature. The 500 kg cap is a typo guard, not a real bound. |
 | 6 | `/manifests` | The freeze semantics correction (§4). One `POST` per edge of the diagram, not a `PATCH` of a status field. `ConfirmAndFreezeAsync` as a single statement. Freeze-then-enqueue ordering. The optional-`QueueServiceClient` DI failure (§6). |
 | 7 | Manifest worker | No database access at all, by design. Plain text output. The integration-test deadlock and its fix (§1). CI's `acceptance` job now starts both workers — it previously started only `app edge website`, so the queue hand-offs were never exercised there. |
 | 8 | Operator UI (`web/`) | A React + Vite SPA co-served by the API under `/app` — see §7 for the load-bearing traps (`/app` not `/`, `UseStaticFiles` before `UseRouting`, in-memory token, Browser Mode config, the hand-rolled reason modal, the un-cached receiver-detail read). New `frontend` CI job (typecheck/lint/format/test/build) and Playwright `@smoke` specs in the `acceptance` job; `publish` needs both. A new public PKCE Keycloak client `freedom-spa` — the API's confidential client is unchanged. |
-| 9 | Box QR labels | `dbo.BoxQrCode` — opaque non-enumerable token, revoke/reissue, revoked rows kept. `IssueQrCodeAsync` is the **second** transaction in the codebase (§2). "One active label" enforced there, not by a filtered index (§1). `QRCoder` is the first drawing dependency — managed renderers only, never the `System.Drawing`-based `QRCode` (§2). The label renderer's signature carries no receiver data, so the "no delivery detail on a travelling label" rule is structural (§3). New `App:PublicBaseUrl` env-only config with a request-host fallback; the local sim sets `App__PublicBaseUrl` because the container sees the edge, not the browser host. BDD probes `/boxes/scan/{all-zero-guid}` — auth runs before the handler, so a present route answers 401 and an old image answers 404. |
+| 9 | Box QR labels | `dbo.BoxQrCode` — opaque non-enumerable token, revoke/reissue, revoked rows kept. `IssueQrCodeAsync` holds a transaction, same shape as the others in §2. "One active label" enforced there, not by a filtered index (§1). `QRCoder` is the first drawing dependency — managed renderers only, never the `System.Drawing`-based `QRCode` (§2). The label renderer's signature carries no receiver data, so the "no delivery detail on a travelling label" rule is structural (§3). New `App:PublicBaseUrl` env-only config with a request-host fallback; the local sim sets `App__PublicBaseUrl` because the container sees the edge, not the browser host. BDD probes `/boxes/scan/{all-zero-guid}` — auth runs before the handler, so a present route answers 401 and an old image answers 404. |
