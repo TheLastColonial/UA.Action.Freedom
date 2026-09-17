@@ -4,7 +4,7 @@ The shared vocabulary for Freedom. Terms defined here should be the terms used i
 conversation with Ukrainian Action.
 
 Related: [System Context](../c4/1-system-context.puml) · [Containers](../c4/2-containers.puml) ·
-[Manifest creation process](../process.puml) · [Manifest status](../manifest-status.puml) ·
+[Convoy creation process](../processes/convoy-creation-process.puml) · [Manifest status](../processes/manifest-status.puml) · [Box status](../processes/box-status.puml) ·
 [Architecture recommendations](../recommendations.md)
 
 ---
@@ -225,18 +225,28 @@ appears on it is a security question — see [Data Sensitivity](#data-sensitivit
 ### Manifest Status
 
 The lifecycle a manifest moves through. `ManifestStatus` is a ten-state enum — `Created, Proposed, Rejected,
-Confirmed, Preparing, Ready, InTransit, Delivered, Lost, Returned` — kept in sync with
-[`manifest-status.puml`](../manifest-status.puml) edge-for-edge; the allowed transitions live as data in
+Approved, Preparing, Ready, InTransit, Delivered, Lost, Returned` — kept in sync with
+[`manifest-status.puml`](../processes/manifest-status.puml) edge-for-edge; the allowed transitions live as data in
 `ManifestTransitions.CanTransition` (`Manifest.cs`), pinned by
 `tests/UA.Action.Freedom.Tests.Unit/Domain/ManifestTransitionsTests.cs`. The happy path is linear; the only
-backward edge is `Rejected → Proposed`. GMR submission is triggered from the `Confirmed → approve` transition,
+backward edge is `Rejected → Proposed`. GMR submission is triggered from the `Approved → prepare` transition,
 which freezes the manifest in the same statement that stamps the GMR timestamp — see CLAUDE.md's manifest
 lifecycle section for the freeze semantics.
+
+### Box Status
+
+The lifecycle a box moves through from creation to final delivery or loss. `BoxStatus` progresses through eight states:
+`Pending, Intake, Validated, Ready, InTransit, Delivered, Lost, Returned` — kept in sync with
+[`box-status.puml`](../processes/box-status.puml). The states reflect both the physical location of a box
+(pre-arrival, at a depot, in transit) and its validation status. A box remains in `Pending` until received at a
+distribution hub (`Intake`), where a [Loader](#loader) can then validate its contents and weight (`Validated`).
+Once assigned to a [Manifest](#manifest), it moves to `Ready`. The happy path is linear: `Ready → InTransit → Delivered`.
+Boxes may be `Lost` or `Returned` during transit, terminal states that bypass `Delivered`.
 
 ### Truck List
 
 Produced at the start of the process: the set of vehicles committed to the next convoy, published so that
-manifests can be proposed against it. See [`process.puml`](../process.puml).
+manifests can be proposed against it. See [`convoy-creation-process.puml`](../processes/convoy-creation-process.puml).
 
 ---
 
