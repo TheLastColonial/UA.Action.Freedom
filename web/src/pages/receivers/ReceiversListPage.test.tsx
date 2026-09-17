@@ -28,7 +28,7 @@ test('lists receivers by organisation and region only', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/receivers',
     roles: ['GroundOfficer'],
@@ -41,7 +41,7 @@ test('lists receivers by organisation and region only', async () => {
 test('only a receivers:write holder sees "New receiver"', async () => {
   worker.use(...receiverApi([]).handlers);
 
-  const asLoader = renderWithProviders(null, {
+  const asLoader = await renderWithProviders(null, {
     routes,
     route: '/receivers',
     roles: ['Loader'],
@@ -51,7 +51,7 @@ test('only a receivers:write holder sees "New receiver"', async () => {
     .element(asLoader.getByRole('link', { name: 'New receiver' }))
     .not.toBeInTheDocument();
 
-  const asGroundOfficer = renderWithProviders(null, {
+  const asGroundOfficer = await renderWithProviders(null, {
     routes,
     route: '/receivers',
     roles: ['GroundOfficer'],

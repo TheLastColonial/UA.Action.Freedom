@@ -23,7 +23,7 @@ afterEach(() => {
 test('renders a stub page showing the current servicing status', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X', servicing: true })]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/VIN-X/servicing',
     roles: ['Loader'],
@@ -41,7 +41,7 @@ test('renders a stub page showing the current servicing status', async () => {
 test('renders Not found for a VIN that does not exist', async () => {
   worker.use(...vehicleApi([]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/vehicles/UNKNOWN/servicing',
     roles: ['Loader'],

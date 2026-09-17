@@ -26,11 +26,15 @@ afterEach(() => {
 test('renders the overview and Not found for an unknown reference', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'D1', vin: 'VIN9' })]).handlers);
 
-  const found = renderWithProviders(null, { routes, route: '/manifests/D1', roles: ['Loader'] });
+  const found = await renderWithProviders(null, {
+    routes,
+    route: '/manifests/D1',
+    roles: ['Loader'],
+  });
   await expect.element(found.getByRole('heading', { name: 'D1' })).toBeInTheDocument();
   await expect.element(found.getByText('VIN9')).toBeInTheDocument();
 
-  const missing = renderWithProviders(null, {
+  const missing = await renderWithProviders(null, {
     routes,
     route: '/manifests/NOPE',
     roles: ['Loader'],
@@ -41,7 +45,11 @@ test('renders the overview and Not found for an unknown reference', async () => 
 test('groups overview fields into a named card', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'D1', vin: 'VIN9' })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/manifests/D1', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/manifests/D1',
+    roles: ['Loader'],
+  });
 
   await expect
     .element(screen.getByRole('region', { name: 'Manifest details' }))
@@ -53,7 +61,7 @@ test('a frozen manifest offers no Edit link and the edit page explains why', asy
     ...manifestApi([makeManifest({ id: 'D2', frozen: true, status: 'Confirmed' })]).handlers,
   );
 
-  const detail = renderWithProviders(null, {
+  const detail = await renderWithProviders(null, {
     routes,
     route: '/manifests/D2',
     roles: ['Dispatcher'],
@@ -61,7 +69,7 @@ test('a frozen manifest offers no Edit link and the edit page explains why', asy
   await expect.element(detail.getByRole('heading', { name: 'D2' })).toBeInTheDocument();
   await expect.element(detail.getByRole('link', { name: 'Edit' })).not.toBeInTheDocument();
 
-  const edit = renderWithProviders(null, {
+  const edit = await renderWithProviders(null, {
     routes,
     route: '/manifests/D2/edit',
     roles: ['Dispatcher'],
@@ -82,7 +90,7 @@ test('the tabs open the Status, Teams, Cargo and Weight panels', async () => {
     ...personApi([]).handlers,
   );
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/manifests/D3',
     roles: ['Dispatcher'],

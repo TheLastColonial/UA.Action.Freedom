@@ -27,17 +27,21 @@ afterEach(() => {
 test('renders the box and Not found for an unknown id', async () => {
   worker.use(...boxApi([makeBox({ id: 4 })]).handlers);
 
-  const found = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+  const found = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
   await expect.element(found.getByRole('heading', { name: 'Box #4' })).toBeInTheDocument();
 
-  const missing = renderWithProviders(null, { routes, route: '/boxes/99', roles: ['Loader'] });
+  const missing = await renderWithProviders(null, {
+    routes,
+    route: '/boxes/99',
+    roles: ['Loader'],
+  });
   await expect.element(missing.getByRole('heading', { name: 'Not found' })).toBeInTheDocument();
 });
 
 test('groups fields into a named card', async () => {
   worker.use(...boxApi([makeBox({ id: 4 })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
 
   await expect.element(screen.getByRole('region', { name: 'Box details' })).toBeInTheDocument();
 });
@@ -45,7 +49,11 @@ test('groups fields into a named card', async () => {
 test('a Dispatcher can pack a box but sees no validate panel', async () => {
   worker.use(...boxApi([makeBox({ id: 4 })]).handlers, ...personApi([]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Dispatcher'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/boxes/4',
+    roles: ['Dispatcher'],
+  });
 
   await expect.element(screen.getByRole('heading', { name: 'Contents' })).toBeInTheDocument();
   await expect
@@ -59,7 +67,7 @@ test('validating the box freezes it: panel gone, contents fixed, no Edit', async
     ...personApi([makePerson({ id: 'v1', firstName: 'Val', lastName: 'Checker' })]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
 
   await screen.getByLabelText('Checked by').selectOptions('v1');
   await screen.getByLabelText('Confirmed weight (kg)').fill('18');
@@ -81,7 +89,7 @@ test('rejects a confirmed weight outside 1..500', async () => {
     ...personApi([makePerson({ id: 'v1' })]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
 
   await screen.getByLabelText('Checked by').selectOptions('v1');
   await screen.getByLabelText('Confirmed weight (kg)').fill('750');
@@ -95,7 +103,11 @@ test('rejects a confirmed weight outside 1..500', async () => {
 test('a Dispatcher sees the box bay but not the controls to change it', async () => {
   worker.use(...boxApi([makeBox({ id: 4, locationId: 3 })]).handlers, ...personApi([]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Dispatcher'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/boxes/4',
+    roles: ['Dispatcher'],
+  });
 
   await expect.element(screen.getByText('Not currently in a bay.')).toBeInTheDocument();
   await expect
@@ -112,7 +124,7 @@ test('a loader places a box in a bay and then vacates it', async () => {
     ...locationApi([location], [bay]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
 
   await screen.getByLabelText('Bay').selectOptions('9');
   await screen.getByLabelText('Placed by').selectOptions('v1');

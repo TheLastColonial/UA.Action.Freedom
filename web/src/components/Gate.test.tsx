@@ -4,7 +4,7 @@ import { renderWithProviders } from '../test/render';
 import { Gate } from './Gate';
 
 test('shows children when the user holds the policy', async () => {
-  const screen = renderWithProviders(
+  const screen = await renderWithProviders(
     <Gate policy="receivers:detail">
       <span>delivery address</span>
     </Gate>,
@@ -15,7 +15,7 @@ test('shows children when the user holds the policy', async () => {
 });
 
 test('renders the fallback when the user lacks the policy', async () => {
-  const screen = renderWithProviders(
+  const screen = await renderWithProviders(
     <Gate policy="receivers:detail" fallback={<span>hidden</span>}>
       <span>delivery address</span>
     </Gate>,

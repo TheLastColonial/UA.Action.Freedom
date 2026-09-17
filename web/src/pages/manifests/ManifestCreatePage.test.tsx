@@ -22,7 +22,7 @@ afterEach(() => {
 
 test('requires a reference', async () => {
   worker.use(...manifestApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/manifests/new',
     roles: ['Dispatcher'],
@@ -34,7 +34,7 @@ test('requires a reference', async () => {
 
 test('surfaces a duplicate-reference 409 and stays on the form', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'UA-DUP' })]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/manifests/new',
     roles: ['Dispatcher'],
@@ -51,7 +51,7 @@ test('surfaces a duplicate-reference 409 and stays on the form', async () => {
 
 test('creates the manifest and opens it', async () => {
   worker.use(...manifestApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/manifests/new',
     roles: ['Dispatcher'],

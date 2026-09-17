@@ -27,7 +27,7 @@ test('pre-populates the form from the volunteer', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/people/p1/edit',
     roles: ['Administrator'],
@@ -39,7 +39,7 @@ test('pre-populates the form from the volunteer', async () => {
 test('saves changes and returns to the detail page', async () => {
   worker.use(...personApi([makePerson({ id: 'p1', firstName: 'Olena', lastName: 'K' })]).handlers);
 
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/people/p1/edit',
     roles: ['Administrator'],

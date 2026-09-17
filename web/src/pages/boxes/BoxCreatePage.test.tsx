@@ -30,7 +30,11 @@ test('creates a box and opens it', async () => {
     ...locationApi([location]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/boxes/new', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/boxes/new',
+    roles: ['Loader'],
+  });
 
   await screen.getByLabelText('Distribution hub').selectOptions('3');
   await screen.getByRole('button', { name: 'Create box' }).click();

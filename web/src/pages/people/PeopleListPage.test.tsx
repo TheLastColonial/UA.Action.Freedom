@@ -28,7 +28,11 @@ test('lists volunteers by name', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/people', roles: ['Dispatcher'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/people',
+    roles: ['Dispatcher'],
+  });
 
   await expect.element(screen.getByRole('link', { name: 'Olena K' })).toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'Ihor M' })).toBeInTheDocument();
@@ -42,7 +46,11 @@ test('the drivers-only toggle filters the list', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/people', roles: ['Dispatcher'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/people',
+    roles: ['Dispatcher'],
+  });
 
   await expect.element(screen.getByRole('link', { name: 'Packer Two' })).toBeInTheDocument();
 
@@ -55,7 +63,7 @@ test('the drivers-only toggle filters the list', async () => {
 test('only an administrator sees "New volunteer"', async () => {
   worker.use(...personApi([]).handlers);
 
-  const asDispatcher = renderWithProviders(null, {
+  const asDispatcher = await renderWithProviders(null, {
     routes,
     route: '/people',
     roles: ['Dispatcher'],
@@ -65,7 +73,7 @@ test('only an administrator sees "New volunteer"', async () => {
     .element(asDispatcher.getByRole('link', { name: 'New volunteer' }))
     .not.toBeInTheDocument();
 
-  const asAdmin = renderWithProviders(null, {
+  const asAdmin = await renderWithProviders(null, {
     routes,
     route: '/people',
     roles: ['Administrator'],

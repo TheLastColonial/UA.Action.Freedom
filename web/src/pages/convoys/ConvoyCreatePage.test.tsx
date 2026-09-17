@@ -21,7 +21,7 @@ afterEach(() => {
 
 test('rejects an arrival before departure', async () => {
   worker.use(...convoyApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/convoys/new',
     roles: ['Dispatcher'],
@@ -38,7 +38,7 @@ test('rejects an arrival before departure', async () => {
 
 test('creates a convoy and opens it', async () => {
   worker.use(...convoyApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/convoys/new',
     roles: ['Dispatcher'],

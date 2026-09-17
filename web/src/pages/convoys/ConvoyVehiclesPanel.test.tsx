@@ -17,7 +17,7 @@ afterEach(() => {
 test('assigns a vehicle and then removes it', async () => {
   worker.use(...convoyApi([makeConvoy({ id: 5 })]).handlers);
 
-  const screen = renderWithProviders(<ConvoyVehiclesPanel convoyId={5} disabled={false} />, {
+  const screen = await renderWithProviders(<ConvoyVehiclesPanel convoyId={5} disabled={false} />, {
     roles: ['Dispatcher'],
   });
 
@@ -35,7 +35,7 @@ test('assigns a vehicle and then removes it', async () => {
 test('surfaces a 409 detail when the truck list was published under the operator', async () => {
   worker.use(...convoyApi([makeConvoy({ id: 5, truckListPublished: true })]).handlers);
 
-  const screen = renderWithProviders(<ConvoyVehiclesPanel convoyId={5} disabled={false} />, {
+  const screen = await renderWithProviders(<ConvoyVehiclesPanel convoyId={5} disabled={false} />, {
     roles: ['Dispatcher'],
   });
 

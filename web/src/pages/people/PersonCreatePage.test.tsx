@@ -23,7 +23,7 @@ afterEach(() => {
 
 test('shows client validation for the required names', async () => {
   worker.use(...personApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/people/new',
     roles: ['Administrator'],
@@ -37,7 +37,7 @@ test('shows client validation for the required names', async () => {
 
 test('keeps "Committed" disabled until the volunteer is a driver', async () => {
   worker.use(...personApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/people/new',
     roles: ['Administrator'],
@@ -54,7 +54,7 @@ test('maps a 400 problem+json error onto the named field', async () => {
   worker.use(
     http.post('/people', () => validationProblem({ Phone: ['That number is not valid.'] })),
   );
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/people/new',
     roles: ['Administrator'],
@@ -70,7 +70,7 @@ test('maps a 400 problem+json error onto the named field', async () => {
 
 test('creates the volunteer and navigates to it', async () => {
   worker.use(...personApi([]).handlers);
-  const screen = renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/people/new',
     roles: ['Administrator'],

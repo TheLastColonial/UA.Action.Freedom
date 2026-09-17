@@ -23,10 +23,10 @@ afterEach(() => {
 test('shows the overview and Not found for an unknown id', async () => {
   worker.use(...convoyApi([makeConvoy({ id: 7 })]).handlers);
 
-  const found = renderWithProviders(null, { routes, route: '/convoys/7', roles: ['Loader'] });
+  const found = await renderWithProviders(null, { routes, route: '/convoys/7', roles: ['Loader'] });
   await expect.element(found.getByRole('heading', { name: 'Convoy #7' })).toBeInTheDocument();
 
-  const missing = renderWithProviders(null, {
+  const missing = await renderWithProviders(null, {
     routes,
     route: '/convoys/999',
     roles: ['Loader'],
@@ -37,7 +37,11 @@ test('shows the overview and Not found for an unknown id', async () => {
 test('groups overview fields into a named card', async () => {
   worker.use(...convoyApi([makeConvoy({ id: 7 })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/convoys/7', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/convoys/7',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByRole('region', { name: 'Convoy details' })).toBeInTheDocument();
 });
@@ -45,7 +49,11 @@ test('groups overview fields into a named card', async () => {
 test('publishing the truck list flips the badge and removes the button', async () => {
   worker.use(...convoyApi([makeConvoy({ id: 7, truckListPublished: false })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/convoys/7', roles: ['Dispatcher'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/convoys/7',
+    roles: ['Dispatcher'],
+  });
 
   await screen.getByRole('button', { name: 'Publish truck list' }).click();
 
@@ -58,7 +66,11 @@ test('publishing the truck list flips the badge and removes the button', async (
 test('a Dispatcher can open the Route and Vehicles tabs', async () => {
   worker.use(...convoyApi([makeConvoy({ id: 7 })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/convoys/7', roles: ['Dispatcher'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/convoys/7',
+    roles: ['Dispatcher'],
+  });
 
   await screen.getByRole('button', { name: 'Route' }).click();
   await expect.element(screen.getByRole('button', { name: 'Add stop' })).toBeInTheDocument();
@@ -70,7 +82,11 @@ test('a Dispatcher can open the Route and Vehicles tabs', async () => {
 test('hides publish from a role without convoys:write', async () => {
   worker.use(...convoyApi([makeConvoy({ id: 7 })]).handlers);
 
-  const screen = renderWithProviders(null, { routes, route: '/convoys/7', roles: ['Loader'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/convoys/7',
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByRole('heading', { name: 'Convoy #7' })).toBeInTheDocument();
   await expect

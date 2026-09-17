@@ -17,7 +17,7 @@ afterEach(() => {
 test('adds an item with a property, then removes it', async () => {
   worker.use(...boxApi([makeBox({ id: 8 })]).handlers);
 
-  const screen = renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
+  const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
     roles: ['Loader'],
   });
 
@@ -39,7 +39,7 @@ test('adds an item with a property, then removes it', async () => {
 test('requires a description', async () => {
   worker.use(...boxApi([makeBox({ id: 8 })]).handlers);
 
-  const screen = renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
+  const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
     roles: ['Loader'],
   });
 
@@ -52,7 +52,9 @@ test('is read-only when the box is frozen', async () => {
   api.items.set(8, [makeBoxItem({ description: 'Sealed contents' })]);
   worker.use(...api.handlers);
 
-  const screen = renderWithProviders(<BoxItemsPanel boxId={8} frozen />, { roles: ['Loader'] });
+  const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen />, {
+    roles: ['Loader'],
+  });
 
   await expect.element(screen.getByText('Sealed contents')).toBeInTheDocument();
   await expect

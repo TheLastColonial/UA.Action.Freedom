@@ -28,7 +28,11 @@ test('lists convoys with their truck-list state', async () => {
     ]).handlers,
   );
 
-  const screen = renderWithProviders(null, { routes, route: '/convoys', roles: ['Dispatcher'] });
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/convoys',
+    roles: ['Dispatcher'],
+  });
 
   await expect.element(screen.getByRole('link', { name: '#1' })).toBeInTheDocument();
   await expect.element(screen.getByText('Published')).toBeInTheDocument();
@@ -38,11 +42,15 @@ test('lists convoys with their truck-list state', async () => {
 test('only a writer sees "New convoy"', async () => {
   worker.use(...convoyApi([]).handlers);
 
-  const asLoader = renderWithProviders(null, { routes, route: '/convoys', roles: ['Loader'] });
+  const asLoader = await renderWithProviders(null, {
+    routes,
+    route: '/convoys',
+    roles: ['Loader'],
+  });
   await expect.element(asLoader.getByText('No convoys planned yet.')).toBeInTheDocument();
   await expect.element(asLoader.getByRole('link', { name: 'New convoy' })).not.toBeInTheDocument();
 
-  const asDispatcher = renderWithProviders(null, {
+  const asDispatcher = await renderWithProviders(null, {
     routes,
     route: '/convoys',
     roles: ['Dispatcher'],
