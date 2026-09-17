@@ -7,7 +7,7 @@ the edge, so there is no CORS.
 
 ## Prerequisites
 
-- **Node 22 LTS** — `nvm use` reads `.nvmrc`.
+- **Node 24 LTS** — `nvm use` reads `.nvmrc`.
 - **Playwright Chromium** — `npx playwright install chromium` (used by both `npm run test`,
   which runs in a real browser, and `npm run e2e`). `npm run e2e:install` adds OS deps.
 

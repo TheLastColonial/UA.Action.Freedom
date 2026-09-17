@@ -9,7 +9,7 @@ Built on .NET 10 with ASP.NET Core minimal APIs, Dapper for data access, and Ope
 ### Prerequisites
 
 - **.NET 10 SDK** — [Download](https://dotnet.microsoft.com/download/dotnet)
-- **Node 22 LTS** — for the operator web UI (`web/`); `nvm use` picks it up from `web/.nvmrc`
+- **Node 24 LTS** — for the operator web UI (`web/`); `nvm use` picks it up from `web/.nvmrc`
 - **Docker Desktop** — for local infrastructure simulation
 - **PowerShell** or **Bash** — for build/test scripts
 - **OpenTofu** (optional) — for provisioning local resources (`iac/tofu/`)
