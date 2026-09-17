@@ -13,7 +13,7 @@ namespace UA.Action.Freedom.Domain;
 public record BoxBayAssignment
 {
     /// <summary>Unique reference</summary>
-    public required int Id { get; init; }
+    public required BoxBayAssignmentId Id { get; init; }
 
     /// <summary>The box this assignment is for</summary>
     public required BoxId BoxId { get; init; }
@@ -22,7 +22,7 @@ public record BoxBayAssignment
     public required BayId BayId { get; init; }
 
     /// <summary>Who placed the box in this bay</summary>
-    public required Guid AssignedByPersonId { get; init; }
+    public required PersonId AssignedByPersonId { get; init; }
 
     /// <summary>When the box was placed in this bay</summary>
     public required DateTime AssignedAt { get; init; }
@@ -33,3 +33,9 @@ public record BoxBayAssignment
     /// <summary>Whether the box is currently in this bay</summary>
     public bool Active => this.VacatedAt is null;
 }
+
+/// <summary>
+/// Unique reference to a <see cref="BoxBayAssignment"/>
+/// </summary>
+/// <param name="Value"></param>
+public record BoxBayAssignmentId(int Value);

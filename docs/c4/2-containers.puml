@@ -51,7 +51,11 @@ Enterprise_Boundary(ua_action, "UA Action") {
 
         AzureFunction(customs_worker, "Customs Worker", "Azure Functions (Consumption, .NET isolated)", "Queue-triggered: submits Goods Movement References to HMRC. Timer-triggered: polls HMRC for outcomes while any GMR is in flight, then falls idle")
 
+        AzureFunction(manifest_worker, "Manifest Worker", "Azure Functions (Consumption, .NET isolated)", "Queue-triggered: renders the plain-text manifest document that travels with a vehicle. No database access — the Freedom Application composes the document and puts it on the queue, so the worker cannot read a Ukrainian delivery address because it cannot read anything")
+
         AzureQueueStorage(work_queue, "Customs Work Queue", "Azure Queue Storage", "Durable hand-off for GMR submissions and refreshes, with a poison queue for failed attempts")
+
+        AzureQueueStorage(manifest_queue, "Manifest Document Queue", "Azure Queue Storage", "Durable hand-off for manifest document render requests, with a poison queue for failed attempts")
 
         AzureSqlDatabase(db, "Freedom Database", "Azure SQL Database (Serverless, free offer, auto-pause)", "Convoys, vehicles, manifests, boxes, people and roles. Sensitive receiver detail is held in a separate, restricted schema")
 
@@ -78,14 +82,22 @@ Rel(app, identity, "Authenticates users, authorises by app role", "OpenID Connec
 Rel_D(app, db, "Reads from and writes to", "Entra auth, managed identity")
 Rel_D(app, documents, "Saves and serves Manifest and ELO documents", "managed identity")
 Rel_D(app, work_queue, "Queues GMR submissions and refreshes", "managed identity")
+Rel_D(app, manifest_queue, "Queues manifest document render requests", "managed identity")
 Rel(app, vault, "Reads secrets", "managed identity")
 Rel(app, telemetry, "Emits traces, metrics and audit events")
 
 Rel_D(work_queue, customs_worker, "Triggers")
+' Open question, not yet resolved: the worker code has no database access at all today
+' (see docs/gotchas-and-open-questions.md). Keeping this edge until that's decided rather
+' than guessing whether it's a missing feature or this edge is simply wrong.
 Rel_D(customs_worker, db, "Writes GMR status against the Manifest", "managed identity")
 Rel_D(customs_worker, documents, "Saves GMR document", "managed identity")
 Rel(customs_worker, vault, "Reads HMRC credentials", "managed identity")
 Rel(customs_worker, telemetry, "Emits traces and metrics")
+
+Rel_D(manifest_queue, manifest_worker, "Triggers")
+Rel_D(manifest_worker, documents, "Saves manifest document", "managed identity")
+Rel(manifest_worker, telemetry, "Emits traces and metrics")
 
 ' --- Outbound to HMRC: pull only, no inbound endpoint ---
 Rel_R(customs_worker, hmrc_goods_api, "Submits Goods Movement References", "HTTPS, OAuth 2.0")
@@ -102,6 +114,7 @@ Rel_L(website, app, "Submits driver applications and donation declarations", "HT
 ' --- Delivery pipeline ---
 Rel_L(github, app, "Deploys container image", "GitHub Actions, OIDC federated credential")
 Rel_L(github, customs_worker, "Deploys function package", "GitHub Actions, OIDC federated credential")
+Rel_L(github, manifest_worker, "Deploys function package", "GitHub Actions, OIDC federated credential")
 
 SHOW_LEGEND()
 

@@ -482,6 +482,19 @@ address field to leak.
 7. **What happens if the database auto-pauses mid-convoy?** Answered as "read-only from cached
    documents, revisit later" (§5.2 Q5). Nothing implements that fallback.
 
+8. **Does the Customs Worker need to write GMR status back to the database?**
+   `docs/c4/2-containers.puml` shows `customs_worker → db, "Writes GMR status against the
+   Manifest"`, but neither `GmrSubmissionProcessor` nor `GmrOutcomeCollector` touch a database —
+   only the work queue and `IGmrDocumentStore` (blob). `UA.Action.Freedom.CustomsWorker.csproj`
+   has no reference to `UA.Action.Freedom.Data`. Relatedly, `iac/local/sql/001-schemas.sql`
+   creates a `freedom_worker` DB role with DML grants, but no login/user is ever created for it —
+   an orphaned role with nothing connecting as it. Two ways this resolves: either the diagram is
+   simply wrong and GMR status is only ever readable from blob storage (matching the "pull-based,
+   no inbound webhook" security posture elsewhere in this design), or a real feature is missing —
+   the API/DB should be able to answer "has this manifest's GMR been submitted / what came back"
+   without reaching into blob storage. Left unresolved rather than guessed; do not remove the
+   `freedom_worker` role or the diagram edge until this is decided.
+
 ### Known bug, not ours to fix cheaply
 
 **`HMRC.PushPullNotifications` cannot deserialise a notification.** HMRC sends

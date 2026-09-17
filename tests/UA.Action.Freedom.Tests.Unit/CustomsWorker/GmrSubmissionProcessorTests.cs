@@ -87,7 +87,8 @@ public class GmrSubmissionProcessorTests
 
         var gvms = Substitute.For<IGvmsClient>();
         gvms.CreateGoodsMovementRecordAsync(Arg.Any<GoodsMovementRecordRequest>(), Arg.Any<CancellationToken>())
-            .ThrowsAsync(new GvmsApiException("Bad Request", 400, "{}", null, null));
+            .ThrowsAsync(new GvmsApiException(
+                "Bad Request", 400, "{}", new Dictionary<string, IEnumerable<string>>(), null));
 
         var processor = new GmrSubmissionProcessor(
             queue, gvms, TestLoggerFactory.Create().CreateLogger<GmrSubmissionProcessor>());

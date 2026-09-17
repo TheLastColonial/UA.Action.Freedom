@@ -159,7 +159,7 @@ resource "keycloak_openid_user_client_role_protocol_mapper" "spa_roles" {
   add_to_userinfo             = true
 }
 
-# Two users, named for what they can do rather than for a person: these are fixtures, and
+# Three users, named for what they can do rather than for a person: these are fixtures, and
 # seeding them with realistic volunteer names would put invented personal data in version
 # control for no benefit.
 resource "keycloak_user" "seed" {
