@@ -60,3 +60,15 @@ internal static class ConvoyDates
     /// </summary>
     internal static readonly DateTime Earliest = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 }
+
+public sealed class RecordInsuranceRequestValidator : AbstractValidator<RecordInsuranceRequest>
+{
+    public RecordInsuranceRequestValidator()
+    {
+        RuleFor(r => r.Insurer).NotEmpty().MaximumLength(200);
+        RuleFor(r => r.PolicyNumber).NotEmpty().MaximumLength(100);
+        RuleFor(r => r.CoverEnd).GreaterThanOrEqualTo(r => r.CoverStart)
+            .WithMessage("Cover cannot end before it starts.");
+        RuleFor(r => r.CostGbp).GreaterThanOrEqualTo(0).When(r => r.CostGbp is not null);
+    }
+}

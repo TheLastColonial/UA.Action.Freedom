@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Convoys;
 
@@ -38,4 +39,26 @@ public sealed record ReplaceConvoyRouteRequest(IReadOnlyList<RouteStopRequest> S
         convoyId,
         [.. Stops.Select((stop, index) => new RouteStopReadModel(
             index + 1, stop.House, stop.Street, stop.City, stop.Country, stop.Postcode))]);
+}
+
+/// <summary>
+/// Optional body of <c>PUT /convoys/{id}/vehicles/{vin}/drivers/{personId}</c>. Omitted, the
+/// person joins the crew as a driver.
+/// </summary>
+public sealed record AssignCrewRequest(CrewRole Role = CrewRole.Driver);
+
+/// <summary>
+/// Body of <c>PUT /convoys/{id}/vehicles/{vin}/insurance</c>. Who recorded it comes from the
+/// caller's token; a <c>recordedBy</c> in the body is ignored.
+/// </summary>
+public sealed record RecordInsuranceRequest(
+    string Insurer,
+    string PolicyNumber,
+    DateTime CoverStart,
+    DateTime CoverEnd,
+    decimal? CostGbp = null)
+{
+    public RecordInsuranceCommand ToCommand(int convoyId, string vin, string recordedBy) =>
+        new(new VehicleInsuranceRecord(
+            convoyId, vin, Insurer, PolicyNumber, CoverStart.Date, CoverEnd.Date, CostGbp, recordedBy));
 }

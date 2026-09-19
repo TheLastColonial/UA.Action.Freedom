@@ -8,15 +8,18 @@ public sealed record DeletePersonCommand(Guid Id);
 public enum DeletePersonOutcome
 {
     Deleted,
-    NotFound
+    NotFound,
+    StillActive
 }
 
 public sealed class DeletePersonHandler(IPersonRepository repository)
     : ICommandHandler<DeletePersonCommand, DeletePersonOutcome>
 {
-    public async Task<DeletePersonOutcome> HandleAsync(DeletePersonCommand command, CancellationToken cancellationToken)
-    {
-        var deleted = await repository.DeleteAsync(command.Id, cancellationToken);
-        return deleted ? DeletePersonOutcome.Deleted : DeletePersonOutcome.NotFound;
-    }
+    public async Task<DeletePersonOutcome> HandleAsync(DeletePersonCommand command, CancellationToken cancellationToken) =>
+        await repository.DeleteAsync(command.Id, cancellationToken) switch
+        {
+            DeletePersonResult.Deleted => DeletePersonOutcome.Deleted,
+            DeletePersonResult.StillActive => DeletePersonOutcome.StillActive,
+            _ => DeletePersonOutcome.NotFound,
+        };
 }

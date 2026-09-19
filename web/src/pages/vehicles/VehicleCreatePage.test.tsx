@@ -1,8 +1,7 @@
 import { http } from 'msw';
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeVehicle } from '../../test/factories/vehicle';
 import { validationProblem } from '../../test/msw/problem';
 import { vehicleApi } from '../../test/msw/vehicles';
@@ -14,13 +13,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'vehicles', children: vehicleRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 async function fillMinimum(screen: Awaited<ReturnType<typeof renderWithProviders>>): Promise<void> {
   await screen.getByLabelText('VIN').fill('WVWZZZ1KZAW000009');

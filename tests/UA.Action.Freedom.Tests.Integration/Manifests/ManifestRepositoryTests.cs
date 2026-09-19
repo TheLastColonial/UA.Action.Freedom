@@ -1,10 +1,9 @@
 using AwesomeAssertions;
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
 using UA.Action.Freedom.Application.Manifests;
-using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Data.Manifests;
 using UA.Action.Freedom.Domain;
+using static UA.Action.Freedom.Tests.Integration.SqlTestDatabase;
 
 namespace UA.Action.Freedom.Tests.Integration.Manifests;
 
@@ -22,33 +21,10 @@ namespace UA.Action.Freedom.Tests.Integration.Manifests;
 [Trait("Category", "Integration")]
 public class ManifestRepositoryTests
 {
-    private const string DefaultLocalConnectionString =
-        "Server=localhost,1433;Database=Freedom;User Id=freedom_app;Password=Local_Freedom_App_1;TrustServerCertificate=True;Encrypt=False;Connect Timeout=3";
-
-    private static string ConnectionString =>
-        Environment.GetEnvironmentVariable("ConnectionStrings__Freedom") ?? DefaultLocalConnectionString;
-
     private static async Task<ManifestRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await using var connection = new SqlConnection(ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(1) FROM dbo.Manifest; SELECT COUNT(1) FROM dbo.ManifestBox;";
-            await command.ExecuteScalarAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            Assert.Skip($"Freedom database with dbo.Manifest is not reachable: {exception.Message}");
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Freedom"] = ConnectionString })
-            .Build();
-
-        return new ManifestRepository(new SqlConnectionFactory(configuration));
+        await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Manifest; SELECT COUNT(1) FROM dbo.ManifestBox;", cancellationToken);
+        return new ManifestRepository(ConnectionFactory());
     }
 
     private static string NewId() => "IT" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
@@ -57,32 +33,8 @@ public class ManifestRepositoryTests
         id, Vin: null, ConvoyId: null, ManifestStatus.Created,
         DeliveryNotes: "Integration test", FerryBookingComplete: false, GmrSubmittedAt: null);
 
-    private static async Task ExecuteAsync(string sql, params (string Name, object Value)[] parameters)
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-
-        foreach (var (name, value) in parameters)
-        {
-            command.Parameters.AddWithValue(name, value);
-        }
-
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<Guid> AddVolunteerAsync(bool isDriver = true)
-    {
-        var id = Guid.NewGuid();
-        await ExecuteAsync(
-            """
-            INSERT INTO dbo.Person (Id, FirstName, LastName, DateOfBirth, Joined, IsDriver)
-            VALUES (@id, 'Integration', 'Driver', '1990-01-01', '2024-01-01', @isDriver)
-            """,
-            ("@id", id), ("@isDriver", isDriver));
-        return id;
-    }
+    private static Task<Guid> AddVolunteerAsync(bool isDriver = true) =>
+        SqlTestDatabase.AddVolunteerAsync("Integration", "Driver", isDriver);
 
     private static async Task<int> AddBoxAsync(
         int weightKg, bool validated, Guid? validatedBy, decimal? widthCm = null, decimal? depthCm = null, decimal? heightCm = null)
@@ -387,13 +339,7 @@ public class ManifestRepositoryTests
 
             (await repository.DeleteAsync(id, cancellationToken)).Should().BeTrue();
 
-            await using var connection = new SqlConnection(ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(1) FROM dbo.Box WHERE Id = @id";
-            command.Parameters.AddWithValue("@id", boxId);
-
-            (await command.ExecuteScalarAsync(cancellationToken)).Should().Be(1);
+            (await ScalarAsync("SELECT COUNT(1) FROM dbo.Box WHERE Id = @id", ("@id", boxId))).Should().Be(1);
         }
         finally
         {

@@ -43,29 +43,29 @@ Also note the xUnit v3 API here: `CollectionBehavior(DisableTestParallelization 
 obsolete **as an error**, and the replacement is `Xunit.v3.ParallelizationAttribute` with
 `Xunit.Sdk.ParallelMode.None` — two different namespaces.
 
-### sqlcmd runs with `QUOTED_IDENTIFIER` off
+### The schema is published by SqlPackage, so `QUOTED_IDENTIFIER` is no longer a trap
 
-`iac/local/sql/001-schemas.sql` is applied by `sqlcmd`, which does not set `QUOTED_IDENTIFIER ON`.
-Filtered indexes, indexed views and indexes on computed columns all require it, so
-`CREATE INDEX ... WHERE ...` fails with `Msg 1934`.
-
-There is a filtered index that *would* be worth having on `dbo.Vehicle (ConvoyId)` — most vehicles
-are unassigned between convoys. It is deliberately unfiltered instead: a bootstrap script that
-depends on the session settings of whatever tool invokes it is a trap, and the fleet is far too
-small for the saving to matter.
+The schema used to be applied by `sqlcmd`, which runs with `QUOTED_IDENTIFIER` off, so filtered
+indexes (`Msg 1934`) were avoided throughout. The dacpac is now published by SqlPackage, which
+sets the ANSI options correctly, so a filtered index is legal again. The existing "one active
+row" rules (`BoxQrCode`, `BoxBayAssignment`) are still enforced in their repository transactions;
+adding a filtered unique index as a second line of defence is now possible, not yet done.
 
 ### sqlcmd resolves `$(NAME)` from the environment
 
 Used deliberately: `database.tf` forwards the two login passwords to the container with
-`docker exec -e`, and the script references them as `$(FREEDOM_APP_PASSWORD)` and
-`$(FREEDOM_SENSITIVE_PASSWORD)`. They never appear on a command line, in `docker inspect`, or in
-the process table — the same reasoning as the `sa` password. See §3 of `iac/README.md`.
+`docker exec -e`, and `iac/local/sql/principals.sql` references them as `$(FREEDOM_APP_PASSWORD)`
+and `$(FREEDOM_SENSITIVE_PASSWORD)`. They never appear on a command line, in `docker inspect`, or
+in the process table — the same reasoning as the `sa` password. See §3 of `iac/README.md`.
+`database/deploy.sh` follows the same rule for SqlPackage by writing the connection string into a
+temporary publish profile instead of passing it as an argument.
 
-### Git Bash mangles container paths
+### Git Bash mangles container paths and SqlPackage arguments
 
 `docker exec freedom-mssql /opt/mssql-tools18/bin/sqlcmd` from Git Bash becomes
-`C:/Program Files/Git/opt/mssql-tools18/...`. Prefix with `MSYS_NO_PATHCONV=1`, or run it from
-PowerShell.
+`C:/Program Files/Git/opt/mssql-tools18/...`, and `sqlpackage /Action:Publish /p:...` has its
+slash-arguments rewritten into paths ("Unrecognized command line argument"). Prefix with
+`MSYS_NO_PATHCONV=1`, use SqlPackage's dash form (`-a:Publish -p:...`), or run it from PowerShell.
 
 ### Rebuild the image before running the BDD suite
 
@@ -97,39 +97,42 @@ open-ended bag, so `BoxRepository` has a private `BoxItemRow` seam that Dapper f
 that turns it into the shape the application uses. That is the exception, and it is commented as
 such.
 
-### The schema is one idempotent file, applied by hash
+### The schema is a SQL project, declared as its end state
 
-`iac/local/sql/001-schemas.sql` — hand-written T-SQL, no migration tool. `iac/tofu/database.tf`
-re-runs it whenever `filesha256` changes, so **editing the file and running `tofu apply` is the
-normal workflow**; there is nothing to taint.
+`database/UA.Action.Freedom.Database` (SDK-style `Microsoft.Build.Sql`) holds one plain `CREATE`
+per object — no `IF OBJECT_ID` guards, no `ALTER ... ADD`, no data moves. `dotnet build` turns it
+into a dacpac and validates every reference, so an FK to a table that does not exist fails the
+build, not the deployment. The old ordering trap (a statement referencing an object created
+further down the script) cannot happen: the model has no order.
 
-Everything must therefore be re-runnable on a database that predates it — `IF OBJECT_ID(...) IS
-NULL`, `IF COL_LENGTH(...) IS NULL`, `IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys ...)`.
-Adding `FK_Vehicle_Convoy` also had to null out orphaned `ConvoyId` values first, because the
-column existed as a loose `int` before `dbo.Convoy` did.
+SqlPackage diffs the dacpac against the target and generates the change: a fresh stack gets a
+create, an up-to-date one gets nothing. **Changing the schema means editing the table file**, then
+`cd iac/local && docker compose build db-deploy && docker compose up -d --wait db-deploy`.
+
+Four rules that keep it that way:
+
+1. **No migration code in the project.** If an environment with data to keep ever needs a data
+   move, it goes in a reviewed Pre/PostDeployment script that is deleted once it has run
+   everywhere. Today every stack is rebuilt from scratch, so none exists.
+2. **Principals are not in the dacpac.** Roles and `GRANT`/`DENY` are; logins, users and role
+   membership belong to the environment (`iac/local/sql/principals.sql` locally, the deployment
+   pipeline in Azure). The publish passes `ExcludeObjectTypes=Users;Logins;RoleMembership` so it
+   never touches them — remove that and a publish could strip `freedom_app_user` out of its role.
+3. **Write CHECK constraints the way SQL Server stores them.** `BETWEEN 0 AND 3` is stored as
+   `>= 0 AND <= 3` and `IN (0, 1)` as `= 1 OR = 0`; SqlPackage sees the text differ and drops and
+   recreates the constraint on every publish. The `Database` workflow fails if a re-publish is not
+   a no-op, which is how you will find out.
+4. **Prefer schema-level grants.** `GRANT ... ON SCHEMA::dbo` covers every table added later, so a
+   new table needs no grant of its own.
 
 ### Test schema changes against a *fresh* database, not yours
 
-Your local database has every table from every increment you have run. CI's does not. A statement
-that references an object created further down the script works for you and fails in CI on the
-first line that needs it.
-
-This actually happened: a `GRANT INSERT ON sensitive.ReceiverDetailAccessLog` was placed in the
-logins section, several sections above the `CREATE TABLE`. Every local run passed, because the
-table already existed from an earlier increment. The `acceptance` job failed on a clean volume
-with `Msg 15151: Cannot find the object 'ReceiverDetailAccessLog'`.
-
-Two lessons, in order of usefulness:
-
-1. **Prefer schema-level grants.** `GRANT ... ON SCHEMA::sensitive` applies to objects created
-   *after* it, so it has no ordering constraint at all. The offending statement was not merely
-   misplaced — it was redundant, and deleting it was the fix. The same is already true of `dbo`:
-   a new table there needs no new grant.
-2. **Reproduce CI locally before pushing a schema change.** It costs a few minutes:
+Your local volume has data and a history; CI's does not. Reproduce CI before pushing a schema
+change — it costs a few minutes:
 
 ```bash
 cd iac/local && docker compose down -v          # the -v is the point: drop the volumes
-docker compose up -d --wait mssql keycloak azurite telemetry
+docker compose up -d --wait
 cd ../tofu && rm -f terraform.tfstate* && tofu apply -auto-approve
 ```
 
@@ -168,8 +171,8 @@ no label a scan resolves to, or in two bays at once.
 
 "At most one active label per box" is enforced by that method — the revoke is
 `WHERE BoxId = @boxId AND RevokedAt IS NULL`, so the database settles a concurrent double-issue —
-**not** by a filtered unique index, because `001-schemas.sql` runs under sqlcmd with
-`QUOTED_IDENTIFIER` off (see § Tooling). `ResolveActiveQrCodeAsync` and `GetActiveQrCodeAsync`
+**not** by a filtered unique index, which the old sqlcmd-applied script could not create (see
+§ Tooling; SqlPackage now could). `ResolveActiveQrCodeAsync` and `GetActiveQrCodeAsync`
 both filter `RevokedAt IS NULL`, so a revoked token reads as unknown rather than resolving to a
 box it no longer names.
 
@@ -289,6 +292,20 @@ requirement** — see §9.
 No items in or out, no new receiver, no second validation. The Loader's confirmed weight is what
 the border check relies on; any of those would leave it describing something no longer true.
 
+### Only a Passed vehicle joins a convoy — and it cannot be moved from another
+
+`PUT /convoys/{id}/vehicles/{vin}` is a 409 unless the vehicle's inspection is `Passed`, and a
+409 if it is already on a *different* convoy. The second rule closed a hole: assigning to convoy B
+used to silently take the vehicle off convoy A, even when A's truck list was already published and
+manifested. Both rules are in the `UPDATE`'s `WHERE`, so a Mechanic failing the vehicle at the
+same moment cannot race it on.
+
+### A volunteer still named anywhere cannot be deleted
+
+None of the five foreign keys onto `dbo.Person` cascades — they are the record of who crewed,
+validated and shelved what. `PersonRepository.DeleteAsync` catches the FK violation (547) and the
+API answers 409, rather than the 500 it used to. See §9 Q9 for the erasure question this raises.
+
 ### `Committed` requires `IsDriver`
 
 Commitment is a commitment to *drive a leg*. Letting the two disagree would put a non-driver on
@@ -344,6 +361,60 @@ than one thing.
 Cleanup deletes as `admin` **except receivers**, which are deleted as `groundofficer` — an admin
 token is correctly refused there, and a hook that silently 403s would leave delivery detail
 behind.
+
+### A test double must be exactly as strict as the thing it replaces
+
+The vehicle inspection "did not persist" for a whole feature while every test was green. The
+web page sent `inspectionStatus` in the vehicle `PUT`; the C# request record had no such field,
+System.Text.Json dropped it silently, and the zod read schema's `.default('Pending')` papered
+over its absence on the way back. The MSW mock, meanwhile, *stored* the field — so the web tests
+proved the page talked to a mock that did not exist. The same shape was in the backend:
+`InMemoryConvoyRepository` returned `[]` where the SQL returned `null`, and kept crews the SQL
+deleted.
+
+The rules that came out of it:
+
+- An MSW handler accepts **only** the fields the C# request declares, and applies the same rules
+  (404 / 409 / 422 and their `detail` text). `web/src/test/msw/convoys.ts` takes the fleet and
+  roster as lookups (`convoyApi(seed, { fleet, people })`) for exactly this reason.
+- No `.default()` on a **response** schema: a field the API omits must fail parsing, loudly.
+- A save test asserts on the store (`api.db`) *and* on what a fresh render reads back — not on
+  the button still being on screen after the click.
+- Every `InMemory*Repository` mirrors its SQL's keys, conditional `WHERE`s and clean-up.
+- The end-to-end check that would have caught it is a Playwright spec that saves, **reloads**,
+  and reads the value back (`e2e/vehicles.smoke.spec.ts`).
+
+### Integration tests share one helper, connect as `freedom_app`, and can be made mandatory
+
+`tests/UA.Action.Freedom.Tests.Integration/SqlTestDatabase.cs` replaced nine copies of
+`ConnectOrSkipAsync`/`ExecuteAsync`/`ScalarAsync`. Three of those copies connected as `sa`, which
+bypasses every grant — a repository test could pass against a permission `freedom_app` does not
+hold (§3). `FREEDOM_REQUIRE_INTEGRATION=true` turns "database unreachable" from a skip into a
+failure; the CI `acceptance` job sets it, because a skipped suite there means broken
+infrastructure, not absent infrastructure.
+
+### A domain 404 keeps its reason
+
+The web client used to turn *every* 404 into `ApiNotFound("Not found")`, which the crew panel
+then swallowed — "There is no vehicle with VIN … on this convoy" never reached the user. A 404
+whose problem body carries a `detail` is now an `ApiDomainProblem`; a bare 404 (the resource
+addressed does not exist) is still `ApiNotFound`, which detail pages render as "Not found".
+
+### VIN and manifest keys must be sent as `varchar`
+
+Dapper sends every .NET string as `nvarchar(4000)`. Under `SQL_Latin1_General_CP1_CI_AS` — the local
+database's collation and Azure SQL's default — `WHERE Vin = @vin` against a `varchar(32)` column then
+converts the **column**, so the key lookup becomes a scan that locks every row it reads. It was
+invisible until the convoy-arrival transaction touched several vehicles at once and began
+deadlocking with single-vehicle inspection updates (found in the `system_health` deadlock graph,
+not in any exception). `SqlKey.Of(vin)` sends the value as `varchar(32)`; where a whole record is
+the parameter object, the SQL casts the parameter instead.
+
+### Running the suites in parallel is a concurrency test — keep it
+
+`dotnet test --solution` runs the Integration and BDD projects at the same time against one
+database. That is how the deadlock above surfaced, as a BDD scenario failing one run in two. A
+flaky scenario there is worth a deadlock graph before it is worth a retry.
 
 ### Frozen manifests accumulate in the local database
 
@@ -405,6 +476,11 @@ cookie) to get a fresh one. In a Playwright spec this means **never `page.goto` 
 SPA pages** — navigate by clicking links, or the reload loses both the token and the target
 route. A spec that switches seed users calls `signIn` (which clears cookies first);
 `e2e/auth.setup.ts` captures the SSO cookie per user so single-user specs skip the form.
+
+A reload now **returns to the page it was on**: `RequireAuth` passes the in-app path to
+`signIn`, it travels through Keycloak in the OIDC `state`, and `onSigninCallback` navigates the
+router there (`auth/returnPath.ts` validates it — an in-app path only, never `//host` or `/\`).
+Before, every reload landed on the dashboard.
 
 ### `Hosting__ServeStaticFrontend` — default on, a no-op without `wwwroot`
 
@@ -489,8 +565,9 @@ address field to leak.
    `docs/c4/2-containers.puml` shows `customs_worker → db, "Writes GMR status against the
    Manifest"`, but neither `GmrSubmissionProcessor` nor `GmrOutcomeCollector` touch a database —
    only the work queue and `IGmrDocumentStore` (blob). `UA.Action.Freedom.CustomsWorker.csproj`
-   has no reference to `UA.Action.Freedom.Data`. Relatedly, `iac/local/sql/001-schemas.sql`
-   creates a `freedom_worker` DB role with DML grants, but no login/user is ever created for it —
+   has no reference to `UA.Action.Freedom.Data`. Relatedly, the database project
+   (`database/UA.Action.Freedom.Database/Security/`) declares a `freedom_worker` role with DML
+   grants, but `iac/local/sql/principals.sql` never creates a login/user for it —
    an orphaned role with nothing connecting as it. Two ways this resolves: either the diagram is
    simply wrong and GMR status is only ever readable from blob storage (matching the "pull-based,
    no inbound webhook" security posture elsewhere in this design), or a real feature is missing —
@@ -509,6 +586,35 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 
 ---
 
+Questions 9–12 from the previous round are **decided and built**:
+
+- **Erasing a volunteer named on old records** — split identity: the personal data is deleted,
+  the anonymous key stays for the records, which read "Former volunteer". Refused while they are
+  on a live crew or manifest team.
+- **One driver on two vehicles of a convoy** — no: one seat per person per convoy, enforced by
+  `UQ_VehicleDriver_Convoy_Person`. Passengers exist, and are any volunteer.
+- **Crew changes after publication** — allowed, but they void the vehicle's insurance, which must
+  be recorded again before departure. An arrived convoy's crew cannot change at all.
+- **The 200-vehicle picker limit** — never reached: arrived vehicles are handed over and leave the
+  picker for good, and a convoy is a handful of vans.
+
+13. **Is "Returned" at arrival really "the vehicle came back"?** Arrival releases Returned vehicles
+    to travel again, and hands Delivered and Lost ones over. If Returned can also mean the cargo
+    came back but the vehicle stayed, that rule needs revisiting.
+
+### Web coverage backlog
+
+Pages with no test file of their own (some are exercised through a parent page's test):
+`BoxBayPanel`, `BoxEditPage`, `BoxForm`, `BoxValidatePanel`, `ConvoyEditPage`, `ConvoyForm`,
+`BaysPanel`, `LocationCreatePage`, `LocationEditPage`, `LocationForm`, `ManifestEditPage`,
+`ReasonModal`, `ReceiverCreatePage`, `ReceiverEditPage`, `ReceiverForm`, `ReceiverDetailForm`,
+`VehicleForm`; components `AppShell`, `ColdStartIndicator`, `DataTable`, `DetailCard`,
+`NotAuthorized`, `NotFound`, `PageSkeleton`, `FormCard`. The API hook modules are covered only
+through the pages. MSW handlers other than vehicles/convoys still cast request bodies with `as`
+rather than parsing them against the contract.
+
+---
+
 ## 10. Per-increment index
 
 | # | Slice | The things worth remembering |
@@ -522,3 +628,5 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 | 7 | Manifest worker | No database access at all, by design. Plain text output. The integration-test deadlock and its fix (§1). CI's `acceptance` job now starts both workers — it previously started only `app edge website`, so the queue hand-offs were never exercised there. |
 | 8 | Operator UI (`web/`) | A React + Vite SPA co-served by the API under `/app` — see §7 for the load-bearing traps (`/app` not `/`, `UseStaticFiles` before `UseRouting`, in-memory token, Browser Mode config, the hand-rolled reason modal, the un-cached receiver-detail read). New `frontend` CI job (typecheck/lint/format/test/build) and Playwright `@smoke` specs in the `acceptance` job; `publish` needs both. A new public PKCE Keycloak client `freedom-spa` — the API's confidential client is unchanged. |
 | 9 | Box QR labels | `dbo.BoxQrCode` — opaque non-enumerable token, revoke/reissue, revoked rows kept. `IssueQrCodeAsync` holds a transaction, same shape as the others in §2. "One active label" enforced there, not by a filtered index (§1). `QRCoder` is the first drawing dependency — managed renderers only, never the `System.Drawing`-based `QRCode` (§2). The label renderer's signature carries no receiver data, so the "no delivery detail on a travelling label" rule is structural (§3). New `App:PublicBaseUrl` env-only config with a request-host fallback; the local sim sets `App__PublicBaseUrl` because the container sees the edge, not the browser host. BDD probes `/boxes/scan/{all-zero-guid}` — auth runs before the handler, so a present route answers 401 and an old image answers 404. |
+| 10 | Vehicle servicing + Mechanic | The inspection was silently dropped by the API and faked by the mock — see §6 "A test double must be exactly as strict". New `Mechanic` role and `vehicles:service` policy; `PUT /vehicles/{vin}/inspection` is the only writer. Convoy assignment gated on `Passed` in SQL, and no longer steals a vehicle from another convoy. Crew clean-up on convoy delete (a sixth transaction). Person delete 500 → 409. Schema guards for columns added after `CREATE TABLE`. Shared `SqlTestDatabase`, `freedom_app` everywhere, `FREEDOM_REQUIRE_INTEGRATION` in CI. Reload keeps the page (§7). |
+| 11 | Crew, insurance, readiness, arrival, erasure | Passengers and one seat per person per convoy (`VehicleDriver` gained `ConvoyId` and `Role`, key `(ConvoyId, Vin, PersonId)`). Insurance per vehicle per convoy, voided by a crew change in the same transaction, gating `depart`. Advisory readiness as one pure function. Arrival hands vehicles over for good. Split volunteer identity for UK-data-protection erasure, with an in-place migration checked on a fresh SQL Server. Found and fixed: `nvarchar` VIN parameters scanning the table (deadlocks), and 500s deleting a vehicle or convoy a manifest names. |

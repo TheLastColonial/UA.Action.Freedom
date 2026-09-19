@@ -1,7 +1,8 @@
 name: Build and Test
 
 # Only build and test when something that can change build or test output moves:
-# the code (src/tests), the local Azure simulation (iac), the operator UI (web),
+# the code (src/tests), the database schema (database), the local Azure simulation (iac),
+# the operator UI (web),
 # the codegen scripts (build), the solution/version/SDK plumbing at the root, or
 # this workflow itself. Doc-only commits (docs/**, *.md, plans/**) are skipped.
 on:
@@ -10,6 +11,7 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'database/**'
       - 'iac/**'
       - 'web/**'
       - 'build/**'
@@ -22,6 +24,7 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'database/**'
       - 'iac/**'
       - 'web/**'
       - 'build/**'
@@ -210,7 +213,8 @@ jobs:
         working-directory: iac/local
         run: cp .env.example .env
 
-      # Build the three service images once, load them into the local daemon under the
+      # Build the three service images (and the db-deploy image that publishes the schema
+      # dacpac) once, load them into the local daemon under the
       # :local tags the compose file expects, and cache layers in the Actions cache. These
       # are the exact images the acceptance suite runs against and — on a non-PR run — the
       # exact images pushed to ghcr.io below (replaces the old `docker compose build`).
@@ -234,15 +238,18 @@ jobs:
           build ua-action-freedom/app:local             src/UA.Action.Freedom.Api/Dockerfile            api
           build ua-action-freedom/customs-worker:local  src/UA.Action.Freedom.CustomsWorker/Dockerfile  customs-worker
           build ua-action-freedom/manifest-worker:local src/UA.Action.Freedom.ManifestWorker/Dockerfile manifest-worker
+          build ua-action-freedom/db-deploy:local       database/Dockerfile                             db-deploy
 
       # tofu talks to these three: keycloak.tf to Keycloak, storage.tf to Azurite
       # (via the az CLI, preinstalled on the runner), database.tf via `docker exec`
-      # into the SQL Server container. Bring them up before provisioning.
-      - name: Start backing services
+      # into the SQL Server container. Bring them up before provisioning. db-deploy
+      # publishes the schema dacpac and exits; database.tf's principals join its roles,
+      # so it has to have finished first — --wait covers that.
+      - name: Start backing services and publish the database schema
         working-directory: iac/local
-        run: docker compose up -d --wait --wait-timeout 300 --no-build mssql keycloak azurite telemetry
+        run: docker compose up -d --wait --wait-timeout 300 --no-build mssql db-deploy keycloak azurite telemetry
 
-      - name: Provision realm, storage and database schema
+      - name: Provision realm, storage and database principals
         working-directory: iac/tofu
         run: |
           tofu init -input=false
@@ -271,6 +278,10 @@ jobs:
           --configuration ${{ env.CONFIGURATION }}
 
       - name: Integration tests (Dapper repository against SQL Server)
+        # The stack was stood up above, so an unreachable database here is a broken
+        # environment, not an absent one — fail rather than skip (SqlTestDatabase).
+        env:
+          FREEDOM_REQUIRE_INTEGRATION: 'true'
         run: >
           dotnet test
           --project tests/UA.Action.Freedom.Tests.Integration/UA.Action.Freedom.Tests.Integration.csproj

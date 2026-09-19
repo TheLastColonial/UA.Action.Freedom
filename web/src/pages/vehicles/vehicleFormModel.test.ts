@@ -22,7 +22,6 @@ const filledForm = {
   servicing: true,
   year: '2012',
   fuel: 'Diesel' as const,
-  convoyId: '',
   purchaserName: 'A. Buyer',
   purchaseDate: '2026-01-15',
   weightKg: '1800',
@@ -115,13 +114,15 @@ describe('vehicleToFormValues', () => {
       cargoWidthCm: null,
       cargoDepthCm: null,
       cargoHeightCm: null,
+      inspectionStatus: 'Pending',
+      inspectionNotes: null,
+      handedOverAt: null,
     };
 
     const values = vehicleToFormValues(vehicle);
 
     expect(values.brand).toBe('');
     expect(values.mileage).toBe('');
-    expect(values.convoyId).toBe('');
     expect(values.purchaseDate).toBe('2025-11-02');
     expect(values.year).toBe('2020');
     expect(values.maxCargoWeightKg).toBe('');

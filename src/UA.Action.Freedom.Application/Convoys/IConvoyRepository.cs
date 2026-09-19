@@ -1,4 +1,34 @@
+using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Domain;
+
 namespace UA.Action.Freedom.Application.Convoys;
+
+/// <summary>What <see cref="IConvoyRepository.AssignVehicleAsync"/> found when it tried.</summary>
+public enum AssignVehicleResult
+{
+    Assigned,
+    VehicleNotFound,
+    NotPassedInspection,
+    OnAnotherConvoy,
+    HandedOver
+}
+
+/// <summary>What <see cref="IConvoyRepository.ArriveAsync"/> found when it tried.</summary>
+public enum ArriveResult
+{
+    Arrived,
+    AlreadyArrived,
+    VehiclesStillTravelling
+}
+
+/// <summary>What <see cref="IConvoyRepository.AssignDriverAsync"/> found when it tried.</summary>
+public enum AssignDriverResult
+{
+    Assigned,
+    VehicleNotOnConvoy,
+    AlreadyAssigned,
+    OnAnotherVehicle
+}
 
 /// <summary>
 /// Persistence port for <see cref="ConvoyReadModel"/> and the two things a convoy owns: its
@@ -23,7 +53,8 @@ public interface IConvoyRepository
 
     Task<bool> UpdateAsync(ConvoyReadModel convoy, CancellationToken cancellationToken);
 
-    Task<bool> DeleteAsync(int id, CancellationToken cancellationToken);
+    /// <summary>Refused (<see cref="DeleteResult.StillReferenced"/>) while a manifest names the convoy.</summary>
+    Task<DeleteResult> DeleteAsync(int id, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RouteStopReadModel>> GetRouteAsync(int convoyId, CancellationToken cancellationToken);
 
@@ -35,8 +66,12 @@ public interface IConvoyRepository
 
     Task<IReadOnlyList<ConvoyVehicleReadModel>> ListVehiclesAsync(int convoyId, CancellationToken cancellationToken);
 
-    /// <summary>Returns false when there is no vehicle with that VIN.</summary>
-    Task<bool> AssignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken);
+    /// <summary>
+    /// Puts the vehicle on this convoy, but only if it has passed its inspection and is not
+    /// already on a different one. The condition is part of the write, so the database settles a
+    /// race with a Mechanic changing the result or with a second dispatcher.
+    /// </summary>
+    Task<AssignVehicleResult> AssignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken);
 
     /// <summary>Returns false when that vehicle is not on this convoy.</summary>
     Task<bool> UnassignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken);
@@ -47,4 +82,43 @@ public interface IConvoyRepository
     /// distinguishes those by reading the convoy.
     /// </summary>
     Task<bool> PublishTruckListAsync(int convoyId, DateTime publishedAt, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the drivers assigned to a specific vehicle on this convoy, or null when the convoy does not exist.
+    /// </summary>
+    Task<IReadOnlyList<VehicleDriverReadModel>?> ListVehicleDriversAsync(int convoyId, string vin, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Puts a person on a vehicle's crew in the given role, provided the vehicle is on this convoy
+    /// and the person is not already crewing another vehicle of it — one seat per convoy.
+    /// </summary>
+    Task<AssignDriverResult> AssignDriverAsync(
+        int convoyId, string vin, Guid personId, CrewRole role, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Unassigns a driver from a vehicle on a convoy. Returns false when there is no such vehicle
+    /// on this convoy or the driver is not assigned to it — the convoy is part of the statement,
+    /// not only of the handler's check.
+    /// </summary>
+    Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Marks the convoy arrived, provided its truck list is published, it has not arrived yet, and
+    /// every vehicle on it has a finished manifest. In the same transaction, Delivered and Lost
+    /// vehicles are handed over and Returned ones released.
+    /// </summary>
+    Task<ArriveResult> ArriveAsync(int convoyId, DateTime arrivedAt, CancellationToken cancellationToken);
+
+    /// <summary>The VINs on this convoy with no Delivered, Lost or Returned manifest on it.</summary>
+    Task<IReadOnlyList<string>> ListVehiclesStillTravellingAsync(int convoyId, CancellationToken cancellationToken);
+
+    Task<VehicleInsuranceReadModel?> GetInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records or replaces the insurance, clearing any void. Returns false when the vehicle is not
+    /// on this convoy. Crew changes void it — see <see cref="AssignDriverAsync"/>.
+    /// </summary>
+    Task<bool> RecordInsuranceAsync(VehicleInsuranceRecord insurance, CancellationToken cancellationToken);
+
+    Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken);
 }

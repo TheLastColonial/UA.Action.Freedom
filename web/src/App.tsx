@@ -1,9 +1,7 @@
 import type { JSX } from 'react';
-import { RouterProvider, createBrowserRouter } from 'react-router-dom';
+import { RouterProvider } from 'react-router-dom';
 
-import { routes } from './routes';
-
-const router = createBrowserRouter(routes, { basename: '/app' });
+import { router } from './router';
 
 export function App(): JSX.Element {
   return <RouterProvider router={router} />;

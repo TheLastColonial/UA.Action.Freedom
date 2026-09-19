@@ -237,6 +237,166 @@ public class VehicleEndpointTests
     }
 
     [Fact]
+    public async Task A_new_vehicle_reads_back_as_awaiting_inspection()
+    {
+        await using var api = FreedomApi.WithVehicles(
+            new InMemoryVehicleRepository(AStoredVehicle()), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var vehicle = await client.GetFromJsonAsync<JsonElement>($"/vehicles/{Vin}", TestContext.Current.CancellationToken);
+
+        vehicle.GetProperty("inspectionStatus").GetString().Should().Be("Pending");
+        vehicle.GetProperty("inspectionNotes").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Theory]
+    [InlineData("Mechanic")]
+    [InlineData("Administrator")]
+    public async Task A_recorded_inspection_is_read_back(string role)
+    {
+        await using var api = FreedomApi.WithVehicles(new InMemoryVehicleRepository(AStoredVehicle()), roles: role);
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/vehicles/{Vin}/inspection",
+            new { status = "Failed", notes = "Nearside rear tyre below legal tread" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var vehicle = await client.GetFromJsonAsync<JsonElement>($"/vehicles/{Vin}", TestContext.Current.CancellationToken);
+        vehicle.GetProperty("inspectionStatus").GetString().Should().Be("Failed");
+        vehicle.GetProperty("inspectionNotes").GetString().Should().Be("Nearside rear tyre below legal tread");
+    }
+
+    [Theory]
+    [InlineData("Purchaser")]
+    [InlineData("Dispatcher")]
+    [InlineData("Loader")]
+    [InlineData("GroundOfficer")]
+    public async Task Only_a_mechanic_or_administrator_may_record_an_inspection(string role)
+    {
+        var repository = new InMemoryVehicleRepository(AStoredVehicle());
+        await using var api = FreedomApi.WithVehicles(repository, roles: role);
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/vehicles/{Vin}/inspection", new { status = "Passed" }, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await repository.GetByVinAsync(Vin, CancellationToken.None))!.InspectionStatus.Should().Be(InspectionStatus.Pending);
+    }
+
+    [Fact]
+    public async Task Recording_an_inspection_for_an_unknown_vehicle_is_a_404()
+    {
+        await using var api = FreedomApi.WithVehicles(new InMemoryVehicleRepository(), roles: "Mechanic");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            "/vehicles/UNKNOWNVIN0000001/inspection", new { status = "Passed" }, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Inspection_notes_longer_than_the_column_are_a_validation_problem()
+    {
+        var repository = new InMemoryVehicleRepository(AStoredVehicle());
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Mechanic");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/vehicles/{Vin}/inspection",
+            new { status = "Failed", notes = new string('x', 2_001) },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").TryGetProperty("Notes", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task An_unknown_inspection_status_is_rejected()
+    {
+        await using var api = FreedomApi.WithVehicles(new InMemoryVehicleRepository(AStoredVehicle()), roles: "Mechanic");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/vehicles/{Vin}/inspection", new { status = "Roadworthy" }, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Editing_a_vehicle_leaves_its_inspection_alone()
+    {
+        var repository = new InMemoryVehicleRepository(
+            AStoredVehicle() with { InspectionStatus = InspectionStatus.Passed, InspectionNotes = "Ready" });
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Mechanic");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/vehicles/{Vin}",
+            new
+            {
+                plate = "ZZ99ZZZ", year = 2016, fuel = "Diesel", transmission = "Manual", weightKg = 1_500,
+                inspectionStatus = "Failed", inspectionNotes = "forged",
+            },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var vehicle = await client.GetFromJsonAsync<JsonElement>($"/vehicles/{Vin}", TestContext.Current.CancellationToken);
+        vehicle.GetProperty("plate").GetString().Should().Be("ZZ99ZZZ");
+        vehicle.GetProperty("inspectionStatus").GetString().Should().Be("Passed");
+        vehicle.GetProperty("inspectionNotes").GetString().Should().Be("Ready");
+    }
+
+    [Fact]
+    public async Task Editing_a_vehicle_cannot_move_it_on_or_off_a_convoy()
+    {
+        var repository = new InMemoryVehicleRepository(AStoredVehicle() with { ConvoyId = 7 });
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Purchaser");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/vehicles/{Vin}",
+            new { plate = "ZZ99ZZZ", year = 2016, fuel = "Diesel", transmission = "Manual", weightKg = 1_500, convoyId = 9 },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var vehicle = await client.GetFromJsonAsync<JsonElement>($"/vehicles/{Vin}", TestContext.Current.CancellationToken);
+        vehicle.GetProperty("convoyId").GetInt32().Should().Be(7);
+    }
+
+    [Fact]
+    public async Task A_new_vehicle_is_on_no_convoy_whatever_the_body_says()
+    {
+        var repository = new InMemoryVehicleRepository();
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Purchaser");
+        using var client = api.CreateClient();
+
+        await client.PostAsJsonAsync(
+            "/vehicles",
+            new { vin = Vin, plate = "AB12CDE", year = 2016, fuel = "Diesel", transmission = "Manual", weightKg = 1_400, convoyId = 9 },
+            TestContext.Current.CancellationToken);
+
+        (await repository.GetByVinAsync(Vin, CancellationToken.None))!.ConvoyId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_mechanic_may_add_a_vehicle()
+    {
+        var repository = new InMemoryVehicleRepository();
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Mechanic");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/vehicles", ACreateBody(), TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        repository.Contains(Vin).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Deleting_an_unknown_vehicle_is_a_404()
     {
         await using var api = FreedomApi.WithVehicles(new InMemoryVehicleRepository(), roles: "Purchaser");
@@ -245,5 +405,20 @@ public class VehicleEndpointTests
         var response = await client.DeleteAsync("/vehicles/UNKNOWNVIN0000001", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_vehicle_named_on_a_manifest_cannot_be_deleted()
+    {
+        var repository = new InMemoryVehicleRepository(AStoredVehicle()).NamedOnAManifest(Vin);
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Purchaser");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync($"/vehicles/{Vin}", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().Should().Contain("manifest");
+        repository.Contains(Vin).Should().BeTrue();
     }
 }

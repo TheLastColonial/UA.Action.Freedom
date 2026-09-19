@@ -25,10 +25,14 @@ Every check `Healthy` means the environment is wired up correctly.
 ## What it is
 
 **docker compose is the substrate** — it starts the containers that play the part of an
-Azure region. It deliberately creates nothing inside them.
+Azure region. It deliberately creates nothing inside them, with one exception: the `db-deploy`
+one-shot publishes the database schema — the dacpac built from `database/UA.Action.Freedom.Database`
+— and exits. The schema is a deployment of its own, shipped separately from code, not a resource
+the control plane owns.
 
-**OpenTofu is the control plane** — it creates the blob containers, queues, database schema,
-realm, clients, app roles, groups and users, the same way `azurerm` and `azuread` would in Azure.
+**OpenTofu is the control plane** — it creates the blob containers, queues, database logins and
+users, realm, clients, app roles, groups and users, the same way `azurerm` and `azuread` would in
+Azure.
 
 That split is the point. `docker compose down` is like tearing down a region;
 `tofu destroy` is like deleting a resource group. Keeping resource creation in OpenTofu
@@ -130,7 +134,7 @@ load-bearing — decorative. Three logins exist instead:
 
 | Login | Role | Can read |
 | --- | --- | --- |
-| `sa` | sysadmin | everything; used only to apply the schema bootstrap |
+| `sa` | sysadmin | everything; used only to publish the schema (`db-deploy`) and create the other two (`principals.sql`) |
 | `freedom_app` | `freedom_app` | full DML on `dbo`. **`DENY SELECT` on `sensitive`** — this is the application's own identity |
 | `freedom_sensitive` | `ground_officer` | `sensitive` as well; the only way to resolve a Ukrainian delivery address |
 
@@ -364,15 +368,19 @@ iac/
     .env.example                 copy to .env
     traefik/dynamic/routes.yml   edge routing
     wiremock/mappings/           HMRC stubs, loaded at boot
-    sql/001-schemas.sql          schemas, roles and the sensitive/ segregation
+    sql/principals.sql           logins + users for freedom_app / freedom_sensitive, and their roles
     website/html/                Static Web Apps placeholder
     grafana/                     Grafana dashboards, provisioned at boot
   tofu/
     versions.tf variables.tf outputs.tf
     keycloak.tf                  realm, two clients (confidential API + public PKCE SPA), app roles, role groups, seeded users
     storage.tf                   blob containers and queues
-    database.tf                  applies sql/001-schemas.sql
+    database.tf                  applies sql/principals.sql
 ```
+
+The schema itself — tables, the `sensitive` schema, roles, `GRANT`/`DENY` — is not under `iac/`.
+It is the SQL project `database/UA.Action.Freedom.Database`, published by the `db-deploy` compose
+service (`database/Dockerfile`, `database/deploy.sh`).
 
 Dockerfiles live next to their projects — `src/UA.Action.Freedom.Api/Dockerfile` and
 `src/UA.Action.Freedom.CustomsWorker/Dockerfile` — and build from the repository root.

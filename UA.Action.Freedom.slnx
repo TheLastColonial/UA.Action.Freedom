@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/database/">
+    <Project Path="database/UA.Action.Freedom.Database/UA.Action.Freedom.Database.sqlproj" Type="42ea0dbd-9cf1-443e-919e-be9c484e4577" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj" />
     <Project Path="src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj" />

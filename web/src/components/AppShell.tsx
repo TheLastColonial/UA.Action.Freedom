@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 
 import { useAuth } from '../auth/useAuth';
+import { Button } from './Button';
 import './AppShell.css';
 import { ColdStartIndicator } from './ColdStartIndicator';
 import { NavSidebar } from './NavSidebar';
@@ -18,9 +19,9 @@ export function AppShell(): JSX.Element {
         </Link>
         <div className="app-shell__identity">
           <span className="app-shell__roles">{auth.roles.join(', ') || 'no roles'}</span>
-          <button type="button" onClick={auth.signOut}>
+          <Button variant="secondary" onClick={auth.signOut}>
             Sign out
-          </button>
+          </Button>
         </div>
       </header>
       <div className="app-shell__body">

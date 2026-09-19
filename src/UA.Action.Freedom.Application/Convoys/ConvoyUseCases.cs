@@ -46,7 +46,8 @@ public sealed record DeleteConvoyCommand(int Id);
 public enum DeleteConvoyOutcome
 {
     Deleted,
-    NotFound
+    NotFound,
+    StillReferenced
 }
 
 public sealed class DeleteConvoyHandler(IConvoyRepository repository)
@@ -54,8 +55,12 @@ public sealed class DeleteConvoyHandler(IConvoyRepository repository)
 {
     public async Task<DeleteConvoyOutcome> HandleAsync(DeleteConvoyCommand command, CancellationToken cancellationToken)
     {
-        var deleted = await repository.DeleteAsync(command.Id, cancellationToken);
-        return deleted ? DeleteConvoyOutcome.Deleted : DeleteConvoyOutcome.NotFound;
+        return await repository.DeleteAsync(command.Id, cancellationToken) switch
+        {
+            DeleteResult.Deleted => DeleteConvoyOutcome.Deleted,
+            DeleteResult.StillReferenced => DeleteConvoyOutcome.StillReferenced,
+            _ => DeleteConvoyOutcome.NotFound,
+        };
     }
 }
 

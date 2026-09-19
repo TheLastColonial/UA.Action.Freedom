@@ -1,7 +1,7 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
+import type { Role } from '../../auth/roles';
 import { makeVehicle } from '../../test/factories/vehicle';
 import { vehicleApi } from '../../test/msw/vehicles';
 import { worker } from '../../test/msw/worker';
@@ -12,13 +12,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'vehicles', children: vehicleRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('renders the vehicle from the detail endpoint', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X', plate: 'ZZ99 ZZZ' })]).handlers);
@@ -124,8 +117,17 @@ test('renders Not found for a VIN that does not exist', async () => {
   await expect.element(screen.getByRole('heading', { name: 'Not found' })).toBeInTheDocument();
 });
 
-test('links to the servicing stub page', async () => {
-  worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X' })]).handlers);
+test('shows the inspection result whether or not the vehicle is in for servicing', async () => {
+  worker.use(
+    ...vehicleApi([
+      makeVehicle({
+        vin: 'VIN-X',
+        servicing: false,
+        inspectionStatus: 'Failed',
+        inspectionNotes: 'Cracked windscreen',
+      }),
+    ]).handlers,
+  );
 
   const screen = await renderWithProviders(null, {
     routes,
@@ -133,9 +135,54 @@ test('links to the servicing stub page', async () => {
     roles: ['Loader'],
   });
 
-  await expect
-    .element(screen.getByRole('link', { name: 'Servicing' }))
-    .toHaveAttribute('href', '/vehicles/VIN-X/servicing');
+  await expect.element(screen.getByText('Inspection status')).toBeInTheDocument();
+  await expect.element(screen.getByText('Issues found')).toBeInTheDocument();
+  await expect.element(screen.getByText('Cracked windscreen')).toBeInTheDocument();
+});
+
+test.each<[Role]>([['Mechanic'], ['Administrator']])(
+  'links a %s to the servicing page',
+  async (role) => {
+    worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X' })]).handlers);
+
+    const screen = await renderWithProviders(null, {
+      routes,
+      route: '/vehicles/VIN-X',
+      roles: [role],
+    });
+
+    await expect
+      .element(screen.getByRole('link', { name: 'Servicing' }))
+      .toHaveAttribute('href', '/vehicles/VIN-X/servicing');
+  },
+);
+
+test.each<[Role]>([['Loader'], ['Purchaser'], ['Dispatcher']])(
+  'offers a %s no servicing link',
+  async (role) => {
+    worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X' })]).handlers);
+
+    const screen = await renderWithProviders(null, {
+      routes,
+      route: '/vehicles/VIN-X',
+      roles: [role],
+    });
+
+    await expect.element(screen.getByRole('heading', { name: 'VIN-X' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('link', { name: 'Servicing' })).not.toBeInTheDocument();
+  },
+);
+
+test('a mechanic may edit a vehicle', async () => {
+  worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X' })]).handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Mechanic'],
+  });
+
+  await expect.element(screen.getByRole('link', { name: 'Edit' })).toBeInTheDocument();
 });
 
 test('hides Edit and Delete from a read-only role', async () => {
@@ -165,4 +212,18 @@ test('deletes the vehicle and returns to the list', async () => {
 
   await expect.element(screen.getByRole('heading', { name: 'Vehicles' })).toBeInTheDocument();
   await expect.element(screen.getByText('No vehicles recorded yet.')).toBeInTheDocument();
+});
+
+test('a vehicle handed over in Ukraine says so', async () => {
+  worker.use(
+    ...vehicleApi([makeVehicle({ vin: 'VIN-X', handedOverAt: '2026-06-05T17:00:00' })]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Loader'],
+  });
+
+  await expect.element(screen.getByText('Handed over on 2026-06-05')).toBeInTheDocument();
 });

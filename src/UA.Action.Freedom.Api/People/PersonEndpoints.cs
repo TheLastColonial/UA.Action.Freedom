@@ -70,7 +70,16 @@ public static class PersonEndpoints
             CancellationToken cancellationToken) =>
         {
             var outcome = await handler.HandleAsync(new DeletePersonCommand(id), cancellationToken);
-            return outcome == DeletePersonOutcome.NotFound ? Results.NotFound() : Results.NoContent();
+
+            return outcome switch
+            {
+                DeletePersonOutcome.Deleted => Results.NoContent(),
+                DeletePersonOutcome.StillActive => Results.Problem(
+                    detail: "This volunteer is on the crew of a convoy that has not arrived, or on the team of a " +
+                            "manifest still under way. Take them off it before erasing their details.",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            };
         })
         .RequireAuthorization(AuthenticationExtensions.PeopleWrite);
 

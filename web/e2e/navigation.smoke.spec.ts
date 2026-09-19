@@ -17,7 +17,7 @@ const OPERATIONAL = [
   'Locations',
 ];
 
-test.describe('operator (Dispatcher + Loader + Purchaser)', () => {
+test.describe('operator (Dispatcher + Loader + Mechanic + Purchaser)', () => {
   test.use({ storageState: authFile('operator') });
 
   test('@smoke sees every operational section', async ({ page }) => {

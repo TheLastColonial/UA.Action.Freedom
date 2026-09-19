@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeManifest, makeManifestBox } from '../../test/factories/manifest';
 import { makePerson } from '../../test/factories/person';
 import { manifestApi } from '../../test/msw/manifests';
@@ -10,13 +9,6 @@ import { renderWithProviders } from '../../test/render';
 import { ManifestBoxesPanel } from './ManifestBoxesPanel';
 import { ManifestTeamsPanel } from './ManifestTeamsPanel';
 import { ManifestWeightPanel } from './ManifestWeightPanel';
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('teams panel assigns a lead driver for the UK leg', async () => {
   const api = manifestApi([makeManifest({ id: 'T1' })], { knownDriverIds: ['d1'] });

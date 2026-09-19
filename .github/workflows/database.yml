@@ -1,0 +1,190 @@
+name: Database
+
+# The Freedom database ships on its own pipeline, separately from the application images:
+# database/UA.Action.Freedom.Database is built into a dacpac, proven against an empty SQL
+# Server, and — on a non-PR run — pushed to ghcr.io as a versioned OCI artifact. Deploying it
+# to an environment is `sqlpackage /Action:Publish` against that artifact; SqlPackage works out
+# the change, so there are no migration scripts to write or order.
+#
+# build-and-test.yml's acceptance job also builds the schema (the db-deploy image) so the
+# Integration/BDD suites always run against the schema of the same commit.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'database/**'
+      - 'global.json'
+      - 'GitVersion.yml'
+      - '.github/workflows/database.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'database/**'
+      - 'global.json'
+      - 'GitVersion.yml'
+      - '.github/workflows/database.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SQLPACKAGE_VERSION: '170.5.96'
+  PROJECT: database/UA.Action.Freedom.Database/UA.Action.Freedom.Database.sqlproj
+  # ghcr requires a lowercase namespace; the repo owner (TheLastColonial) is mixed-case.
+  ARTIFACT: ghcr.io/thelastcolonial/ua-action-freedom-database
+  # A throwaway server that lives for this job only. Repeated literally under `services:`,
+  # where the env context is not available.
+  SA_PASSWORD: Ci_Throwaway_Sa_1
+
+jobs:
+  dacpac:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write          # build-provenance attestation
+      attestations: write
+
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: Ci_Throwaway_Sa_1
+          MSSQL_PID: Developer
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Ci_Throwaway_Sa_1 -C -Q 'SELECT 1' -b"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 20s
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4
+        with:
+          versionSpec: '6.x'
+
+      - name: Determine version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4
+        with:
+          configFilePath: GitVersion.yml
+
+      - name: Resolve version
+        id: version
+        run: |
+          base='${{ steps.gitversion.outputs.majorMinorPatch }}'
+          echo "dac=${base}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          if [ '${{ github.ref }}' = 'refs/heads/main' ]; then
+            echo "value=${base}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${base}-beta.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # TreatTSqlWarningsAsErrors is on in the project, so an unresolved reference or any
+      # other model warning fails here rather than at deploy time.
+      - name: Build dacpac
+        run: >
+          dotnet build ${{ env.PROJECT }}
+          --configuration Release
+          --output artifacts
+          -p:DacVersion=${{ steps.version.outputs.dac }}
+
+      - name: Install SqlPackage
+        run: dotnet tool install --global microsoft.sqlpackage --version ${{ env.SQLPACKAGE_VERSION }}
+
+      # The same publish settings as database/deploy.sh. Against an empty server this is the
+      # fresh-stack path: everything is created from the model, nothing is migrated.
+      - name: Publish to an empty database
+        run: >
+          sqlpackage
+          /Action:Publish
+          /SourceFile:artifacts/UA.Action.Freedom.Database.dacpac
+          "/TargetConnectionString:Server=localhost,1433;Database=Freedom;User Id=sa;Password=${{ env.SA_PASSWORD }};TrustServerCertificate=True;Encrypt=False"
+          /p:AllowIncompatiblePlatform=true
+          /p:ScriptDatabaseOptions=false
+          /p:BlockOnPossibleDataLoss=true
+          "/p:ExcludeObjectTypes=Users;Logins;RoleMembership"
+
+      # A second publish must have nothing to do. Anything here means the model and what SQL
+      # Server stores disagree (typically a CHECK written in a form the engine normalises), and
+      # every deployment would needlessly drop and recreate it.
+      - name: Re-publish is a no-op
+        run: |
+          set -euo pipefail
+          sqlpackage \
+            /Action:DeployReport \
+            /SourceFile:artifacts/UA.Action.Freedom.Database.dacpac \
+            "/TargetConnectionString:Server=localhost,1433;Database=Freedom;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=False" \
+            /OutputPath:artifacts/deploy-report.xml \
+            /p:AllowIncompatiblePlatform=true \
+            /p:ScriptDatabaseOptions=false \
+            "/p:ExcludeObjectTypes=Users;Logins;RoleMembership"
+          cat artifacts/deploy-report.xml; echo
+          if grep -q '<Operation ' artifacts/deploy-report.xml; then
+            echo "::error::Re-publishing the dacpac would change the database — see the report above."
+            exit 1
+          fi
+
+      - name: Upload dacpac
+        uses: actions/upload-artifact@v7
+        with:
+          name: dacpac
+          retention-days: 7
+          path: artifacts/UA.Action.Freedom.Database.dacpac
+
+      # --- Publish the dacpac (non-PR events only) ------------------------------
+      - name: Setup ORAS
+        if: github.event_name != 'pull_request'
+        uses: oras-project/setup-oras@v1
+
+      - name: Push dacpac to GHCR
+        id: push
+        if: github.event_name != 'pull_request'
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          tags="${VERSION},sha-${GITHUB_SHA::7}"
+          if [ '${{ github.ref }}' = 'refs/heads/main' ]; then
+            tags="${tags},latest"
+          fi
+          cd artifacts
+          digest="$(oras push "${ARTIFACT}:${tags}" \
+            --artifact-type application/vnd.ua-action-freedom.database \
+            --annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --annotation "org.opencontainers.image.revision=${{ github.sha }}" \
+            --annotation "org.opencontainers.image.version=${VERSION}" \
+            --format go-template='{{.digest}}' \
+            UA.Action.Freedom.Database.dacpac:application/vnd.microsoft.sql.dacpac)"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Pushed ${ARTIFACT}@${digest} as ${tags}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attest dacpac provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.ARTIFACT }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

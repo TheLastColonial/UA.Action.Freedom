@@ -290,4 +290,19 @@ public class PersonEndpointTests
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task A_volunteer_on_a_live_crew_is_not_erased_and_the_reason_given()
+    {
+        var repository = new InMemoryPersonRepository(AStoredPerson(isDriver: true)).OnALiveCrew(Id);
+        await using var api = FreedomApi.WithPeople(repository, roles: "Administrator");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync($"/people/{Id}", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().Should().Contain("Take them off it");
+        repository.Contains(Id).Should().BeTrue();
+    }
 }

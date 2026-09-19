@@ -19,7 +19,6 @@ public sealed record CreateVehicleRequest(
     bool Servicing,
     int Year,
     FuelType Fuel,
-    int? ConvoyId,
     string? PurchaserName,
     DateTime? PurchaseDate,
     int WeightKg,
@@ -30,8 +29,14 @@ public sealed record CreateVehicleRequest(
 {
     public CreateVehicleCommand ToCommand() => new(
         Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing,
-        Year, Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg,
+        Year, Fuel, PurchaserName, PurchaseDate, WeightKg,
         MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm);
+}
+
+/// <summary>Body of <c>PUT /vehicles/{vin}/inspection</c>. The route supplies the VIN.</summary>
+public sealed record RecordInspectionRequest(InspectionStatus Status, string? Notes)
+{
+    public RecordInspectionCommand ToCommand(string vin) => new(vin, Status, Notes);
 }
 
 /// <summary>Body of <c>PUT /vehicles/{vin}</c>. The route supplies the VIN.</summary>
@@ -46,7 +51,6 @@ public sealed record UpdateVehicleRequest(
     bool Servicing,
     int Year,
     FuelType Fuel,
-    int? ConvoyId,
     string? PurchaserName,
     DateTime? PurchaseDate,
     int WeightKg,
@@ -57,6 +61,6 @@ public sealed record UpdateVehicleRequest(
 {
     public UpdateVehicleCommand ToCommand(string vin) => new(
         vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing,
-        Year, Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg,
+        Year, Fuel, PurchaserName, PurchaseDate, WeightKg,
         MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm);
 }

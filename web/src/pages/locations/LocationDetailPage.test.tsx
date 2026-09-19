@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeBay, makeLocation } from '../../test/factories/location';
 import { locationApi } from '../../test/msw/locations';
 import { worker } from '../../test/msw/worker';
@@ -12,13 +11,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'locations', children: locationRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('renders a known location', async () => {
   worker.use(...locationApi([makeLocation({ id: 3, name: 'Coventry Depot' })]).handlers);

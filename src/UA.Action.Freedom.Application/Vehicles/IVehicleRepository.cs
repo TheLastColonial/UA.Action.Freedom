@@ -1,3 +1,6 @@
+using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Domain;
+
 namespace UA.Action.Freedom.Application.Vehicles;
 
 /// <summary>
@@ -17,5 +20,9 @@ public interface IVehicleRepository
 
     Task<bool> UpdateAsync(VehicleReadModel vehicle, CancellationToken cancellationToken);
 
-    Task<bool> DeleteAsync(string vin, CancellationToken cancellationToken);
+    /// <summary>Refused (<see cref="DeleteResult.StillReferenced"/>) while a manifest names the vehicle.</summary>
+    Task<DeleteResult> DeleteAsync(string vin, CancellationToken cancellationToken);
+
+    Task<bool> RecordInspectionAsync(
+        string vin, InspectionStatus status, string? notes, CancellationToken cancellationToken);
 }

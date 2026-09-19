@@ -4,20 +4,29 @@ import { z } from 'zod';
 
 import type { CreatedResource, ParentMissing } from './client';
 import { delete204, getCollection, getJson, postCreate, postTransition, put204 } from './http';
+import { ApiNotFound } from './problem';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
 import {
   convoyReadModelSchema,
+  convoyReadinessReadModelSchema,
   convoyVehicleReadModelSchema,
   routeStopReadModelSchema,
+  vehicleDriverReadModelSchema,
+  vehicleInsuranceReadModelSchema,
 } from './schemas/convoys';
 import type {
   ConvoyReadModel,
+  ConvoyReadinessReadModel,
   ConvoyVehicleReadModel,
   CreateConvoyRequest,
+  CrewRole,
+  RecordInsuranceRequest,
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
   UpdateConvoyRequest,
+  VehicleDriverReadModel,
+  VehicleInsuranceReadModel,
 } from './schemas/convoys';
 
 const BASE = '/convoys';
@@ -69,6 +78,58 @@ export function assignVehicle(id: number, vin: string): Promise<void> {
 
 export function unassignVehicle(id: number, vin: string): Promise<void> {
   return delete204(vinPath(id, vin));
+}
+
+export function fetchVehicleDrivers(
+  id: number,
+  vin: string,
+): Promise<readonly VehicleDriverReadModel[] | ParentMissing> {
+  return getCollection(`${vinPath(id, vin)}/drivers`, vehicleDriverReadModelSchema);
+}
+
+export interface CrewAssignment {
+  personId: string;
+  role: CrewRole;
+}
+
+export function assignDriver(
+  id: number,
+  vin: string,
+  { personId, role }: CrewAssignment,
+): Promise<void> {
+  return put204(`${vinPath(id, vin)}/drivers/${encodeURIComponent(personId)}`, { role });
+}
+
+export function unassignDriver(id: number, vin: string, personId: string): Promise<void> {
+  return delete204(`${vinPath(id, vin)}/drivers/${encodeURIComponent(personId)}`);
+}
+
+// A vehicle with no insurance recorded is a bare 404; that is an answer ("not recorded"), not
+// an error, so it resolves to null.
+export async function fetchInsurance(
+  id: number,
+  vin: string,
+): Promise<VehicleInsuranceReadModel | null> {
+  try {
+    return await getJson(`${vinPath(id, vin)}/insurance`, vehicleInsuranceReadModelSchema);
+  } catch (error) {
+    if (error instanceof ApiNotFound) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export function recordInsurance(
+  id: number,
+  vin: string,
+  body: RecordInsuranceRequest,
+): Promise<void> {
+  return put204(`${vinPath(id, vin)}/insurance`, body);
+}
+
+export function arriveConvoy(id: number): Promise<void> {
+  return postTransition(`${idPath(id)}/arrive`);
 }
 
 export function publishTruckList(id: number): Promise<void> {
@@ -155,6 +216,43 @@ export function useUnassignVehicle(id: number): UseMutationResult<void, Error, s
   });
 }
 
+export function useVehicleDrivers(
+  id: number,
+  vin: string,
+): UseQueryResult<readonly VehicleDriverReadModel[] | ParentMissing> {
+  return useQuery({
+    queryKey: qk.convoys.vehicleDrivers(id, vin),
+    queryFn: () => fetchVehicleDrivers(id, vin),
+  });
+}
+
+export function useAssignDriver(
+  id: number,
+  vin: string,
+): UseMutationResult<void, Error, CrewAssignment> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (assignment: CrewAssignment) => assignDriver(id, vin, assignment),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleDrivers(id, vin) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) });
+    },
+  });
+}
+
+export function useUnassignDriver(id: number, vin: string): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (personId: string) => unassignDriver(id, vin, personId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleDrivers(id, vin) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) });
+    },
+  });
+}
+
 export function usePublishTruckList(id: number): UseMutationResult<void, Error, void> {
   const queryClient = useQueryClient();
   return useMutation({
@@ -165,5 +263,47 @@ export function usePublishTruckList(id: number): UseMutationResult<void, Error, 
       // A published truck list is a precondition for proposing a manifest against the convoy.
       await queryClient.invalidateQueries({ queryKey: qk.manifests.all });
     },
+  });
+}
+
+export function useVehicleInsurance(
+  id: number,
+  vin: string,
+): UseQueryResult<VehicleInsuranceReadModel | null> {
+  return useQuery({
+    queryKey: qk.convoys.insurance(id, vin),
+    queryFn: () => fetchInsurance(id, vin),
+  });
+}
+
+export function useRecordInsurance(
+  id: number,
+  vin: string,
+): UseMutationResult<void, Error, RecordInsuranceRequest> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RecordInsuranceRequest) => recordInsurance(id, vin, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) }),
+  });
+}
+
+export function useArriveConvoy(id: number): UseMutationResult<void, Error, void> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => arriveConvoy(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.all });
+      await queryClient.invalidateQueries({ queryKey: qk.vehicles.all });
+    },
+  });
+}
+
+// Readiness is derived from the crew, the insurance and the route, all edited on other tabs, so
+// it is fetched afresh whenever it is shown rather than trusted from the cache.
+export function useConvoyReadiness(id: number): UseQueryResult<ConvoyReadinessReadModel> {
+  return useQuery({
+    queryKey: qk.convoys.readiness(id),
+    queryFn: () => getJson(`${idPath(id)}/readiness`, convoyReadinessReadModelSchema),
+    refetchOnMount: 'always',
   });
 }

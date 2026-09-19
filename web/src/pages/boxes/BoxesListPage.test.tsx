@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeBox } from '../../test/factories/box';
 import { boxApi } from '../../test/msw/boxes';
 import { worker } from '../../test/msw/worker';
@@ -12,13 +11,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'boxes', children: boxRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('lists boxes with their validation state', async () => {
   worker.use(

@@ -1,5 +1,9 @@
+using System.Data.Common;
 using Dapper;
+using Microsoft.Data.SqlClient;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Data.Convoys;
 
@@ -11,9 +15,16 @@ namespace UA.Action.Freedom.Data.Convoys;
 /// </summary>
 public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : IConvoyRepository
 {
-    private const string Columns = "Id, Start, ExpectedEnd, TruckListPublishedAt";
+    private const string Columns = "Id, Start, ExpectedEnd, TruckListPublishedAt, ArrivedAt";
+
+    /// <summary>A manifest in one of these says what became of its vehicle; the journey is over for it.</summary>
+    private static readonly string FinishedStatuses =
+        $"({(int)ManifestStatus.Delivered}, {(int)ManifestStatus.Lost}, {(int)ManifestStatus.Returned})";
 
     private const string StopColumns = "Sequence, House, Street, City, Country, Postcode";
+
+    private const int PrimaryKeyViolation = 2627;
+    private const int UniqueIndexViolation = 2601;
 
     public async Task<ConvoyReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
@@ -90,17 +101,44 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         return affected > 0;
     }
 
-    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)
+    public async Task<DeleteResult> DeleteAsync(int id, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
 
-        // Route stops cascade; vehicles are released to ConvoyId NULL by the foreign key.
-        var affected = await connection.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM dbo.Convoy WHERE Id = @id",
+        // Route stops cascade and vehicles are released to ConvoyId NULL by the foreign key — but
+        // the crew does not cascade (a second cascade path from Convoy is not allowed, see the
+        // schema), and FK_VehicleDriver_Convoy would refuse the delete while crew remain. Same
+        // transaction as the delete, as in UnassignVehicleAsync.
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            DELETE FROM dbo.VehicleDriver WHERE ConvoyId = @id;
+            DELETE FROM dbo.VehicleInsurance WHERE ConvoyId = @id;
+            """,
             new { id },
+            transaction,
             cancellationToken: cancellationToken));
 
-        return affected > 0;
+        // FK_Manifest_Convoy is NO ACTION: a convoy with manifests travelled, or is about to, and
+        // those manifests are the record of it. Refused, the transaction rolls the crew back too.
+        try
+        {
+            var affected = await connection.ExecuteAsync(new CommandDefinition(
+                "DELETE FROM dbo.Convoy WHERE Id = @id",
+                new { id },
+                transaction,
+                cancellationToken: cancellationToken));
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return affected > 0 ? DeleteResult.Deleted : DeleteResult.NotFound;
+        }
+        catch (SqlException exception) when (exception.Number == SqlErrors.ForeignKeyViolation)
+        {
+            return DeleteResult.StillReferenced;
+        }
     }
 
     public async Task<IReadOnlyList<RouteStopReadModel>> GetRouteAsync(int convoyId, CancellationToken cancellationToken)
@@ -121,8 +159,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         await using var connection = connectionFactory.Create();
         await connection.OpenAsync(cancellationToken);
 
-        // The only transaction in the codebase, and it earns it: a route is meaningful only as
-        // a whole journey. Deleting the old stops and failing part-way through inserting the new
+        // A route is meaningful only as a whole journey. Deleting the old stops and failing part-way through inserting the new
         // ones would leave the convoy with a truncated route that still looks valid.
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -162,37 +199,370 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         await using var connection = connectionFactory.Create();
 
         var rows = await connection.QueryAsync<ConvoyVehicleReadModel>(new CommandDefinition(
-            "SELECT Vin, Plate, WeightKg FROM dbo.Vehicle WHERE ConvoyId = @convoyId ORDER BY Vin",
+            """
+            SELECT
+                v.Vin,
+                v.Plate,
+                v.WeightKg,
+                (SELECT COUNT(1) FROM dbo.VehicleDriver AS vd
+                 WHERE vd.ConvoyId = @convoyId AND vd.Vin = v.Vin AND vd.[Role] = @driver) AS DriverCount,
+                (SELECT COUNT(1) FROM dbo.VehicleDriver AS vd
+                 WHERE vd.ConvoyId = @convoyId AND vd.Vin = v.Vin AND vd.[Role] = @passenger) AS PassengerCount
+            FROM dbo.Vehicle v
+            WHERE v.ConvoyId = @convoyId
+            ORDER BY v.Vin
+            """,
+            new { convoyId, driver = (int)CrewRole.Driver, passenger = (int)CrewRole.Passenger },
+            cancellationToken: cancellationToken));
+
+        return rows.ToList();
+    }
+
+    public async Task<AssignVehicleResult> AssignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // The rules are part of the UPDATE, so the database settles the race rather than a
+        // read-then-write here. Only when nothing matched is the row read, to say which rule held.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.Vehicle SET ConvoyId = @convoyId, UpdatedAt = SYSUTCDATETIME()
+            WHERE Vin = @vin
+              AND InspectionStatus = @passed
+              AND HandedOverAt IS NULL
+              AND (ConvoyId IS NULL OR ConvoyId = @convoyId)
+            """,
+            new { convoyId, vin = SqlKey.Of(vin), passed = (int)InspectionStatus.Passed },
+            cancellationToken: cancellationToken));
+
+        if (affected > 0)
+        {
+            return AssignVehicleResult.Assigned;
+        }
+
+        var vehicle = await connection.QuerySingleOrDefaultAsync<(int InspectionStatus, bool HandedOver)?>(new CommandDefinition(
+            """
+            SELECT InspectionStatus, CAST(CASE WHEN HandedOverAt IS NULL THEN 0 ELSE 1 END AS bit) AS HandedOver
+            FROM dbo.Vehicle WHERE Vin = @vin
+            """,
+            new { vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+
+        return vehicle switch
+        {
+            null => AssignVehicleResult.VehicleNotFound,
+            { HandedOver: true } => AssignVehicleResult.HandedOver,
+            { InspectionStatus: (int)InspectionStatus.Passed } => AssignVehicleResult.OnAnotherConvoy,
+            _ => AssignVehicleResult.NotPassedInspection,
+        };
+    }
+
+    public async Task<bool> UnassignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+
+        // Unassigning a vehicle from a convoy must also clear its driver assignments, else the
+        // vehicle would still show crew from a convoy it's no longer on. Both operations in one
+        // transaction ensures that never happens.
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // Scoped to this convoy: removing a vehicle from a convoy it was never on is a caller
+        // mistake worth reporting, not a silent success that clears someone else's truck list.
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            DELETE FROM dbo.VehicleDriver WHERE ConvoyId = @convoyId AND Vin = @vin;
+            DELETE FROM dbo.VehicleInsurance WHERE ConvoyId = @convoyId AND Vin = @vin;
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.Vehicle SET ConvoyId = NULL, UpdatedAt = SYSUTCDATETIME()
+            WHERE Vin = @vin AND ConvoyId = @convoyId
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return affected > 0;
+    }
+
+    public async Task<IReadOnlyList<VehicleDriverReadModel>?> ListVehicleDriversAsync(
+        int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // Check that the vehicle is on this convoy before listing its drivers.
+        var vehicleOnConvoy = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "SELECT CAST(CASE WHEN COUNT(1) > 0 THEN 1 ELSE 0 END AS bit) FROM dbo.Vehicle WHERE Vin = @vin AND ConvoyId = @convoyId",
+            new { vin = SqlKey.Of(vin), convoyId },
+            cancellationToken: cancellationToken));
+
+        if (!vehicleOnConvoy)
+        {
+            return null;
+        }
+
+        var rows = await connection.QueryAsync<VehicleDriverReadModel>(new CommandDefinition(
+            """
+            SELECT
+                vd.PersonId,
+                COALESCE(d.FirstName, N'Former') AS FirstName,
+                COALESCE(d.LastName, N'volunteer') AS LastName,
+                vd.[Role]
+            FROM dbo.VehicleDriver vd
+            -- LEFT: an erased volunteer keeps their seat in the history, but not their name.
+            LEFT JOIN dbo.PersonDetail d ON d.PersonId = vd.PersonId
+            WHERE vd.ConvoyId = @convoyId AND vd.Vin = @vin
+            ORDER BY vd.[Role], LastName, FirstName
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+
+        return rows.ToList();
+    }
+
+    public async Task<AssignDriverResult> AssignDriverAsync(
+        int convoyId, string vin, Guid personId, CrewRole role, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+
+        // One conditional INSERT rather than check-then-insert: the vehicle has to be on this
+        // convoy, and the person in no other seat of it, at the moment the row is written.
+        // UQ_VehicleDriver_Convoy_Person settles a race the WHERE cannot see. The crew and the
+        // insurance that names it change together, so the void is in the same transaction.
+        try
+        {
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+            var inserted = await connection.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO dbo.VehicleDriver (ConvoyId, Vin, PersonId, [Role])
+                SELECT @convoyId, @vin, @personId, @role
+                WHERE EXISTS (SELECT 1 FROM dbo.Vehicle WHERE Vin = @vin AND ConvoyId = @convoyId)
+                  AND NOT EXISTS (SELECT 1 FROM dbo.VehicleDriver WHERE ConvoyId = @convoyId AND PersonId = @personId)
+                """,
+                new { convoyId, vin = SqlKey.Of(vin), personId, role = (int)role },
+                transaction,
+                cancellationToken: cancellationToken));
+
+            if (inserted > 0)
+            {
+                await VoidInsuranceAsync(connection, transaction, convoyId, vin, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return AssignDriverResult.Assigned;
+            }
+        }
+        catch (SqlException exception) when (exception.Number is PrimaryKeyViolation or UniqueIndexViolation)
+        {
+            // Lost a race with a second dispatcher; the read below says which seat won.
+        }
+
+        return await WhyNotSeatedAsync(connection, convoyId, vin, personId, cancellationToken);
+    }
+
+    private static Task VoidInsuranceAsync(
+        DbConnection connection, DbTransaction transaction, int convoyId, string vin, CancellationToken cancellationToken) =>
+        connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.VehicleInsurance SET VoidedAt = SYSUTCDATETIME()
+            WHERE ConvoyId = @convoyId AND Vin = @vin AND VoidedAt IS NULL
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            transaction,
+            cancellationToken: cancellationToken));
+
+    private static async Task<AssignDriverResult> WhyNotSeatedAsync(
+        DbConnection connection, int convoyId, string vin, Guid personId, CancellationToken cancellationToken)
+    {
+        var seatedIn = await connection.QuerySingleOrDefaultAsync<string?>(new CommandDefinition(
+            "SELECT Vin FROM dbo.VehicleDriver WHERE ConvoyId = @convoyId AND PersonId = @personId",
+            new { convoyId, personId },
+            cancellationToken: cancellationToken));
+
+        if (seatedIn is not null)
+        {
+            return string.Equals(seatedIn, vin, StringComparison.OrdinalIgnoreCase)
+                ? AssignDriverResult.AlreadyAssigned
+                : AssignDriverResult.OnAnotherVehicle;
+        }
+
+        return AssignDriverResult.VehicleNotOnConvoy;
+    }
+
+    public async Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            DELETE FROM dbo.VehicleDriver
+            WHERE ConvoyId = @convoyId AND Vin = @vin AND PersonId = @personId
+              AND EXISTS (SELECT 1 FROM dbo.Vehicle WHERE Vin = @vin AND ConvoyId = @convoyId)
+            """,
+            new { convoyId, vin = SqlKey.Of(vin), personId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (affected > 0)
+        {
+            await VoidInsuranceAsync(connection, transaction, convoyId, vin, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return affected > 0;
+    }
+
+    public async Task<ArriveResult> ArriveAsync(int convoyId, DateTime arrivedAt, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+
+        // Arrival, handover and release are one fact about the journey: a convoy marked arrived
+        // with its vehicles still offered for the next one, or the reverse, must not be possible.
+        //
+        // The convoy row is taken first, by the conditional UPDATE that stamps it: a second
+        // dispatcher's arrival then waits on that one row rather than both succeeding. The
+        // still-travelling check is an ordinary read after it — the truck list is published, so
+        // no vehicle can join or leave meanwhile — and nothing here scans dbo.Vehicle under a
+        // lock, which is what deadlocked this transaction against single-vehicle writes.
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var arrived = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.Convoy SET ArrivedAt = @arrivedAt, UpdatedAt = SYSUTCDATETIME()
+            WHERE Id = @convoyId AND ArrivedAt IS NULL AND TruckListPublishedAt IS NOT NULL
+            """,
+            new { convoyId, arrivedAt },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (arrived == 0)
+        {
+            return ArriveResult.AlreadyArrived;
+        }
+
+        var stillTravelling = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            $"""
+             SELECT COUNT(1)
+             FROM dbo.Vehicle AS v
+             WHERE v.ConvoyId = @convoyId
+               AND NOT EXISTS (SELECT 1 FROM dbo.Manifest AS m
+                               WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN {FinishedStatuses})
+             """,
+            new { convoyId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (stillTravelling > 0)
+        {
+            // Disposing the transaction without committing rolls the ArrivedAt stamp back.
+            return ArriveResult.VehiclesStillTravelling;
+        }
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE v SET HandedOverAt = @arrivedAt, UpdatedAt = SYSUTCDATETIME()
+            FROM dbo.Vehicle AS v
+            WHERE v.ConvoyId = @convoyId
+              AND EXISTS (SELECT 1 FROM dbo.Manifest AS m
+                          WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN (@delivered, @lost));
+
+            UPDATE v SET ConvoyId = NULL, UpdatedAt = SYSUTCDATETIME()
+            FROM dbo.Vehicle AS v
+            WHERE v.ConvoyId = @convoyId AND v.HandedOverAt IS NULL
+              AND EXISTS (SELECT 1 FROM dbo.Manifest AS m
+                          WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status = @returned);
+            """,
+            new
+            {
+                convoyId,
+                arrivedAt,
+                delivered = (int)ManifestStatus.Delivered,
+                lost = (int)ManifestStatus.Lost,
+                returned = (int)ManifestStatus.Returned,
+            },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return ArriveResult.Arrived;
+    }
+
+    public async Task<IReadOnlyList<string>> ListVehiclesStillTravellingAsync(int convoyId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var rows = await connection.QueryAsync<string>(new CommandDefinition(
+            $"""
+             SELECT v.Vin FROM dbo.Vehicle AS v
+             WHERE v.ConvoyId = @convoyId
+               AND NOT EXISTS (SELECT 1 FROM dbo.Manifest AS m
+                               WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN {FinishedStatuses})
+             ORDER BY v.Vin
+             """,
             new { convoyId },
             cancellationToken: cancellationToken));
 
         return rows.ToList();
     }
 
-    public async Task<bool> AssignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    public async Task<VehicleInsuranceReadModel?> GetInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
+        return await connection.QuerySingleOrDefaultAsync<VehicleInsuranceReadModel>(new CommandDefinition(
+            """
+            SELECT ConvoyId, Vin, Insurer, PolicyNumber, CoverStart, CoverEnd, CostGbp,
+                   RecordedBySub AS RecordedBy, RecordedAt, VoidedAt
+            FROM dbo.VehicleInsurance
+            WHERE ConvoyId = @convoyId AND Vin = @vin
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<bool> RecordInsuranceAsync(VehicleInsuranceRecord insurance, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // Replace rather than accumulate: the latest policy is the one that covers the crew. The
+        // vehicle has to be on the convoy at the moment it is written.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
-            "UPDATE dbo.Vehicle SET ConvoyId = @convoyId, UpdatedAt = SYSUTCDATETIME() WHERE Vin = @vin",
-            new { convoyId, vin },
+            """
+            MERGE dbo.VehicleInsurance WITH (HOLDLOCK) AS target
+            USING (SELECT @ConvoyId AS ConvoyId, CAST(@Vin AS varchar(32)) AS Vin
+                   WHERE EXISTS (SELECT 1 FROM dbo.Vehicle WHERE Vin = CAST(@Vin AS varchar(32)) AND ConvoyId = @ConvoyId)) AS source
+            ON target.ConvoyId = source.ConvoyId AND target.Vin = source.Vin
+            WHEN MATCHED THEN UPDATE SET
+                Insurer = @Insurer, PolicyNumber = @PolicyNumber, CoverStart = @CoverStart,
+                CoverEnd = @CoverEnd, CostGbp = @CostGbp, RecordedBySub = @RecordedBy,
+                RecordedAt = SYSUTCDATETIME(), VoidedAt = NULL
+            WHEN NOT MATCHED THEN INSERT
+                (ConvoyId, Vin, Insurer, PolicyNumber, CoverStart, CoverEnd, CostGbp, RecordedBySub)
+                VALUES (@ConvoyId, @Vin, @Insurer, @PolicyNumber, @CoverStart, @CoverEnd, @CostGbp, @RecordedBy);
+            """,
+            insurance,
             cancellationToken: cancellationToken));
 
         return affected > 0;
     }
 
-    public async Task<bool> UnassignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    public async Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
-        // Scoped to this convoy: removing a vehicle from a convoy it was never on is a caller
-        // mistake worth reporting, not a silent success that clears someone else's truck list.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
-            """
-            UPDATE dbo.Vehicle SET ConvoyId = NULL, UpdatedAt = SYSUTCDATETIME()
-            WHERE Vin = @vin AND ConvoyId = @convoyId
-            """,
-            new { convoyId, vin },
+            "DELETE FROM dbo.VehicleInsurance WHERE ConvoyId = @convoyId AND Vin = @vin",
+            new { convoyId, vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
 
         return affected > 0;

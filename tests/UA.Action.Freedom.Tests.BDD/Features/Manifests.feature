@@ -114,9 +114,9 @@ Scenario: A frozen manifest cannot be edited or deleted
 
 Scenario: A frozen manifest still runs to delivery
     Given I am authenticated as "operator"
-    And a convoy exists whose truck list is published
+    And a convoy exists with an insured vehicle on its published truck list
     And a manifest reference that is not yet used
-    When I POST a manifest on the remembered convoy
+    When I POST a manifest for the insured vehicle on the remembered convoy
     Then the response status is 201
     When I POST "propose" on the remembered manifest
     Then the response status is 204
@@ -171,3 +171,58 @@ Scenario: Fetching an unknown manifest is a 404
     Given I am authenticated as "operator"
     When I GET "/manifests/NOSUCHMANIFEST"
     Then the response status is 404
+
+Scenario: A vehicle cannot depart once its insurance is gone
+    Given I am authenticated as "operator"
+    And a convoy exists with an insured vehicle on its published truck list
+    And a manifest reference that is not yet used
+    When I POST a manifest for the insured vehicle on the remembered convoy
+    Then the response status is 201
+    When I POST "propose" on the remembered manifest
+    Given I am authenticated as "admin"
+    When I POST "approve" on the remembered manifest
+    And I POST "prepare" on the remembered manifest
+    And I POST "ready" on the remembered manifest
+    Then the response status is 204
+    When I remove the insurance of the insured vehicle
+    And I POST "depart" on the remembered manifest
+    Then the response status is 409
+
+Scenario: A convoy arrives once its vehicles are delivered, and the vehicle is handed over for good
+    Given I am authenticated as "operator"
+    And a convoy exists with an insured vehicle on its published truck list
+    And a manifest reference that is not yet used
+    When I POST a manifest for the insured vehicle on the remembered convoy
+    And I POST "propose" on the remembered manifest
+    Given I am authenticated as "admin"
+    When I POST "approve" on the remembered manifest
+    And I POST "prepare" on the remembered manifest
+    And I POST "ready" on the remembered manifest
+    And I POST "depart" on the remembered manifest
+    Then the response status is 204
+    When I mark the manifest's convoy arrived
+    Then the response status is 409
+    When I POST "deliver" on the remembered manifest
+    And I mark the manifest's convoy arrived
+    Then the response status is 204
+    And the insured vehicle has been handed over
+    And the insured vehicle cannot join another convoy
+
+Scenario: A driver is erased only once their convoy has arrived, and the history keeps an anonymous seat
+    Given I am authenticated as "operator"
+    And a convoy exists with an insured vehicle on its published truck list
+    And a manifest reference that is not yet used
+    When I POST a manifest for the insured vehicle on the remembered convoy
+    And I POST "propose" on the remembered manifest
+    Given I am authenticated as "admin"
+    When I POST "approve" on the remembered manifest
+    And I POST "prepare" on the remembered manifest
+    And I POST "ready" on the remembered manifest
+    And I POST "depart" on the remembered manifest
+    And the administrator erases the vehicle's driver
+    Then the response status is 409
+    When I POST "deliver" on the remembered manifest
+    And I mark the manifest's convoy arrived
+    And the administrator erases the vehicle's driver
+    Then the response status is 204
+    And the vehicle's crew on that convoy shows a former volunteer

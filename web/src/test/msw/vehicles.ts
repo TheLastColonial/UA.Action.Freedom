@@ -1,21 +1,35 @@
 import { HttpResponse, http } from 'msw';
 import type { RequestHandler } from 'msw';
+import { z } from 'zod';
 
+import { inspectionStatusSchema } from '../../api/schemas/vehicles';
 import type {
   CreateVehicleRequest,
   UpdateVehicleRequest,
   VehicleReadModel,
 } from '../../api/schemas/vehicles';
-import { problem } from './problem';
+import { problem, validationProblem } from './problem';
+
+// Mirrors RecordInspectionRequest + its validator: the status by name, notes up to 2000.
+const recordInspectionBodySchema = z.object({
+  status: inspectionStatusSchema,
+  notes: z.string().max(2000).nullish(),
+});
 
 export interface VehicleApi {
   db: Map<string, VehicleReadModel>;
   handlers: RequestHandler[];
 }
 
+// The real API never writes the convoy or the inspection through create or update — a new
+// vehicle starts on no convoy and Pending, and an edit keeps what was there. `kept` carries that.
 function toReadModel(
   vin: string,
   body: CreateVehicleRequest | UpdateVehicleRequest,
+  kept: Pick<
+    VehicleReadModel,
+    'convoyId' | 'inspectionStatus' | 'inspectionNotes' | 'handedOverAt'
+  >,
 ): VehicleReadModel {
   return {
     vin,
@@ -29,7 +43,7 @@ function toReadModel(
     servicing: body.servicing,
     year: body.year,
     fuel: body.fuel,
-    convoyId: body.convoyId ?? null,
+    convoyId: kept.convoyId,
     purchaserName: body.purchaserName ?? null,
     purchaseDate: body.purchaseDate ?? null,
     weightKg: body.weightKg,
@@ -37,6 +51,9 @@ function toReadModel(
     cargoWidthCm: body.cargoWidthCm ?? null,
     cargoDepthCm: body.cargoDepthCm ?? null,
     cargoHeightCm: body.cargoHeightCm ?? null,
+    inspectionStatus: kept.inspectionStatus,
+    inspectionNotes: kept.inspectionNotes,
+    handedOverAt: kept.handedOverAt,
   };
 }
 
@@ -65,7 +82,15 @@ export function vehicleApi(seed: readonly VehicleReadModel[] = []): VehicleApi {
       if (db.has(body.vin)) {
         return problem(409, `A vehicle with VIN '${body.vin}' already exists.`);
       }
-      db.set(body.vin, toReadModel(body.vin, body));
+      db.set(
+        body.vin,
+        toReadModel(body.vin, body, {
+          convoyId: null,
+          inspectionStatus: 'Pending',
+          inspectionNotes: null,
+          handedOverAt: null,
+        }),
+      );
       return new HttpResponse(null, {
         status: 201,
         headers: { Location: `/vehicles/${encodeURIComponent(body.vin)}` },
@@ -74,11 +99,27 @@ export function vehicleApi(seed: readonly VehicleReadModel[] = []): VehicleApi {
 
     http.put('/vehicles/:vin', async ({ params, request }) => {
       const vin = decodeURIComponent(String(params['vin']));
-      if (!db.has(vin)) {
+      const existing = db.get(vin);
+      if (!existing) {
         return new HttpResponse(null, { status: 404 });
       }
       const body = (await request.json()) as UpdateVehicleRequest;
-      db.set(vin, toReadModel(vin, body));
+      db.set(vin, toReadModel(vin, body, existing));
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.put('/vehicles/:vin/inspection', async ({ params, request }) => {
+      const vin = decodeURIComponent(String(params['vin']));
+      const existing = db.get(vin);
+      if (!existing) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const parsed = recordInspectionBodySchema.safeParse(await request.json());
+      if (!parsed.success) {
+        return validationProblem({ Status: [parsed.error.message] });
+      }
+      const notes = parsed.data.notes?.trim() ? parsed.data.notes : null;
+      db.set(vin, { ...existing, inspectionStatus: parsed.data.status, inspectionNotes: notes });
       return new HttpResponse(null, { status: 204 });
     }),
 

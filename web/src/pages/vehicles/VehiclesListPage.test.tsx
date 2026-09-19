@@ -1,8 +1,7 @@
 import { HttpResponse, http } from 'msw';
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeVehicle } from '../../test/factories/vehicle';
 import { vehicleApi } from '../../test/msw/vehicles';
 import { worker } from '../../test/msw/worker';
@@ -13,13 +12,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'vehicles', children: vehicleRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('renders a row per vehicle from the list endpoint', async () => {
   const seed = [makeVehicle({ vin: 'VIN-A' }), makeVehicle({ vin: 'VIN-B' })];
@@ -35,8 +27,22 @@ test('renders a row per vehicle from the list endpoint', async () => {
   await expect.element(screen.getByRole('link', { name: 'VIN-B' })).toBeInTheDocument();
 });
 
-test('links each row into the servicing stub page', async () => {
-  worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-A', servicing: true })]).handlers);
+test('links each inspection result to the servicing page for a mechanic', async () => {
+  worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-A', inspectionStatus: 'Passed' })]).handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles',
+    roles: ['Mechanic'],
+  });
+
+  await expect
+    .element(screen.getByRole('link', { name: 'Ready for convoy' }))
+    .toHaveAttribute('href', '/vehicles/VIN-A/servicing');
+});
+
+test('shows the inspection result without a link to a role that cannot record one', async () => {
+  worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-A', inspectionStatus: 'Failed' })]).handlers);
 
   const screen = await renderWithProviders(null, {
     routes,
@@ -44,9 +50,8 @@ test('links each row into the servicing stub page', async () => {
     roles: ['Purchaser'],
   });
 
-  await expect
-    .element(screen.getByRole('link', { name: 'Yes' }))
-    .toHaveAttribute('href', '/vehicles/VIN-A/servicing');
+  await expect.element(screen.getByText('Issues found')).toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: 'Issues found' })).not.toBeInTheDocument();
 });
 
 test('shows an empty message when there are no vehicles', async () => {

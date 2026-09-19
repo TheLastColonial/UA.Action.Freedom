@@ -35,13 +35,22 @@ public class ManifestEndpointTests
         Id, "WVWZZZ1JZXW000001", convoyId, status, null, FerryBookingComplete: false,
         GmrSubmittedAt: frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
 
-    private static IConvoyRepository AConvoy(bool truckListPublished = true)
+    /// <summary>
+    /// A convoy whose truck list is published and whose vehicles are insured and in cover today —
+    /// what departure needs — unless a test says otherwise.
+    /// </summary>
+    private static IConvoyRepository AConvoy(bool truckListPublished = true, bool insured = true)
     {
         var convoys = Substitute.For<IConvoyRepository>();
         convoys.GetByIdAsync(ConvoyId, Arg.Any<CancellationToken>()).Returns(
             new ConvoyReadModel(
                 ConvoyId, Departs, Departs.AddDays(4),
                 truckListPublished ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null));
+        convoys.GetInsuranceAsync(ConvoyId, Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(call => insured
+            ? new VehicleInsuranceReadModel(
+                ConvoyId, call.ArgAt<string>(1), "Ukraine Aid Mutual", "POL-1",
+                DateTime.UtcNow.Date.AddDays(-1), DateTime.UtcNow.Date.AddDays(30), null, "test-user", DateTime.UtcNow, null)
+            : null);
         return convoys;
     }
 
@@ -137,6 +146,22 @@ public class ManifestEndpointTests
             response.StatusCode.Should().Be(HttpStatusCode.NoContent, "step '{0}' should be allowed", step);
             manifests.Manifest(Id)!.Status.Should().Be(expected);
         }
+    }
+
+    [Fact]
+    public async Task A_vehicle_without_insurance_in_cover_does_not_depart()
+    {
+        var manifests = new InMemoryManifestRepository(AManifest() with { Status = ManifestStatus.Ready });
+        await using var api = FreedomApi.WithManifests(
+            manifests, AConvoy(insured: false), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsync($"/manifests/{Id}/depart", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().Should().Contain("insurance");
+        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Ready);
     }
 
     [Fact]

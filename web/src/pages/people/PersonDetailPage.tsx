@@ -1,8 +1,9 @@
 import type { JSX } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useDeletePerson, usePerson } from '../../api/people';
-import { ApiNotFound } from '../../api/problem';
+import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
 import { Button, LinkButton } from '../../components/Button';
 import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
@@ -14,6 +15,7 @@ export function PersonDetailPage(): JSX.Element {
   const navigate = useNavigate();
   const query = usePerson(id);
   const remove = useDeletePerson();
+  const [confirming, setConfirming] = useState(false);
 
   if (query.isError && query.error instanceof ApiNotFound) {
     return <NotFound />;
@@ -40,22 +42,61 @@ export function PersonDetailPage(): JSX.Element {
             </LinkButton>
             <Button
               variant="danger"
+              disabled={remove.isPending || confirming}
+              onClick={() => {
+                setConfirming(true);
+              }}
+            >
+              Erase volunteer
+            </Button>
+          </span>
+        </Gate>
+      </header>
+
+      {confirming ? (
+        <div role="alertdialog" aria-labelledby="erase-heading" aria-describedby="erase-body">
+          <h2 id="erase-heading">Erase this volunteer?</h2>
+          <p id="erase-body">
+            This permanently erases {person.firstName} {person.lastName}'s personal details. Past
+            convoys and manifests they were part of will show them as a former volunteer. It cannot
+            be undone.
+          </p>
+          <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
+            <Button
+              variant="danger"
               disabled={remove.isPending}
               onClick={() => {
                 remove.mutate(person.id, {
                   onSuccess: () => {
                     void navigate('/people');
                   },
+                  onError: () => {
+                    setConfirming(false);
+                  },
                 });
               }}
             >
-              Delete
+              Erase permanently
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setConfirming(false);
+              }}
+            >
+              Cancel
             </Button>
           </span>
-        </Gate>
-      </header>
+        </div>
+      ) : null}
 
-      {remove.isError ? <p role="alert">The volunteer could not be removed.</p> : null}
+      {remove.isError ? (
+        <p role="alert">
+          {remove.error instanceof ApiDomainProblem
+            ? (remove.error.detail ?? remove.error.message)
+            : 'The volunteer could not be erased.'}
+        </p>
+      ) : null}
 
       <DetailCard title="Personal details">
         <dl>

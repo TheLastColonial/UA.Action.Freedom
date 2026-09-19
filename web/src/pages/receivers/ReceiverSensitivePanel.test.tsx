@@ -1,18 +1,10 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeReceiver, makeReceiverDetail } from '../../test/factories/receiver';
 import { receiverApi } from '../../test/msw/receivers';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { ReceiverSensitivePanel } from './ReceiverSensitivePanel';
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('the reveal modal carries the audit warning and blocks an empty reason', async () => {
   const api = receiverApi(

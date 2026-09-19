@@ -208,6 +208,10 @@ public static class ManifestEndpoints
             detail: "This manifest's convoy has not published its truck list, so there is no fixed set of "
                     + "vehicles to propose against.",
             statusCode: StatusCodes.Status409Conflict),
+        TransitionManifestOutcome.NotInsured => Results.Problem(
+            detail: "This vehicle cannot depart: its insurance is not recorded, was voided by a crew change, "
+                    + "or does not cover today. Record the insurance for its current crew first.",
+            statusCode: StatusCodes.Status409Conflict),
         _ => Results.Problem(
             detail: "A manifest cannot move to that state from the one it is in.",
             statusCode: StatusCodes.Status409Conflict),

@@ -2,6 +2,7 @@ import { HttpResponse, http } from 'msw';
 import type { RequestHandler } from 'msw';
 
 import type { CreatePersonRequest, PersonReadModel } from '../../api/schemas/people';
+import { problem } from './problem';
 
 export interface PersonApi {
   db: Map<string, PersonReadModel>;
@@ -23,8 +24,17 @@ function toReadModel(id: string, body: CreatePersonRequest): PersonReadModel {
   };
 }
 
-export function personApi(seed: readonly PersonReadModel[] = []): PersonApi {
+export interface PersonApiOptions {
+  /** Volunteers on a live crew or manifest team, whom the API refuses to erase. */
+  activeIds?: readonly string[];
+}
+
+export function personApi(
+  seed: readonly PersonReadModel[] = [],
+  { activeIds = [] }: PersonApiOptions = {},
+): PersonApi {
   const db = new Map<string, PersonReadModel>(seed.map((p) => [p.id, p]));
+  const active = new Set(activeIds);
 
   const handlers: RequestHandler[] = [
     http.get('/people', ({ request }) => {
@@ -61,7 +71,14 @@ export function personApi(seed: readonly PersonReadModel[] = []): PersonApi {
     }),
 
     http.delete('/people/:id', ({ params }) => {
-      return db.delete(String(params['id']))
+      const id = String(params['id']);
+      if (db.has(id) && active.has(id)) {
+        return problem(
+          409,
+          'This volunteer is on the crew of a convoy that has not arrived, or on the team of a manifest still under way. Take them off it before erasing their details.',
+        );
+      }
+      return db.delete(id)
         ? new HttpResponse(null, { status: 204 })
         : new HttpResponse(null, { status: 404 });
     }),

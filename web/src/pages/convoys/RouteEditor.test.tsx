@@ -1,18 +1,10 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeConvoy, makeRouteStop } from '../../test/factories/convoy';
 import { convoyApi } from '../../test/msw/convoys';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { RouteEditor } from './RouteEditor';
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('adds a stop, requires a postcode, then saves the whole route', async () => {
   const api = convoyApi([makeConvoy({ id: 3 })]);

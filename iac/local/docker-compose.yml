@@ -2,11 +2,12 @@
 #
 # This file is the *substrate* — it starts the containers that play the part of an Azure
 # region. It deliberately creates no resources inside them: no blob containers, no queues,
-# no database schema, no realm. That is OpenTofu's job (../tofu), the same way azurerm
-# would own it in the real environment.
+# no realm, no logins. That is OpenTofu's job (../tofu), the same way azurerm would own it
+# in the real environment. The one exception is `db-deploy`, which publishes the database
+# schema — a deployment of its own (database/), not a resource the control plane creates.
 #
-#   docker compose up -d --wait     # substrate
-#   cd ../tofu && tofu apply        # resources
+#   docker compose up -d --wait     # substrate + database schema
+#   cd ../tofu && tofu apply        # resources + database principals
 #
 # See ../README.md.
 
@@ -142,7 +143,11 @@ services:
         condition: service_healthy
       mssql:
         condition: service_healthy
+      db-deploy:
+        condition: service_completed_successfully
       keycloak:
+        condition: service_healthy
+      mailpit:
         condition: service_healthy
       telemetry:
         condition: service_started
@@ -250,6 +255,7 @@ services:
       - "${MSSQL_PORT:-1433}:1433"
     volumes:
       - mssql-data:/var/opt/mssql
+      # principals.sql, run by `tofu apply` through `docker exec`.
       - ./sql:/sql:ro
     healthcheck:
       test:
@@ -259,6 +265,48 @@ services:
       timeout: 5s
       retries: 30
       start_period: 20s
+
+  # Publishes the Freedom dacpac (database/UA.Action.Freedom.Database) and exits. SqlPackage
+  # diffs it against whatever is in the volume: a fresh stack gets a create, an up-to-date one
+  # gets nothing. The logins and users the application connects as are not here — they are the
+  # environment's, created by `tofu apply` (../tofu/database.tf).
+  db-deploy:
+    build:
+      context: ../..
+      dockerfile: database/Dockerfile
+    image: ua-action-freedom/db-deploy:local
+    container_name: freedom-db-deploy
+    restart: "no"
+    environment:
+      FREEDOM_DB_SERVER: mssql
+      FREEDOM_DB_NAME: Freedom
+      FREEDOM_DB_USER: sa
+      FREEDOM_DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+    depends_on:
+      mssql:
+        condition: service_healthy
+
+  # Optionally loads fictional dev seed data after the schema is deployed.
+  # Run with: docker compose up db-seed
+  # Skips if the database already has data. Safe to run multiple times.
+  db-seed:
+    build:
+      context: ../..
+      dockerfile: database/Dockerfile
+    image: ua-action-freedom/db-deploy:local
+    container_name: freedom-db-seed
+    restart: "no"
+    entrypoint: ["/deploy/seed.sh"]
+    environment:
+      FREEDOM_DB_SERVER: mssql
+      FREEDOM_DB_NAME: Freedom
+      FREEDOM_DB_USER: sa
+      FREEDOM_DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+    depends_on:
+      db-deploy:
+        condition: service_completed_successfully
+      mssql:
+        condition: service_healthy
 
   # --- Identity Provider ----------------------------------------------------
   # Stands in for Microsoft Entra External ID. Keycloak speaks the same OpenID Connect

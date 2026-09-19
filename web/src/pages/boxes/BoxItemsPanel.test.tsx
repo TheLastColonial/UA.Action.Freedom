@@ -1,18 +1,10 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeBox, makeBoxItem } from '../../test/factories/box';
 import { boxApi } from '../../test/msw/boxes';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { BoxItemsPanel } from './BoxItemsPanel';
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('adds an item with a property, then removes it', async () => {
   worker.use(...boxApi([makeBox({ id: 8 })]).handlers);
