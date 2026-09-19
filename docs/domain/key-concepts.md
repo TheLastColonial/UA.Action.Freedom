@@ -89,6 +89,18 @@ The Ground Officer is the only role that sees full [Receiver](#receiver) detail.
 A volunteer who drives a vehicle on one leg of a convoy. Drivers are notified of their allocation and receive
 their manifest, but do not administer the system. A driver may be *committed* to a convoy or merely available.
 
+### Volunteer erasure
+
+A volunteer who leaves can ask to be erased, and UK data protection gives them that right. Freedom **deletes their
+personal data** — name, date of birth, phone, driving status — rather than hiding it. The records they were part of
+(past convoy crews, manifest teams, who validated or shelved a box) keep an anonymous identity in their place and read
+**"Former volunteer"**; nothing links that identity back to the person. Someone no record names is removed
+outright.
+
+Erasure is **refused while the volunteer is still needed**: on the crew of a convoy that has not arrived, or on the
+team of a manifest still under way. Take them off it first. Only the Administrator erases, and the operator UI asks
+for confirmation, since it cannot be undone.
+
 ### Donor _(external)_
 
 A person or organisation donating a vehicle, goods or funds. Interacts with the public website, not with Freedom
@@ -108,6 +120,25 @@ Represents a country's border authority. Verifies a load in transit. Has no acco
 A collection of [Vehicles](#vehicle) travelling together to Ukraine, with a departure timestamp, an expected
 arrival timestamp and a [Route](#route). The convoy is the unit that is planned; the [Manifest](#manifest) is the
 unit that is executed per vehicle.
+
+#### Readiness
+
+A convoy is **ready** when it has a route, has vehicles, and every vehicle on it is ready; a vehicle is ready with
+**at least two drivers** (passengers do not count) and [insurance](#vehicle-insurance) that is recorded, not voided,
+and in cover on the departure date. Readiness is **advisory** — it says what is missing and blocks nothing — and is
+shown on the convoy's overview. Cargo checks will join it later.
+
+#### Arrival
+
+A convoy **arrives** when the Dispatcher marks it so (`POST /convoys/{id}/arrive`), which is allowed only once its
+truck list is published and **every vehicle on it has a finished manifest** — Delivered, Lost or Returned. Until
+then the request is refused and names the vehicles still travelling. Arrival, in one step:
+
+- **Delivered and Lost vehicles are handed over.** A vehicle is itself part of the aid and stays in Ukraine, so it
+  is stamped `HandedOverAt` and is never offered for a convoy again.
+- **Returned vehicles are released** — taken off the convoy so they can travel again.
+- **The journey becomes history.** An arrived convoy takes no further crew or insurance changes; its crew list is
+  the record of who went.
 
 ### Vehicle
 
@@ -144,10 +175,30 @@ while the inspection status tracks how far through that process it has progresse
 
 ### Vehicle Crew
 
-The set of volunteer [Drivers](#driver) assigned to a [Vehicle](#vehicle) while a [Convoy](#convoy) is being
-planned — decided before any [Manifest](#manifest) exists for the leg. A vehicle with fewer than two assigned
-drivers is flagged as a planning warning (advisory only — nothing is blocked), since a two-person crew is the norm
-for sustained driving and border compliance. Assigning drivers is a [Dispatcher](#dispatcher) responsibility.
+The people travelling in a [Vehicle](#vehicle) on one [Convoy](#convoy), decided while it is planned — before any
+[Manifest](#manifest) exists for the leg. Each crew member is either:
+
+- a **Driver** — a volunteer registered to drive; or
+- a **Passenger** — any volunteer.
+
+**A person takes one seat per convoy**: they cannot be on two vehicles of the same journey (the database enforces
+it). A vehicle needs **two drivers** to be [ready](#readiness) — the norm for sustained driving and border
+compliance; passengers do not count. Crewing is the [Dispatcher](#dispatcher)'s alone.
+
+The crew can still change after the truck list is published — a driver falls ill — but **any change voids the
+vehicle's [insurance](#vehicle-insurance)**, which names the crew, and it must be recorded again before the vehicle
+departs. Once the convoy has [arrived](#arrival) the crew is history and cannot change.
+
+### Vehicle Insurance
+
+Bought by the Dispatcher for each vehicle on a convoy, and it **names that vehicle's crew**. Recorded per vehicle
+per convoy: insurer, policy number, cover start and end, optional cost, and who recorded it (taken from their login,
+never typed in). Dispatcher and Administrator may record it (`PUT /convoys/{id}/vehicles/{vin}/insurance`).
+
+- **A crew change voids it**, in the same step as the change. Recording it again renews it.
+- **A manifest cannot depart without it** — recorded, not voided, and in cover on the day — and is refused with the
+  reason.
+- Taking the vehicle off the convoy, or cancelling the convoy, removes it.
 
 This is distinct from a [Driver Team](#driver-team): the crew is a property of the vehicle within the convoy,
 decided during planning, while a Driver Team is a primary/secondary pair fixed to one specific leg once a manifest
@@ -304,7 +355,7 @@ Not all data in Freedom carries the same risk, and the difference drives how it 
 | Class | Examples | Handling |
 | --- | --- | --- |
 | **Sensitive** | Ukrainian delivery addresses, receiver contact names and organisations | Segregated storage, Ground Officer access only, every read audited, redacted from anything that crosses a border |
-| **Personal** | Volunteer names, dates of birth, phone numbers, driving license | UK data residency, never written to logs, defined retention period |
+| **Personal** | Volunteer names, dates of birth, phone numbers, driving license | UK data residency, never written to logs, defined retention period, **erased on request** (see [Volunteer erasure](#volunteer-erasure)) |
 | **Operational** | Convoys, vehicles, boxes, weights, routes within the UK/EU | Standard role-based access |
 
 **Why this matters.** A manifest listing precise Ukrainian delivery addresses is a targeting document, and it

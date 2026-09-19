@@ -397,6 +397,22 @@ then swallowed — "There is no vehicle with VIN … on this convoy" never reach
 whose problem body carries a `detail` is now an `ApiDomainProblem`; a bare 404 (the resource
 addressed does not exist) is still `ApiNotFound`, which detail pages render as "Not found".
 
+### VIN and manifest keys must be sent as `varchar`
+
+Dapper sends every .NET string as `nvarchar(4000)`. Under `SQL_Latin1_General_CP1_CI_AS` — the local
+database's collation and Azure SQL's default — `WHERE Vin = @vin` against a `varchar(32)` column then
+converts the **column**, so the key lookup becomes a scan that locks every row it reads. It was
+invisible until the convoy-arrival transaction touched several vehicles at once and began
+deadlocking with single-vehicle inspection updates (found in the `system_health` deadlock graph,
+not in any exception). `SqlKey.Of(vin)` sends the value as `varchar(32)`; where a whole record is
+the parameter object, the SQL casts the parameter instead.
+
+### Running the suites in parallel is a concurrency test — keep it
+
+`dotnet test --solution` runs the Integration and BDD projects at the same time against one
+database. That is how the deadlock above surfaced, as a BDD scenario failing one run in two. A
+flaky scenario there is worth a deadlock graph before it is worth a retry.
+
 ### Frozen manifests accumulate in the local database
 
 BDD cleanup cannot delete them — `DELETE` on a frozen manifest is correctly a `409`, and the hook
@@ -566,20 +582,21 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 
 ---
 
-9. **How is a volunteer erased who is still named on a record?** Deleting one who crewed a
-   vehicle, sat on a manifest team or validated a box is now refused (409). A UK GDPR erasure
-   request would need anonymisation of the `dbo.Person` row in place rather than deletion.
-   Not built; needs a decision on what the historical records must keep.
+Questions 9–12 from the previous round are **decided and built**:
 
-10. **May one driver crew two vehicles on the same convoy?** Nothing prevents it —
-    `PK_VehicleDriver` is per vehicle. Physically it is impossible for the same leg.
+- **Erasing a volunteer named on old records** — split identity: the personal data is deleted,
+  the anonymous key stays for the records, which read "Former volunteer". Refused while they are
+  on a live crew or manifest team.
+- **One driver on two vehicles of a convoy** — no: one seat per person per convoy, enforced by
+  `UQ_VehicleDriver_Convoy_Person`. Passengers exist, and are any volunteer.
+- **Crew changes after publication** — allowed, but they void the vehicle's insurance, which must
+  be recorded again before departure. An arrived convoy's crew cannot change at all.
+- **The 200-vehicle picker limit** — never reached: arrived vehicles are handed over and leave the
+  picker for good, and a convoy is a handful of vans.
 
-11. **May the crew change after the truck list is published?** Currently yes — the freeze
-    covers which vehicles travel, not who drives them, and the Drivers tab stays editable. The
-    manifest has its own driver teams, which *are* frozen by approval.
-
-12. **The vehicle picker lists at most 200 vehicles** (one API page). Fine for a fleet of
-    donated vans; a larger fleet needs a server-side search parameter on `GET /vehicles`.
+13. **Is "Returned" at arrival really "the vehicle came back"?** Arrival releases Returned vehicles
+    to travel again, and hands Delivered and Lost ones over. If Returned can also mean the cargo
+    came back but the vehicle stayed, that rule needs revisiting.
 
 ### Web coverage backlog
 
@@ -608,3 +625,4 @@ rather than parsing them against the contract.
 | 8 | Operator UI (`web/`) | A React + Vite SPA co-served by the API under `/app` — see §7 for the load-bearing traps (`/app` not `/`, `UseStaticFiles` before `UseRouting`, in-memory token, Browser Mode config, the hand-rolled reason modal, the un-cached receiver-detail read). New `frontend` CI job (typecheck/lint/format/test/build) and Playwright `@smoke` specs in the `acceptance` job; `publish` needs both. A new public PKCE Keycloak client `freedom-spa` — the API's confidential client is unchanged. |
 | 9 | Box QR labels | `dbo.BoxQrCode` — opaque non-enumerable token, revoke/reissue, revoked rows kept. `IssueQrCodeAsync` holds a transaction, same shape as the others in §2. "One active label" enforced there, not by a filtered index (§1). `QRCoder` is the first drawing dependency — managed renderers only, never the `System.Drawing`-based `QRCode` (§2). The label renderer's signature carries no receiver data, so the "no delivery detail on a travelling label" rule is structural (§3). New `App:PublicBaseUrl` env-only config with a request-host fallback; the local sim sets `App__PublicBaseUrl` because the container sees the edge, not the browser host. BDD probes `/boxes/scan/{all-zero-guid}` — auth runs before the handler, so a present route answers 401 and an old image answers 404. |
 | 10 | Vehicle servicing + Mechanic | The inspection was silently dropped by the API and faked by the mock — see §6 "A test double must be exactly as strict". New `Mechanic` role and `vehicles:service` policy; `PUT /vehicles/{vin}/inspection` is the only writer. Convoy assignment gated on `Passed` in SQL, and no longer steals a vehicle from another convoy. Crew clean-up on convoy delete (a sixth transaction). Person delete 500 → 409. Schema guards for columns added after `CREATE TABLE`. Shared `SqlTestDatabase`, `freedom_app` everywhere, `FREEDOM_REQUIRE_INTEGRATION` in CI. Reload keeps the page (§7). |
+| 11 | Crew, insurance, readiness, arrival, erasure | Passengers and one seat per person per convoy (`VehicleDriver` gained `ConvoyId` and `Role`, key `(ConvoyId, Vin, PersonId)`). Insurance per vehicle per convoy, voided by a crew change in the same transaction, gating `depart`. Advisory readiness as one pure function. Arrival hands vehicles over for good. Split volunteer identity for UK-data-protection erasure, with an in-place migration checked on a fresh SQL Server. Found and fixed: `nvarchar` VIN parameters scanning the table (deadlocks), and 500s deleting a vehicle or convoy a manifest names. |

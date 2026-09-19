@@ -183,11 +183,14 @@ to force a run.
 Core resource endpoints:
 - `GET|POST /vehicles` — Vehicle inventory (natural key: VIN), including optional cargo capacity (max weight, dimensions); writes are Administrator, Purchaser and Mechanic (`vehicles:write`)
   - `PUT /vehicles/{vin}/inspection` — Record the servicing inspection (`Pending`/`Inspecting`/`Passed`/`Failed` + notes) — **Administrator and Mechanic only** (`vehicles:service`). The ordinary `PUT /vehicles/{vin}` cannot change it — nor which convoy the vehicle is on, which only `/convoys/{id}/vehicles/{vin}` changes
-- `GET|POST /people` — Volunteers & drivers; deleting one still named on a crew, manifest team or box record is a 409
+- `GET|POST /people` — Volunteers & drivers; `DELETE /people/{id}` **erases** a volunteer (their personal data is deleted; past records show "Former volunteer"), refused with 409 while they are on a live crew or manifest team
 - `GET|POST /convoys` — Convoy groups with routes
   - `PUT|GET /convoys/{id}/route` — Ordered stop list
   - `PUT|DELETE /convoys/{id}/vehicles/{vin}` — Vehicle assignment; only a vehicle that has **Passed** its inspection, and is not on another convoy, may join (409 otherwise)
-  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/drivers/{personId}` — Vehicle crew assignment (**Dispatcher only** for `PUT`/`DELETE`; `GET` is included in `convoys:read`)
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/drivers/{personId}` — Vehicle crew: an optional `{ "role": "Driver" | "Passenger" }` body; a person takes one seat per convoy (**Dispatcher only** for `PUT`/`DELETE`; `GET` is included in `convoys:read`)
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/insurance` — The vehicle's insurance for this convoy; any crew change voids it, and a manifest cannot depart without it (`convoys:write`)
+  - `GET /convoys/{id}/readiness` — Advisory readiness: two drivers and insurance per vehicle, and a route (`convoys:read`)
+  - `POST /convoys/{id}/arrive` — Mark arrived once every vehicle has a finished manifest; Delivered/Lost vehicles are handed over for good, Returned ones released (`convoys:write`)
   - `POST /convoys/{id}/publish-truck-list` — Lock vehicle manifest
 - `GET|POST /receivers` — Delivery contacts (reference/org/region)
   - `GET|PUT /receivers/{ref}/detail` — **GroundOfficer only**: delivery address + contact
@@ -261,10 +264,31 @@ Manifests follow a 10-state model (see `docs/manifest-status.puml`):
 - **Dapper** for SQL mapping (typed constructor, rows map to primary constructor CLR types)
 - One repository per slice with dedicated `I*Repository` port
 - **CQRS read models** (flat shapes) separate from domain objects
-- **Transactions** only where required: route replacement, taking a vehicle off a convoy and
-  cancelling a convoy (both stand the vehicle's crew down in the same transaction), receiver
-  detail resolve + audit, and QR-label re-issue / bay assignment (`BoxRepository` vacates the
-  old row and writes the new one atomically — see below)
+- **Transactions** only where one fact spans several rows: route replacement; a vehicle leaving
+  a convoy or a convoy being cancelled (crew and insurance go too); a crew change (it voids the
+  vehicle's insurance); convoy arrival (handover and release); volunteer add and erasure; receiver
+  detail resolve + audit; QR-label re-issue and bay assignment. See CLAUDE.md for the list.
+- **VIN and manifest keys are `varchar(32)`** — pass them with `SqlKey.Of(...)`. Dapper's default
+  `nvarchar` would make every key lookup a table scan under the SQL collation, and it caused
+  deadlocks before it was fixed.
+
+### Convoy crew, insurance, readiness and arrival
+
+- **Crew** — drivers (registered to drive) and passengers (any volunteer); one seat per person per
+  convoy, enforced by `UQ_VehicleDriver_Convoy_Person`.
+- **Insurance** — per vehicle per convoy, naming the crew. A crew change voids it in the same
+  transaction; `TransitionManifestHandler` refuses `depart` without insurance in cover.
+- **Readiness** — `ConvoyReadiness.Assess`, one pure function, advisory only.
+- **Arrival** — allowed once every vehicle has a finished manifest; stamps `Convoy.ArrivedAt`, hands
+  Delivered/Lost vehicles over (`Vehicle.HandedOverAt`, never offered again) and releases Returned
+  ones, in one transaction. An arrived convoy's crew and insurance no longer change.
+
+### Volunteer erasure (split identity)
+
+`dbo.Person` holds only the anonymous key every foreign key points at; `dbo.PersonDetail` holds the
+personal data. Erasure deletes the detail (UK data protection) and removes the key too unless past
+records name it — they then show "Former volunteer". Refused while the volunteer is still on a live
+crew or manifest team.
 
 ### Vehicle servicing and the convoy gate
 

@@ -198,6 +198,11 @@ token lacking the role is **403**.
 
 A few rows are worth understanding rather than memorising:
 
+- **`convoys:write` also covers a vehicle's insurance and marking a convoy arrived** — both are the
+  Dispatcher's (and Administrator's) coordination work. Crewing stays narrower, `convoys:assign-drivers`.
+- **`people:write` is also volunteer erasure.** `DELETE /people/{id}` permanently deletes the
+  volunteer's personal data (UK data protection); it is refused while they are on a live crew or
+  manifest team.
 - **`vehicles:service` is Administrator and Mechanic** and separate from `vehicles:write`. The
   inspection result decides whether a vehicle may join a convoy, so a Purchaser who can edit a
   vehicle's details cannot also pass it as roadworthy. It is recorded through its own route,
