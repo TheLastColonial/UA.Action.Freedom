@@ -36,7 +36,7 @@ test('@smoke a manifest is proposed against a published convoy, then approved an
   await page.getByRole('button', { name: 'Create manifest' }).click();
   await expect(page.getByRole('heading', { name: reference })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Status' }).click();
+  await page.getByRole('tab', { name: 'Status' }).click();
   await page.getByRole('button', { name: 'Propose' }).click();
   await expect(page.getByRole('heading', { name: 'Status: Proposed' })).toBeVisible();
 

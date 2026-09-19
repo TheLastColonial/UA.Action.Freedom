@@ -8,6 +8,7 @@ import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
+import { TabPanel, Tabs } from '../../components/Tabs';
 import { ConvoyVehiclesPanel } from './ConvoyVehiclesPanel';
 import { RouteEditor } from './RouteEditor';
 
@@ -55,24 +56,19 @@ export function ConvoyDetailPage(): JSX.Element {
         <span>{published ? 'Truck list published' : 'Truck list open'}</span>
       </header>
 
-      <nav aria-label="Convoy sections" style={{ display: 'flex', gap: 'var(--space-3)' }}>
-        {TABS.map((name) => (
-          <button
-            key={name}
-            type="button"
-            aria-current={tab === name ? 'page' : undefined}
-            onClick={() => {
-              selectTab(name);
-            }}
-          >
-            {name[0]?.toUpperCase()}
-            {name.slice(1)}
-          </button>
-        ))}
-      </nav>
+      <Tabs
+        label="Convoy sections"
+        tabs={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'route', label: 'Route' },
+          { id: 'vehicles', label: 'Vehicles' },
+        ]}
+        active={tab}
+        onChange={selectTab}
+      />
 
       {tab === 'overview' ? (
-        <div>
+        <TabPanel id="overview">
           <DetailCard title="Convoy details">
             <dl>
               <dt>Departs</dt>
@@ -107,12 +103,18 @@ export function ConvoyDetailPage(): JSX.Element {
               {publishError}
             </p>
           ) : null}
-        </div>
+        </TabPanel>
       ) : null}
 
-      {tab === 'route' ? <RouteEditor convoyId={convoy.id} disabled={published} /> : null}
+      {tab === 'route' ? (
+        <TabPanel id="route">
+          <RouteEditor convoyId={convoy.id} disabled={published} />
+        </TabPanel>
+      ) : null}
       {tab === 'vehicles' ? (
-        <ConvoyVehiclesPanel convoyId={convoy.id} disabled={published} />
+        <TabPanel id="vehicles">
+          <ConvoyVehiclesPanel convoyId={convoy.id} disabled={published} />
+        </TabPanel>
       ) : null}
     </section>
   );

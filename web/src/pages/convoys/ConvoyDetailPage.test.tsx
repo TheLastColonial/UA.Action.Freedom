@@ -72,10 +72,10 @@ test('a Dispatcher can open the Route and Vehicles tabs', async () => {
     roles: ['Dispatcher'],
   });
 
-  await screen.getByRole('button', { name: 'Route' }).click();
+  await screen.getByRole('tab', { name: 'Route' }).click();
   await expect.element(screen.getByRole('button', { name: 'Add stop' })).toBeInTheDocument();
 
-  await screen.getByRole('button', { name: 'Vehicles' }).click();
+  await screen.getByRole('tab', { name: 'Vehicles' }).click();
   await expect.element(screen.getByRole('button', { name: 'Assign vehicle' })).toBeInTheDocument();
 });
 

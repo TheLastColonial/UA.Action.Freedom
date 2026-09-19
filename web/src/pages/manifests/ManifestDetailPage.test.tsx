@@ -96,16 +96,16 @@ test('the tabs open the Status, Teams, Cargo and Weight panels', async () => {
     roles: ['Dispatcher'],
   });
 
-  await screen.getByRole('button', { name: 'Status' }).click();
+  await screen.getByRole('tab', { name: 'Status' }).click();
   await expect.element(screen.getByRole('heading', { name: /Status:/ })).toBeInTheDocument();
 
-  await screen.getByRole('button', { name: 'Teams' }).click();
+  await screen.getByRole('tab', { name: 'Teams' }).click();
   await expect.element(screen.getByRole('heading', { name: 'Driver teams' })).toBeInTheDocument();
 
-  await screen.getByRole('button', { name: 'Cargo' }).click();
+  await screen.getByRole('tab', { name: 'Cargo' }).click();
   await expect.element(screen.getByRole('heading', { name: 'Cargo' })).toBeInTheDocument();
 
-  await screen.getByRole('button', { name: 'Weight' }).click();
+  await screen.getByRole('tab', { name: 'Weight' }).click();
   await expect
     .element(screen.getByRole('heading', { name: 'Border-check weight' }))
     .toBeInTheDocument();
