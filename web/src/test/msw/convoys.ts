@@ -7,6 +7,7 @@ import type {
   CreateConvoyRequest,
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
+  VehicleDriverReadModel,
 } from '../../api/schemas/convoys';
 import { problem } from './problem';
 
@@ -14,6 +15,7 @@ export interface ConvoyApi {
   db: Map<number, ConvoyReadModel>;
   routes: Map<number, RouteStopReadModel[]>;
   vehicles: Map<number, ConvoyVehicleReadModel[]>;
+  drivers: Map<string, VehicleDriverReadModel[]>;
   handlers: RequestHandler[];
 }
 
@@ -23,8 +25,10 @@ export function convoyApi(seed: readonly ConvoyReadModel[] = []): ConvoyApi {
   const db = new Map<number, ConvoyReadModel>(seed.map((c) => [c.id, c]));
   const routes = new Map<number, RouteStopReadModel[]>();
   const vehicles = new Map<number, ConvoyVehicleReadModel[]>();
+  const drivers = new Map<string, VehicleDriverReadModel[]>();
 
   const idFrom = (raw: string | readonly string[] | undefined) => Number(String(raw));
+  const driverKey = (convoyId: number, vin: string) => `${convoyId}:${vin}`;
 
   const handlers: RequestHandler[] = [
     http.get('/convoys', () => HttpResponse.json([...db.values()])),
@@ -115,7 +119,7 @@ export function convoyApi(seed: readonly ConvoyReadModel[] = []): ConvoyApi {
       const vin = decodeURIComponent(String(params['vin']));
       const list = vehicles.get(id) ?? [];
       if (!list.some((v) => v.vin === vin)) {
-        list.push({ vin, plate: `PL-${vin.slice(-4)}`, weightKg: 1800 });
+        list.push({ vin, plate: `PL-${vin.slice(-4)}`, weightKg: 1800, driverCount: 0 });
       }
       vehicles.set(id, list);
       return new HttpResponse(null, { status: 204 });
@@ -156,7 +160,68 @@ export function convoyApi(seed: readonly ConvoyReadModel[] = []): ConvoyApi {
       });
       return new HttpResponse(null, { status: 204 });
     }),
+
+    http.get('/convoys/:id/vehicles/:vin/drivers', ({ params }) => {
+      const convoyId = idFrom(params['id']);
+      if (!db.has(convoyId)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const vin = decodeURIComponent(String(params['vin']));
+      const vehicleList = vehicles.get(convoyId) ?? [];
+      if (!vehicleList.some((v) => v.vin === vin)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const key = driverKey(convoyId, vin);
+      return HttpResponse.json(drivers.get(key) ?? []);
+    }),
+
+    http.put('/convoys/:id/vehicles/:vin/drivers/:personId', ({ params }) => {
+      const convoyId = idFrom(params['id']);
+      const convoy = db.get(convoyId);
+      if (!convoy) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const vin = decodeURIComponent(String(params['vin']));
+      const vehicleList = vehicles.get(convoyId) ?? [];
+      if (!vehicleList.some((v) => v.vin === vin)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const personId = String(params['personId']);
+      const key = driverKey(convoyId, vin);
+      const driverList = drivers.get(key) ?? [];
+      if (!driverList.some((d) => d.personId === personId)) {
+        driverList.push({
+          personId,
+          firstName: 'Driver',
+          lastName: 'Name',
+        });
+        drivers.set(key, driverList);
+      }
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.delete('/convoys/:id/vehicles/:vin/drivers/:personId', ({ params }) => {
+      const convoyId = idFrom(params['id']);
+      const convoy = db.get(convoyId);
+      if (!convoy) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const vin = decodeURIComponent(String(params['vin']));
+      const vehicleList = vehicles.get(convoyId) ?? [];
+      if (!vehicleList.some((v) => v.vin === vin)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const personId = String(params['personId']);
+      const key = driverKey(convoyId, vin);
+      const driverList = drivers.get(key) ?? [];
+      const next = driverList.filter((d) => d.personId !== personId);
+      if (next.length === driverList.length) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      drivers.set(key, next);
+      return new HttpResponse(null, { status: 204 });
+    }),
   ];
 
-  return { db, routes, vehicles, handlers };
+  return { db, routes, vehicles, drivers, handlers };
 }

@@ -33,5 +33,5 @@ export function makeRouteStop(overrides: Partial<RouteStopReadModel> = {}): Rout
 export function makeConvoyVehicle(
   overrides: Partial<ConvoyVehicleReadModel> = {},
 ): ConvoyVehicleReadModel {
-  return { vin: 'VIN-CONVOY-1', plate: 'AB12 CDE', weightKg: 2000, ...overrides };
+  return { vin: 'VIN-CONVOY-1', plate: 'AB12 CDE', weightKg: 2000, driverCount: 0, ...overrides };
 }
