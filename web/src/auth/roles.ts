@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
-// The five application roles. Names match the Keycloak client roles and the Entra app roles
+// The six application roles. Names match the Keycloak client roles and the Entra app roles
 // they become in Azure — see docs/local-authentication.md and iac/tofu/keycloak.tf.
 export const roleSchema = z.enum([
   'Administrator',
   'Purchaser',
   'Dispatcher',
   'Loader',
+  'Mechanic',
   'GroundOfficer',
 ]);
 

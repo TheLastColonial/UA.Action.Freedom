@@ -29,7 +29,7 @@ export const convoyVehicleReadModelSchema = z.object({
 export type ConvoyVehicleReadModel = z.infer<typeof convoyVehicleReadModelSchema>;
 
 export const vehicleDriverReadModelSchema = z.object({
-  personId: z.string().uuid(),
+  personId: z.string(),
   firstName: z.string(),
   lastName: z.string(),
 });

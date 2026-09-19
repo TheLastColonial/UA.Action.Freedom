@@ -1,5 +1,6 @@
 using Dapper;
 using UA.Action.Freedom.Application.Vehicles;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Data.Vehicles;
 
@@ -7,11 +8,16 @@ namespace UA.Action.Freedom.Data.Vehicles;
 /// Dapper-backed <see cref="IVehicleRepository"/> over <c>dbo.Vehicle</c>. Every statement is
 /// parameterised; the write methods return the affected-row count as a bool so the handlers
 /// can tell "no such VIN" from "done".
+///
+/// <c>ConvoyId</c> and the inspection pair are read here but never written by an add or an edit:
+/// convoy membership changes only through <c>ConvoyRepository</c>, where the truck-list freeze,
+/// the inspection gate and the crew clean-up are, and the inspection only through
+/// <see cref="RecordInspectionAsync"/>.
 /// </summary>
 public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : IVehicleRepository
 {
     private const string Columns =
-        "Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm";
+        "Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm, InspectionStatus, InspectionNotes";
 
     public async Task<VehicleReadModel?> GetByVinAsync(string vin, CancellationToken cancellationToken)
     {
@@ -54,9 +60,9 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
         await connection.ExecuteAsync(new CommandDefinition(
             """
             INSERT INTO dbo.Vehicle
-                (Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm)
+                (Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm)
             VALUES
-                (@Vin, @Plate, @Brand, @Model, @Colour, @Transmission, @Notes, @Mileage, @Servicing, @Year, @Fuel, @ConvoyId, @PurchaserName, @PurchaseDate, @WeightKg, @MaxCargoWeightKg, @CargoWidthCm, @CargoDepthCm, @CargoHeightCm)
+                (@Vin, @Plate, @Brand, @Model, @Colour, @Transmission, @Notes, @Mileage, @Servicing, @Year, @Fuel, @PurchaserName, @PurchaseDate, @WeightKg, @MaxCargoWeightKg, @CargoWidthCm, @CargoDepthCm, @CargoHeightCm)
             """,
             vehicle,
             cancellationToken: cancellationToken));
@@ -79,7 +85,6 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
                 Servicing = @Servicing,
                 [Year] = @Year,
                 Fuel = @Fuel,
-                ConvoyId = @ConvoyId,
                 PurchaserName = @PurchaserName,
                 PurchaseDate = @PurchaseDate,
                 WeightKg = @WeightKg,
@@ -91,6 +96,25 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
             WHERE Vin = @Vin
             """,
             vehicle,
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<bool> RecordInspectionAsync(
+        string vin, InspectionStatus status, string? notes, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.Vehicle SET
+                InspectionStatus = @status,
+                InspectionNotes = @notes,
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE Vin = @vin
+            """,
+            new { vin, status = (int)status, notes },
             cancellationToken: cancellationToken));
 
         return affected > 0;

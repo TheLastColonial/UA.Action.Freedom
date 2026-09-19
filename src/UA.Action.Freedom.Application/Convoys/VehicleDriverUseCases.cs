@@ -39,9 +39,12 @@ public sealed class AssignDriverToVehicleHandler(IConvoyRepository convoyReposit
             return AssignDriverOutcome.PersonNotADriver;
         }
 
-        return await convoyRepository.AssignDriverAsync(command.ConvoyId, command.Vin, command.PersonId, cancellationToken)
-            ? AssignDriverOutcome.Assigned
-            : AssignDriverOutcome.AlreadyAssigned;
+        return await convoyRepository.AssignDriverAsync(command.ConvoyId, command.Vin, command.PersonId, cancellationToken) switch
+        {
+            AssignDriverResult.Assigned => AssignDriverOutcome.Assigned,
+            AssignDriverResult.AlreadyAssigned => AssignDriverOutcome.AlreadyAssigned,
+            _ => AssignDriverOutcome.VehicleNotFound,
+        };
     }
 }
 

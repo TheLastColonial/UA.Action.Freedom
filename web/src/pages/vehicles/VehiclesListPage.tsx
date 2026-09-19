@@ -9,6 +9,7 @@ import type { Column } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
 import { Pagination } from '../../components/Pagination';
 import { PageSkeleton } from '../../components/PageSkeleton';
+import { INSPECTION_STATUS_LABELS } from './inspection';
 
 const PAGE_SIZE = 50;
 
@@ -23,12 +24,15 @@ const columns: readonly Column<VehicleReadModel>[] = [
   { header: 'Fuel', cell: (v) => v.fuel },
   { header: 'Weight (kg)', cell: (v) => v.weightKg },
   {
-    header: 'Servicing',
-    cell: (v) => (
-      <Link to={`/vehicles/${encodeURIComponent(v.vin)}/servicing`}>
-        {v.servicing ? 'Yes' : 'No'}
-      </Link>
-    ),
+    header: 'Inspection',
+    cell: (v) => {
+      const label = INSPECTION_STATUS_LABELS[v.inspectionStatus];
+      return (
+        <Gate policy="vehicles:service" fallback={label}>
+          <Link to={`/vehicles/${encodeURIComponent(v.vin)}/servicing`}>{label}</Link>
+        </Gate>
+      );
+    },
   },
 ];
 

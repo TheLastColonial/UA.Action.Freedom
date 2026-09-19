@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeManifest } from '../../test/factories/manifest';
 import { manifestApi } from '../../test/msw/manifests';
 import { worker } from '../../test/msw/worker';
@@ -12,13 +11,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'manifests', children: manifestRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('requires a reference', async () => {
   worker.use(...manifestApi([]).handlers);

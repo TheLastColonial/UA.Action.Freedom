@@ -1,9 +1,7 @@
 using AwesomeAssertions;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
 using UA.Action.Freedom.Application.People;
-using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Data.People;
+using static UA.Action.Freedom.Tests.Integration.SqlTestDatabase;
 
 namespace UA.Action.Freedom.Tests.Integration.People;
 
@@ -15,33 +13,10 @@ namespace UA.Action.Freedom.Tests.Integration.People;
 [Trait("Category", "Integration")]
 public class PersonRepositoryTests
 {
-    private const string DefaultLocalConnectionString =
-        "Server=localhost,1433;Database=Freedom;User Id=sa;Password=Local_Freedom_Dev_1;TrustServerCertificate=True;Encrypt=False;Connect Timeout=3";
-
-    private static string ConnectionString =>
-        Environment.GetEnvironmentVariable("ConnectionStrings__Freedom") ?? DefaultLocalConnectionString;
-
     private static async Task<PersonRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await using var connection = new SqlConnection(ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(1) FROM dbo.Person";
-            await command.ExecuteScalarAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            Assert.Skip($"Freedom database with dbo.Person is not reachable: {exception.Message}");
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Freedom"] = ConnectionString })
-            .Build();
-
-        return new PersonRepository(new SqlConnectionFactory(configuration));
+        await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Person", cancellationToken);
+        return new PersonRepository(ConnectionFactory());
     }
 
     /// <summary>
@@ -60,15 +35,8 @@ public class PersonRepositoryTests
         IsDriver: isDriver,
         Committed: committed);
 
-    private static async Task RemoveAsync(Guid id)
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM dbo.Person WHERE Id = @id";
-        command.Parameters.AddWithValue("@id", id);
-        await command.ExecuteNonQueryAsync();
-    }
+    private static Task RemoveAsync(Guid id) =>
+        ExecuteAsync("DELETE FROM dbo.Person WHERE Id = @id", ("@id", id));
 
     [Fact]
     public async Task Round_trips_every_field_through_the_database()
@@ -141,13 +109,44 @@ public class PersonRepositoryTests
             await repository.AddAsync(APerson(id, surname), cancellationToken);
             (await repository.ExistsAsync(id, cancellationToken)).Should().BeTrue();
 
-            (await repository.DeleteAsync(id, cancellationToken)).Should().BeTrue();
+            (await repository.DeleteAsync(id, cancellationToken)).Should().Be(DeletePersonResult.Deleted);
             (await repository.ExistsAsync(id, cancellationToken)).Should().BeFalse();
 
-            (await repository.DeleteAsync(id, cancellationToken)).Should().BeFalse();
+            (await repository.DeleteAsync(id, cancellationToken)).Should().Be(DeletePersonResult.NotFound);
         }
         finally
         {
+            await RemoveAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task A_volunteer_still_crewing_a_vehicle_is_kept_and_reported()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = Guid.NewGuid();
+        var vin = "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
+
+        try
+        {
+            await repository.AddAsync(APerson(id, NewSurname(), isDriver: true), cancellationToken);
+            await ExecuteAsync(
+                """
+                INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg) VALUES (@vin, 'IT12ABC', 2015, 1800);
+                INSERT INTO dbo.VehicleDriver (Vin, PersonId) VALUES (@vin, @id);
+                """,
+                ("@vin", vin),
+                ("@id", id));
+
+            var result = await repository.DeleteAsync(id, cancellationToken);
+
+            result.Should().Be(DeletePersonResult.StillReferenced);
+            (await repository.ExistsAsync(id, cancellationToken)).Should().BeTrue();
+        }
+        finally
+        {
+            await ExecuteAsync("DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
             await RemoveAsync(id);
         }
     }

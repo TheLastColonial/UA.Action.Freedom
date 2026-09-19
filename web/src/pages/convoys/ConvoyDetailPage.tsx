@@ -120,7 +120,7 @@ export function ConvoyDetailPage(): JSX.Element {
       ) : null}
       {tab === 'drivers' ? (
         <TabPanel id="drivers">
-          <ConvoyDriversPanel convoyId={convoy.id} disabled={published} />
+          <ConvoyDriversPanel convoyId={convoy.id} />
         </TabPanel>
       ) : null}
     </section>

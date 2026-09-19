@@ -8,6 +8,7 @@ import { AuthContext } from './AuthContext';
 import type { FreedomAuth } from './AuthContext';
 import { deriveIdentity } from './identity';
 import { oidcConfig } from './oidcConfig';
+import type { SignInState } from './returnPath';
 
 export function FreedomAuthProvider({ children }: { children: ReactNode }): JSX.Element {
   return (
@@ -27,8 +28,9 @@ function FreedomAuthBridge({ children }: { children: ReactNode }): JSX.Element {
       ...identity,
       isLoading: oidc.isLoading,
       isAuthenticated: oidc.isAuthenticated,
-      signIn: () => {
-        void oidc.signinRedirect();
+      signIn: (returnTo) => {
+        const state: SignInState | undefined = returnTo === undefined ? undefined : { returnTo };
+        void oidc.signinRedirect(state ? { state } : undefined);
       },
       signOut: () => {
         void oidc.signoutRedirect();

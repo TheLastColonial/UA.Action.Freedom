@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeConvoy } from '../../test/factories/convoy';
 import { makeManifest } from '../../test/factories/manifest';
 import { convoyApi } from '../../test/msw/convoys';
@@ -15,13 +14,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'manifests', children: manifestRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('renders the overview and Not found for an unknown reference', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'D1', vin: 'VIN9' })]).handlers);

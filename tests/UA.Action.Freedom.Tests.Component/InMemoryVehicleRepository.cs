@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Vehicles;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Component;
 
@@ -40,15 +41,32 @@ internal sealed class InMemoryVehicleRepository : IVehicleRepository
 
     public Task<bool> UpdateAsync(VehicleReadModel vehicle, CancellationToken cancellationToken)
     {
-        if (!store.ContainsKey(vehicle.Vin))
+        if (!store.TryGetValue(vehicle.Vin, out var existing))
         {
             return Task.FromResult(false);
         }
 
-        store[vehicle.Vin] = vehicle;
+        store[vehicle.Vin] = vehicle with
+        {
+            ConvoyId = existing.ConvoyId,
+            InspectionStatus = existing.InspectionStatus,
+            InspectionNotes = existing.InspectionNotes,
+        };
         return Task.FromResult(true);
     }
 
     public Task<bool> DeleteAsync(string vin, CancellationToken cancellationToken) =>
         Task.FromResult(store.Remove(vin));
+
+    public Task<bool> RecordInspectionAsync(
+        string vin, InspectionStatus status, string? notes, CancellationToken cancellationToken)
+    {
+        if (!store.TryGetValue(vin, out var existing))
+        {
+            return Task.FromResult(false);
+        }
+
+        store[vin] = existing with { InspectionStatus = status, InspectionNotes = notes };
+        return Task.FromResult(true);
+    }
 }

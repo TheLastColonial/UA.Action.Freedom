@@ -10,12 +10,21 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
 {
     private readonly Dictionary<Guid, PersonReadModel> store = [];
 
+    /// <summary>Volunteers some other record still names, standing in for the foreign keys onto dbo.Person.</summary>
+    private readonly HashSet<Guid> referenced = [];
+
     public InMemoryPersonRepository(params PersonReadModel[] seed)
     {
         foreach (var person in seed)
         {
             store[person.Id] = person;
         }
+    }
+
+    public InMemoryPersonRepository NamedElsewhere(Guid id)
+    {
+        referenced.Add(id);
+        return this;
     }
 
     public int Count => store.Count;
@@ -58,6 +67,13 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
         return Task.FromResult(true);
     }
 
-    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken) =>
-        Task.FromResult(store.Remove(id));
+    public Task<DeletePersonResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (referenced.Contains(id) && store.ContainsKey(id))
+        {
+            return Task.FromResult(DeletePersonResult.StillReferenced);
+        }
+
+        return Task.FromResult(store.Remove(id) ? DeletePersonResult.Deleted : DeletePersonResult.NotFound);
+    }
 }

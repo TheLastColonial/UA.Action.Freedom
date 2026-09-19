@@ -290,4 +290,19 @@ public class PersonEndpointTests
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task A_volunteer_still_named_on_a_crew_or_record_is_kept_and_the_reason_given()
+    {
+        var repository = new InMemoryPersonRepository(AStoredPerson(isDriver: true)).NamedElsewhere(Id);
+        await using var api = FreedomApi.WithPeople(repository, roles: "Administrator");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync($"/people/{Id}", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().Should().Contain("still named");
+        repository.Contains(Id).Should().BeTrue();
+    }
 }

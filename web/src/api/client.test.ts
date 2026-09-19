@@ -8,6 +8,7 @@ import {
   ApiDomainProblem,
   ApiError,
   ApiForbidden,
+  ApiNotFound,
   ApiUnauthorized,
   ApiValidationProblem,
 } from './problem';
@@ -120,6 +121,46 @@ describe('request', () => {
     expect((error as ApiDomainProblem).detail).toBe(
       'The truck list for this convoy has already been published.',
     );
+  });
+
+  it('keeps the detail of a 404 that explains itself, and reports a bare 404 as not found', async () => {
+    worker.use(
+      http.put('/convoys/1/vehicles/VIN1/drivers/p1', () =>
+        HttpResponse.json(
+          {
+            title: 'Not Found',
+            status: 404,
+            detail: "There is no vehicle with VIN 'VIN1' on this convoy.",
+          },
+          { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+      http.get('/convoys/999', () =>
+        HttpResponse.json(
+          { title: 'Not Found', status: 404 },
+          { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    );
+
+    const explained = await request({
+      method: 'PUT',
+      path: '/convoys/1/vehicles/VIN1/drivers/p1',
+      expect: 'nocontent',
+    }).catch((e: unknown) => e);
+    const bare = await request({
+      method: 'GET',
+      path: '/convoys/999',
+      expect: 'json',
+      schema: widget,
+    }).catch((e: unknown) => e);
+
+    expect(explained).toBeInstanceOf(ApiDomainProblem);
+    expect(explained).toHaveProperty(
+      'detail',
+      "There is no vehicle with VIN 'VIN1' on this convoy.",
+    );
+    expect(bare).toBeInstanceOf(ApiNotFound);
   });
 
   it('distinguishes a missing parent (404) from an empty collection (200 [])', async () => {

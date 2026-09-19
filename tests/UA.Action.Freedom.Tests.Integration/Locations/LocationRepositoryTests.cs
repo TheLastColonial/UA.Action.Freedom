@@ -1,9 +1,7 @@
 using AwesomeAssertions;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
 using UA.Action.Freedom.Application.Locations;
-using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Data.Locations;
+using static UA.Action.Freedom.Tests.Integration.SqlTestDatabase;
 
 namespace UA.Action.Freedom.Tests.Integration.Locations;
 
@@ -14,33 +12,10 @@ namespace UA.Action.Freedom.Tests.Integration.Locations;
 [Trait("Category", "Integration")]
 public class LocationRepositoryTests
 {
-    private const string DefaultLocalConnectionString =
-        "Server=localhost,1433;Database=Freedom;User Id=freedom_app;Password=Local_Freedom_App_1;TrustServerCertificate=True;Encrypt=False;Connect Timeout=3";
-
-    private static string ConnectionString =>
-        Environment.GetEnvironmentVariable("ConnectionStrings__Freedom") ?? DefaultLocalConnectionString;
-
     private static async Task<LocationRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await using var connection = new SqlConnection(ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(1) FROM dbo.Location";
-            await command.ExecuteScalarAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            Assert.Skip($"Freedom database with dbo.Location is not reachable: {exception.Message}");
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Freedom"] = ConnectionString })
-            .Build();
-
-        return new LocationRepository(new SqlConnectionFactory(configuration));
+        await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Location", cancellationToken);
+        return new LocationRepository(ConnectionFactory());
     }
 
     private static LocationReadModel ANewLocation() => new(
@@ -49,21 +24,6 @@ public class LocationRepositoryTests
 
     private static Task RemoveAsync(int id) =>
         ExecuteAsync("DELETE FROM dbo.Location WHERE Id = @id", ("@id", id));
-
-    private static async Task ExecuteAsync(string sql, params (string Name, object Value)[] parameters)
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-
-        foreach (var (name, value) in parameters)
-        {
-            command.Parameters.AddWithValue(name, value);
-        }
-
-        await command.ExecuteNonQueryAsync();
-    }
 
     [Fact]
     public async Task Round_trips_a_location_and_hands_back_the_identifier_it_assigned()

@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
-import { makeConvoyVehicle } from '../../test/factories/convoy';
+import type { Role } from '../../auth/roles';
+import { makeConvoy, makeConvoyVehicle } from '../../test/factories/convoy';
 import { makePerson } from '../../test/factories/person';
 import { convoyApi } from '../../test/msw/convoys';
 import { personApi } from '../../test/msw/people';
@@ -9,91 +9,112 @@ import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { ConvoyDriversPanel } from './ConvoyDriversPanel';
 
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
+const alice = makePerson({ firstName: 'Alice', lastName: 'Driver', isDriver: true });
+const bob = makePerson({ firstName: 'Bob', lastName: 'Walker', isDriver: false });
 
-test('renders empty when no vehicles are assigned', async () => {
-  const api = convoyApi();
-  worker.use(...api.handlers, ...personApi().handlers);
+function serve() {
+  const people = personApi([alice, bob]);
+  const convoys = convoyApi([makeConvoy({ id: 7 })], { people: people.db });
+  convoys.vehicles.set(7, [makeConvoyVehicle({ vin: 'VIN-TEST-1', plate: 'PL-001' })]);
+  worker.use(...convoys.handlers, ...people.handlers);
+  return convoys;
+}
 
-  const screen = await renderWithProviders(
-    <ConvoyDriversPanel convoyId={7} disabled={false} />,
-    {
-      roles: ['Dispatcher'],
-    },
-  );
+function renderPanel(role: Role = 'Dispatcher') {
+  return renderWithProviders(<ConvoyDriversPanel convoyId={7} />, { roles: [role] });
+}
 
-  // Component renders without error even with no vehicles
-  expect(screen.container).toBeInTheDocument();
-});
+test('says when the convoy has no vehicles to crew', async () => {
+  const convoys = serve();
+  convoys.vehicles.set(7, []);
 
-test('displays warning when vehicle has fewer than two drivers', async () => {
-  const api = convoyApi();
-  api.vehicles.set(7, [
-    makeConvoyVehicle({ vin: 'VIN-TEST-1', plate: 'PL-001', driverCount: 1 }),
-    makeConvoyVehicle({ vin: 'VIN-TEST-2', plate: 'PL-002', driverCount: 0 }),
-  ]);
-
-  worker.use(...api.handlers, ...personApi().handlers);
-
-  const screen = await renderWithProviders(
-    <ConvoyDriversPanel convoyId={7} disabled={false} />,
-    {
-      roles: ['Dispatcher'],
-    },
-  );
+  const screen = await renderPanel();
 
   await expect
-    .element(screen.getByText(/have fewer than two drivers assigned/i))
+    .element(screen.getByText('Put vehicles on the truck list before assigning drivers.'))
     .toBeInTheDocument();
 });
 
-test('a Dispatcher can assign a driver', async () => {
-  const driver = makePerson({ id: 'd1', firstName: 'Alice', lastName: 'Driver', isDriver: true });
-
-  const api = convoyApi();
-  api.vehicles.set(7, [makeConvoyVehicle({ vin: 'VIN-TEST-1', driverCount: 0 })]);
-
-  worker.use(...api.handlers, ...personApi([driver]).handlers);
-
-  const screen = await renderWithProviders(
-    <ConvoyDriversPanel convoyId={7} disabled={false} />,
-    {
-      roles: ['Dispatcher'],
-    },
-  );
-
-  const driverSelect = screen.getByLabelText(/Add driver/i);
-  await driverSelect.selectOptions(driver.id);
-
-  const assignButton = screen.getByRole('button', { name: 'Assign' });
-  await assignButton.click();
-
-  await expect.element(screen.getByText('Alice Driver')).toBeInTheDocument();
-});
-
-test('non-Dispatcher roles cannot modify drivers', async () => {
-  const driver = makePerson({ id: 'd1', firstName: 'Alice', lastName: 'Driver', isDriver: true });
-
-  const api = convoyApi();
-  api.vehicles.set(7, [makeConvoyVehicle({ vin: 'VIN-TEST-1' })]);
-  api.drivers.set('7:VIN-TEST-1', [
-    { personId: driver.id, firstName: 'Alice', lastName: 'Driver' },
+test('warns about each vehicle with fewer than two drivers', async () => {
+  const convoys = serve();
+  convoys.vehicles.set(7, [
+    makeConvoyVehicle({ vin: 'VIN-TEST-1', plate: 'PL-001', driverCount: 1 }),
+    makeConvoyVehicle({ vin: 'VIN-TEST-2', plate: 'PL-002', driverCount: 2 }),
+    makeConvoyVehicle({ vin: 'VIN-TEST-3', plate: 'PL-003', driverCount: 0 }),
   ]);
 
-  worker.use(...api.handlers, ...personApi([driver]).handlers);
+  const screen = await renderPanel();
 
-  const screen = await renderWithProviders(
-    <ConvoyDriversPanel convoyId={7} disabled={false} />,
-    {
-      roles: ['Loader'],
-    },
-  );
-
-  await expect.element(screen.getByText('Alice Driver')).toBeInTheDocument();
-  expect(screen.queryByLabelText(/Add driver/i)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole('status'))
+    .toHaveTextContent(
+      'Vehicles VIN-TEST-1 (PL-001), VIN-TEST-3 (PL-003) have fewer than two drivers',
+    );
 });
+
+test('a dispatcher crews a vehicle with a registered driver', async () => {
+  const convoys = serve();
+  const screen = await renderPanel();
+
+  await screen.getByLabelText('Add driver to PL-001').selectOptions(alice.id);
+  await screen.getByRole('button', { name: 'Assign' }).click();
+
+  await expect.element(screen.getByRole('cell', { name: 'Alice Driver' })).toBeInTheDocument();
+  expect(convoys.drivers.get('7:VIN-TEST-1')?.map((d) => d.personId)).toEqual([alice.id]);
+  await expect
+    .element(screen.getByRole('option', { name: 'Alice Driver' }))
+    .not.toBeInTheDocument();
+});
+
+test('only registered drivers are offered', async () => {
+  serve();
+  const screen = await renderPanel();
+
+  await expect.element(screen.getByRole('option', { name: 'Alice Driver' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('option', { name: 'Bob Walker' })).not.toBeInTheDocument();
+});
+
+test('a dispatcher stands a driver down', async () => {
+  const convoys = serve();
+  convoys.drivers.set('7:VIN-TEST-1', [
+    { personId: alice.id, firstName: 'Alice', lastName: 'Driver' },
+  ]);
+  const screen = await renderPanel();
+
+  await screen.getByRole('button', { name: 'Remove Alice Driver' }).click();
+
+  await expect.element(screen.getByText('No drivers assigned yet')).toBeInTheDocument();
+  expect(convoys.drivers.get('7:VIN-TEST-1')).toEqual([]);
+});
+
+test('shows the reason when the API refuses the driver', async () => {
+  const convoys = serve();
+  const screen = await renderPanel();
+  await expect.element(screen.getByLabelText('Add driver to PL-001')).toBeInTheDocument();
+
+  // Another dispatcher takes the vehicle off the truck list while this page is open.
+  convoys.vehicles.set(7, []);
+
+  await screen.getByLabelText('Add driver to PL-001').selectOptions(alice.id);
+  await screen.getByRole('button', { name: 'Assign' }).click();
+
+  await expect.element(screen.getByRole('alert')).toHaveTextContent('on this convoy');
+});
+
+test.each<[Role]>([['Loader'], ['Administrator'], ['Purchaser']])(
+  'a %s sees the crew but cannot change it',
+  async (role) => {
+    const convoys = serve();
+    convoys.drivers.set('7:VIN-TEST-1', [
+      { personId: alice.id, firstName: 'Alice', lastName: 'Driver' },
+    ]);
+
+    const screen = await renderPanel(role);
+
+    await expect.element(screen.getByRole('cell', { name: 'Alice Driver' })).toBeInTheDocument();
+    await expect.element(screen.getByLabelText('Add driver to PL-001')).not.toBeInTheDocument();
+    await expect
+      .element(screen.getByRole('button', { name: 'Remove Alice Driver' }))
+      .not.toBeInTheDocument();
+  },
+);

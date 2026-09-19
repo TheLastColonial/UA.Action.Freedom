@@ -24,6 +24,8 @@ export function makeVehicle(overrides: Partial<VehicleReadModel> = {}): VehicleR
     cargoWidthCm: null,
     cargoDepthCm: null,
     cargoHeightCm: null,
+    inspectionStatus: 'Pending',
+    inspectionNotes: null,
     ...overrides,
   };
 }

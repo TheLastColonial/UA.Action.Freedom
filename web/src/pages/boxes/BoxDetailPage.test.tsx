@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeBox } from '../../test/factories/box';
 import { makeBay, makeLocation } from '../../test/factories/location';
 import { makePerson } from '../../test/factories/person';
@@ -16,13 +15,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'boxes', children: boxRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('renders the box and Not found for an unknown id', async () => {
   worker.use(...boxApi([makeBox({ id: 4 })]).handlers);

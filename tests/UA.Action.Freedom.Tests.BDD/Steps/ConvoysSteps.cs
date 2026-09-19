@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using AwesomeAssertions;
 using Reqnroll;
@@ -62,4 +63,46 @@ public sealed class ConvoysSteps(FreedomApiClient api, ScenarioState state)
     [When("I DELETE \"(.*)\" on the remembered convoy")]
     public Task WhenIDeleteOnTheRememberedConvoy(string template) =>
         api.SendAsync(HttpMethod.Delete, state.Recall("convoy", template), state.CurrentToken, null);
+
+    /// <summary>
+    /// Adds a volunteer registered as a driver and pins their id as <c>{driver}</c>. Added as
+    /// <c>admin</c> whatever the scenario's identity, because only the Administrator adds people.
+    /// </summary>
+    [Given("a driver exists")]
+    public async Task GivenADriverExists()
+    {
+        var admin = await api.TokenForAsync("admin");
+        var body = """
+            { "firstName": "Olena", "lastName": "Bondar", "dateOfBirth": "1985-01-01T00:00:00Z", "joined": "2024-01-01T00:00:00Z", "isDriver": true, "committed": true }
+            """;
+
+        var response = await api.SendAsync(HttpMethod.Post, "/people", admin, body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created, "the body was: {0}", api.LastBody);
+        var location = response.Headers.Location!;
+        var path = location.IsAbsoluteUri ? location.AbsolutePath : location.ToString();
+        var personId = path.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
+
+        state.CreatedResources.Add(("people", personId));
+        state.Pin(DriverKey, personId);
+    }
+
+    [When("I PUT \"(.*)\" on the remembered convoy for the driver")]
+    public Task WhenIPutOnTheRememberedConvoyForTheDriver(string template) =>
+        api.SendAsync(HttpMethod.Put, ForTheDriver(template), state.CurrentToken, null);
+
+    [When("I DELETE \"(.*)\" on the remembered convoy for the driver")]
+    public Task WhenIDeleteOnTheRememberedConvoyForTheDriver(string template) =>
+        api.SendAsync(HttpMethod.Delete, ForTheDriver(template), state.CurrentToken, null);
+
+    [Then("the response body lists the driver")]
+    public void ThenTheResponseBodyListsTheDriver() =>
+        JsonDocument.Parse(api.LastBody).RootElement.EnumerateArray()
+            .Select(driver => driver.GetProperty("personId").GetString())
+            .Should().Equal([state.Pinned(DriverKey)], "the body was: {0}", api.LastBody);
+
+    private const string DriverKey = "driver";
+
+    private string ForTheDriver(string template) =>
+        state.Recall("convoy", template).Replace("{driver}", state.Pinned(DriverKey), StringComparison.Ordinal);
 }

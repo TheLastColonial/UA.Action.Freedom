@@ -1,3 +1,5 @@
+using UA.Action.Freedom.Domain;
+
 namespace UA.Action.Freedom.Application.Vehicles;
 
 /// <summary>
@@ -18,4 +20,7 @@ public interface IVehicleRepository
     Task<bool> UpdateAsync(VehicleReadModel vehicle, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(string vin, CancellationToken cancellationToken);
+
+    Task<bool> RecordInspectionAsync(
+        string vin, InspectionStatus status, string? notes, CancellationToken cancellationToken);
 }

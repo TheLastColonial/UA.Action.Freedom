@@ -1,8 +1,7 @@
 import { http } from 'msw';
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { validationProblem } from '../../test/msw/problem';
 import { personApi } from '../../test/msw/people';
 import { worker } from '../../test/msw/worker';
@@ -13,13 +12,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'people', children: peopleRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('shows client validation for the required names', async () => {
   worker.use(...personApi([]).handlers);

@@ -48,7 +48,9 @@ public enum AssignVehicleOutcome
     Assigned,
     ConvoyNotFound,
     VehicleNotFound,
-    TruckListPublished
+    TruckListPublished,
+    VehicleNotPassedInspection,
+    VehicleOnAnotherConvoy
 }
 
 public sealed class AssignVehicleToConvoyHandler(IConvoyRepository repository)
@@ -71,9 +73,15 @@ public sealed class AssignVehicleToConvoyHandler(IConvoyRepository repository)
             return AssignVehicleOutcome.TruckListPublished;
         }
 
-        return await repository.AssignVehicleAsync(command.ConvoyId, command.Vin, cancellationToken)
-            ? AssignVehicleOutcome.Assigned
-            : AssignVehicleOutcome.VehicleNotFound;
+        // A donated vehicle is itself part of the aid, handed over in Ukraine: one that has not
+        // passed its servicing inspection is a failed delivery waiting to happen.
+        return await repository.AssignVehicleAsync(command.ConvoyId, command.Vin, cancellationToken) switch
+        {
+            AssignVehicleResult.Assigned => AssignVehicleOutcome.Assigned,
+            AssignVehicleResult.NotPassedInspection => AssignVehicleOutcome.VehicleNotPassedInspection,
+            AssignVehicleResult.OnAnotherConvoy => AssignVehicleOutcome.VehicleOnAnotherConvoy,
+            _ => AssignVehicleOutcome.VehicleNotFound,
+        };
     }
 }
 

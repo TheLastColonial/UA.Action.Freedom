@@ -271,6 +271,10 @@ jobs:
           --configuration ${{ env.CONFIGURATION }}
 
       - name: Integration tests (Dapper repository against SQL Server)
+        # The stack was stood up above, so an unreachable database here is a broken
+        # environment, not an absent one — fail rather than skip (SqlTestDatabase).
+        env:
+          FREEDOM_REQUIRE_INTEGRATION: 'true'
         run: >
           dotnet test
           --project tests/UA.Action.Freedom.Tests.Integration/UA.Action.Freedom.Tests.Integration.csproj

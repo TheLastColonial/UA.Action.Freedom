@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeConvoy } from '../../test/factories/convoy';
 import { makeManifest } from '../../test/factories/manifest';
 import { convoyApi } from '../../test/msw/convoys';
@@ -8,13 +7,6 @@ import { manifestApi } from '../../test/msw/manifests';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { ManifestStatePanel } from './ManifestStatePanel';
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('from Created without a convoy: Reject is offered, Propose is disabled with a reason', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'M1', status: 'Created' })]).handlers);

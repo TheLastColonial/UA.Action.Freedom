@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.People;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Component;
 
@@ -26,6 +28,15 @@ public class ConvoyEndpointTests
 
     private static ConvoyReadModel AConvoy(bool published = false) =>
         new(Id, Start, ExpectedEnd, published ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null);
+
+    private static readonly Guid DriverId = new("0b7e8f2a-4c1d-4e5f-9a6b-7c8d9e0f1a2b");
+
+    private static PersonReadModel APerson(Guid id, bool isDriver = true) => new(
+        id, "Olena", "Bondar", new DateTime(1985, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), null, isDriver, Committed: true);
+
+    private static InMemoryConvoyRepository AConvoyWithAVehicleOnIt() =>
+        new InMemoryConvoyRepository(AConvoy()).WithVehicle(Vin, onConvoy: Id).WithPerson(DriverId, "Olena", "Bondar");
 
     private static object ACreateBody() => new
     {
@@ -315,5 +326,206 @@ public class ConvoyEndpointTests
 
         // Donated vehicles outlive the convoy they were going to travel on.
         repository.ConvoyOf(Vin).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(InspectionStatus.Pending)]
+    [InlineData(InspectionStatus.Inspecting)]
+    [InlineData(InspectionStatus.Failed)]
+    public async Task A_vehicle_that_has_not_passed_its_inspection_cannot_join_a_convoy(InspectionStatus inspection)
+    {
+        var repository = new InMemoryConvoyRepository(AConvoy()).WithVehicle(Vin, inspection: inspection);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsync(
+            $"/convoys/{Id}/vehicles/{Vin}", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().Should().Contain("has not passed its servicing inspection");
+        repository.ConvoyOf(Vin).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_vehicle_already_on_another_convoy_is_not_moved()
+    {
+        const int otherConvoy = 7;
+        var repository = new InMemoryConvoyRepository(AConvoy()).WithVehicle(Vin, onConvoy: otherConvoy);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsync(
+            $"/convoys/{Id}/vehicles/{Vin}", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        repository.ConvoyOf(Vin).Should().Be(otherConvoy);
+    }
+
+    [Fact]
+    public async Task A_mechanic_may_not_see_or_plan_convoys()
+    {
+        await using var api = FreedomApi.WithConvoys(new InMemoryConvoyRepository(), roles: "Mechanic");
+        using var client = api.CreateClient();
+
+        var read = await client.GetAsync("/convoys", TestContext.Current.CancellationToken);
+        var write = await client.PostAsJsonAsync("/convoys", ACreateBody(), TestContext.Current.CancellationToken);
+
+        read.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        write.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task A_dispatcher_crews_a_vehicle_and_every_operational_role_can_read_the_crew()
+    {
+        var repository = AConvoyWithAVehicleOnIt();
+        await using (var dispatcher = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher"))
+        {
+            using var client = dispatcher.CreateClient();
+
+            var response = await client.PutAsync(
+                $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", content: null, TestContext.Current.CancellationToken);
+
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        await using var loader = FreedomApi.WithConvoys(repository, roles: "Loader");
+        using var loaderClient = loader.CreateClient();
+
+        var crew = await loaderClient.GetFromJsonAsync<JsonElement>(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers", TestContext.Current.CancellationToken);
+        var vehicles = await loaderClient.GetFromJsonAsync<JsonElement>(
+            $"/convoys/{Id}/vehicles", TestContext.Current.CancellationToken);
+
+        crew.EnumerateArray().Should().ContainSingle()
+            .Which.GetProperty("personId").GetGuid().Should().Be(DriverId);
+        vehicles.EnumerateArray().Single().GetProperty("driverCount").GetInt32().Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("Administrator")]
+    [InlineData("Loader")]
+    [InlineData("Purchaser")]
+    [InlineData("Mechanic")]
+    public async Task Only_a_dispatcher_may_crew_a_vehicle(string role)
+    {
+        var repository = AConvoyWithAVehicleOnIt().WithDriver(Vin, DriverId);
+        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: role);
+        using var client = api.CreateClient();
+
+        var assign = await client.PutAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{Guid.NewGuid()}", content: null, TestContext.Current.CancellationToken);
+        var unassign = await client.DeleteAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", TestContext.Current.CancellationToken);
+
+        assign.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        unassign.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        repository.DriverIdsOf(Vin).Should().Equal(DriverId);
+    }
+
+    [Fact]
+    public async Task Crewing_a_vehicle_that_is_not_on_the_convoy_is_a_404_not_a_conflict()
+    {
+        var repository = new InMemoryConvoyRepository(AConvoy()).WithVehicle(Vin).WithPerson(DriverId, "Olena", "Bondar");
+        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Crewing_a_vehicle_with_a_driver_already_on_it_is_a_conflict()
+    {
+        var repository = AConvoyWithAVehicleOnIt().WithDriver(Vin, DriverId);
+        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task A_volunteer_who_does_not_drive_cannot_crew_a_vehicle()
+    {
+        var repository = AConvoyWithAVehicleOnIt();
+        await using var api = FreedomApi.WithConvoys(
+            repository, new InMemoryPersonRepository(APerson(DriverId, isDriver: false)), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        repository.DriverIdsOf(Vin).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Crewing_with_an_unknown_volunteer_is_a_404()
+    {
+        await using var api = FreedomApi.WithConvoys(AConvoyWithAVehicleOnIt(), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_dispatcher_stands_a_driver_down()
+    {
+        var repository = AConvoyWithAVehicleOnIt().WithDriver(Vin, DriverId);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", TestContext.Current.CancellationToken);
+        var again = await client.DeleteAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        again.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        repository.DriverIdsOf(Vin).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task The_crew_of_a_vehicle_not_on_the_convoy_is_a_404()
+    {
+        var repository = new InMemoryConvoyRepository(AConvoy()).WithVehicle(Vin);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.GetAsync($"/convoys/{Id}/vehicles/{Vin}/drivers", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Taking_a_vehicle_off_the_truck_list_stands_its_crew_down()
+    {
+        var repository = AConvoyWithAVehicleOnIt().WithDriver(Vin, DriverId);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        await client.DeleteAsync($"/convoys/{Id}/vehicles/{Vin}", TestContext.Current.CancellationToken);
+
+        repository.DriverIdsOf(Vin).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Cancelling_a_convoy_stands_its_crews_down()
+    {
+        var repository = AConvoyWithAVehicleOnIt().WithDriver(Vin, DriverId);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        await client.DeleteAsync($"/convoys/{Id}", TestContext.Current.CancellationToken);
+
+        repository.DriverIdsOf(Vin).Should().BeEmpty();
     }
 }

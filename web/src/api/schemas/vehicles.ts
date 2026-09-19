@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 import { fuelTypeSchema, transmissionSchema } from './common';
 
+// src/UA.Action.Freedom.Domain/Vehicle.cs — InspectionStatus. Only Passed may join a convoy.
+export const inspectionStatusSchema = z.enum(['Pending', 'Inspecting', 'Passed', 'Failed']);
+export type InspectionStatus = z.infer<typeof inspectionStatusSchema>;
+
 // Response shape — src/UA.Action.Freedom.Application/Vehicles/VehicleReadModel.cs. Optional
 // scalars come back as JSON null (System.Text.Json does not omit them).
 export const vehicleReadModelSchema = z.object({
@@ -24,12 +28,16 @@ export const vehicleReadModelSchema = z.object({
   cargoWidthCm: z.number().nullable(),
   cargoDepthCm: z.number().nullable(),
   cargoHeightCm: z.number().nullable(),
+  inspectionStatus: inspectionStatusSchema,
+  inspectionNotes: z.string().nullable(),
 });
 
 export type VehicleReadModel = z.infer<typeof vehicleReadModelSchema>;
 
 // Request shape — src/UA.Action.Freedom.Api/Vehicles/VehicleRequests.cs. Optional fields are
-// omitted entirely rather than sent as null.
+// omitted entirely rather than sent as null. Convoy membership and the inspection are
+// absent on purpose: they change only through /convoys/{id}/vehicles/{vin} and
+// /vehicles/{vin}/inspection.
 export interface CreateVehicleRequest {
   vin: string;
   plate: string;
@@ -42,7 +50,6 @@ export interface CreateVehicleRequest {
   servicing: boolean;
   year: number;
   fuel: z.infer<typeof fuelTypeSchema>;
-  convoyId?: number;
   purchaserName?: string;
   purchaseDate?: string;
   weightKg: number;
@@ -53,3 +60,10 @@ export interface CreateVehicleRequest {
 }
 
 export type UpdateVehicleRequest = Omit<CreateVehicleRequest, 'vin'>;
+
+// Body of PUT /vehicles/{vin}/inspection — RecordInspectionRequest in VehicleRequests.cs. The
+// inspection is deliberately absent from the create/update bodies: the API ignores it there.
+export interface RecordInspectionRequest {
+  status: InspectionStatus;
+  notes?: string;
+}

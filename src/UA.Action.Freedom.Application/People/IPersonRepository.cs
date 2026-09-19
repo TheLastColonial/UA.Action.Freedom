@@ -21,5 +21,17 @@ public interface IPersonRepository
 
     Task<bool> UpdateAsync(PersonReadModel person, CancellationToken cancellationToken);
 
-    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>
+    /// Removes the volunteer, unless something still names them — a vehicle crew, a manifest
+    /// team, or the record of who validated or shelved a box. Those records are the charity's
+    /// account of who did what, so they keep the volunteer rather than lose the name.
+    /// </summary>
+    Task<DeletePersonResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
+}
+
+public enum DeletePersonResult
+{
+    Deleted,
+    NotFound,
+    StillReferenced
 }

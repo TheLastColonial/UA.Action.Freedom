@@ -22,7 +22,6 @@ export interface VehicleFormValues {
   servicing: boolean;
   year: string;
   fuel: z.infer<typeof fuelTypeSchema>;
-  convoyId: string;
   purchaserName: string;
   purchaseDate: string;
   weightKg: string;
@@ -45,7 +44,6 @@ export function emptyVehicleForm(): VehicleFormValues {
     servicing: false,
     year: String(new Date().getUTCFullYear()),
     fuel: 'Unknown',
-    convoyId: '',
     purchaserName: '',
     purchaseDate: '',
     weightKg: '',
@@ -69,7 +67,6 @@ export function vehicleToFormValues(vehicle: VehicleReadModel): VehicleFormValue
     servicing: vehicle.servicing,
     year: String(vehicle.year),
     fuel: vehicle.fuel,
-    convoyId: vehicle.convoyId === null ? '' : String(vehicle.convoyId),
     purchaserName: vehicle.purchaserName ?? '',
     purchaseDate: vehicle.purchaseDate ? vehicle.purchaseDate.slice(0, 10) : '',
     weightKg: String(vehicle.weightKg),
@@ -121,8 +118,6 @@ export function vehicleFormToRequest(values: VehicleFormValues): CreateVehicleRe
 
   const mileage = wholeNumber(values.mileage);
   if (mileage !== undefined) request.mileage = mileage;
-  const convoyId = wholeNumber(values.convoyId);
-  if (convoyId !== undefined) request.convoyId = convoyId;
 
   const maxCargoWeightKg = decimalNumber(values.maxCargoWeightKg);
   if (maxCargoWeightKg !== undefined) request.maxCargoWeightKg = maxCargoWeightKg;
@@ -181,7 +176,6 @@ export const vehicleFormSchema = z.object({
   servicing: z.boolean(),
   year: integerInRange(1950, 2100, 'Year must be a whole number between 1950 and 2100'),
   fuel: fuelTypeSchema,
-  convoyId: optionalNonNegativeInteger('Convoy must be a whole number'),
   purchaserName: z.string().max(200, 'Purchaser must be 200 characters or fewer'),
   purchaseDate: z.string(),
   weightKg: integerInRange(0, 1_000_000, 'Weight must be a whole number of 0 or more'),

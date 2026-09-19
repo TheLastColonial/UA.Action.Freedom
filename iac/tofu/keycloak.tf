@@ -84,6 +84,7 @@ locals {
     Dispatcher    = "Plans convoys, builds manifests, requests GMR and ELO."
     Loader        = "Confirms donation contents, weighs and validates boxes."
     Purchaser     = "Records sourced vehicles and supplies."
+    Mechanic      = "Keeps vehicle details current and records servicing inspections."
     GroundOfficer = "Coordinates with local authorities; the only role that may resolve receiver addresses."
   }
 
@@ -96,7 +97,7 @@ locals {
   #                   receiver address.
   seed_users = {
     Admin         = ["Administrator"]
-    Operator      = ["Dispatcher", "Loader", "Purchaser"]
+    Operator      = ["Dispatcher", "Loader", "Mechanic", "Purchaser"]
     GroundOfficer = ["GroundOfficer"]
   }
 }

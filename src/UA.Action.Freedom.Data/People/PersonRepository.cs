@@ -1,4 +1,5 @@
 using Dapper;
+using Microsoft.Data.SqlClient;
 using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Data.People;
@@ -15,6 +16,8 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
 {
     private const string Columns =
         "Id, FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed";
+
+    private const int ForeignKeyViolation = 547;
 
     public async Task<PersonReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -96,15 +99,25 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
         return affected > 0;
     }
 
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<DeletePersonResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
-        var affected = await connection.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM dbo.Person WHERE Id = @id",
-            new { id },
-            cancellationToken: cancellationToken));
+        // None of the five foreign keys onto dbo.Person cascades, on purpose, so the database is
+        // the one place that knows every table still naming this volunteer. Asking it — rather
+        // than listing those tables here — keeps a sixth reference from turning into a 500.
+        try
+        {
+            var affected = await connection.ExecuteAsync(new CommandDefinition(
+                "DELETE FROM dbo.Person WHERE Id = @id",
+                new { id },
+                cancellationToken: cancellationToken));
 
-        return affected > 0;
+            return affected > 0 ? DeletePersonResult.Deleted : DeletePersonResult.NotFound;
+        }
+        catch (SqlException exception) when (exception.Number == ForeignKeyViolation)
+        {
+            return DeletePersonResult.StillReferenced;
+        }
     }
 }

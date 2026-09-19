@@ -8,7 +8,9 @@ namespace UA.Action.Freedom.Application.Vehicles;
 /// <see cref="Vehicle"/> entity carries non-nullable <c>Convoy</c> / <c>Purchaser</c>
 /// navigation and no identity, so it cannot be hydrated from a row yet — reconciling the two
 /// is follow-up work. This record is the read model for queries and the write shape the
-/// repository takes.
+/// repository takes. The inspection pair is read-only through this shape: the repository never
+/// writes it from here, only through <see cref="IVehicleRepository.RecordInspectionAsync"/>, so
+/// an ordinary vehicle edit cannot set, clear or forge a Mechanic's result.
 /// </summary>
 public sealed record VehicleReadModel(
     string Vin,
@@ -29,4 +31,6 @@ public sealed record VehicleReadModel(
     decimal? MaxCargoWeightKg,
     decimal? CargoWidthCm,
     decimal? CargoDepthCm,
-    decimal? CargoHeightCm);
+    decimal? CargoHeightCm,
+    InspectionStatus InspectionStatus = InspectionStatus.Pending,
+    string? InspectionNotes = null);

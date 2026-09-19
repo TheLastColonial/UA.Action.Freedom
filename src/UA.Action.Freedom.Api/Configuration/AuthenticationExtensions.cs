@@ -15,8 +15,18 @@ public static class AuthenticationExtensions
     /// <summary>Read any vehicle — every operational role.</summary>
     public const string VehiclesRead = "vehicles:read";
 
-    /// <summary>Create, change or remove a vehicle — Purchaser and Administrator only.</summary>
+    /// <summary>Create, change or remove a vehicle — Administrator, Purchaser and Mechanic.</summary>
     public const string VehiclesWrite = "vehicles:write";
+
+    /// <summary>
+    /// Record a vehicle's servicing inspection — Administrator and Mechanic.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="VehiclesWrite"/> because the result is what decides whether a
+    /// vehicle may join a convoy: a Purchaser who can edit a vehicle's details cannot also pass
+    /// it as roadworthy (docs/domain/key-concepts.md § Mechanic).
+    /// </remarks>
+    public const string VehiclesService = "vehicles:service";
 
     /// <summary>Read the volunteer roster — every operational role.</summary>
     public const string PeopleRead = "people:read";
@@ -134,6 +144,12 @@ public static class AuthenticationExtensions
     private const string Loader = "Loader";
 
     /// <summary>
+    /// Vehicles only: reads and edits the fleet and records servicing inspections. Absent from
+    /// every other policy — a Mechanic has no reason to see convoys, cargo or volunteers.
+    /// </summary>
+    private const string Mechanic = "Mechanic";
+
+    /// <summary>
     /// The only role that sees full receiver detail. Deliberately absent from every other
     /// policy: a Ground Officer has no reason to read the vehicle roster or the volunteer list,
     /// and the isolation runs both ways.
@@ -182,9 +198,11 @@ public static class AuthenticationExtensions
         services
             .AddAuthorizationBuilder()
             .AddPolicy(VehiclesRead, policy =>
-                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader, Mechanic))
             .AddPolicy(VehiclesWrite, policy =>
-                policy.RequireRole(Administrator, Purchaser))
+                policy.RequireRole(Administrator, Purchaser, Mechanic))
+            .AddPolicy(VehiclesService, policy =>
+                policy.RequireRole(Administrator, Mechanic))
             .AddPolicy(PeopleRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(PeopleWrite, policy =>

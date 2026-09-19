@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../auth/useAuth';
 import { PageSkeleton } from './PageSkeleton';
@@ -12,12 +12,13 @@ import { PageSkeleton } from './PageSkeleton';
  */
 export function RequireAuth(): JSX.Element {
   const auth = useAuth();
+  const { pathname, search } = useLocation();
 
   useEffect(() => {
     if (!auth.isLoading && !auth.isAuthenticated) {
-      auth.signIn();
+      auth.signIn(`${pathname}${search}`);
     }
-  }, [auth]);
+  }, [auth, pathname, search]);
 
   if (auth.isLoading || !auth.isAuthenticated) {
     return <PageSkeleton />;

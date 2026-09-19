@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeVehicle } from '../../test/factories/vehicle';
 import { vehicleApi } from '../../test/msw/vehicles';
 import { worker } from '../../test/msw/worker';
@@ -12,13 +11,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'vehicles', children: vehicleRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('pre-populates the form from the vehicle', async () => {
   worker.use(...vehicleApi([makeVehicle({ vin: 'VIN-X', plate: 'ED11 TME' })]).handlers);

@@ -1,5 +1,22 @@
 namespace UA.Action.Freedom.Application.Convoys;
 
+/// <summary>What <see cref="IConvoyRepository.AssignVehicleAsync"/> found when it tried.</summary>
+public enum AssignVehicleResult
+{
+    Assigned,
+    VehicleNotFound,
+    NotPassedInspection,
+    OnAnotherConvoy
+}
+
+/// <summary>What <see cref="IConvoyRepository.AssignDriverAsync"/> found when it tried.</summary>
+public enum AssignDriverResult
+{
+    Assigned,
+    VehicleNotOnConvoy,
+    AlreadyAssigned
+}
+
 /// <summary>
 /// Persistence port for <see cref="ConvoyReadModel"/> and the two things a convoy owns: its
 /// route and its truck list.
@@ -35,8 +52,12 @@ public interface IConvoyRepository
 
     Task<IReadOnlyList<ConvoyVehicleReadModel>> ListVehiclesAsync(int convoyId, CancellationToken cancellationToken);
 
-    /// <summary>Returns false when there is no vehicle with that VIN.</summary>
-    Task<bool> AssignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken);
+    /// <summary>
+    /// Puts the vehicle on this convoy, but only if it has passed its inspection and is not
+    /// already on a different one. The condition is part of the write, so the database settles a
+    /// race with a Mechanic changing the result or with a second dispatcher.
+    /// </summary>
+    Task<AssignVehicleResult> AssignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken);
 
     /// <summary>Returns false when that vehicle is not on this convoy.</summary>
     Task<bool> UnassignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken);
@@ -53,15 +74,13 @@ public interface IConvoyRepository
     /// </summary>
     Task<IReadOnlyList<VehicleDriverReadModel>?> ListVehicleDriversAsync(int convoyId, string vin, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Assigns a driver to a vehicle on a convoy. Returns false when there is no such vehicle on this convoy or
-    /// the driver is already assigned to this vehicle.
-    /// </summary>
-    Task<bool> AssignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
+    /// <summary>Assigns a driver to a vehicle, provided the vehicle is on this convoy.</summary>
+    Task<AssignDriverResult> AssignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Unassigns a driver from a vehicle on a convoy. Returns false when there is no such vehicle on this convoy or
-    /// the driver is not assigned to this vehicle.
+    /// Unassigns a driver from a vehicle on a convoy. Returns false when there is no such vehicle
+    /// on this convoy or the driver is not assigned to it — the convoy is part of the statement,
+    /// not only of the handler's check.
     /// </summary>
     Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
 }

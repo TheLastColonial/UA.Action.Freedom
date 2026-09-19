@@ -30,6 +30,15 @@ public sealed class CreateVehicleRequestValidator : AbstractValidator<CreateVehi
     }
 }
 
+public sealed class RecordInspectionRequestValidator : AbstractValidator<RecordInspectionRequest>
+{
+    public RecordInspectionRequestValidator()
+    {
+        RuleFor(r => r.Status).IsInEnum();
+        RuleFor(r => r.Notes).MaximumLength(2000);
+    }
+}
+
 public sealed class UpdateVehicleRequestValidator : AbstractValidator<UpdateVehicleRequest>
 {
     public UpdateVehicleRequestValidator()

@@ -1,9 +1,8 @@
 using AwesomeAssertions;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
 using UA.Action.Freedom.Application.Convoys;
-using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Data.Convoys;
+using UA.Action.Freedom.Domain;
+using static UA.Action.Freedom.Tests.Integration.SqlTestDatabase;
 
 namespace UA.Action.Freedom.Tests.Integration.Convoys;
 
@@ -20,36 +19,13 @@ namespace UA.Action.Freedom.Tests.Integration.Convoys;
 [Trait("Category", "Integration")]
 public class ConvoyRepositoryTests
 {
-    private const string DefaultLocalConnectionString =
-        "Server=localhost,1433;Database=Freedom;User Id=sa;Password=Local_Freedom_Dev_1;TrustServerCertificate=True;Encrypt=False;Connect Timeout=3";
-
-    private static string ConnectionString =>
-        Environment.GetEnvironmentVariable("ConnectionStrings__Freedom") ?? DefaultLocalConnectionString;
-
     private static readonly DateTime Start = new(2026, 9, 1, 6, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime ExpectedEnd = new(2026, 9, 5, 18, 0, 0, DateTimeKind.Utc);
 
     private static async Task<ConvoyRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await using var connection = new SqlConnection(ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(1) FROM dbo.Convoy; SELECT COUNT(1) FROM dbo.ConvoyRouteStop;";
-            await command.ExecuteScalarAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            Assert.Skip($"Freedom database with dbo.Convoy is not reachable: {exception.Message}");
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Freedom"] = ConnectionString })
-            .Build();
-
-        return new ConvoyRepository(new SqlConnectionFactory(configuration));
+        await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Convoy; SELECT COUNT(1) FROM dbo.ConvoyRouteStop;", cancellationToken);
+        return new ConvoyRepository(ConnectionFactory());
     }
 
     private static RouteStopReadModel AStop(int sequence, string city, string postcode) =>
@@ -57,30 +33,184 @@ public class ConvoyRepositoryTests
 
     private static string NewVin() => "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
 
-    private static async Task ExecuteAsync(string sql, params (string Name, object Value)[] parameters)
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
+    private static Task AddVehicleAsync(string vin, InspectionStatus inspection = InspectionStatus.Passed) => ExecuteAsync(
+        "INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg, InspectionStatus) VALUES (@vin, 'IT12ABC', 2015, 1800, @inspection)",
+        ("@vin", vin),
+        ("@inspection", (int)inspection));
 
-        foreach (var (name, value) in parameters)
-        {
-            command.Parameters.AddWithValue(name, value);
-        }
-
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static Task AddVehicleAsync(string vin) => ExecuteAsync(
-        "INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg) VALUES (@vin, 'IT12ABC', 2015, 1800)",
-        ("@vin", vin));
+    private static Task<object?> ConvoyOfAsync(string vin) =>
+        ValueAsync("SELECT ConvoyId FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
 
     private static Task RemoveVehicleAsync(string vin) =>
         ExecuteAsync("DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
 
     private static Task RemoveConvoyAsync(int id) =>
         ExecuteAsync("DELETE FROM dbo.Convoy WHERE Id = @id", ("@id", id));
+
+    private static async Task<Guid> AddDriverAsync(string firstName, string lastName)
+    {
+        var id = Guid.NewGuid();
+        await ExecuteAsync(
+            """
+            INSERT INTO dbo.Person (Id, FirstName, LastName, DateOfBirth, Joined, IsDriver)
+            VALUES (@id, @firstName, @lastName, '1985-01-01', '2024-01-01', 1)
+            """,
+            ("@id", id),
+            ("@firstName", firstName),
+            ("@lastName", lastName));
+        return id;
+    }
+
+    private static Task RemovePeopleAsync(params Guid[] ids) => Task.WhenAll(ids.Select(id =>
+        ExecuteAsync("DELETE FROM dbo.VehicleDriver WHERE PersonId = @id; DELETE FROM dbo.Person WHERE Id = @id", ("@id", id))));
+
+    [Fact]
+    public async Task Crews_a_vehicle_and_lists_its_drivers_by_surname()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var zelenko = await AddDriverAsync("Taras", "Zelenko");
+        var bondar = await AddDriverAsync("Olena", "Bondar");
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await repository.AssignVehicleAsync(id, vin, cancellationToken);
+
+            (await repository.AssignDriverAsync(id, vin, zelenko, cancellationToken)).Should().Be(AssignDriverResult.Assigned);
+            (await repository.AssignDriverAsync(id, vin, bondar, cancellationToken)).Should().Be(AssignDriverResult.Assigned);
+            (await repository.AssignDriverAsync(id, vin, bondar, cancellationToken)).Should().Be(AssignDriverResult.AlreadyAssigned);
+
+            var crew = await repository.ListVehicleDriversAsync(id, vin, cancellationToken);
+            crew!.Select(driver => driver.LastName).Should().Equal("Bondar", "Zelenko");
+            (await repository.ListVehiclesAsync(id, cancellationToken)).Should().ContainSingle()
+                .Which.DriverCount.Should().Be(2);
+
+            (await repository.UnassignDriverAsync(id, vin, zelenko, cancellationToken)).Should().BeTrue();
+            (await repository.UnassignDriverAsync(id, vin, zelenko, cancellationToken)).Should().BeFalse();
+            (await repository.ListVehicleDriversAsync(id, vin, cancellationToken))!.Should().ContainSingle();
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(id);
+            await RemovePeopleAsync(zelenko, bondar);
+        }
+    }
+
+    [Fact]
+    public async Task Will_not_crew_or_list_a_vehicle_that_is_not_on_the_convoy()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var driver = await AddDriverAsync("Olena", "Bondar");
+
+        try
+        {
+            await AddVehicleAsync(vin);
+
+            (await repository.AssignDriverAsync(id, vin, driver, cancellationToken)).Should().Be(AssignDriverResult.VehicleNotOnConvoy);
+            (await repository.ListVehicleDriversAsync(id, vin, cancellationToken)).Should().BeNull();
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(id);
+            await RemovePeopleAsync(driver);
+        }
+    }
+
+    [Fact]
+    public async Task Unassigning_a_driver_names_the_convoy_as_well_as_the_vehicle()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var other = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var driver = await AddDriverAsync("Olena", "Bondar");
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await repository.AssignVehicleAsync(id, vin, cancellationToken);
+            await repository.AssignDriverAsync(id, vin, driver, cancellationToken);
+
+            (await repository.UnassignDriverAsync(other, vin, driver, cancellationToken)).Should().BeFalse();
+            (await repository.ListVehicleDriversAsync(id, vin, cancellationToken))!.Should().ContainSingle();
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(id);
+            await RemoveConvoyAsync(other);
+            await RemovePeopleAsync(driver);
+        }
+    }
+
+    [Fact]
+    public async Task Taking_a_vehicle_off_a_convoy_stands_its_crew_down()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var driver = await AddDriverAsync("Olena", "Bondar");
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await repository.AssignVehicleAsync(id, vin, cancellationToken);
+            await repository.AssignDriverAsync(id, vin, driver, cancellationToken);
+
+            await repository.UnassignVehicleAsync(id, vin, cancellationToken);
+            await repository.AssignVehicleAsync(id, vin, cancellationToken);
+
+            (await repository.ListVehicleDriversAsync(id, vin, cancellationToken)).Should().BeEmpty();
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(id);
+            await RemovePeopleAsync(driver);
+        }
+    }
+
+    [Fact]
+    public async Task Cancelling_a_convoy_stands_its_crews_down()
+    {
+        // Otherwise the released vehicle carries the old crew to whichever convoy it joins next.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var cancelled = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var next = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var driver = await AddDriverAsync("Olena", "Bondar");
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await repository.AssignVehicleAsync(cancelled, vin, cancellationToken);
+            await repository.AssignDriverAsync(cancelled, vin, driver, cancellationToken);
+
+            await repository.DeleteAsync(cancelled, cancellationToken);
+            await repository.AssignVehicleAsync(next, vin, cancellationToken);
+
+            (await repository.ListVehicleDriversAsync(next, vin, cancellationToken)).Should().BeEmpty();
+            (await repository.ListVehiclesAsync(next, cancellationToken)).Should().ContainSingle()
+                .Which.DriverCount.Should().Be(0);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(next);
+            await RemovePeopleAsync(driver);
+        }
+    }
 
     [Fact]
     public async Task Round_trips_a_convoy_and_hands_back_the_identifier_it_assigned()
@@ -186,7 +316,10 @@ public class ConvoyRepositoryTests
         {
             await AddVehicleAsync(vin);
 
-            (await repository.AssignVehicleAsync(id, vin, cancellationToken)).Should().BeTrue();
+            (await repository.AssignVehicleAsync(id, vin, cancellationToken)).Should().Be(AssignVehicleResult.Assigned);
+
+            // Assigning it again to the convoy it is already on changes nothing and is not an error.
+            (await repository.AssignVehicleAsync(id, vin, cancellationToken)).Should().Be(AssignVehicleResult.Assigned);
 
             var onConvoy = await repository.ListVehiclesAsync(id, cancellationToken);
             onConvoy.Should().ContainSingle(vehicle => vehicle.Vin == vin);
@@ -198,12 +331,69 @@ public class ConvoyRepositoryTests
             (await repository.UnassignVehicleAsync(id, vin, cancellationToken)).Should().BeFalse();
 
             // And there is no vehicle with this VIN at all.
-            (await repository.AssignVehicleAsync(id, "NOSUCHVIN000000", cancellationToken)).Should().BeFalse();
+            (await repository.AssignVehicleAsync(id, "NOSUCHVIN000000", cancellationToken))
+                .Should().Be(AssignVehicleResult.VehicleNotFound);
         }
         finally
         {
             await RemoveVehicleAsync(vin);
             await RemoveConvoyAsync(id);
+        }
+    }
+
+    [Theory]
+    [InlineData(InspectionStatus.Pending)]
+    [InlineData(InspectionStatus.Inspecting)]
+    [InlineData(InspectionStatus.Failed)]
+    public async Task Refuses_a_vehicle_that_has_not_passed_its_inspection(InspectionStatus inspection)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+
+        try
+        {
+            await AddVehicleAsync(vin, inspection);
+
+            var result = await repository.AssignVehicleAsync(id, vin, cancellationToken);
+
+            result.Should().Be(AssignVehicleResult.NotPassedInspection);
+            (await ConvoyOfAsync(vin)).Should().Be(DBNull.Value);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task Will_not_take_a_vehicle_off_another_convoy()
+    {
+        // Otherwise assigning to a second convoy would silently empty a seat on the first —
+        // including one whose truck list is already published and manifested.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var first = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var second = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await repository.AssignVehicleAsync(first, vin, cancellationToken);
+
+            var result = await repository.AssignVehicleAsync(second, vin, cancellationToken);
+
+            result.Should().Be(AssignVehicleResult.OnAnotherConvoy);
+            (await ConvoyOfAsync(vin)).Should().Be(first);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(first);
+            await RemoveConvoyAsync(second);
         }
     }
 
@@ -224,15 +414,7 @@ public class ConvoyRepositoryTests
 
             await repository.DeleteAsync(id, cancellationToken);
 
-            await using var connection = new SqlConnection(ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT ConvoyId FROM dbo.Vehicle WHERE Vin = @vin";
-            command.Parameters.AddWithValue("@vin", vin);
-
-            var convoyId = await command.ExecuteScalarAsync(cancellationToken);
-
-            convoyId.Should().Be(DBNull.Value);
+            (await ConvoyOfAsync(vin)).Should().Be(DBNull.Value);
         }
         finally
         {

@@ -7,8 +7,10 @@ namespace UA.Action.Freedom.Api.Vehicles;
 /// <summary>
 /// CRUD for donated vehicles. VIN is the natural key: it is the route segment and the one
 /// field a <c>PUT</c> cannot change — correcting a VIN is delete-and-recreate. Reads are
-/// open to every operational role; writes to Purchaser and Administrator
-/// (docs/domain/key-concepts.md § Roles). Ground Officer is excluded from both.
+/// open to every operational role; writes to Administrator, Purchaser and Mechanic; the
+/// servicing inspection to Administrator and Mechanic alone, through its own route so an
+/// ordinary edit cannot set it (docs/domain/key-concepts.md § Roles). Ground Officer is
+/// excluded from all of them.
 /// </summary>
 public static class VehicleEndpoints
 {
@@ -64,6 +66,18 @@ public static class VehicleEndpoints
         })
         .AddEndpointFilter<ValidationFilter<UpdateVehicleRequest>>()
         .RequireAuthorization(AuthenticationExtensions.VehiclesWrite);
+
+        vehicles.MapPut("/{vin}/inspection", async (
+            string vin,
+            RecordInspectionRequest request,
+            ICommandHandler<RecordInspectionCommand, RecordInspectionOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(request.ToCommand(vin), cancellationToken);
+            return outcome == RecordInspectionOutcome.NotFound ? Results.NotFound() : Results.NoContent();
+        })
+        .AddEndpointFilter<ValidationFilter<RecordInspectionRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.VehiclesService);
 
         vehicles.MapDelete("/{vin}", async (
             string vin,

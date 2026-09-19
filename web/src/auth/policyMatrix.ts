@@ -4,8 +4,9 @@ import type { Role } from './roles';
 // what". This drives what the UI offers — nav links, action buttons, the receiver-detail
 // block. The API enforces the same policies independently; this table is never the guard.
 export const POLICY_MATRIX = {
-  'vehicles:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
-  'vehicles:write': ['Administrator', 'Purchaser'],
+  'vehicles:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader', 'Mechanic'],
+  'vehicles:write': ['Administrator', 'Purchaser', 'Mechanic'],
+  'vehicles:service': ['Administrator', 'Mechanic'],
   'people:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
   'people:write': ['Administrator'],
   'convoys:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],

@@ -123,6 +123,12 @@ public static class ConvoyEndpoints
                 AssignVehicleOutcome.VehicleNotFound => Results.Problem(
                     detail: $"There is no vehicle with VIN '{vin}'.",
                     statusCode: StatusCodes.Status404NotFound),
+                AssignVehicleOutcome.VehicleNotPassedInspection => Results.Problem(
+                    detail: $"Vehicle '{vin}' has not passed its servicing inspection, so it cannot join a convoy.",
+                    statusCode: StatusCodes.Status409Conflict),
+                AssignVehicleOutcome.VehicleOnAnotherConvoy => Results.Problem(
+                    detail: $"Vehicle '{vin}' is already on another convoy. Remove it from that convoy first.",
+                    statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Problem(
                     detail: "The truck list for this convoy has been published, so its vehicles can no longer change.",
                     statusCode: StatusCodes.Status409Conflict),

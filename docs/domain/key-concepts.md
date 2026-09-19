@@ -37,7 +37,9 @@ access when they leave.
 
 Responsible for creating a [Manifest](#manifest) and acting as the communication point for convoy team leaders.
 Books ferry crossings and triggers the [GMR](#gmr--goods-movement-reference) and [ELO](#elo--obligatory-logistics-envelope)
-paperwork. Also the booking of hotel accomidation for the trip. They will also coordinate with third parties to ensure servicing process.
+paperwork. Also the booking of hotel accommodation for the trip. They will also coordinate with third parties to
+arrange servicing — though recording the result of a vehicle's inspection is the [Mechanic](#mechanic)'s job, not
+theirs.
 Also to find insurance for the [Driver](#driver) and [Vehicle](#vehicle).
 
 ### Loader
@@ -53,6 +55,24 @@ because it is the physical, on-site act of shelving one so it can be found again
 
 Responsible for the sourcing of vehicles, equipment and other sundries consumed in a convoy.
 Including transportation of the purchase to the logistical hubs.
+
+### Mechanic
+
+Responsible for the mechanical readiness of the donated [Vehicles](#vehicle). A Mechanic records vehicles as they
+come in, keeps each one's details current — mileage, condition notes, kerb weight, cargo capacity — and carries out
+the servicing inspection: moving a vehicle through **Pending → Inspecting → Passed** or **Failed**, and writing down
+any defects found in the inspection notes (see [Inspection Status](#inspection-status)).
+
+That result matters beyond the workshop. A vehicle is itself part of the aid and is handed over in Ukraine, so a
+vehicle that fails on the road is a failed delivery: **only a vehicle the Mechanic has marked Passed may be assigned
+to a [Convoy](#convoy)**, and the API refuses any other.
+
+- An Administrator may also record an inspection. A Purchaser, who can edit a vehicle's details, cannot — sourcing a
+  vehicle and vouching that it is roadworthy are different acts (the `vehicles:service` policy).
+- The inspection is recorded through its own route, `PUT /vehicles/{vin}/inspection`; an ordinary vehicle edit
+  cannot set, clear or forge it.
+- The role is deliberately narrow, like the others: a Mechanic has no access to convoys, manifests, boxes,
+  volunteers or receivers.
 
 ### Ground Officer
 
@@ -102,6 +122,22 @@ its cargo space. Nothing back-fills this — it starts unset and is measured whe
 is distinct from the kerb weight above (the vehicle's own weight) and exists to help a dispatcher judge, before a
 convoy leaves, whether the [Boxes](#box) assigned to a [Manifest](#manifest) are too heavy or too large for the
 vehicle carrying them — see the note under Manifest.
+
+#### Inspection Status
+
+Every vehicle carries an **inspection status**, recorded by a [Mechanic](#mechanic), that tracks its mechanical
+inspection:
+
+- **Pending**: The vehicle has not been inspected yet — the state every new vehicle starts in.
+- **Inspecting**: The vehicle is currently being inspected by a Mechanic.
+- **Passed**: The vehicle has completed inspection and is ready for convoy. Only vehicles in this state are eligible
+  for assignment to a convoy.
+- **Failed**: The vehicle has completed inspection but was found to have issues that prevent it from being used in a
+  convoy.
+
+The inspection status is separate from the `Servicing` flag: `Servicing=true` means a vehicle is in for servicing,
+while the inspection status tracks how far through that process it has progressed. The Mechanic may also record
+**inspection notes** (up to 2,000 characters) documenting any defects, damage, or issues found during inspection.
 
 > **Naming:** the domain type was renamed from `Veichle` to `Vehicle`. The rename is complete across the
 > solution.

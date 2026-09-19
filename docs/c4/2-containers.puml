@@ -38,6 +38,7 @@ Enterprise_Boundary(ua_action, "UA Action") {
     Person(purchaser, "Purchaser", "A person who manages procurement and supplies for convoys")
     Person(loader, "Loader", "A person who loads cargo onto vehicles and verifies donations")
     Person(dispatcher, "Dispatcher", "A person who dispatches vehicles and manages paperwork for a convoy")
+    Person(mechanic, "Mechanic", "A person who services donated vehicles and passes them as fit to travel")
 
     AzureActiveDirectoryB2C(identity, "Identity Provider", "Microsoft Entra External ID", "Sign-in, MFA and app roles for staff and volunteers. Free up to 50,000 monthly active users")
 
@@ -71,6 +72,7 @@ Enterprise_Boundary(ua_action, "UA Action") {
 Rel_D(dispatcher, edge, "Plans convoys, builds manifests, requests GMR and ELO", "HTTPS")
 Rel_D(loader, edge, "Confirms donation contents, weighs and validates boxes", "HTTPS")
 Rel_D(purchaser, edge, "Records sourced vehicles and supplies", "HTTPS")
+Rel_D(mechanic, edge, "Records vehicle details and servicing inspections", "HTTPS")
 Rel_D(ground_officer, edge, "Raises requests for aid, confirms receipt", "HTTPS")
 Rel_U(guard, edge, "Scans manifest QR code to verify a load", "HTTPS, anonymous single-manifest token")
 

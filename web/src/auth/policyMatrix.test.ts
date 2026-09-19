@@ -7,8 +7,9 @@ import type { Role } from './roles';
 // The authoritative matrix from docs/local-authentication.md § "Which role can do what".
 // The API is the enforcement point; this table only drives what the UI offers.
 const EXPECTED: Record<Policy, readonly Role[]> = {
-  'vehicles:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
-  'vehicles:write': ['Administrator', 'Purchaser'],
+  'vehicles:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader', 'Mechanic'],
+  'vehicles:write': ['Administrator', 'Purchaser', 'Mechanic'],
+  'vehicles:service': ['Administrator', 'Mechanic'],
   'people:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
   'people:write': ['Administrator'],
   'convoys:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
@@ -33,11 +34,12 @@ const ALL_ROLES: readonly Role[] = [
   'Purchaser',
   'Dispatcher',
   'Loader',
+  'Mechanic',
   'GroundOfficer',
 ];
 
 describe('policySatisfiedBy', () => {
-  it('covers exactly the 19 documented policies', () => {
+  it('covers exactly the 20 documented policies', () => {
     expect([...ALL_POLICIES].sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 

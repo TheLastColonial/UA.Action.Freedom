@@ -250,6 +250,10 @@ BEGIN
         CargoDepthCm     decimal(10,2) NULL,
         CargoHeightCm    decimal(10,2) NULL,
 
+        -- The Mechanic's inspection result — see the "Columns added to dbo.Vehicle" block below.
+        InspectionStatus int            NOT NULL CONSTRAINT DF_Vehicle_InspectionStatus DEFAULT 0,
+        InspectionNotes  nvarchar(2000) NULL,
+
         CreatedAt     datetime2(0)   NOT NULL CONSTRAINT DF_Vehicle_CreatedAt DEFAULT SYSUTCDATETIME(),
         UpdatedAt     datetime2(0)   NOT NULL CONSTRAINT DF_Vehicle_UpdatedAt DEFAULT SYSUTCDATETIME()
     );
@@ -363,6 +367,39 @@ BEGIN
     ALTER TABLE dbo.Vehicle ADD CONSTRAINT FK_Vehicle_Convoy
         FOREIGN KEY (ConvoyId) REFERENCES dbo.Convoy (Id) ON DELETE SET NULL;
 END
+GO
+
+-- --------------------------------------------------------------------------
+-- Columns added to dbo.Vehicle after it was first created
+--
+-- CREATE TABLE above runs once, so a database built before these columns existed never gets
+-- them from it — and VehicleRepository selects every one, so a missing column is a 500 on
+-- every vehicle read. Each is guarded by COL_LENGTH so the script stays re-runnable.
+--
+-- InspectionStatus is written only by PUT /vehicles/{vin}/inspection (the Mechanic's result)
+-- and gates convoy assignment: only Passed (2) may join a convoy. The CHECK keeps it inside
+-- the Domain InspectionStatus enum, because an out-of-range int maps to an enum value Dapper
+-- will happily construct and nothing downstream expects.
+-- --------------------------------------------------------------------------
+
+IF COL_LENGTH('dbo.Vehicle', 'MaxCargoWeightKg') IS NULL
+    ALTER TABLE dbo.Vehicle ADD MaxCargoWeightKg decimal(10,2) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'CargoWidthCm') IS NULL
+    ALTER TABLE dbo.Vehicle ADD CargoWidthCm decimal(10,2) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'CargoDepthCm') IS NULL
+    ALTER TABLE dbo.Vehicle ADD CargoDepthCm decimal(10,2) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'CargoHeightCm') IS NULL
+    ALTER TABLE dbo.Vehicle ADD CargoHeightCm decimal(10,2) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'InspectionStatus') IS NULL
+    ALTER TABLE dbo.Vehicle ADD InspectionStatus int NOT NULL
+        CONSTRAINT DF_Vehicle_InspectionStatus DEFAULT 0;
+IF COL_LENGTH('dbo.Vehicle', 'InspectionNotes') IS NULL
+    ALTER TABLE dbo.Vehicle ADD InspectionNotes nvarchar(2000) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_Vehicle_InspectionStatus')
+    ALTER TABLE dbo.Vehicle ADD CONSTRAINT CK_Vehicle_InspectionStatus
+        CHECK (InspectionStatus BETWEEN 0 AND 3);
 GO
 
 -- The truck list is read by convoy: "which vehicles are travelling together".

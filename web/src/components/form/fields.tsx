@@ -121,3 +121,29 @@ export function SelectField({
     </FieldShell>
   );
 }
+
+type TextareaProps = Omit<ComponentPropsWithRef<'textarea'>, 'id'>;
+
+export function TextareaField({
+  label,
+  error,
+  hint,
+  ...textarea
+}: {
+  label: string;
+  error?: string | undefined;
+  hint?: string | undefined;
+} & TextareaProps): JSX.Element {
+  return (
+    <FieldShell label={label} error={error} hint={hint}>
+      {({ inputId, describedBy }) => (
+        <textarea
+          id={inputId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          {...textarea}
+        />
+      )}
+    </FieldShell>
+  );
+}

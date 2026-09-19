@@ -2,6 +2,8 @@ import { InMemoryWebStorage, WebStorageStateStore } from 'oidc-client-ts';
 import type { AuthProviderProps } from 'react-oidc-context';
 
 import { env } from '../env';
+import { router } from '../router';
+import { returnPathFrom } from './returnPath';
 
 const appOrigin = `${window.location.origin}/app/`;
 
@@ -19,7 +21,9 @@ export const oidcConfig: AuthProviderProps = {
   accessTokenExpiringNotificationTimeInSeconds: 120,
   userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
   stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
-  onSigninCallback: () => {
-    window.history.replaceState({}, document.title, appOrigin);
+  // Back to the page the user asked for (RequireAuth put it in the sign-in state), replacing
+  // the ?code=&state= callback URL so it is neither bookmarked nor replayed.
+  onSigninCallback: (user) => {
+    void router.navigate(returnPathFrom(user?.state), { replace: true });
   },
 };

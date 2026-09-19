@@ -26,7 +26,6 @@ const FORM_FIELDS = new Set<string>([
   'servicing',
   'year',
   'fuel',
-  'convoyId',
   'purchaserName',
   'purchaseDate',
   'weightKg',

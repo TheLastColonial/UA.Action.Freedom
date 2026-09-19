@@ -52,114 +52,45 @@ internal static class FreedomApi
         IVehicleRepository repository,
         bool authenticated = true,
         params string[] roles) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseEnvironment("Development");
-            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+        WithFakes(authenticated, roles, services => services.Replace(repository));
 
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IVehicleRepository>();
-                services.AddScoped(_ => repository);
-
-                services
-                    .AddAuthentication(TestAuthHandler.SchemeName)
-                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
-                    {
-                        options.Roles = roles;
-                        options.Authenticated = authenticated;
-                    });
-            });
-        });
-
-    /// <summary>
-    /// The application with its volunteer persistence swapped for <paramref name="repository"/>
-    /// and its JWT scheme swapped for <see cref="TestAuthHandler"/>. <paramref name="roles"/> are
-    /// the app roles the caller's token carries; pass <c>authenticated: false</c> to send no
-    /// credentials at all.
-    /// </summary>
+    /// <summary>The application with its volunteer persistence swapped for <paramref name="repository"/>.</summary>
     internal static WebApplicationFactory<Program> WithPeople(
         IPersonRepository repository,
         bool authenticated = true,
         params string[] roles) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseEnvironment("Development");
-            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
-
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IPersonRepository>();
-                services.AddScoped(_ => repository);
-
-                services
-                    .AddAuthentication(TestAuthHandler.SchemeName)
-                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
-                    {
-                        options.Roles = roles;
-                        options.Authenticated = authenticated;
-                    });
-            });
-        });
+        WithFakes(authenticated, roles, services => services.Replace(repository));
 
     /// <summary>
-    /// The application with its convoy persistence swapped for <paramref name="repository"/>
-    /// and its JWT scheme swapped for <see cref="TestAuthHandler"/>.
+    /// The application with its convoy persistence swapped for <paramref name="repository"/>, and
+    /// the volunteer roster for <paramref name="people"/> — crewing a vehicle checks the person
+    /// named is a driver, so without it those routes would reach for a real database.
     /// </summary>
     internal static WebApplicationFactory<Program> WithConvoys(
         IConvoyRepository repository,
+        IPersonRepository? people = null,
         bool authenticated = true,
         params string[] roles) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        WithFakes(authenticated, roles, services =>
         {
-            builder.UseEnvironment("Development");
-            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
-
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IConvoyRepository>();
-                services.AddScoped(_ => repository);
-
-                services
-                    .AddAuthentication(TestAuthHandler.SchemeName)
-                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
-                    {
-                        options.Roles = roles;
-                        options.Authenticated = authenticated;
-                    });
-            });
+            services.Replace(repository);
+            services.Replace(people ?? new InMemoryPersonRepository());
         });
 
     /// <summary>
-    /// The application with both halves of receiver persistence swapped out and its JWT scheme
-    /// swapped for <see cref="TestAuthHandler"/>. Both halves are replaced together because the
-    /// endpoints that matter here span them — deleting a receiver touches its address.
+    /// The application with both halves of receiver persistence swapped out. Both are replaced
+    /// together because the endpoints that matter here span them — deleting a receiver touches
+    /// its address.
     /// </summary>
     internal static WebApplicationFactory<Program> WithReceivers(
         IReceiverRepository receivers,
         IReceiverDetailRepository detail,
         bool authenticated = true,
         params string[] roles) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        WithFakes(authenticated, roles, services =>
         {
-            builder.UseEnvironment("Development");
-            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
-
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IReceiverRepository>();
-                services.AddScoped(_ => receivers);
-                services.RemoveAll<IReceiverDetailRepository>();
-                services.AddScoped(_ => detail);
-
-                services
-                    .AddAuthentication(TestAuthHandler.SchemeName)
-                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
-                    {
-                        options.Roles = roles;
-                        options.Authenticated = authenticated;
-                    });
-            });
+            services.Replace(receivers);
+            services.Replace(detail);
         });
 
     /// <summary>
@@ -173,58 +104,23 @@ internal static class FreedomApi
         IBayRepository? bays = null,
         bool authenticated = true,
         params string[] roles) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        WithFakes(authenticated, roles, services =>
         {
-            builder.UseEnvironment("Development");
-            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
-
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IBoxRepository>();
-                services.AddScoped(_ => boxes);
-                services.RemoveAll<IPersonRepository>();
-                services.AddScoped(_ => people);
-                services.RemoveAll<IBayRepository>();
-                services.AddScoped(_ => bays ?? new InMemoryBayRepository());
-
-                services
-                    .AddAuthentication(TestAuthHandler.SchemeName)
-                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
-                    {
-                        options.Roles = roles;
-                        options.Authenticated = authenticated;
-                    });
-            });
+            services.Replace(boxes);
+            services.Replace(people);
+            services.Replace(bays ?? new InMemoryBayRepository());
         });
 
-    /// <summary>
-    /// The application with location and bay persistence swapped out.
-    /// </summary>
+    /// <summary>The application with location and bay persistence swapped out.</summary>
     internal static WebApplicationFactory<Program> WithLocations(
         ILocationRepository locations,
         IBayRepository bays,
         bool authenticated = true,
         params string[] roles) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        WithFakes(authenticated, roles, services =>
         {
-            builder.UseEnvironment("Development");
-            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
-
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<ILocationRepository>();
-                services.AddScoped(_ => locations);
-                services.RemoveAll<IBayRepository>();
-                services.AddScoped(_ => bays);
-
-                services
-                    .AddAuthentication(TestAuthHandler.SchemeName)
-                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
-                    {
-                        options.Roles = roles;
-                        options.Authenticated = authenticated;
-                    });
-            });
+            services.Replace(locations);
+            services.Replace(bays);
         });
 
     /// <summary>
@@ -239,30 +135,12 @@ internal static class FreedomApi
         IManifestWorkQueue queue,
         bool authenticated = true,
         params string[] roles) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        WithFakes(authenticated, roles, services =>
         {
-            builder.UseEnvironment("Development");
-            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
-
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IManifestRepository>();
-                services.AddScoped(_ => manifests);
-                services.RemoveAll<IConvoyRepository>();
-                services.AddScoped(_ => convoys);
-                services.RemoveAll<IPersonRepository>();
-                services.AddScoped(_ => people);
-                services.RemoveAll<IManifestWorkQueue>();
-                services.AddScoped(_ => queue);
-
-                services
-                    .AddAuthentication(TestAuthHandler.SchemeName)
-                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
-                    {
-                        options.Roles = roles;
-                        options.Authenticated = authenticated;
-                    });
-            });
+            services.Replace(manifests);
+            services.Replace(convoys);
+            services.Replace(people);
+            services.Replace(queue);
         });
 
     /// <summary>
@@ -297,4 +175,36 @@ internal static class FreedomApi
                 builder.UseSetting(key, value);
             }
         });
+
+    /// <summary>
+    /// The application with the given persistence fakes swapped in and its JWT scheme swapped for
+    /// <see cref="TestAuthHandler"/>, carrying <paramref name="roles"/>.
+    /// </summary>
+    private static WebApplicationFactory<Program> WithFakes(
+        bool authenticated, string[] roles, Action<IServiceCollection> swapFakes) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("Hosting:UseHttpsRedirection", "false");
+
+            builder.ConfigureTestServices(services =>
+            {
+                swapFakes(services);
+
+                services
+                    .AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<TestAuthOptions, TestAuthHandler>(TestAuthHandler.SchemeName, options =>
+                    {
+                        options.Roles = roles;
+                        options.Authenticated = authenticated;
+                    });
+            });
+        });
+
+    private static void Replace<TService>(this IServiceCollection services, TService instance)
+        where TService : class
+    {
+        services.RemoveAll<TService>();
+        services.AddScoped(_ => instance);
+    }
 }

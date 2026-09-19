@@ -1,9 +1,9 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeConvoy } from '../../test/factories/convoy';
 import { convoyApi } from '../../test/msw/convoys';
+import { vehicleApi } from '../../test/msw/vehicles';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { convoyRoutes } from './routes';
@@ -12,13 +12,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'convoys', children: convoyRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('shows the overview and Not found for an unknown id', async () => {
   worker.use(...convoyApi([makeConvoy({ id: 7 })]).handlers);
@@ -64,7 +57,7 @@ test('publishing the truck list flips the badge and removes the button', async (
 });
 
 test('a Dispatcher can open the Route and Vehicles tabs', async () => {
-  worker.use(...convoyApi([makeConvoy({ id: 7 })]).handlers);
+  worker.use(...convoyApi([makeConvoy({ id: 7 })]).handlers, ...vehicleApi([]).handlers);
 
   const screen = await renderWithProviders(null, {
     routes,
@@ -76,7 +69,7 @@ test('a Dispatcher can open the Route and Vehicles tabs', async () => {
   await expect.element(screen.getByRole('button', { name: 'Add stop' })).toBeInTheDocument();
 
   await screen.getByRole('tab', { name: 'Vehicles' }).click();
-  await expect.element(screen.getByRole('button', { name: 'Assign vehicle' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('combobox', { name: 'Vehicle' })).toBeInTheDocument();
 });
 
 test('hides publish from a role without convoys:write', async () => {

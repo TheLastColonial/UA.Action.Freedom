@@ -8,6 +8,7 @@ import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
+import { INSPECTION_STATUS_LABELS } from './inspection';
 
 export function VehicleDetailPage(): JSX.Element {
   const { vin = '' } = useParams();
@@ -32,12 +33,14 @@ export function VehicleDetailPage(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>{vehicle.vin}</h1>
         <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <LinkButton
-            to={`/vehicles/${encodeURIComponent(vehicle.vin)}/servicing`}
-            variant="secondary"
-          >
-            Servicing
-          </LinkButton>
+          <Gate policy="vehicles:service">
+            <LinkButton
+              to={`/vehicles/${encodeURIComponent(vehicle.vin)}/servicing`}
+              variant="secondary"
+            >
+              Servicing
+            </LinkButton>
+          </Gate>
           <Gate policy="vehicles:write">
             <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
               <LinkButton
@@ -113,6 +116,10 @@ export function VehicleDetailPage(): JSX.Element {
           <dd>{vehicle.convoyId ?? 'Unassigned'}</dd>
           <dt>In for servicing</dt>
           <dd>{vehicle.servicing ? 'Yes' : 'No'}</dd>
+          <dt>Inspection status</dt>
+          <dd>{INSPECTION_STATUS_LABELS[vehicle.inspectionStatus]}</dd>
+          <dt>Inspection notes</dt>
+          <dd>{vehicle.inspectionNotes ?? '—'}</dd>
         </dl>
       </DetailCard>
 

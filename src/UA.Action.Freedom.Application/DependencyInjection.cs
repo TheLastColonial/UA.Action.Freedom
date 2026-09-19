@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<CreateVehicleCommand, CreateVehicleOutcome>, CreateVehicleHandler>();
         services.AddScoped<ICommandHandler<UpdateVehicleCommand, UpdateVehicleOutcome>, UpdateVehicleHandler>();
         services.AddScoped<ICommandHandler<DeleteVehicleCommand, DeleteVehicleOutcome>, DeleteVehicleHandler>();
+        services.AddScoped<ICommandHandler<RecordInspectionCommand, RecordInspectionOutcome>, RecordInspectionHandler>();
         services.AddScoped<IQueryHandler<GetVehicleByVinQuery, VehicleReadModel?>, GetVehicleByVinHandler>();
         services.AddScoped<IQueryHandler<ListVehiclesQuery, IReadOnlyList<VehicleReadModel>>, ListVehiclesHandler>();
 

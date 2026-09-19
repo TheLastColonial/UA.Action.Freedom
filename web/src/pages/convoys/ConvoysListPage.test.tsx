@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeConvoy } from '../../test/factories/convoy';
 import { convoyApi } from '../../test/msw/convoys';
 import { worker } from '../../test/msw/worker';
@@ -12,13 +11,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'convoys', children: convoyRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('lists convoys with their truck-list state', async () => {
   worker.use(

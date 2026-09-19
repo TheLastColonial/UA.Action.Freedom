@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeLocation } from '../../test/factories/location';
 import { boxApi } from '../../test/msw/boxes';
 import { locationApi } from '../../test/msw/locations';
@@ -14,13 +13,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'boxes', children: boxRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('creates a box and opens it', async () => {
   const location = makeLocation({ id: 3, name: 'Coventry Depot' });

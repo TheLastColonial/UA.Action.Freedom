@@ -1,10 +1,8 @@
 using AwesomeAssertions;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
 using UA.Action.Freedom.Application.Vehicles;
-using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Data.Vehicles;
 using UA.Action.Freedom.Domain;
+using static UA.Action.Freedom.Tests.Integration.SqlTestDatabase;
 
 namespace UA.Action.Freedom.Tests.Integration.Vehicles;
 
@@ -17,33 +15,10 @@ namespace UA.Action.Freedom.Tests.Integration.Vehicles;
 [Trait("Category", "Integration")]
 public class VehicleRepositoryTests
 {
-    private const string DefaultLocalConnectionString =
-        "Server=localhost,1433;Database=Freedom;User Id=sa;Password=Local_Freedom_Dev_1;TrustServerCertificate=True;Encrypt=False;Connect Timeout=3";
-
-    private static string ConnectionString =>
-        Environment.GetEnvironmentVariable("ConnectionStrings__Freedom") ?? DefaultLocalConnectionString;
-
     private static async Task<VehicleRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await using var connection = new SqlConnection(ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(1) FROM dbo.Vehicle";
-            await command.ExecuteScalarAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            Assert.Skip($"Freedom database with dbo.Vehicle is not reachable: {exception.Message}");
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Freedom"] = ConnectionString })
-            .Build();
-
-        return new VehicleRepository(new SqlConnectionFactory(configuration));
+        await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Vehicle", cancellationToken);
+        return new VehicleRepository(ConnectionFactory());
     }
 
     private static VehicleReadModel AVehicle(string vin) => new(
@@ -69,15 +44,8 @@ public class VehicleRepositoryTests
 
     private static string NewVin() => "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
 
-    private static async Task RemoveAsync(string vin)
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM dbo.Vehicle WHERE Vin = @vin";
-        command.Parameters.AddWithValue("@vin", vin);
-        await command.ExecuteNonQueryAsync();
-    }
+    private static Task RemoveAsync(string vin) =>
+        ExecuteAsync("DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
 
     [Fact]
     public async Task Round_trips_every_field_through_the_database()
@@ -144,6 +112,113 @@ public class VehicleRepositoryTests
         finally
         {
             await RemoveAsync(vin);
+        }
+    }
+
+    [Fact]
+    public async Task A_new_vehicle_is_awaiting_inspection_with_no_notes()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var vin = NewVin();
+
+        try
+        {
+            await repository.AddAsync(AVehicle(vin), cancellationToken);
+
+            var stored = await repository.GetByVinAsync(vin, cancellationToken);
+
+            stored!.InspectionStatus.Should().Be(InspectionStatus.Pending);
+            stored.InspectionNotes.Should().BeNull();
+        }
+        finally
+        {
+            await RemoveAsync(vin);
+        }
+    }
+
+    [Fact]
+    public async Task Recording_an_inspection_persists_its_status_and_notes()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var vin = NewVin();
+
+        try
+        {
+            await repository.AddAsync(AVehicle(vin), cancellationToken);
+
+            var recorded = await repository.RecordInspectionAsync(
+                vin, InspectionStatus.Failed, "Rear brake pads worn", cancellationToken);
+            var missing = await repository.RecordInspectionAsync(
+                NewVin(), InspectionStatus.Passed, null, cancellationToken);
+
+            recorded.Should().BeTrue();
+            missing.Should().BeFalse();
+            var stored = await repository.GetByVinAsync(vin, cancellationToken);
+            stored!.InspectionStatus.Should().Be(InspectionStatus.Failed);
+            stored.InspectionNotes.Should().Be("Rear brake pads worn");
+        }
+        finally
+        {
+            await RemoveAsync(vin);
+        }
+    }
+
+    [Fact]
+    public async Task A_general_update_cannot_change_or_clear_an_inspection()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var vin = NewVin();
+
+        try
+        {
+            await repository.AddAsync(AVehicle(vin), cancellationToken);
+            await repository.RecordInspectionAsync(vin, InspectionStatus.Passed, "All good", cancellationToken);
+
+            await repository.UpdateAsync(
+                AVehicle(vin) with { Plate = "IT99ZZZ", InspectionStatus = InspectionStatus.Pending, InspectionNotes = null },
+                cancellationToken);
+
+            var stored = await repository.GetByVinAsync(vin, cancellationToken);
+            stored!.Plate.Should().Be("IT99ZZZ");
+            stored.InspectionStatus.Should().Be(InspectionStatus.Passed);
+            stored.InspectionNotes.Should().Be("All good");
+        }
+        finally
+        {
+            await RemoveAsync(vin);
+        }
+    }
+
+    [Fact]
+    public async Task Neither_adding_nor_editing_a_vehicle_can_change_its_convoy()
+    {
+        // Convoy membership belongs to /convoys/{id}/vehicles/{vin}, where the truck-list freeze,
+        // the inspection gate and the crew clean-up live. A vehicle write must not route round them.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var vin = NewVin();
+        var convoyId = await ScalarAsync(
+            "INSERT INTO dbo.Convoy (Start, ExpectedEnd) VALUES ('2026-09-01', '2026-09-05'); SELECT CAST(SCOPE_IDENTITY() AS int);");
+
+        try
+        {
+            await repository.AddAsync(AVehicle(vin) with { ConvoyId = convoyId }, cancellationToken);
+            (await repository.GetByVinAsync(vin, cancellationToken))!.ConvoyId.Should().BeNull();
+
+            await ExecuteAsync("UPDATE dbo.Vehicle SET ConvoyId = @convoyId WHERE Vin = @vin", ("@convoyId", convoyId), ("@vin", vin));
+            await repository.UpdateAsync(AVehicle(vin) with { ConvoyId = null, Plate = "IT99ZZZ" }, cancellationToken);
+
+            var stored = await repository.GetByVinAsync(vin, cancellationToken);
+            stored!.Plate.Should().Be("IT99ZZZ");
+            stored.ConvoyId.Should().Be(convoyId);
+        }
+        finally
+        {
+            await RemoveAsync(vin);
+            await ExecuteAsync("DELETE FROM dbo.Convoy WHERE Id = @id", ("@id", convoyId));
         }
     }
 

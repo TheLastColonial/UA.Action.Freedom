@@ -86,6 +86,18 @@ async function readProblem(response: Response): Promise<never> {
   throw new ApiError(`Request failed with status ${String(response.status)}`, response.status);
 }
 
+// A bare 404 means the resource addressed does not exist — pages render "Not found" for it. A
+// 404 carrying a `detail` is a domain answer ("no vehicle with that VIN on this convoy") whose
+// reason the user needs, so it is kept rather than flattened into the generic case.
+async function readNotFound(response: Response): Promise<never> {
+  const body: unknown = await response.json().catch(() => null);
+  const parsed = problemJsonSchema.safeParse(body);
+  if (parsed.success && parsed.data.detail) {
+    throw new ApiDomainProblem(404, parsed.data.title, parsed.data.detail);
+  }
+  throw new ApiNotFound();
+}
+
 /**
  * One entry point for every API call. Adds the bearer token, applies the response
  * conventions the API commits to (Location on 201, empty body on 204, problem+json on 4xx,
@@ -155,7 +167,7 @@ export async function request<T>(
 
   if (!response.ok) {
     if (response.status === 404) {
-      throw new ApiNotFound();
+      return readNotFound(response);
     }
     return readProblem(response);
   }

@@ -1,10 +1,16 @@
 import type { JSX } from 'react';
 import { useState } from 'react';
 
-import { useAssignDriver, useUnassignDriver, useVehicleDrivers, useConvoyVehicles } from '../../api/convoys';
+import {
+  useAssignDriver,
+  useConvoyVehicles,
+  useUnassignDriver,
+  useVehicleDrivers,
+} from '../../api/convoys';
 import { usePeople } from '../../api/people';
-import type { ParentMissing } from '../../api/client';
 import { ApiDomainProblem } from '../../api/problem';
+import type { ConvoyVehicleReadModel, VehicleDriverReadModel } from '../../api/schemas/convoys';
+import type { PersonReadModel } from '../../api/schemas/people';
 import { Button } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
@@ -13,108 +19,113 @@ import { SelectField } from '../../components/form/fields';
 
 interface ConvoyDriversPanelProps {
   convoyId: number;
-  disabled: boolean;
 }
 
 function problemMessage(error: unknown): string | undefined {
   return error instanceof ApiDomainProblem ? (error.detail ?? error.message) : undefined;
 }
 
-export function ConvoyDriversPanel({ convoyId, disabled }: ConvoyDriversPanelProps): JSX.Element {
-  const vehiclesQuery = useConvoyVehicles(convoyId);
-  const peopleQuery = usePeople({ page: 1, pageSize: 200, driversOnly: true });
+const fullName = (person: { firstName: string; lastName: string }) =>
+  `${person.firstName} ${person.lastName}`;
 
-  if (vehiclesQuery.isPending || peopleQuery.isPending) {
-    return <PageSkeleton />;
+function UndercrewedWarning({
+  vehicles,
+}: {
+  vehicles: readonly ConvoyVehicleReadModel[];
+}): JSX.Element | null {
+  const undercrewed = vehicles.filter((vehicle) => vehicle.driverCount < 2);
+  if (undercrewed.length === 0) {
+    return null;
   }
 
+  const one = undercrewed.length === 1;
+  const names = undercrewed.map((vehicle) => `${vehicle.vin} (${vehicle.plate})`).join(', ');
+  return (
+    <p role="status">
+      {one ? 'Vehicle' : 'Vehicles'} {names} {one ? 'has' : 'have'} fewer than two drivers assigned.
+      This is advisory only — nothing is blocked.
+    </p>
+  );
+}
+
+export function ConvoyDriversPanel({ convoyId }: ConvoyDriversPanelProps): JSX.Element {
+  const vehiclesQuery = useConvoyVehicles(convoyId);
+  const driversQuery = usePeople({ page: 1, pageSize: 200, driversOnly: true });
+
+  if (vehiclesQuery.isPending || driversQuery.isPending) {
+    return <PageSkeleton />;
+  }
   if (vehiclesQuery.isError) {
     return <p role="alert">The vehicles could not be loaded.</p>;
   }
-
-  if (peopleQuery.isError) {
+  if (driversQuery.isError) {
     return <p role="alert">The driver list could not be loaded.</p>;
   }
 
   const vehicles = 'parentMissing' in vehiclesQuery.data ? [] : vehiclesQuery.data;
-  const people = peopleQuery.data ?? [];
-
-  const vehiclesWithFewerThanTwoDrivers = vehicles
-    .filter((v) => v.driverCount < 2)
-    .map((v) => `${v.vin} (${v.plate})`)
-    .join(', ');
+  if (vehicles.length === 0) {
+    return <p>Put vehicles on the truck list before assigning drivers.</p>;
+  }
 
   return (
     <div>
-      {vehiclesWithFewerThanTwoDrivers ? (
-        <p role="status">
-          Vehicle{vehicles.filter((v) => v.driverCount < 2).length === 1 ? '' : 's'}{' '}
-          {vehiclesWithFewerThanTwoDrivers} {vehicles.filter((v) => v.driverCount < 2).length === 1 ? 'has' : 'have'} fewer
-          than two drivers assigned. This is advisory only — nothing is blocked.
-        </p>
-      ) : null}
-
+      <UndercrewedWarning vehicles={vehicles} />
       {vehicles.map((vehicle) => (
-        <div key={vehicle.vin} style={{ marginTop: '20px' }}>
-          <h3>{vehicle.plate || vehicle.vin}</h3>
-          <VehicleDriversSection
-            convoyId={convoyId}
-            vehicle={vehicle}
-            people={people}
-            disabled={disabled}
-          />
-        </div>
+        <section key={vehicle.vin} aria-label={`Crew for ${vehicle.plate}`}>
+          <h3>{vehicle.plate}</h3>
+          <VehicleCrew convoyId={convoyId} vehicle={vehicle} drivers={driversQuery.data} />
+        </section>
       ))}
     </div>
   );
 }
 
-interface VehicleDriversSectionProps {
+interface VehicleCrewProps {
   convoyId: number;
-  vehicle: { vin: string; plate: string };
-  people: Array<{ id: string; firstName: string; lastName: string }>;
-  disabled: boolean;
+  vehicle: ConvoyVehicleReadModel;
+  drivers: readonly PersonReadModel[];
 }
 
-function VehicleDriversSection({
-  convoyId,
-  vehicle,
-  people,
-  disabled,
-}: VehicleDriversSectionProps): JSX.Element {
-  const driversQuery = useVehicleDrivers(convoyId, vehicle.vin);
-  const [selectedPersonId, setSelectedPersonId] = useState('');
+function VehicleCrew({ convoyId, vehicle, drivers }: VehicleCrewProps): JSX.Element {
+  const crewQuery = useVehicleDrivers(convoyId, vehicle.vin);
+  const [selected, setSelected] = useState('');
   const assign = useAssignDriver(convoyId, vehicle.vin);
   const unassign = useUnassignDriver(convoyId, vehicle.vin);
 
-  if (driversQuery.isPending) {
-    return <p>Loading drivers...</p>;
+  if (crewQuery.isPending) {
+    return <p>Loading drivers…</p>;
+  }
+  if (crewQuery.isError) {
+    return <p role="alert">The crew for {vehicle.plate} could not be loaded.</p>;
   }
 
-  const drivers = 'parentMissing' in driversQuery.data ? [] : driversQuery.data;
-  const assignedIds = new Set(drivers.map((d) => d.personId));
-  const availablePeople = people.filter((p) => !assignedIds.has(p.id));
-  const driverOptions = [
+  const crew = 'parentMissing' in crewQuery.data ? [] : crewQuery.data;
+  const crewIds = new Set(crew.map((member) => member.personId));
+  const options = [
     { value: '', label: 'Select a driver' },
-    ...availablePeople.map((p) => ({ value: p.id, label: `${p.firstName} ${p.lastName}` })),
+    ...drivers
+      .filter((driver) => !crewIds.has(driver.id))
+      .map((driver) => ({ value: driver.id, label: fullName(driver) })),
   ];
-
   const error = problemMessage(assign.error) ?? problemMessage(unassign.error);
 
   return (
     <div>
-      <DataTable<{ personId: string; firstName: string; lastName: string }>
-        caption={`Drivers for ${vehicle.plate || vehicle.vin}`}
+      <DataTable<VehicleDriverReadModel>
+        caption={`Drivers for ${vehicle.plate}`}
         columns={[
-          { header: 'Name', cell: (d) => `${d.firstName} ${d.lastName}` },
+          { header: 'Name', cell: fullName },
           {
             header: 'Action',
-            cell: (d) => (
+            cell: (member) => (
               <Gate policy="convoys:assign-drivers">
                 <Button
                   variant="secondary"
+                  aria-label={`Remove ${fullName(member)}`}
                   disabled={unassign.isPending}
-                  onClick={() => unassign.mutate(d.personId)}
+                  onClick={() => {
+                    unassign.mutate(member.personId);
+                  }}
                 >
                   Remove
                 </Button>
@@ -122,32 +133,35 @@ function VehicleDriversSection({
             ),
           },
         ]}
-        rows={drivers}
-        rowKey="personId"
+        rows={crew}
+        rowKey={(member) => member.personId}
         emptyMessage="No drivers assigned yet"
       />
 
       <Gate policy="convoys:assign-drivers">
         <form
-          style={{ marginTop: '16px', display: 'flex', gap: '8px' }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (selectedPersonId) {
-              assign.mutate(selectedPersonId, {
-                onSuccess: () => setSelectedPersonId(''),
+          style={{ marginTop: 'var(--space-3)', display: 'flex', gap: 'var(--space-2)' }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (selected) {
+              assign.mutate(selected, {
+                onSuccess: () => {
+                  setSelected('');
+                },
               });
             }
           }}
         >
           <SelectField
-            id={`driver-select-${vehicle.vin}`}
-            label="Add driver"
-            value={selectedPersonId}
-            onChange={setSelectedPersonId}
-            options={driverOptions}
+            label={`Add driver to ${vehicle.plate}`}
+            value={selected}
+            onChange={(event) => {
+              setSelected(event.target.value);
+            }}
+            options={options}
             disabled={assign.isPending}
           />
-          <Button type="submit" disabled={!selectedPersonId || assign.isPending}>
+          <Button type="submit" disabled={!selected || assign.isPending}>
             Assign
           </Button>
         </form>
