@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.Build.Sql/2.3.0">
+
+  <!--
+    The Freedom database, declared as the state it should be in — not the steps that got it
+    there. SqlPackage compares this model with whatever database it is pointed at and works out
+    the change itself, so nothing in here is guarded, ordered, or re-runnable by hand.
+
+    Azure SQL is the production target, so the model is validated against it. The local SQL
+    Server 2022 container accepts the same dacpac with /p:AllowIncompatiblePlatform=true
+    (database/deploy.sh).
+
+    Principals are not here. Logins, users and role membership differ per environment (password
+    logins locally, managed identities in Azure) and belong to the environment layer — the
+    dacpac owns the roles and what they may do, never who is in them.
+  -->
+
+  <PropertyGroup>
+    <Name>UA.Action.Freedom.Database</Name>
+    <DSP>Microsoft.Data.Tools.Schema.Sql.SqlAzureV12DatabaseSchemaProvider</DSP>
+    <ModelCollation>1033,CI</ModelCollation>
+    <TargetDatabaseName>Freedom</TargetDatabaseName>
+    <TreatTSqlWarningsAsErrors>true</TreatTSqlWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

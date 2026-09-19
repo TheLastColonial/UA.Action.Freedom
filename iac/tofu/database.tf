@@ -1,23 +1,25 @@
-# Freedom database bootstrap.
+# Freedom database principals.
 #
-# In Azure this is a migration step in the deployment pipeline plus azurerm_mssql_database
-# for the server itself. Here the server is a container and the schema is applied with
-# sqlcmd, which is already inside that container — no host-side SQL tooling required.
+# The schema is not applied here. It is the dacpac built from database/UA.Action.Freedom.Database,
+# published by the `db-deploy` compose service before this runs — the database's shape ships on
+# its own pipeline, separately from code and from environment wiring. What remains for the control
+# plane is the environment's half: the logins and users that connect locally, and the roles they
+# join. In Azure that is managed identities added by the deployment pipeline; the roles and grants
+# they rely on come from the same dacpac.
 #
-# The script is ../local/sql/001-schemas.sql, mounted at /sql. It is idempotent, so a
-# re-apply is harmless, and it is the file to read to understand how receiver detail is
-# segregated (recommendations 4.4).
+# The script is ../local/sql/principals.sql, mounted at /sql and run with the sqlcmd already
+# inside the container — no host-side SQL tooling required.
 
-resource "terraform_data" "database_schema" {
+resource "terraform_data" "database_principals" {
   # Last in the chain, for the same reason as the storage resources: everything here talks
   # to a container through Docker Desktop's loopback proxy, and running the graph in
   # parallel makes that proxy drop connections.
   depends_on = [terraform_data.queues]
 
-  # Re-runs whenever the script changes, so editing the schema and re-applying is the
-  # normal workflow rather than something needing a taint.
+  # Re-runs whenever the script changes, so editing it and re-applying is the normal workflow
+  # rather than something needing a taint.
   triggers_replace = {
-    script = filesha256("${path.module}/../local/sql/001-schemas.sql")
+    script = filesha256("${path.module}/../local/sql/principals.sql")
   }
 
   provisioner "local-exec" {
@@ -31,9 +33,9 @@ resource "terraform_data" "database_schema" {
       "/opt/mssql-tools18/bin/sqlcmd",
       "-S localhost -U sa",
       # -C trusts the container's self-signed certificate; -b makes sqlcmd exit non-zero on
-      # a T-SQL error, without which a failed bootstrap would report success.
+      # a T-SQL error, without which a failed step would report success.
       "-C -b",
-      "-i /sql/001-schemas.sql",
+      "-i /sql/principals.sql",
     ])
 
     # sqlcmd resolves $(NAME) in the script from the environment as well as from -v, so the

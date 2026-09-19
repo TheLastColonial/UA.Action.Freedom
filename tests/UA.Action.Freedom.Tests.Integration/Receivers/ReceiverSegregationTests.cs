@@ -98,7 +98,7 @@ public class ReceiverSegregationTests
     [Fact]
     public async Task The_application_identity_cannot_read_a_delivery_address()
     {
-        // The load-bearing line of iac/local/sql/001-schemas.sql, asserted rather than assumed.
+        // The load-bearing line of database/UA.Action.Freedom.Database/Security/Permissions.sql, asserted rather than assumed.
         var cancellationToken = TestContext.Current.CancellationToken;
         await SkipUnlessReachableAsync(cancellationToken);
 

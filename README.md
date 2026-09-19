@@ -40,6 +40,12 @@ src/
 ├── HMRC.GVMS/                          # HMRC Goods Vehicle Movements SDK
 └── HMRC.PushPullNotifications/         # HMRC Push Pull Notifications SDK
 
+database/
+├── UA.Action.Freedom.Database/         # SQL project → dacpac: tables, schemas, roles, grants
+├── seed/dev-seed.sql                   # Opt-in fictional dev data (never in the dacpac)
+├── Dockerfile                          # db-deploy image: SqlPackage + the dacpac
+└── deploy.sh                           # Publish the dacpac, optionally load the seed
+
 tests/
 ├── UA.Action.Freedom.Tests.Unit/       # Handler & unit logic tests
 ├── UA.Action.Freedom.Tests.Component/  # In-memory API tests
@@ -133,19 +139,25 @@ npm run verify         # typecheck + lint + format + test + build (what CI runs)
 Run the full local infrastructure (SQL, Blob/Queue Storage, Keycloak auth, HMRC mocks):
 
 ```bash
-# Start Docker containers
+# Start Docker containers (db-deploy publishes the database schema and exits)
 cd iac/local
 cp .env.example .env
 docker compose up -d --wait
 
-# Provision resources via OpenTofu
+# Provision resources and database logins via OpenTofu
 cd ../tofu
 tofu init
 tofu apply
 
 # Verify all services are healthy
 curl http://localhost:8080/health/ready
+
+# (Optional) Load fictional seed data: depots, volunteers, a convoy, vehicles, boxes
+cd ../local && docker compose up db-seed
 ```
+
+The `db-seed` service is optional and re-runnable — it guards against seeding an already-populated
+database. Integration/BDD suites create their own data and do not invoke it.
 
 `tofu apply` also provisions the public PKCE Keycloak client (`freedom-spa`) the operator UI
 signs in with. The UI is then at <http://localhost:8080/app/>; all three seed logins work
@@ -173,10 +185,22 @@ The images are built inside the `acceptance` job so the image that passes the en
 the one that ships. `iac/local/docker-compose.yml` still builds its own `:local` images for the
 local environment — unchanged.
 
-The workflow only triggers on changes under `src/`, `tests/`, `iac/`, `web/`, `build/`, the
-root `UA.Action.Freedom.slnx` / `global.json` / `GitVersion.yml`, or the workflow file itself.
-Doc-only commits (`docs/**`, `plans/**`, `*.md`) do not start a build; use `workflow_dispatch`
-to force a run.
+The workflow only triggers on changes under `src/`, `tests/`, `database/`, `iac/`, `web/`,
+`build/`, the root `UA.Action.Freedom.slnx` / `global.json` / `GitVersion.yml`, or the workflow
+file itself. Doc-only commits (`docs/**`, `plans/**`, `*.md`) do not start a build; use
+`workflow_dispatch` to force a run.
+
+The database ships separately. `.github/workflows/database.yml` (triggered by `database/**`)
+builds the dacpac, publishes it to an empty SQL Server, fails if a second publish would change
+anything, and on `main`/`workflow_dispatch` pushes it as an OCI artifact with a provenance
+attestation:
+
+| Artifact | Contents |
+| --- | --- |
+| `ghcr.io/thelastcolonial/ua-action-freedom-database` | `UA.Action.Freedom.Database.dacpac` (`application/vnd.microsoft.sql.dacpac`) |
+
+Fetch it with `oras pull ghcr.io/thelastcolonial/ua-action-freedom-database:<tag>` and deploy with
+`sqlpackage /Action:Publish` — see [Database](#database) below.
 
 ### API Endpoints
 
@@ -259,6 +283,21 @@ Manifests follow a 10-state model (see `docs/manifest-status.puml`):
 - Once confirmed, only progress states run: Preparing → Ready → InTransit → Delivered
 - A confirmed manifest cannot be edited (backward transitions blocked)
 
+### Database
+
+- **Declarative, not migrated.** `database/UA.Action.Freedom.Database` is an SDK-style SQL project
+  (`Microsoft.Build.Sql`): one plain `CREATE` per table, the `sensitive` schema, the database roles
+  and their `GRANT`/`DENY`s. It describes the end state only — no guards, no `ALTER`s, no data
+  moves. `dotnet build` validates every reference and produces the dacpac; SqlPackage diffs it
+  against the target and generates the change. No EF, no DbUp.
+- **Deployed separately from code.** Locally the `db-deploy` compose service publishes it
+  (`database/deploy.sh`); in CI it has its own workflow and versioned ghcr artifact.
+- **Principals belong to the environment.** Logins, users and role membership are not in the
+  dacpac: `iac/local/sql/principals.sql` (applied by `tofu apply`) creates `freedom_app` and
+  `freedom_sensitive` locally; in Azure they are managed identities added by the deployment. The
+  publish excludes users/logins/role membership so it never touches them.
+- **Dev seed** — `database/seed/dev-seed.sql`, opt-in and fictional, with nothing in `sensitive.*`.
+
 ### Data Persistence
 
 - **Dapper** for SQL mapping (typed constructor, rows map to primary constructor CLR types)
@@ -306,8 +345,8 @@ vehicle already on one convoy is never silently moved to another.
   physical label.
 - A box can be re-labelled. Issuing a new code revokes any it already had (`IssueQrCodeAsync`,
   one transaction), so at most one row per box is active; revoked rows are kept as history. The
-  "one active" rule lives in that method, not a filtered unique index — `001-schemas.sql` runs
-  under sqlcmd with `QUOTED_IDENTIFIER` OFF and avoids filtered indexes throughout.
+  "one active" rule lives in that method, not a filtered unique index (the old sqlcmd-applied
+  schema script could not create one; the SqlPackage-published dacpac now could).
 - `GET /boxes/scan/{token}` resolves an **active** token to its box — a revoked token reads as
   unknown. This is the link from the physical box to its digital record.
 - The QR image and the printable label are rendered synchronously with **QRCoder** (managed
@@ -364,7 +403,11 @@ To add a new domain concept (e.g., a new `Donation` slice):
    down, fails instead when `FREEDOM_REQUIRE_INTEGRATION=true`). Component tests use
    `FreedomApi.With*`; the `InMemory*Repository` fake must enforce the same rules as the SQL —
    a fake kinder than the database lets a test pass that production fails.
-8. Update schema in `iac/local/sql/001-schemas.sql` and re-run `tofu apply`
+8. Add the table as `database/UA.Action.Freedom.Database/dbo/Tables/Donation.sql` — a plain
+   `CREATE TABLE` in its final shape, no guards. `dbo` already carries the schema-level grants.
+   Then `cd iac/local && docker compose build db-deploy && docker compose up -d --wait db-deploy`.
+   Write CHECK constraints the way SQL Server stores them (see the gotchas doc), or every publish
+   recreates them
 9. Build the operator-UI slice — see the 8-step recipe in `web/README.md` (Zod schemas,
    `api/<slice>.ts` hooks, pages + routes, MSW handlers + factory, a Vitest Browser test per
    page, one `@smoke` Playwright spec). `src/pages/vehicles/` is the reference.
@@ -382,7 +425,8 @@ See `docs/gotchas-and-open-questions.md` for:
 - MTP test runner CLI differences
 - Integration test deadlock (assembly parallelization disabled)
 - HMRC PPNS enum deserialization bug (codegen issue, affects real HMRC)
-- SQL `QUOTED_IDENTIFIER` quirks with sqlcmd
+- Database project rules: no migration code, principals excluded from publish, CHECK constraints
+  in SQL Server's normalised form
 - MSW mocks must mirror the API contract — a mock that accepts fields the API ignores hid the
   lost-inspection bug for a whole feature
 
@@ -392,7 +436,7 @@ See `docs/gotchas-and-open-questions.md` for:
 2. Write failing tests first (TDD)
 3. Implement the minimum to pass tests
 4. Run all tests to ensure no regressions
-5. Open a pull request — CI will build, test (Unit/Component), run the `web/` frontend job (typecheck/lint/format/test/build), and acceptance-test (Integration/BDD + Playwright smokes against the full stack), building the three service container images and running the suite against them. Merging to `main` pushes those images to `ghcr.io/thelastcolonial/*`, publishes the two HMRC SDK NuGet packages to GitHub Packages, and cuts a GitHub Release annotated with the image digests.
+5. Open a pull request — CI will build, test (Unit/Component), run the `web/` frontend job (typecheck/lint/format/test/build), and acceptance-test (Integration/BDD + Playwright smokes against the full stack), building the three service container images and running the suite against them. A change under `database/` also runs the `Database` workflow (dacpac build, fresh publish, no-op re-publish). Merging to `main` pushes those images (and the dacpac, from its own workflow) to `ghcr.io/thelastcolonial/*`, publishes the two HMRC SDK NuGet packages to GitHub Packages, and cuts a GitHub Release annotated with the image digests.
 6. Wait for approval and status checks to pass
 
 ## Resources

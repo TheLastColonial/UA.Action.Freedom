@@ -43,29 +43,29 @@ Also note the xUnit v3 API here: `CollectionBehavior(DisableTestParallelization 
 obsolete **as an error**, and the replacement is `Xunit.v3.ParallelizationAttribute` with
 `Xunit.Sdk.ParallelMode.None` — two different namespaces.
 
-### sqlcmd runs with `QUOTED_IDENTIFIER` off
+### The schema is published by SqlPackage, so `QUOTED_IDENTIFIER` is no longer a trap
 
-`iac/local/sql/001-schemas.sql` is applied by `sqlcmd`, which does not set `QUOTED_IDENTIFIER ON`.
-Filtered indexes, indexed views and indexes on computed columns all require it, so
-`CREATE INDEX ... WHERE ...` fails with `Msg 1934`.
-
-There is a filtered index that *would* be worth having on `dbo.Vehicle (ConvoyId)` — most vehicles
-are unassigned between convoys. It is deliberately unfiltered instead: a bootstrap script that
-depends on the session settings of whatever tool invokes it is a trap, and the fleet is far too
-small for the saving to matter.
+The schema used to be applied by `sqlcmd`, which runs with `QUOTED_IDENTIFIER` off, so filtered
+indexes (`Msg 1934`) were avoided throughout. The dacpac is now published by SqlPackage, which
+sets the ANSI options correctly, so a filtered index is legal again. The existing "one active
+row" rules (`BoxQrCode`, `BoxBayAssignment`) are still enforced in their repository transactions;
+adding a filtered unique index as a second line of defence is now possible, not yet done.
 
 ### sqlcmd resolves `$(NAME)` from the environment
 
 Used deliberately: `database.tf` forwards the two login passwords to the container with
-`docker exec -e`, and the script references them as `$(FREEDOM_APP_PASSWORD)` and
-`$(FREEDOM_SENSITIVE_PASSWORD)`. They never appear on a command line, in `docker inspect`, or in
-the process table — the same reasoning as the `sa` password. See §3 of `iac/README.md`.
+`docker exec -e`, and `iac/local/sql/principals.sql` references them as `$(FREEDOM_APP_PASSWORD)`
+and `$(FREEDOM_SENSITIVE_PASSWORD)`. They never appear on a command line, in `docker inspect`, or
+in the process table — the same reasoning as the `sa` password. See §3 of `iac/README.md`.
+`database/deploy.sh` follows the same rule for SqlPackage by writing the connection string into a
+temporary publish profile instead of passing it as an argument.
 
-### Git Bash mangles container paths
+### Git Bash mangles container paths and SqlPackage arguments
 
 `docker exec freedom-mssql /opt/mssql-tools18/bin/sqlcmd` from Git Bash becomes
-`C:/Program Files/Git/opt/mssql-tools18/...`. Prefix with `MSYS_NO_PATHCONV=1`, or run it from
-PowerShell.
+`C:/Program Files/Git/opt/mssql-tools18/...`, and `sqlpackage /Action:Publish /p:...` has its
+slash-arguments rewritten into paths ("Unrecognized command line argument"). Prefix with
+`MSYS_NO_PATHCONV=1`, use SqlPackage's dash form (`-a:Publish -p:...`), or run it from PowerShell.
 
 ### Rebuild the image before running the BDD suite
 
@@ -97,39 +97,42 @@ open-ended bag, so `BoxRepository` has a private `BoxItemRow` seam that Dapper f
 that turns it into the shape the application uses. That is the exception, and it is commented as
 such.
 
-### The schema is one idempotent file, applied by hash
+### The schema is a SQL project, declared as its end state
 
-`iac/local/sql/001-schemas.sql` — hand-written T-SQL, no migration tool. `iac/tofu/database.tf`
-re-runs it whenever `filesha256` changes, so **editing the file and running `tofu apply` is the
-normal workflow**; there is nothing to taint.
+`database/UA.Action.Freedom.Database` (SDK-style `Microsoft.Build.Sql`) holds one plain `CREATE`
+per object — no `IF OBJECT_ID` guards, no `ALTER ... ADD`, no data moves. `dotnet build` turns it
+into a dacpac and validates every reference, so an FK to a table that does not exist fails the
+build, not the deployment. The old ordering trap (a statement referencing an object created
+further down the script) cannot happen: the model has no order.
 
-Everything must therefore be re-runnable on a database that predates it — `IF OBJECT_ID(...) IS
-NULL`, `IF COL_LENGTH(...) IS NULL`, `IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys ...)`.
-Adding `FK_Vehicle_Convoy` also had to null out orphaned `ConvoyId` values first, because the
-column existed as a loose `int` before `dbo.Convoy` did.
+SqlPackage diffs the dacpac against the target and generates the change: a fresh stack gets a
+create, an up-to-date one gets nothing. **Changing the schema means editing the table file**, then
+`cd iac/local && docker compose build db-deploy && docker compose up -d --wait db-deploy`.
+
+Four rules that keep it that way:
+
+1. **No migration code in the project.** If an environment with data to keep ever needs a data
+   move, it goes in a reviewed Pre/PostDeployment script that is deleted once it has run
+   everywhere. Today every stack is rebuilt from scratch, so none exists.
+2. **Principals are not in the dacpac.** Roles and `GRANT`/`DENY` are; logins, users and role
+   membership belong to the environment (`iac/local/sql/principals.sql` locally, the deployment
+   pipeline in Azure). The publish passes `ExcludeObjectTypes=Users;Logins;RoleMembership` so it
+   never touches them — remove that and a publish could strip `freedom_app_user` out of its role.
+3. **Write CHECK constraints the way SQL Server stores them.** `BETWEEN 0 AND 3` is stored as
+   `>= 0 AND <= 3` and `IN (0, 1)` as `= 1 OR = 0`; SqlPackage sees the text differ and drops and
+   recreates the constraint on every publish. The `Database` workflow fails if a re-publish is not
+   a no-op, which is how you will find out.
+4. **Prefer schema-level grants.** `GRANT ... ON SCHEMA::dbo` covers every table added later, so a
+   new table needs no grant of its own.
 
 ### Test schema changes against a *fresh* database, not yours
 
-Your local database has every table from every increment you have run. CI's does not. A statement
-that references an object created further down the script works for you and fails in CI on the
-first line that needs it.
-
-This actually happened: a `GRANT INSERT ON sensitive.ReceiverDetailAccessLog` was placed in the
-logins section, several sections above the `CREATE TABLE`. Every local run passed, because the
-table already existed from an earlier increment. The `acceptance` job failed on a clean volume
-with `Msg 15151: Cannot find the object 'ReceiverDetailAccessLog'`.
-
-Two lessons, in order of usefulness:
-
-1. **Prefer schema-level grants.** `GRANT ... ON SCHEMA::sensitive` applies to objects created
-   *after* it, so it has no ordering constraint at all. The offending statement was not merely
-   misplaced — it was redundant, and deleting it was the fix. The same is already true of `dbo`:
-   a new table there needs no new grant.
-2. **Reproduce CI locally before pushing a schema change.** It costs a few minutes:
+Your local volume has data and a history; CI's does not. Reproduce CI before pushing a schema
+change — it costs a few minutes:
 
 ```bash
 cd iac/local && docker compose down -v          # the -v is the point: drop the volumes
-docker compose up -d --wait mssql keycloak azurite telemetry
+docker compose up -d --wait
 cd ../tofu && rm -f terraform.tfstate* && tofu apply -auto-approve
 ```
 
@@ -168,8 +171,8 @@ no label a scan resolves to, or in two bays at once.
 
 "At most one active label per box" is enforced by that method — the revoke is
 `WHERE BoxId = @boxId AND RevokedAt IS NULL`, so the database settles a concurrent double-issue —
-**not** by a filtered unique index, because `001-schemas.sql` runs under sqlcmd with
-`QUOTED_IDENTIFIER` off (see § Tooling). `ResolveActiveQrCodeAsync` and `GetActiveQrCodeAsync`
+**not** by a filtered unique index, which the old sqlcmd-applied script could not create (see
+§ Tooling; SqlPackage now could). `ResolveActiveQrCodeAsync` and `GetActiveQrCodeAsync`
 both filter `RevokedAt IS NULL`, so a revoked token reads as unknown rather than resolving to a
 box it no longer names.
 
@@ -562,8 +565,9 @@ address field to leak.
    `docs/c4/2-containers.puml` shows `customs_worker → db, "Writes GMR status against the
    Manifest"`, but neither `GmrSubmissionProcessor` nor `GmrOutcomeCollector` touch a database —
    only the work queue and `IGmrDocumentStore` (blob). `UA.Action.Freedom.CustomsWorker.csproj`
-   has no reference to `UA.Action.Freedom.Data`. Relatedly, `iac/local/sql/001-schemas.sql`
-   creates a `freedom_worker` DB role with DML grants, but no login/user is ever created for it —
+   has no reference to `UA.Action.Freedom.Data`. Relatedly, the database project
+   (`database/UA.Action.Freedom.Database/Security/`) declares a `freedom_worker` role with DML
+   grants, but `iac/local/sql/principals.sql` never creates a login/user for it —
    an orphaned role with nothing connecting as it. Two ways this resolves: either the diagram is
    simply wrong and GMR status is only ever readable from blob storage (matching the "pull-based,
    no inbound webhook" security posture elsewhere in this design), or a real feature is missing —
