@@ -115,6 +115,17 @@ public static class AuthenticationExtensions
     /// </remarks>
     public const string ManifestsApprove = "manifests:approve";
 
+    /// <summary>
+    /// Assign or unassign a driver to/from a vehicle on a convoy — Dispatcher only.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than <see cref="ConvoysWrite"/> (which also allows Administrator): crewing
+    /// vehicles is day-to-day convoy coordination, which is what the Dispatcher role exists for
+    /// (docs/domain/key-concepts.md § Roles). Every operational role can still read the crew
+    /// list via <see cref="ConvoysRead"/>.
+    /// </remarks>
+    public const string ConvoysAssignDrivers = "convoys:assign-drivers";
+
     private const string RoleClaimType = "roles";
 
     private const string Administrator = "Administrator";
@@ -182,6 +193,8 @@ public static class AuthenticationExtensions
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(ConvoysWrite, policy =>
                 policy.RequireRole(Administrator, Dispatcher))
+            .AddPolicy(ConvoysAssignDrivers, policy =>
+                policy.RequireRole(Dispatcher))
             .AddPolicy(ReceiversRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader, GroundOfficer))
             .AddPolicy(ReceiversWrite, policy =>

@@ -149,6 +149,67 @@ public static class ConvoyEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        convoys.MapGet("/{id:int}/vehicles/{vin}/drivers", async (
+            int id,
+            string vin,
+            IQueryHandler<ListVehicleDriversQuery, IReadOnlyList<VehicleDriverReadModel>?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var drivers = await handler.HandleAsync(new ListVehicleDriversQuery(id, vin), cancellationToken);
+            return drivers is null ? Results.NotFound() : Results.Ok(drivers);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+
+        convoys.MapPut("/{id:int}/vehicles/{vin}/drivers/{personId:guid}", async (
+            int id,
+            string vin,
+            Guid personId,
+            ICommandHandler<AssignDriverToVehicleCommand, AssignDriverOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new AssignDriverToVehicleCommand(id, vin, personId), cancellationToken);
+
+            return outcome switch
+            {
+                AssignDriverOutcome.Assigned => Results.NoContent(),
+                AssignDriverOutcome.ConvoyNotFound => Results.NotFound(),
+                AssignDriverOutcome.VehicleNotFound or AssignDriverOutcome.NotOnThisConvoy => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+                AssignDriverOutcome.PersonNotFound => Results.Problem(
+                    detail: $"There is no volunteer with that ID.",
+                    statusCode: StatusCodes.Status404NotFound),
+                AssignDriverOutcome.PersonNotADriver => Results.Problem(
+                    detail: "That volunteer is not registered as a driver.",
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+                _ => Results.Problem(
+                    detail: "That driver is already assigned to this vehicle.",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysAssignDrivers);
+
+        convoys.MapDelete("/{id:int}/vehicles/{vin}/drivers/{personId:guid}", async (
+            int id,
+            string vin,
+            Guid personId,
+            ICommandHandler<UnassignDriverFromVehicleCommand, UnassignDriverOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new UnassignDriverFromVehicleCommand(id, vin, personId), cancellationToken);
+
+            return outcome switch
+            {
+                UnassignDriverOutcome.Unassigned => Results.NoContent(),
+                UnassignDriverOutcome.ConvoyNotFound => Results.NotFound(),
+                UnassignDriverOutcome.NotOnThisConvoy => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+                _ => Results.NotFound(),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysAssignDrivers);
+
         convoys.MapPost("/{id:int}/publish-truck-list", async (
             int id,
             ICommandHandler<PublishTruckListCommand, PublishTruckListOutcome> handler,
