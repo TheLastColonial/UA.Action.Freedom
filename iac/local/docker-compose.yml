@@ -184,8 +184,6 @@ services:
         condition: service_healthy
       wiremock:
         condition: service_healthy
-      wiremock:
-        condition: service_healthy
 
   # Renders the document that travels with a vehicle. Reads the manifest document queue and
   # writes to the manifests container — no database access at all, which is what makes it
