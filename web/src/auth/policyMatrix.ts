@@ -10,6 +10,7 @@ export const POLICY_MATRIX = {
   'people:write': ['Administrator'],
   'convoys:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
   'convoys:write': ['Administrator', 'Dispatcher'],
+  'convoys:assign-drivers': ['Dispatcher'],
   'receivers:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader', 'GroundOfficer'],
   'receivers:write': ['Administrator', 'GroundOfficer'],
   'receivers:detail': ['GroundOfficer'],

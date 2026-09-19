@@ -10,6 +10,7 @@ import {
   convoyReadModelSchema,
   convoyVehicleReadModelSchema,
   routeStopReadModelSchema,
+  vehicleDriverReadModelSchema,
 } from './schemas/convoys';
 import type {
   ConvoyReadModel,
@@ -18,6 +19,7 @@ import type {
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
   UpdateConvoyRequest,
+  VehicleDriverReadModel,
 } from './schemas/convoys';
 
 const BASE = '/convoys';
@@ -69,6 +71,21 @@ export function assignVehicle(id: number, vin: string): Promise<void> {
 
 export function unassignVehicle(id: number, vin: string): Promise<void> {
   return delete204(vinPath(id, vin));
+}
+
+export function fetchVehicleDrivers(
+  id: number,
+  vin: string,
+): Promise<readonly VehicleDriverReadModel[] | ParentMissing> {
+  return getCollection(`${vinPath(id, vin)}/drivers`, vehicleDriverReadModelSchema);
+}
+
+export function assignDriver(id: number, vin: string, personId: string): Promise<void> {
+  return put204(`${vinPath(id, vin)}/drivers/${encodeURIComponent(personId)}`);
+}
+
+export function unassignDriver(id: number, vin: string, personId: string): Promise<void> {
+  return delete204(`${vinPath(id, vin)}/drivers/${encodeURIComponent(personId)}`);
 }
 
 export function publishTruckList(id: number): Promise<void> {
@@ -152,6 +169,44 @@ export function useUnassignVehicle(id: number): UseMutationResult<void, Error, s
   return useMutation({
     mutationFn: (vin: string) => unassignVehicle(id, vin),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) }),
+  });
+}
+
+export function useVehicleDrivers(
+  id: number,
+  vin: string,
+): UseQueryResult<readonly VehicleDriverReadModel[] | ParentMissing> {
+  return useQuery({
+    queryKey: qk.convoys.vehicleDrivers(id, vin),
+    queryFn: () => fetchVehicleDrivers(id, vin),
+  });
+}
+
+export function useAssignDriver(
+  id: number,
+  vin: string,
+): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (personId: string) => assignDriver(id, vin, personId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleDrivers(id, vin) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
+    },
+  });
+}
+
+export function useUnassignDriver(
+  id: number,
+  vin: string,
+): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (personId: string) => unassignDriver(id, vin, personId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleDrivers(id, vin) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
+    },
   });
 }
 

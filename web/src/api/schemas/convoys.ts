@@ -24,8 +24,16 @@ export const convoyVehicleReadModelSchema = z.object({
   vin: z.string(),
   plate: z.string(),
   weightKg: z.number().int(),
+  driverCount: z.number().int(),
 });
 export type ConvoyVehicleReadModel = z.infer<typeof convoyVehicleReadModelSchema>;
+
+export const vehicleDriverReadModelSchema = z.object({
+  personId: z.string().uuid(),
+  firstName: z.string(),
+  lastName: z.string(),
+});
+export type VehicleDriverReadModel = z.infer<typeof vehicleDriverReadModelSchema>;
 
 // Request shapes — src/UA.Action.Freedom.Api/Convoys/ConvoyRequests.cs.
 export interface CreateConvoyRequest {
