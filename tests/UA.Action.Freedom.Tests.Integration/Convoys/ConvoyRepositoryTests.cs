@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Data.Convoys;
 using UA.Action.Freedom.Domain;
@@ -268,7 +269,7 @@ public class ConvoyRepositoryTests
             await repository.RecordInsuranceAsync(AnInsurance(cancelled, other), cancellationToken);
 
             await repository.UnassignVehicleAsync(id, vin, cancellationToken);
-            (await repository.DeleteAsync(cancelled, cancellationToken)).Should().BeTrue();
+            (await repository.DeleteAsync(cancelled, cancellationToken)).Should().Be(DeleteResult.Deleted);
 
             (await repository.GetInsuranceAsync(id, vin, cancellationToken)).Should().BeNull();
             (await ScalarAsync("SELECT COUNT(1) FROM dbo.VehicleInsurance WHERE Vin = @vin", ("@vin", other))).Should().Be(0);
@@ -367,6 +368,32 @@ public class ConvoyRepositoryTests
             await RemoveManifestsAsync(id);
             await RemoveVehicleAsync(travelling);
             await RemoveVehicleAsync(noManifest);
+            await RemoveConvoyAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task A_convoy_a_manifest_names_is_kept_and_reported()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await repository.AssignVehicleAsync(id, vin, cancellationToken);
+            await AddManifestAsync(id, vin, ManifestStatus.Created);
+
+            (await repository.DeleteAsync(id, cancellationToken)).Should().Be(DeleteResult.StillReferenced);
+            (await repository.ExistsAsync(id, cancellationToken)).Should().BeTrue();
+            (await ConvoyOfAsync(vin)).Should().Be(id);
+        }
+        finally
+        {
+            await RemoveManifestsAsync(id);
+            await RemoveVehicleAsync(vin);
             await RemoveConvoyAsync(id);
         }
     }
@@ -566,7 +593,7 @@ public class ConvoyRepositoryTests
 
         await repository.ReplaceRouteAsync(id, [AStop(1, "Coventry", "CV1 2AB")], cancellationToken);
 
-        (await repository.DeleteAsync(id, cancellationToken)).Should().BeTrue();
+        (await repository.DeleteAsync(id, cancellationToken)).Should().Be(DeleteResult.Deleted);
 
         // The cascade is what stops a cancelled convoy leaving orphan stops behind.
         (await repository.GetRouteAsync(id, cancellationToken)).Should().BeEmpty();

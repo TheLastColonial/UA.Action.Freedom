@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Convoys;
@@ -52,7 +53,8 @@ public interface IConvoyRepository
 
     Task<bool> UpdateAsync(ConvoyReadModel convoy, CancellationToken cancellationToken);
 
-    Task<bool> DeleteAsync(int id, CancellationToken cancellationToken);
+    /// <summary>Refused (<see cref="DeleteResult.StillReferenced"/>) while a manifest names the convoy.</summary>
+    Task<DeleteResult> DeleteAsync(int id, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RouteStopReadModel>> GetRouteAsync(int convoyId, CancellationToken cancellationToken);
 

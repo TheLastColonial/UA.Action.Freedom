@@ -809,4 +809,18 @@ public class ConvoyEndpointTests
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task A_convoy_with_manifests_cannot_be_deleted()
+    {
+        var repository = AConvoyWithAVehicleOnIt().WithManifest(Vin, ManifestStatus.Created);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync($"/convoys/{Id}", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        repository.Count.Should().Be(1);
+        repository.ConvoyOf(Vin).Should().Be(Id);
+    }
 }

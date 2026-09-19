@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Vehicles;
 using UA.Action.Freedom.Data.Vehicles;
 using UA.Action.Freedom.Domain;
@@ -105,9 +106,9 @@ public class VehicleRepositoryTests
             await repository.AddAsync(AVehicle(vin), cancellationToken);
 
             (await repository.ExistsAsync(vin, cancellationToken)).Should().BeTrue();
-            (await repository.DeleteAsync(vin, cancellationToken)).Should().BeTrue();
+            (await repository.DeleteAsync(vin, cancellationToken)).Should().Be(DeleteResult.Deleted);
             (await repository.ExistsAsync(vin, cancellationToken)).Should().BeFalse();
-            (await repository.DeleteAsync(vin, cancellationToken)).Should().BeFalse();
+            (await repository.DeleteAsync(vin, cancellationToken)).Should().Be(DeleteResult.NotFound);
         }
         finally
         {
@@ -219,6 +220,30 @@ public class VehicleRepositoryTests
         {
             await RemoveAsync(vin);
             await ExecuteAsync("DELETE FROM dbo.Convoy WHERE Id = @id", ("@id", convoyId));
+        }
+    }
+
+    [Fact]
+    public async Task A_vehicle_a_manifest_names_is_kept_and_reported()
+    {
+        // The manifest is the record of what that vehicle carried; it outlives any tidy-up.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var vin = NewVin();
+        var manifestId = "IT" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
+
+        try
+        {
+            await repository.AddAsync(AVehicle(vin), cancellationToken);
+            await ExecuteAsync("INSERT INTO dbo.Manifest (Id, Vin) VALUES (@id, @vin)", ("@id", manifestId), ("@vin", vin));
+
+            (await repository.DeleteAsync(vin, cancellationToken)).Should().Be(DeleteResult.StillReferenced);
+            (await repository.ExistsAsync(vin, cancellationToken)).Should().BeTrue();
+        }
+        finally
+        {
+            await ExecuteAsync("DELETE FROM dbo.Manifest WHERE Id = @id", ("@id", manifestId));
+            await RemoveAsync(vin);
         }
     }
 

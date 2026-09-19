@@ -1,4 +1,6 @@
 using Dapper;
+using Microsoft.Data.SqlClient;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Vehicles;
 using UA.Action.Freedom.Domain;
 
@@ -25,7 +27,7 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
 
         return await connection.QuerySingleOrDefaultAsync<VehicleReadModel>(new CommandDefinition(
             $"SELECT {Columns} FROM dbo.Vehicle WHERE Vin = @vin",
-            new { vin },
+            new { vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
     }
 
@@ -47,7 +49,7 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
 
         var count = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             "SELECT COUNT(1) FROM dbo.Vehicle WHERE Vin = @vin",
-            new { vin },
+            new { vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
 
         return count > 0;
@@ -93,7 +95,7 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
                 CargoDepthCm = @CargoDepthCm,
                 CargoHeightCm = @CargoHeightCm,
                 UpdatedAt = SYSUTCDATETIME()
-            WHERE Vin = @Vin
+            WHERE Vin = CAST(@Vin AS varchar(32))
             """,
             vehicle,
             cancellationToken: cancellationToken));
@@ -114,21 +116,29 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
                 UpdatedAt = SYSUTCDATETIME()
             WHERE Vin = @vin
             """,
-            new { vin, status = (int)status, notes },
+            new { vin = SqlKey.Of(vin), status = (int)status, notes },
             cancellationToken: cancellationToken));
 
         return affected > 0;
     }
 
-    public async Task<bool> DeleteAsync(string vin, CancellationToken cancellationToken)
+    public async Task<DeleteResult> DeleteAsync(string vin, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
-        var affected = await connection.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM dbo.Vehicle WHERE Vin = @vin",
-            new { vin },
-            cancellationToken: cancellationToken));
+        // FK_Manifest_Vehicle is NO ACTION: a manifest is the record of what the vehicle carried.
+        try
+        {
+            var affected = await connection.ExecuteAsync(new CommandDefinition(
+                "DELETE FROM dbo.Vehicle WHERE Vin = @vin",
+                new { vin = SqlKey.Of(vin) },
+                cancellationToken: cancellationToken));
 
-        return affected > 0;
+            return affected > 0 ? DeleteResult.Deleted : DeleteResult.NotFound;
+        }
+        catch (SqlException exception) when (exception.Number == SqlErrors.ForeignKeyViolation)
+        {
+            return DeleteResult.StillReferenced;
+        }
     }
 }

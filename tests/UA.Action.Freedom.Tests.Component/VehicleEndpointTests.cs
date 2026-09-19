@@ -406,4 +406,19 @@ public class VehicleEndpointTests
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task A_vehicle_named_on_a_manifest_cannot_be_deleted()
+    {
+        var repository = new InMemoryVehicleRepository(AStoredVehicle()).NamedOnAManifest(Vin);
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Purchaser");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync($"/vehicles/{Vin}", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().Should().Contain("manifest");
+        repository.Contains(Vin).Should().BeTrue();
+    }
 }

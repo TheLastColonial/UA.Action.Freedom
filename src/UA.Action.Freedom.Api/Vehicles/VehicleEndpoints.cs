@@ -85,7 +85,14 @@ public static class VehicleEndpoints
             CancellationToken cancellationToken) =>
         {
             var outcome = await handler.HandleAsync(new DeleteVehicleCommand(vin), cancellationToken);
-            return outcome == DeleteVehicleOutcome.NotFound ? Results.NotFound() : Results.NoContent();
+            return outcome switch
+            {
+                DeleteVehicleOutcome.Deleted => Results.NoContent(),
+                DeleteVehicleOutcome.StillReferenced => Results.Problem(
+                    detail: $"Vehicle '{vin}' is named on a manifest, which is the record of what it carried, so it cannot be removed.",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            };
         })
         .RequireAuthorization(AuthenticationExtensions.VehiclesWrite);
 

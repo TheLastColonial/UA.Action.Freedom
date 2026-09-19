@@ -73,7 +73,14 @@ public static class ConvoyEndpoints
             CancellationToken cancellationToken) =>
         {
             var outcome = await handler.HandleAsync(new DeleteConvoyCommand(id), cancellationToken);
-            return outcome == DeleteConvoyOutcome.NotFound ? Results.NotFound() : Results.NoContent();
+            return outcome switch
+            {
+                DeleteConvoyOutcome.Deleted => Results.NoContent(),
+                DeleteConvoyOutcome.StillReferenced => Results.Problem(
+                    detail: "This convoy has manifests, which are the record of its journey, so it cannot be removed.",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            };
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 

@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Domain;
 
@@ -143,8 +144,18 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
         return Task.FromResult(true);
     }
 
-    public Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)
+    public Task<DeleteResult> DeleteAsync(int id, CancellationToken cancellationToken)
     {
+        if (!convoys.ContainsKey(id))
+        {
+            return Task.FromResult(DeleteResult.NotFound);
+        }
+
+        if (VinsOn(id).Any(manifestStatus.ContainsKey))
+        {
+            return Task.FromResult(DeleteResult.StillReferenced);
+        }
+
         routes.Remove(id);
         crew.RemoveAll(seat => seat.ConvoyId == id);
         foreach (var key in insurance.Keys.Where(key => key.ConvoyId == id).ToList())
@@ -157,7 +168,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
             Release(vin);
         }
 
-        return Task.FromResult(convoys.Remove(id));
+        convoys.Remove(id);
+        return Task.FromResult(DeleteResult.Deleted);
     }
 
     public Task<IReadOnlyList<RouteStopReadModel>> GetRouteAsync(int convoyId, CancellationToken cancellationToken) =>
@@ -278,14 +290,14 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
 
     public Task<ArriveResult> ArriveAsync(int convoyId, DateTime arrivedAt, CancellationToken cancellationToken)
     {
-        if (StillTravelling(convoyId).Count > 0)
-        {
-            return Task.FromResult(ArriveResult.VehiclesStillTravelling);
-        }
-
         if (!convoys.TryGetValue(convoyId, out var convoy) || convoy.Arrived || !convoy.TruckListPublished)
         {
             return Task.FromResult(ArriveResult.AlreadyArrived);
+        }
+
+        if (StillTravelling(convoyId).Count > 0)
+        {
+            return Task.FromResult(ArriveResult.VehiclesStillTravelling);
         }
 
         convoys[convoyId] = convoy with { ArrivedAt = arrivedAt };

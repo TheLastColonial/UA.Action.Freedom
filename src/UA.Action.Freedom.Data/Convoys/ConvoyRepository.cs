@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Domain;
 
@@ -100,7 +101,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         return affected > 0;
     }
 
-    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)
+    public async Task<DeleteResult> DeleteAsync(int id, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
         await connection.OpenAsync(cancellationToken);
@@ -120,15 +121,24 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             transaction,
             cancellationToken: cancellationToken));
 
-        var affected = await connection.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM dbo.Convoy WHERE Id = @id",
-            new { id },
-            transaction,
-            cancellationToken: cancellationToken));
+        // FK_Manifest_Convoy is NO ACTION: a convoy with manifests travelled, or is about to, and
+        // those manifests are the record of it. Refused, the transaction rolls the crew back too.
+        try
+        {
+            var affected = await connection.ExecuteAsync(new CommandDefinition(
+                "DELETE FROM dbo.Convoy WHERE Id = @id",
+                new { id },
+                transaction,
+                cancellationToken: cancellationToken));
 
-        await transaction.CommitAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
 
-        return affected > 0;
+            return affected > 0 ? DeleteResult.Deleted : DeleteResult.NotFound;
+        }
+        catch (SqlException exception) when (exception.Number == SqlErrors.ForeignKeyViolation)
+        {
+            return DeleteResult.StillReferenced;
+        }
     }
 
     public async Task<IReadOnlyList<RouteStopReadModel>> GetRouteAsync(int convoyId, CancellationToken cancellationToken)
@@ -222,7 +232,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
               AND HandedOverAt IS NULL
               AND (ConvoyId IS NULL OR ConvoyId = @convoyId)
             """,
-            new { convoyId, vin, passed = (int)InspectionStatus.Passed },
+            new { convoyId, vin = SqlKey.Of(vin), passed = (int)InspectionStatus.Passed },
             cancellationToken: cancellationToken));
 
         if (affected > 0)
@@ -235,7 +245,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             SELECT InspectionStatus, CAST(CASE WHEN HandedOverAt IS NULL THEN 0 ELSE 1 END AS bit) AS HandedOver
             FROM dbo.Vehicle WHERE Vin = @vin
             """,
-            new { vin },
+            new { vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
 
         return vehicle switch
@@ -264,7 +274,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             DELETE FROM dbo.VehicleDriver WHERE ConvoyId = @convoyId AND Vin = @vin;
             DELETE FROM dbo.VehicleInsurance WHERE ConvoyId = @convoyId AND Vin = @vin;
             """,
-            new { convoyId, vin },
+            new { convoyId, vin = SqlKey.Of(vin) },
             transaction,
             cancellationToken: cancellationToken));
 
@@ -273,7 +283,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             UPDATE dbo.Vehicle SET ConvoyId = NULL, UpdatedAt = SYSUTCDATETIME()
             WHERE Vin = @vin AND ConvoyId = @convoyId
             """,
-            new { convoyId, vin },
+            new { convoyId, vin = SqlKey.Of(vin) },
             transaction,
             cancellationToken: cancellationToken));
 
@@ -290,7 +300,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         // Check that the vehicle is on this convoy before listing its drivers.
         var vehicleOnConvoy = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
             "SELECT CAST(CASE WHEN COUNT(1) > 0 THEN 1 ELSE 0 END AS bit) FROM dbo.Vehicle WHERE Vin = @vin AND ConvoyId = @convoyId",
-            new { vin, convoyId },
+            new { vin = SqlKey.Of(vin), convoyId },
             cancellationToken: cancellationToken));
 
         if (!vehicleOnConvoy)
@@ -310,7 +320,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             WHERE vd.ConvoyId = @convoyId AND vd.Vin = @vin
             ORDER BY vd.[Role], p.LastName, p.FirstName
             """,
-            new { convoyId, vin },
+            new { convoyId, vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
 
         return rows.ToList();
@@ -337,7 +347,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
                 WHERE EXISTS (SELECT 1 FROM dbo.Vehicle WHERE Vin = @vin AND ConvoyId = @convoyId)
                   AND NOT EXISTS (SELECT 1 FROM dbo.VehicleDriver WHERE ConvoyId = @convoyId AND PersonId = @personId)
                 """,
-                new { convoyId, vin, personId, role = (int)role },
+                new { convoyId, vin = SqlKey.Of(vin), personId, role = (int)role },
                 transaction,
                 cancellationToken: cancellationToken));
 
@@ -363,7 +373,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             UPDATE dbo.VehicleInsurance SET VoidedAt = SYSUTCDATETIME()
             WHERE ConvoyId = @convoyId AND Vin = @vin AND VoidedAt IS NULL
             """,
-            new { convoyId, vin },
+            new { convoyId, vin = SqlKey.Of(vin) },
             transaction,
             cancellationToken: cancellationToken));
 
@@ -397,7 +407,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             WHERE ConvoyId = @convoyId AND Vin = @vin AND PersonId = @personId
               AND EXISTS (SELECT 1 FROM dbo.Vehicle WHERE Vin = @vin AND ConvoyId = @convoyId)
             """,
-            new { convoyId, vin, personId },
+            new { convoyId, vin = SqlKey.Of(vin), personId },
             transaction,
             cancellationToken: cancellationToken));
 
@@ -417,25 +427,13 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
 
         // Arrival, handover and release are one fact about the journey: a convoy marked arrived
         // with its vehicles still offered for the next one, or the reverse, must not be possible.
-        // UPDLOCK on the convoy row makes a second dispatcher wait rather than both succeed.
+        //
+        // The convoy row is taken first, by the conditional UPDATE that stamps it: a second
+        // dispatcher's arrival then waits on that one row rather than both succeeding. The
+        // still-travelling check is an ordinary read after it — the truck list is published, so
+        // no vehicle can join or leave meanwhile — and nothing here scans dbo.Vehicle under a
+        // lock, which is what deadlocked this transaction against single-vehicle writes.
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-
-        var stillTravelling = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
-            $"""
-             SELECT COUNT(1)
-             FROM dbo.Vehicle AS v WITH (UPDLOCK)
-             WHERE v.ConvoyId = @convoyId
-               AND NOT EXISTS (SELECT 1 FROM dbo.Manifest AS m
-                               WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN {FinishedStatuses})
-             """,
-            new { convoyId },
-            transaction,
-            cancellationToken: cancellationToken));
-
-        if (stillTravelling > 0)
-        {
-            return ArriveResult.VehiclesStillTravelling;
-        }
 
         var arrived = await connection.ExecuteAsync(new CommandDefinition(
             """
@@ -449,6 +447,24 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         if (arrived == 0)
         {
             return ArriveResult.AlreadyArrived;
+        }
+
+        var stillTravelling = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            $"""
+             SELECT COUNT(1)
+             FROM dbo.Vehicle AS v
+             WHERE v.ConvoyId = @convoyId
+               AND NOT EXISTS (SELECT 1 FROM dbo.Manifest AS m
+                               WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN {FinishedStatuses})
+             """,
+            new { convoyId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (stillTravelling > 0)
+        {
+            // Disposing the transaction without committing rolls the ArrivedAt stamp back.
+            return ArriveResult.VehiclesStillTravelling;
         }
 
         await connection.ExecuteAsync(new CommandDefinition(
@@ -509,7 +525,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             FROM dbo.VehicleInsurance
             WHERE ConvoyId = @convoyId AND Vin = @vin
             """,
-            new { convoyId, vin },
+            new { convoyId, vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
     }
 
@@ -522,8 +538,8 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             """
             MERGE dbo.VehicleInsurance WITH (HOLDLOCK) AS target
-            USING (SELECT @ConvoyId AS ConvoyId, @Vin AS Vin
-                   WHERE EXISTS (SELECT 1 FROM dbo.Vehicle WHERE Vin = @Vin AND ConvoyId = @ConvoyId)) AS source
+            USING (SELECT @ConvoyId AS ConvoyId, CAST(@Vin AS varchar(32)) AS Vin
+                   WHERE EXISTS (SELECT 1 FROM dbo.Vehicle WHERE Vin = CAST(@Vin AS varchar(32)) AND ConvoyId = @ConvoyId)) AS source
             ON target.ConvoyId = source.ConvoyId AND target.Vin = source.Vin
             WHEN MATCHED THEN UPDATE SET
                 Insurer = @Insurer, PolicyNumber = @PolicyNumber, CoverStart = @CoverStart,
@@ -545,7 +561,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
 
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM dbo.VehicleInsurance WHERE ConvoyId = @convoyId AND Vin = @vin",
-            new { convoyId, vin },
+            new { convoyId, vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
 
         return affected > 0;

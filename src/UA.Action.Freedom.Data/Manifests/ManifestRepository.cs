@@ -19,7 +19,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
 
         return await connection.QuerySingleOrDefaultAsync<ManifestReadModel>(new CommandDefinition(
             $"SELECT {Columns} FROM dbo.Manifest WHERE Id = @id",
-            new { id },
+            new { id = SqlKey.Of(id) },
             cancellationToken: cancellationToken));
     }
 
@@ -46,7 +46,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
 
         var count = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             "SELECT COUNT(1) FROM dbo.Manifest WHERE Id = @id",
-            new { id },
+            new { id = SqlKey.Of(id) },
             cancellationToken: cancellationToken));
 
         return count > 0;
@@ -79,7 +79,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
                 DeliveryNotes = @DeliveryNotes,
                 FerryBookingComplete = @FerryBookingComplete,
                 UpdatedAt = SYSUTCDATETIME()
-            WHERE Id = @Id
+            WHERE Id = CAST(@Id AS varchar(32))
             """,
             manifest,
             cancellationToken: cancellationToken));
@@ -94,7 +94,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
         // Teams and the cargo links cascade; the boxes themselves are untouched.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM dbo.Manifest WHERE Id = @id",
-            new { id },
+            new { id = SqlKey.Of(id) },
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -114,7 +114,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
                 UpdatedAt = SYSUTCDATETIME()
             WHERE Id = @id AND Status = @from
             """,
-            new { id, from = (int)from, to = (int)to },
+            new { id = SqlKey.Of(id), from = (int)from, to = (int)to },
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -137,7 +137,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             OUTPUT INSERTED.GmrSubmittedAt
             WHERE Id = @id AND Status = @from AND GmrSubmittedAt IS NULL
             """,
-            new { id, from = (int)from, confirmed = (int)ManifestStatus.Confirmed },
+            new { id = SqlKey.Of(id), from = (int)from, confirmed = (int)ManifestStatus.Confirmed },
             cancellationToken: cancellationToken));
     }
 
@@ -153,7 +153,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             WHERE ManifestId = @id
             ORDER BY Leg
             """,
-            new { id },
+            new { id = SqlKey.Of(id) },
             cancellationToken: cancellationToken));
 
         return rows.ToList();
@@ -173,7 +173,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
                 SecondaryPersonId = @SecondaryPersonId
             WHERE ManifestId = @id AND Leg = @Leg
             """,
-            new { id, Leg = (int)team.Leg, team.PrimaryPersonId, team.SecondaryPersonId },
+            new { id = SqlKey.Of(id), Leg = (int)team.Leg, team.PrimaryPersonId, team.SecondaryPersonId },
             cancellationToken: cancellationToken));
 
         if (affected == 0)
@@ -183,7 +183,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
                 INSERT INTO dbo.ManifestDriverTeam (ManifestId, Leg, PrimaryPersonId, SecondaryPersonId)
                 VALUES (@id, @Leg, @PrimaryPersonId, @SecondaryPersonId)
                 """,
-                new { id, Leg = (int)team.Leg, team.PrimaryPersonId, team.SecondaryPersonId },
+                new { id = SqlKey.Of(id), Leg = (int)team.Leg, team.PrimaryPersonId, team.SecondaryPersonId },
                 cancellationToken: cancellationToken));
         }
     }
@@ -208,7 +208,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             WHERE mb.ManifestId = @id
             ORDER BY b.Id
             """,
-            new { id },
+            new { id = SqlKey.Of(id) },
             cancellationToken: cancellationToken));
 
         return rows.ToList();
@@ -227,7 +227,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             IF @@ROWCOUNT = 0 AND EXISTS (SELECT 1 FROM dbo.Box WHERE Id = @boxId)
                 INSERT INTO dbo.ManifestBox (BoxId, ManifestId) VALUES (@boxId, @id);
             """,
-            new { id, boxId },
+            new { id = SqlKey.Of(id), boxId },
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -240,7 +240,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
         // Scoped to this manifest: taking a box off one it was never on is a caller mistake.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM dbo.ManifestBox WHERE BoxId = @boxId AND ManifestId = @id",
-            new { id, boxId },
+            new { id = SqlKey.Of(id), boxId },
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -259,7 +259,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             INNER JOIN dbo.Vehicle AS v ON v.Vin = m.Vin
             WHERE m.Id = @id
             """,
-            new { id },
+            new { id = SqlKey.Of(id) },
             cancellationToken: cancellationToken)) ?? 0;
     }
 
@@ -277,7 +277,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             INNER JOIN dbo.Vehicle AS v ON v.Vin = m.Vin
             WHERE m.Id = @id
             """,
-            new { id },
+            new { id = SqlKey.Of(id) },
             cancellationToken: cancellationToken)) ?? new VehicleCargoCapacityReadModel(null, null, null, null);
     }
 
@@ -302,7 +302,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             WHERE mb.ManifestId = @id
             ORDER BY b.Id
             """,
-            new { id },
+            new { id = SqlKey.Of(id) },
             cancellationToken: cancellationToken));
 
         return rows.ToList();

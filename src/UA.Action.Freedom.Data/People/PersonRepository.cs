@@ -115,7 +115,7 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
 
             return affected > 0 ? DeletePersonResult.Deleted : DeletePersonResult.NotFound;
         }
-        catch (SqlException exception) when (exception.Number == ForeignKeyViolation)
+        catch (SqlException exception) when (exception.Number == SqlErrors.ForeignKeyViolation)
         {
             return DeletePersonResult.StillReferenced;
         }
