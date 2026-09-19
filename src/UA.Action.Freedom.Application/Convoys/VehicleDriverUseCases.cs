@@ -1,10 +1,14 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.People;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Convoys;
 
-/// <summary>Assign a driver to a vehicle on a convoy.</summary>
-public sealed record AssignDriverToVehicleCommand(int ConvoyId, string Vin, Guid PersonId);
+/// <summary>
+/// Put a volunteer on a vehicle's crew for this convoy. A driver must be registered to drive; a
+/// passenger can be any volunteer.
+/// </summary>
+public sealed record AssignDriverToVehicleCommand(int ConvoyId, string Vin, Guid PersonId, CrewRole Role = CrewRole.Driver);
 
 public enum AssignDriverOutcome
 {
@@ -13,7 +17,8 @@ public enum AssignDriverOutcome
     VehicleNotFound,
     PersonNotFound,
     PersonNotADriver,
-    AlreadyAssigned
+    AlreadyAssigned,
+    OnAnotherVehicle
 }
 
 public sealed class AssignDriverToVehicleHandler(IConvoyRepository convoyRepository, IPersonRepository personRepository)
@@ -34,15 +39,17 @@ public sealed class AssignDriverToVehicleHandler(IConvoyRepository convoyReposit
             return AssignDriverOutcome.PersonNotFound;
         }
 
-        if (!person.IsDriver)
+        if (command.Role == CrewRole.Driver && !person.IsDriver)
         {
             return AssignDriverOutcome.PersonNotADriver;
         }
 
-        return await convoyRepository.AssignDriverAsync(command.ConvoyId, command.Vin, command.PersonId, cancellationToken) switch
+        return await convoyRepository.AssignDriverAsync(
+            command.ConvoyId, command.Vin, command.PersonId, command.Role, cancellationToken) switch
         {
             AssignDriverResult.Assigned => AssignDriverOutcome.Assigned,
             AssignDriverResult.AlreadyAssigned => AssignDriverOutcome.AlreadyAssigned,
+            AssignDriverResult.OnAnotherVehicle => AssignDriverOutcome.OnAnotherVehicle,
             _ => AssignDriverOutcome.VehicleNotFound,
         };
     }

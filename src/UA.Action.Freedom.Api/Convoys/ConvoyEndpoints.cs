@@ -1,6 +1,7 @@
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Convoys;
 
@@ -170,10 +171,13 @@ public static class ConvoyEndpoints
             int id,
             string vin,
             Guid personId,
+            AssignCrewRequest? request,
             ICommandHandler<AssignDriverToVehicleCommand, AssignDriverOutcome> handler,
             CancellationToken cancellationToken) =>
         {
-            var outcome = await handler.HandleAsync(new AssignDriverToVehicleCommand(id, vin, personId), cancellationToken);
+            // The body is optional: no body means a driver, which is what every earlier caller meant.
+            var role = request?.Role ?? CrewRole.Driver;
+            var outcome = await handler.HandleAsync(new AssignDriverToVehicleCommand(id, vin, personId, role), cancellationToken);
 
             return outcome switch
             {
@@ -186,8 +190,11 @@ public static class ConvoyEndpoints
                     detail: $"There is no volunteer with that ID.",
                     statusCode: StatusCodes.Status404NotFound),
                 AssignDriverOutcome.PersonNotADriver => Results.Problem(
-                    detail: "That volunteer is not registered as a driver.",
+                    detail: "That volunteer is not registered as a driver. They can ride as a passenger instead.",
                     statusCode: StatusCodes.Status422UnprocessableEntity),
+                AssignDriverOutcome.OnAnotherVehicle => Results.Problem(
+                    detail: "That volunteer is already crewing another vehicle on this convoy. A person takes one seat per convoy.",
+                    statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Problem(
                     detail: "That driver is already assigned to this vehicle.",
                     statusCode: StatusCodes.Status409Conflict),

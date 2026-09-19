@@ -450,6 +450,43 @@ public class ConvoyEndpointTests
     }
 
     [Fact]
+    public async Task A_volunteer_who_does_not_drive_may_ride_as_a_passenger()
+    {
+        var repository = AConvoyWithAVehicleOnIt();
+        await using var api = FreedomApi.WithConvoys(
+            repository, new InMemoryPersonRepository(APerson(DriverId, isDriver: false)), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", new { role = "Passenger" }, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var crew = await client.GetFromJsonAsync<JsonElement>(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers", TestContext.Current.CancellationToken);
+        crew.EnumerateArray().Single().GetProperty("role").GetString().Should().Be("Passenger");
+        var vehicles = await client.GetFromJsonAsync<JsonElement>($"/convoys/{Id}/vehicles", TestContext.Current.CancellationToken);
+        vehicles.EnumerateArray().Single().GetProperty("driverCount").GetInt32().Should().Be(0);
+        vehicles.EnumerateArray().Single().GetProperty("passengerCount").GetInt32().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_person_already_crewing_another_vehicle_of_the_convoy_is_a_conflict()
+    {
+        const string otherVin = "WVWZZZ1JZXW000002";
+        var repository = AConvoyWithAVehicleOnIt().WithVehicle(otherVin, onConvoy: Id).WithDriver(otherVin, DriverId);
+        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().Should().Contain("another vehicle on this convoy");
+        repository.DriverIdsOf(Vin).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_volunteer_who_does_not_drive_cannot_crew_a_vehicle()
     {
         var repository = AConvoyWithAVehicleOnIt();

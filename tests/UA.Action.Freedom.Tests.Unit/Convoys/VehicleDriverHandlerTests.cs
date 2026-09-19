@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.People;
+using UA.Action.Freedom.Domain;
 using UA.Action.Freedom.Tests.Unit.People;
 
 namespace UA.Action.Freedom.Tests.Unit.Convoys;
@@ -26,18 +27,20 @@ public class VehicleDriverHandlerTests
         return (convoys, people);
     }
 
-    private static Task<AssignDriverOutcome> AssignAsync(IConvoyRepository convoys, IPersonRepository people) =>
+    private static Task<AssignDriverOutcome> AssignAsync(
+        IConvoyRepository convoys, IPersonRepository people, CrewRole role = CrewRole.Driver) =>
         new AssignDriverToVehicleHandler(convoys, people).HandleAsync(
-            new AssignDriverToVehicleCommand(ConvoyTestData.Id, Vin, PersonId), TestContext.Current.CancellationToken);
+            new AssignDriverToVehicleCommand(ConvoyTestData.Id, Vin, PersonId, role), TestContext.Current.CancellationToken);
 
     [Theory]
     [InlineData(AssignDriverResult.Assigned, AssignDriverOutcome.Assigned)]
     [InlineData(AssignDriverResult.AlreadyAssigned, AssignDriverOutcome.AlreadyAssigned)]
     [InlineData(AssignDriverResult.VehicleNotOnConvoy, AssignDriverOutcome.VehicleNotFound)]
+    [InlineData(AssignDriverResult.OnAnotherVehicle, AssignDriverOutcome.OnAnotherVehicle)]
     public async Task Reports_what_the_write_found(AssignDriverResult result, AssignDriverOutcome expected)
     {
         var (convoys, people) = Repositories(ConvoyTestData.AReadModel(), PersonTestData.AReadModel(PersonId, isDriver: true));
-        convoys.AssignDriverAsync(ConvoyTestData.Id, Vin, PersonId, Arg.Any<CancellationToken>()).Returns(result);
+        convoys.AssignDriverAsync(ConvoyTestData.Id, Vin, PersonId, CrewRole.Driver, Arg.Any<CancellationToken>()).Returns(result);
 
         var outcome = await AssignAsync(convoys, people);
 
@@ -53,7 +56,7 @@ public class VehicleDriverHandlerTests
 
         outcome.Should().Be(AssignDriverOutcome.ConvoyNotFound);
         await convoys.DidNotReceive().AssignDriverAsync(
-            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CrewRole>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -65,7 +68,7 @@ public class VehicleDriverHandlerTests
 
         outcome.Should().Be(AssignDriverOutcome.PersonNotFound);
         await convoys.DidNotReceive().AssignDriverAsync(
-            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CrewRole>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -77,7 +80,19 @@ public class VehicleDriverHandlerTests
 
         outcome.Should().Be(AssignDriverOutcome.PersonNotADriver);
         await convoys.DidNotReceive().AssignDriverAsync(
-            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CrewRole>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Any_volunteer_may_ride_as_a_passenger()
+    {
+        var (convoys, people) = Repositories(ConvoyTestData.AReadModel(), PersonTestData.AReadModel(PersonId, isDriver: false));
+        convoys.AssignDriverAsync(ConvoyTestData.Id, Vin, PersonId, CrewRole.Passenger, Arg.Any<CancellationToken>())
+            .Returns(AssignDriverResult.Assigned);
+
+        var outcome = await AssignAsync(convoys, people, CrewRole.Passenger);
+
+        outcome.Should().Be(AssignDriverOutcome.Assigned);
     }
 
     [Fact]
@@ -86,7 +101,7 @@ public class VehicleDriverHandlerTests
         var (convoys, _) = Repositories(ConvoyTestData.AReadModel(), person: null);
         convoys.UnassignDriverAsync(ConvoyTestData.Id, Vin, PersonId, Arg.Any<CancellationToken>()).Returns(true);
         convoys.ListVehicleDriversAsync(ConvoyTestData.Id, Vin, Arg.Any<CancellationToken>())
-            .Returns([new VehicleDriverReadModel(PersonId, "Olena", "Kovalenko")]);
+            .Returns([new VehicleDriverReadModel(PersonId, "Olena", "Kovalenko", CrewRole.Driver)]);
 
         var outcome = await new UnassignDriverFromVehicleHandler(convoys).HandleAsync(
             new UnassignDriverFromVehicleCommand(ConvoyTestData.Id, Vin, PersonId), TestContext.Current.CancellationToken);
@@ -134,7 +149,7 @@ public class VehicleDriverHandlerTests
     [Fact]
     public async Task Lists_the_crew_of_a_vehicle()
     {
-        var crew = new[] { new VehicleDriverReadModel(PersonId, "Olena", "Kovalenko") };
+        var crew = new[] { new VehicleDriverReadModel(PersonId, "Olena", "Kovalenko", CrewRole.Driver) };
         var (convoys, _) = Repositories(ConvoyTestData.AReadModel(), person: null);
         convoys.ListVehicleDriversAsync(ConvoyTestData.Id, Vin, Arg.Any<CancellationToken>()).Returns(crew);
 

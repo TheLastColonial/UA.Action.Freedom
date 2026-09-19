@@ -1,5 +1,6 @@
 import { HttpResponse, http } from 'msw';
 import type { RequestHandler } from 'msw';
+import { z } from 'zod';
 
 import type {
   ConvoyReadModel,
@@ -11,7 +12,11 @@ import type {
 } from '../../api/schemas/convoys';
 import type { PersonReadModel } from '../../api/schemas/people';
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
+import { crewRoleSchema } from '../../api/schemas/convoys';
 import { problem } from './problem';
+
+// Mirrors AssignCrewRequest: an optional body, and no body means a driver.
+const crewBodySchema = z.object({ role: crewRoleSchema.optional() });
 
 /**
  * What the truck-list and crew routes look up, as the real API does. Pass the `db` of a
@@ -50,10 +55,14 @@ export function convoyApi(
   const convoyOf = (vin: string) =>
     [...vehicles.entries()].find(([, list]) => list.some((v) => v.vin === vin))?.[0];
   const setDriverCount = (convoyId: number, vin: string) => {
-    const count = (drivers.get(driverKey(convoyId, vin)) ?? []).length;
+    const crew = drivers.get(driverKey(convoyId, vin)) ?? [];
+    const driverCount = crew.filter((member) => member.role === 'Driver').length;
+    const passengerCount = crew.length - driverCount;
     vehicles.set(
       convoyId,
-      (vehicles.get(convoyId) ?? []).map((v) => (v.vin === vin ? { ...v, driverCount: count } : v)),
+      (vehicles.get(convoyId) ?? []).map((v) =>
+        v.vin === vin ? { ...v, driverCount, passengerCount } : v,
+      ),
     );
   };
 
@@ -164,7 +173,13 @@ export function convoyApi(
       if (current === undefined) {
         vehicles.set(id, [
           ...(vehicles.get(id) ?? []),
-          { vin, plate: vehicle.plate, weightKg: vehicle.weightKg, driverCount: 0 },
+          {
+            vin,
+            plate: vehicle.plate,
+            weightKg: vehicle.weightKg,
+            driverCount: 0,
+            passengerCount: 0,
+          },
         ]);
       }
       return new HttpResponse(null, { status: 204 });
@@ -216,7 +231,7 @@ export function convoyApi(
       return HttpResponse.json(drivers.get(driverKey(convoyId, vin)) ?? []);
     }),
 
-    http.put('/convoys/:id/vehicles/:vin/drivers/:personId', ({ params }) => {
+    http.put('/convoys/:id/vehicles/:vin/drivers/:personId', async ({ params, request }) => {
       const convoyId = idFrom(params['id']);
       if (!db.has(convoyId)) {
         return new HttpResponse(null, { status: 404 });
@@ -226,8 +241,13 @@ export function convoyApi(
       if (!person) {
         return problem(404, 'There is no volunteer with that ID.');
       }
-      if (!person.isDriver) {
-        return problem(422, 'That volunteer is not registered as a driver.');
+      const body = crewBodySchema.safeParse(await request.json().catch(() => ({})));
+      const role = body.success ? (body.data.role ?? 'Driver') : 'Driver';
+      if (role === 'Driver' && !person.isDriver) {
+        return problem(
+          422,
+          'That volunteer is not registered as a driver. They can ride as a passenger instead.',
+        );
       }
       if (!onConvoy(convoyId, vin)) {
         return problem(404, `There is no vehicle with VIN '${vin}' on this convoy.`);
@@ -237,9 +257,21 @@ export function convoyApi(
       if (crew.some((d) => d.personId === person.id)) {
         return problem(409, 'That driver is already assigned to this vehicle.');
       }
+      const seatedElsewhere = [...drivers.entries()].some(
+        ([otherKey, members]) =>
+          otherKey.startsWith(`${String(convoyId)}:`) &&
+          otherKey !== key &&
+          members.some((d) => d.personId === person.id),
+      );
+      if (seatedElsewhere) {
+        return problem(
+          409,
+          'That volunteer is already crewing another vehicle on this convoy. A person takes one seat per convoy.',
+        );
+      }
       drivers.set(key, [
         ...crew,
-        { personId: person.id, firstName: person.firstName, lastName: person.lastName },
+        { personId: person.id, firstName: person.firstName, lastName: person.lastName, role },
       ]);
       setDriverCount(convoyId, vin);
       return new HttpResponse(null, { status: 204 });

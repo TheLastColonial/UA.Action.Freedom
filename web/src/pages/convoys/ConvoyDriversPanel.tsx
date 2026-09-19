@@ -9,7 +9,12 @@ import {
 } from '../../api/convoys';
 import { usePeople } from '../../api/people';
 import { ApiDomainProblem } from '../../api/problem';
-import type { ConvoyVehicleReadModel, VehicleDriverReadModel } from '../../api/schemas/convoys';
+import { crewRoleSchema } from '../../api/schemas/convoys';
+import type {
+  ConvoyVehicleReadModel,
+  CrewRole,
+  VehicleDriverReadModel,
+} from '../../api/schemas/convoys';
 import type { PersonReadModel } from '../../api/schemas/people';
 import { Button } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
@@ -50,16 +55,16 @@ function UndercrewedWarning({
 
 export function ConvoyDriversPanel({ convoyId }: ConvoyDriversPanelProps): JSX.Element {
   const vehiclesQuery = useConvoyVehicles(convoyId);
-  const driversQuery = usePeople({ page: 1, pageSize: 200, driversOnly: true });
+  const peopleQuery = usePeople({ page: 1, pageSize: 200 });
 
-  if (vehiclesQuery.isPending || driversQuery.isPending) {
+  if (vehiclesQuery.isPending || peopleQuery.isPending) {
     return <PageSkeleton />;
   }
   if (vehiclesQuery.isError) {
     return <p role="alert">The vehicles could not be loaded.</p>;
   }
-  if (driversQuery.isError) {
-    return <p role="alert">The driver list could not be loaded.</p>;
+  if (peopleQuery.isError) {
+    return <p role="alert">The volunteer list could not be loaded.</p>;
   }
 
   const vehicles = 'parentMissing' in vehiclesQuery.data ? [] : vehiclesQuery.data;
@@ -73,7 +78,7 @@ export function ConvoyDriversPanel({ convoyId }: ConvoyDriversPanelProps): JSX.E
       {vehicles.map((vehicle) => (
         <section key={vehicle.vin} aria-label={`Crew for ${vehicle.plate}`}>
           <h3>{vehicle.plate}</h3>
-          <VehicleCrew convoyId={convoyId} vehicle={vehicle} drivers={driversQuery.data} />
+          <VehicleCrew convoyId={convoyId} vehicle={vehicle} volunteers={peopleQuery.data} />
         </section>
       ))}
     </div>
@@ -83,11 +88,14 @@ export function ConvoyDriversPanel({ convoyId }: ConvoyDriversPanelProps): JSX.E
 interface VehicleCrewProps {
   convoyId: number;
   vehicle: ConvoyVehicleReadModel;
-  drivers: readonly PersonReadModel[];
+  volunteers: readonly PersonReadModel[];
 }
 
-function VehicleCrew({ convoyId, vehicle, drivers }: VehicleCrewProps): JSX.Element {
+const ROLE_OPTIONS = crewRoleSchema.options.map((role) => ({ value: role, label: role }));
+
+function VehicleCrew({ convoyId, vehicle, volunteers }: VehicleCrewProps): JSX.Element {
   const crewQuery = useVehicleDrivers(convoyId, vehicle.vin);
+  const [role, setRole] = useState<CrewRole>('Driver');
   const [selected, setSelected] = useState('');
   const assign = useAssignDriver(convoyId, vehicle.vin);
   const unassign = useUnassignDriver(convoyId, vehicle.vin);
@@ -101,20 +109,24 @@ function VehicleCrew({ convoyId, vehicle, drivers }: VehicleCrewProps): JSX.Elem
 
   const crew = 'parentMissing' in crewQuery.data ? [] : crewQuery.data;
   const crewIds = new Set(crew.map((member) => member.personId));
+  // A driver must be registered to drive; a passenger can be any volunteer.
+  const eligible = volunteers.filter(
+    (person) => !crewIds.has(person.id) && (role === 'Passenger' || person.isDriver),
+  );
+  const noun = role === 'Driver' ? 'driver' : 'passenger';
   const options = [
-    { value: '', label: 'Select a driver' },
-    ...drivers
-      .filter((driver) => !crewIds.has(driver.id))
-      .map((driver) => ({ value: driver.id, label: fullName(driver) })),
+    { value: '', label: `Select a ${noun}` },
+    ...eligible.map((person) => ({ value: person.id, label: fullName(person) })),
   ];
   const error = problemMessage(assign.error) ?? problemMessage(unassign.error);
 
   return (
     <div>
       <DataTable<VehicleDriverReadModel>
-        caption={`Drivers for ${vehicle.plate}`}
+        caption={`Crew for ${vehicle.plate}`}
         columns={[
           { header: 'Name', cell: fullName },
+          { header: 'Role', cell: (member) => member.role },
           {
             header: 'Action',
             cell: (member) => (
@@ -135,7 +147,7 @@ function VehicleCrew({ convoyId, vehicle, drivers }: VehicleCrewProps): JSX.Elem
         ]}
         rows={crew}
         rowKey={(member) => member.personId}
-        emptyMessage="No drivers assigned yet"
+        emptyMessage="No crew assigned yet"
       />
 
       <Gate policy="convoys:assign-drivers">
@@ -144,16 +156,29 @@ function VehicleCrew({ convoyId, vehicle, drivers }: VehicleCrewProps): JSX.Elem
           onSubmit={(event) => {
             event.preventDefault();
             if (selected) {
-              assign.mutate(selected, {
-                onSuccess: () => {
-                  setSelected('');
+              assign.mutate(
+                { personId: selected, role },
+                {
+                  onSuccess: () => {
+                    setSelected('');
+                  },
                 },
-              });
+              );
             }
           }}
         >
           <SelectField
-            label={`Add driver to ${vehicle.plate}`}
+            label={`Role on ${vehicle.plate}`}
+            value={role}
+            onChange={(event) => {
+              setRole(crewRoleSchema.parse(event.target.value));
+              setSelected('');
+            }}
+            options={ROLE_OPTIONS}
+            disabled={assign.isPending}
+          />
+          <SelectField
+            label={`Add ${noun} to ${vehicle.plate}`}
             value={selected}
             onChange={(event) => {
               setSelected(event.target.value);

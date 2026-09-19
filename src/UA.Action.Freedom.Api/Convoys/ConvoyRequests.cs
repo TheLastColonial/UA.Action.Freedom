@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Convoys;
 
@@ -39,3 +40,9 @@ public sealed record ReplaceConvoyRouteRequest(IReadOnlyList<RouteStopRequest> S
         [.. Stops.Select((stop, index) => new RouteStopReadModel(
             index + 1, stop.House, stop.Street, stop.City, stop.Country, stop.Postcode))]);
 }
+
+/// <summary>
+/// Optional body of <c>PUT /convoys/{id}/vehicles/{vin}/drivers/{personId}</c>. Omitted, the
+/// person joins the crew as a driver.
+/// </summary>
+public sealed record AssignCrewRequest(CrewRole Role = CrewRole.Driver);

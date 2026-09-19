@@ -682,10 +682,9 @@ BEGIN
 END
 GO
 
--- Convoy vehicle crews: drivers assigned to specific vehicles within a convoy during planning.
--- A vehicle is on at most one convoy at a time, so we don't need ConvoyId here — the join
--- is on Vin alone. Deleting a vehicle cascades the row; unassigning a vehicle from a convoy
--- (ConvoyId = NULL) explicitly deletes these rows in the same transaction.
+-- Convoy vehicle crews. Deleting a vehicle cascades the row; unassigning a vehicle from a
+-- convoy explicitly deletes these rows in the same transaction. Created with its original
+-- (Vin, PersonId) shape; the block after it brings every database to the current one.
 IF OBJECT_ID('dbo.VehicleDriver') IS NULL
 BEGIN
     CREATE TABLE dbo.VehicleDriver (
@@ -700,6 +699,64 @@ BEGIN
 
     CREATE INDEX IX_VehicleDriver_PersonId ON dbo.VehicleDriver (PersonId);
 END
+GO
+
+-- --------------------------------------------------------------------------
+-- dbo.VehicleDriver holds the whole crew, per convoy
+--
+-- The table keeps its name, but a crew member is now a Driver (0) or a Passenger (1) — a
+-- passenger can be any volunteer — and each row names the convoy. Three things follow:
+--
+--   * One seat per person per convoy: UQ_VehicleDriver_Convoy_Person. A person cannot be on
+--     two vehicles of the same journey.
+--   * The key is (ConvoyId, Vin, PersonId), not (Vin, PersonId): a Returned vehicle can join
+--     a later convoy, and the crew of the earlier journey stays as history.
+--   * FK_VehicleDriver_Convoy is NO ACTION rather than CASCADE. Convoy already reaches this
+--     table through Vehicle (SET NULL, then CASCADE), and SQL Server refuses a second cascade
+--     path; ConvoyRepository.DeleteAsync clears the crew itself, in the same transaction.
+--
+-- Rows written before ConvoyId existed take it from their vehicle; rows whose vehicle is on
+-- no convoy were crew of nothing and are removed.
+-- --------------------------------------------------------------------------
+
+IF COL_LENGTH('dbo.VehicleDriver', 'ConvoyId') IS NULL
+    ALTER TABLE dbo.VehicleDriver ADD ConvoyId int NULL;
+IF COL_LENGTH('dbo.VehicleDriver', 'Role') IS NULL
+    ALTER TABLE dbo.VehicleDriver ADD Role int NOT NULL CONSTRAINT DF_VehicleDriver_Role DEFAULT 0;
+GO
+
+IF EXISTS (SELECT 1 FROM sys.columns
+           WHERE object_id = OBJECT_ID('dbo.VehicleDriver') AND name = 'ConvoyId' AND is_nullable = 1)
+BEGIN
+    DELETE vd FROM dbo.VehicleDriver AS vd
+    JOIN dbo.Vehicle AS v ON v.Vin = vd.Vin
+    WHERE v.ConvoyId IS NULL;
+
+    UPDATE vd SET ConvoyId = v.ConvoyId
+    FROM dbo.VehicleDriver AS vd
+    JOIN dbo.Vehicle AS v ON v.Vin = vd.Vin;
+
+    ALTER TABLE dbo.VehicleDriver ALTER COLUMN ConvoyId int NOT NULL;
+END
+GO
+
+IF EXISTS (SELECT 1 FROM sys.index_columns AS ic
+           JOIN sys.indexes AS i ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+           WHERE i.name = 'PK_VehicleDriver' AND i.object_id = OBJECT_ID('dbo.VehicleDriver')
+           GROUP BY i.name HAVING COUNT(*) = 2)
+BEGIN
+    ALTER TABLE dbo.VehicleDriver DROP CONSTRAINT PK_VehicleDriver;
+    ALTER TABLE dbo.VehicleDriver ADD CONSTRAINT PK_VehicleDriver PRIMARY KEY (ConvoyId, Vin, PersonId);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_VehicleDriver_Convoy')
+    ALTER TABLE dbo.VehicleDriver ADD CONSTRAINT FK_VehicleDriver_Convoy
+        FOREIGN KEY (ConvoyId) REFERENCES dbo.Convoy (Id);
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_VehicleDriver_Role')
+    ALTER TABLE dbo.VehicleDriver ADD CONSTRAINT CK_VehicleDriver_Role CHECK (Role IN (0, 1));
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_VehicleDriver_Convoy_Person')
+    ALTER TABLE dbo.VehicleDriver ADD CONSTRAINT UQ_VehicleDriver_Convoy_Person UNIQUE (ConvoyId, PersonId);
 GO
 
 -- Cargo. A box travels on at most one manifest, which the primary key on BoxId enforces:

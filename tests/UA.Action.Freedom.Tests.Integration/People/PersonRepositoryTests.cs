@@ -133,8 +133,10 @@ public class PersonRepositoryTests
             await repository.AddAsync(APerson(id, NewSurname(), isDriver: true), cancellationToken);
             await ExecuteAsync(
                 """
-                INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg) VALUES (@vin, 'IT12ABC', 2015, 1800);
-                INSERT INTO dbo.VehicleDriver (Vin, PersonId) VALUES (@vin, @id);
+                INSERT INTO dbo.Convoy (Start, ExpectedEnd) VALUES ('2026-09-01', '2026-09-05');
+                DECLARE @convoyId int = CAST(SCOPE_IDENTITY() AS int);
+                INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg, ConvoyId) VALUES (@vin, 'IT12ABC', 2015, 1800, @convoyId);
+                INSERT INTO dbo.VehicleDriver (ConvoyId, Vin, PersonId) VALUES (@convoyId, @vin, @id);
                 """,
                 ("@vin", vin),
                 ("@id", id));
@@ -146,7 +148,13 @@ public class PersonRepositoryTests
         }
         finally
         {
-            await ExecuteAsync("DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
+            await ExecuteAsync(
+                """
+                DECLARE @convoyId int = (SELECT ConvoyId FROM dbo.Vehicle WHERE Vin = @vin);
+                DELETE FROM dbo.Vehicle WHERE Vin = @vin;
+                DELETE FROM dbo.Convoy WHERE Id = @convoyId;
+                """,
+                ("@vin", vin));
             await RemoveAsync(id);
         }
     }

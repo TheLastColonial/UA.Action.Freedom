@@ -79,9 +79,9 @@ public class ConvoyRepositoryTests
             await AddVehicleAsync(vin);
             await repository.AssignVehicleAsync(id, vin, cancellationToken);
 
-            (await repository.AssignDriverAsync(id, vin, zelenko, cancellationToken)).Should().Be(AssignDriverResult.Assigned);
-            (await repository.AssignDriverAsync(id, vin, bondar, cancellationToken)).Should().Be(AssignDriverResult.Assigned);
-            (await repository.AssignDriverAsync(id, vin, bondar, cancellationToken)).Should().Be(AssignDriverResult.AlreadyAssigned);
+            (await repository.AssignDriverAsync(id, vin, zelenko, CrewRole.Driver, cancellationToken)).Should().Be(AssignDriverResult.Assigned);
+            (await repository.AssignDriverAsync(id, vin, bondar, CrewRole.Driver, cancellationToken)).Should().Be(AssignDriverResult.Assigned);
+            (await repository.AssignDriverAsync(id, vin, bondar, CrewRole.Driver, cancellationToken)).Should().Be(AssignDriverResult.AlreadyAssigned);
 
             var crew = await repository.ListVehicleDriversAsync(id, vin, cancellationToken);
             crew!.Select(driver => driver.LastName).Should().Equal("Bondar", "Zelenko");
@@ -101,6 +101,81 @@ public class ConvoyRepositoryTests
     }
 
     [Fact]
+    public async Task Passengers_ride_with_a_role_and_are_not_counted_as_drivers()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var driver = await AddDriverAsync("Olena", "Bondar");
+        var passenger = await AddDriverAsync("Mykola", "Shevchuk");
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await repository.AssignVehicleAsync(id, vin, cancellationToken);
+
+            await repository.AssignDriverAsync(id, vin, driver, CrewRole.Driver, cancellationToken);
+            await repository.AssignDriverAsync(id, vin, passenger, CrewRole.Passenger, cancellationToken);
+
+            var crew = await repository.ListVehicleDriversAsync(id, vin, cancellationToken);
+            crew!.Select(member => (member.LastName, member.Role))
+                .Should().Equal(("Bondar", CrewRole.Driver), ("Shevchuk", CrewRole.Passenger));
+            var onConvoy = (await repository.ListVehiclesAsync(id, cancellationToken)).Single();
+            onConvoy.DriverCount.Should().Be(1);
+            onConvoy.PassengerCount.Should().Be(1);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(id);
+            await RemovePeopleAsync(driver, passenger);
+        }
+    }
+
+    [Fact]
+    public async Task A_person_takes_one_seat_per_convoy()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var next = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var first = NewVin();
+        var second = NewVin();
+        var third = NewVin();
+        var driver = await AddDriverAsync("Olena", "Bondar");
+
+        try
+        {
+            await AddVehicleAsync(first);
+            await AddVehicleAsync(second);
+            await AddVehicleAsync(third);
+            await repository.AssignVehicleAsync(id, first, cancellationToken);
+            await repository.AssignVehicleAsync(id, second, cancellationToken);
+            await repository.AssignVehicleAsync(next, third, cancellationToken);
+
+            (await repository.AssignDriverAsync(id, first, driver, CrewRole.Driver, cancellationToken))
+                .Should().Be(AssignDriverResult.Assigned);
+            (await repository.AssignDriverAsync(id, second, driver, CrewRole.Passenger, cancellationToken))
+                .Should().Be(AssignDriverResult.OnAnotherVehicle);
+            (await repository.ListVehicleDriversAsync(id, second, cancellationToken)).Should().BeEmpty();
+
+            // A different convoy is a different journey: the same person may crew on it.
+            (await repository.AssignDriverAsync(next, third, driver, CrewRole.Driver, cancellationToken))
+                .Should().Be(AssignDriverResult.Assigned);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(first);
+            await RemoveVehicleAsync(second);
+            await RemoveVehicleAsync(third);
+            await RemoveConvoyAsync(id);
+            await RemoveConvoyAsync(next);
+            await RemovePeopleAsync(driver);
+        }
+    }
+
+    [Fact]
     public async Task Will_not_crew_or_list_a_vehicle_that_is_not_on_the_convoy()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -113,7 +188,7 @@ public class ConvoyRepositoryTests
         {
             await AddVehicleAsync(vin);
 
-            (await repository.AssignDriverAsync(id, vin, driver, cancellationToken)).Should().Be(AssignDriverResult.VehicleNotOnConvoy);
+            (await repository.AssignDriverAsync(id, vin, driver, CrewRole.Driver, cancellationToken)).Should().Be(AssignDriverResult.VehicleNotOnConvoy);
             (await repository.ListVehicleDriversAsync(id, vin, cancellationToken)).Should().BeNull();
         }
         finally
@@ -138,7 +213,7 @@ public class ConvoyRepositoryTests
         {
             await AddVehicleAsync(vin);
             await repository.AssignVehicleAsync(id, vin, cancellationToken);
-            await repository.AssignDriverAsync(id, vin, driver, cancellationToken);
+            await repository.AssignDriverAsync(id, vin, driver, CrewRole.Driver, cancellationToken);
 
             (await repository.UnassignDriverAsync(other, vin, driver, cancellationToken)).Should().BeFalse();
             (await repository.ListVehicleDriversAsync(id, vin, cancellationToken))!.Should().ContainSingle();
@@ -165,7 +240,7 @@ public class ConvoyRepositoryTests
         {
             await AddVehicleAsync(vin);
             await repository.AssignVehicleAsync(id, vin, cancellationToken);
-            await repository.AssignDriverAsync(id, vin, driver, cancellationToken);
+            await repository.AssignDriverAsync(id, vin, driver, CrewRole.Driver, cancellationToken);
 
             await repository.UnassignVehicleAsync(id, vin, cancellationToken);
             await repository.AssignVehicleAsync(id, vin, cancellationToken);
@@ -195,7 +270,7 @@ public class ConvoyRepositoryTests
         {
             await AddVehicleAsync(vin);
             await repository.AssignVehicleAsync(cancelled, vin, cancellationToken);
-            await repository.AssignDriverAsync(cancelled, vin, driver, cancellationToken);
+            await repository.AssignDriverAsync(cancelled, vin, driver, CrewRole.Driver, cancellationToken);
 
             await repository.DeleteAsync(cancelled, cancellationToken);
             await repository.AssignVehicleAsync(next, vin, cancellationToken);

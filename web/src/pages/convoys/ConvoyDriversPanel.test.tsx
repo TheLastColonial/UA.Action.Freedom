@@ -60,10 +60,48 @@ test('a dispatcher crews a vehicle with a registered driver', async () => {
   await screen.getByRole('button', { name: 'Assign' }).click();
 
   await expect.element(screen.getByRole('cell', { name: 'Alice Driver' })).toBeInTheDocument();
-  expect(convoys.drivers.get('7:VIN-TEST-1')?.map((d) => d.personId)).toEqual([alice.id]);
+  await expect
+    .element(screen.getByRole('cell', { name: 'Driver', exact: true }))
+    .toBeInTheDocument();
+  expect(convoys.drivers.get('7:VIN-TEST-1')?.map((d) => [d.personId, d.role])).toEqual([
+    [alice.id, 'Driver'],
+  ]);
   await expect
     .element(screen.getByRole('option', { name: 'Alice Driver' }))
     .not.toBeInTheDocument();
+});
+
+test('any volunteer may ride as a passenger', async () => {
+  const convoys = serve();
+  const screen = await renderPanel();
+
+  await screen.getByLabelText('Role on PL-001').selectOptions('Passenger');
+  await screen.getByLabelText('Add passenger to PL-001').selectOptions(bob.id);
+  await screen.getByRole('button', { name: 'Assign' }).click();
+
+  await expect.element(screen.getByRole('cell', { name: 'Bob Walker' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('cell', { name: 'Passenger' })).toBeInTheDocument();
+  expect(convoys.drivers.get('7:VIN-TEST-1')?.map((d) => d.role)).toEqual(['Passenger']);
+});
+
+test('a person already crewing another vehicle of the convoy is refused, with the reason', async () => {
+  const convoys = serve();
+  convoys.vehicles.set(7, [
+    makeConvoyVehicle({ vin: 'VIN-TEST-1', plate: 'PL-001' }),
+    makeConvoyVehicle({ vin: 'VIN-TEST-2', plate: 'PL-002', driverCount: 1 }),
+  ]);
+  convoys.drivers.set('7:VIN-TEST-2', [
+    { personId: alice.id, firstName: 'Alice', lastName: 'Driver', role: 'Driver' },
+  ]);
+  const screen = await renderPanel();
+
+  await screen.getByLabelText('Add driver to PL-001').selectOptions(alice.id);
+  await screen.getByRole('button', { name: 'Assign' }).first().click();
+
+  await expect
+    .element(screen.getByRole('alert'))
+    .toHaveTextContent('another vehicle on this convoy');
+  expect(convoys.drivers.get('7:VIN-TEST-1') ?? []).toEqual([]);
 });
 
 test('only registered drivers are offered', async () => {
@@ -77,13 +115,13 @@ test('only registered drivers are offered', async () => {
 test('a dispatcher stands a driver down', async () => {
   const convoys = serve();
   convoys.drivers.set('7:VIN-TEST-1', [
-    { personId: alice.id, firstName: 'Alice', lastName: 'Driver' },
+    { personId: alice.id, firstName: 'Alice', lastName: 'Driver', role: 'Driver' },
   ]);
   const screen = await renderPanel();
 
   await screen.getByRole('button', { name: 'Remove Alice Driver' }).click();
 
-  await expect.element(screen.getByText('No drivers assigned yet')).toBeInTheDocument();
+  await expect.element(screen.getByText('No crew assigned yet')).toBeInTheDocument();
   expect(convoys.drivers.get('7:VIN-TEST-1')).toEqual([]);
 });
 
@@ -106,7 +144,7 @@ test.each<[Role]>([['Loader'], ['Administrator'], ['Purchaser']])(
   async (role) => {
     const convoys = serve();
     convoys.drivers.set('7:VIN-TEST-1', [
-      { personId: alice.id, firstName: 'Alice', lastName: 'Driver' },
+      { personId: alice.id, firstName: 'Alice', lastName: 'Driver', role: 'Driver' },
     ]);
 
     const screen = await renderPanel(role);

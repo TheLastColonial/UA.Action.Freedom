@@ -158,6 +158,36 @@ Scenario: A dispatcher crews a vehicle on the truck list and stands the driver d
     When I DELETE "/convoys/{id}/vehicles/WDB9066331S0BDC66/drivers/{driver}" on the remembered convoy for the driver
     Then the response status is 204
 
+Scenario: A volunteer who does not drive rides as a passenger, and takes only one seat per convoy
+    Given I am authenticated as "operator"
+    When I POST "/convoys" with body:
+        """
+        { "start": "2026-09-01T06:00:00Z", "expectedEnd": "2026-09-05T18:00:00Z" }
+        """
+    Then the response status is 201
+    Given I remember the convoy
+    And no vehicle exists with VIN "WDB9066331S0BDC44"
+    And a vehicle exists with VIN "WDB9066331S0BDC44"
+    And the vehicle "WDB9066331S0BDC44" has passed its inspection
+    And no vehicle exists with VIN "WDB9066331S0BDC33"
+    And a vehicle exists with VIN "WDB9066331S0BDC33"
+    And the vehicle "WDB9066331S0BDC33" has passed its inspection
+    And a volunteer who does not drive exists
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC44" on the remembered convoy
+    And I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC33" on the remembered convoy
+    And I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC44/drivers/{passenger}" on the remembered convoy for the passenger with body:
+        """
+        { "role": "Passenger" }
+        """
+    Then the response status is 204
+    When I GET "/convoys/{id}/vehicles/WDB9066331S0BDC44/drivers" on the remembered convoy
+    Then the crew lists the passenger as a "Passenger"
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC33/drivers/{passenger}" on the remembered convoy for the passenger with body:
+        """
+        { "role": "Passenger" }
+        """
+    Then the response status is 409
+
 Scenario: An administrator may not crew a vehicle
     Given I am authenticated as "admin"
     When I POST "/convoys" with body:

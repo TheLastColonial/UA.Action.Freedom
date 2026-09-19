@@ -75,7 +75,7 @@ test('@smoke a passed vehicle joins a convoy and a dispatcher crews it', async (
   await page.getByRole('option', { name: new RegExp(vin) }).click();
   await expect(page.getByRole('cell', { name: vin })).toBeVisible();
 
-  await page.getByRole('tab', { name: 'Drivers' }).click();
+  await page.getByRole('tab', { name: 'Crew' }).click();
   await page.getByLabel('Add driver to E2E 002').selectOption({ label: `Olena ${surname}` });
   await page.getByRole('button', { name: 'Assign' }).click();
   await expect(page.getByRole('cell', { name: `Olena ${surname}`, exact: true })).toBeVisible();

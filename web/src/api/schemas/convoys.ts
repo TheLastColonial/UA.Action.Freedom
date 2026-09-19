@@ -20,11 +20,17 @@ export const routeStopReadModelSchema = z.object({
 });
 export type RouteStopReadModel = z.infer<typeof routeStopReadModelSchema>;
 
+// src/UA.Action.Freedom.Domain/CrewRole.cs. A driver must be registered to drive; a passenger
+// can be any volunteer. Only drivers count towards a vehicle's two.
+export const crewRoleSchema = z.enum(['Driver', 'Passenger']);
+export type CrewRole = z.infer<typeof crewRoleSchema>;
+
 export const convoyVehicleReadModelSchema = z.object({
   vin: z.string(),
   plate: z.string(),
   weightKg: z.number().int(),
   driverCount: z.number().int(),
+  passengerCount: z.number().int(),
 });
 export type ConvoyVehicleReadModel = z.infer<typeof convoyVehicleReadModelSchema>;
 
@@ -32,6 +38,7 @@ export const vehicleDriverReadModelSchema = z.object({
   personId: z.string(),
   firstName: z.string(),
   lastName: z.string(),
+  role: crewRoleSchema,
 });
 export type VehicleDriverReadModel = z.infer<typeof vehicleDriverReadModelSchema>;
 

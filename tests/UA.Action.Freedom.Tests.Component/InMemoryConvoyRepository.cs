@@ -8,9 +8,9 @@ namespace UA.Action.Freedom.Tests.Component;
 /// database. The Dapper implementation is covered separately by the integration tests.
 /// </summary>
 /// <remarks>
-/// Every rule here mirrors a statement in <c>ConvoyRepository</c>: drivers are keyed by VIN
-/// alone (<c>PK_VehicleDriver</c>), and are cleared when the vehicle leaves its convoy or the
-/// convoy is cancelled. A fake that is kinder than the SQL lets a test pass that production fails.
+/// Every rule here mirrors a statement in <c>ConvoyRepository</c>: a crew seat names its convoy,
+/// a person holds one seat per convoy (<c>UQ_VehicleDriver_Convoy_Person</c>), and seats are
+/// cleared when the vehicle leaves its convoy or the convoy is cancelled. A fake that is kinder than the SQL lets a test pass that production fails.
 /// </remarks>
 internal sealed class InMemoryConvoyRepository : IConvoyRepository
 {
@@ -22,10 +22,15 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
     /// <summary>Standing in for <c>dbo.Vehicle.ConvoyId</c> and <c>InspectionStatus</c>.</summary>
     private readonly Dictionary<string, StoredVehicle> vehicles = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Standing in for <c>dbo.VehicleDriver</c>: VIN to the people crewing it.</summary>
-    private readonly Dictionary<string, List<Guid>> vehicleDrivers = new(StringComparer.OrdinalIgnoreCase);
+    private sealed record CrewSeat(int ConvoyId, string Vin, Guid PersonId, CrewRole Role);
 
-    /// <summary>Names for the crew list, standing in for the join to <c>dbo.Person</c>.</summary>
+    /// <summary>
+    /// Standing in for <c>dbo.VehicleDriver</c>, keyed as the table is: one seat per person per
+    /// convoy (<c>UQ_VehicleDriver_Convoy_Person</c>).
+    /// </summary>
+    private readonly List<CrewSeat> crew = [];
+
+    /// <summary>Names for the crew list, standing in for the join to <c>dbo.Person</c>; the role comes from the seat.</summary>
     private readonly Dictionary<Guid, VehicleDriverReadModel> persons = [];
 
     private int nextId = 1;
@@ -52,13 +57,13 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
 
     public InMemoryConvoyRepository WithPerson(Guid personId, string firstName, string lastName)
     {
-        persons[personId] = new VehicleDriverReadModel(personId, firstName, lastName);
+        persons[personId] = new VehicleDriverReadModel(personId, firstName, lastName, CrewRole.Driver);
         return this;
     }
 
-    public InMemoryConvoyRepository WithDriver(string vin, Guid personId)
+    public InMemoryConvoyRepository WithDriver(string vin, Guid personId, CrewRole role = CrewRole.Driver)
     {
-        DriversOf(vin).Add(personId);
+        crew.Add(new CrewSeat(ConvoyOf(vin) ?? throw new InvalidOperationException($"{vin} is on no convoy."), vin, personId, role));
         return this;
     }
 
@@ -66,7 +71,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
 
     public int? ConvoyOf(string vin) => vehicles.GetValueOrDefault(vin)?.ConvoyId;
 
-    public IReadOnlyList<Guid> DriverIdsOf(string vin) => vehicleDrivers.GetValueOrDefault(vin, []);
+    public IReadOnlyList<Guid> DriverIdsOf(string vin) =>
+        crew.Where(seat => seat.ConvoyId == ConvoyOf(vin) && Same(seat.Vin, vin)).Select(seat => seat.PersonId).ToList();
 
     public IReadOnlyList<RouteStopReadModel> RouteOf(int convoyId) =>
         routes.GetValueOrDefault(convoyId, []);
@@ -108,6 +114,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
     public Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)
     {
         routes.Remove(id);
+        crew.RemoveAll(seat => seat.ConvoyId == id);
 
         foreach (var vin in VinsOn(id))
         {
@@ -131,7 +138,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
         Task.FromResult<IReadOnlyList<ConvoyVehicleReadModel>>(
             VinsOn(convoyId)
                 .Order(StringComparer.Ordinal)
-                .Select(vin => new ConvoyVehicleReadModel(vin, "AB12CDE", 1_400, DriverIdsOf(vin).Count))
+                .Select(vin => new ConvoyVehicleReadModel(
+                    vin, "AB12CDE", 1_400, CountOf(convoyId, vin, CrewRole.Driver), CountOf(convoyId, vin, CrewRole.Passenger)))
                 .ToList());
 
     public Task<AssignVehicleResult> AssignVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken)
@@ -185,55 +193,53 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
             return Task.FromResult<IReadOnlyList<VehicleDriverReadModel>?>(null);
         }
 
-        var drivers = DriverIdsOf(vin)
-            .Select(personId => persons[personId])
-            .OrderBy(driver => driver.LastName)
-            .ThenBy(driver => driver.FirstName)
+        var drivers = crew
+            .Where(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin))
+            .Select(seat => persons[seat.PersonId] with { Role = seat.Role })
+            .OrderBy(member => member.Role)
+            .ThenBy(member => member.LastName)
+            .ThenBy(member => member.FirstName)
             .ToList();
 
         return Task.FromResult<IReadOnlyList<VehicleDriverReadModel>?>(drivers);
     }
 
     public Task<AssignDriverResult> AssignDriverAsync(
-        int convoyId, string vin, Guid personId, CancellationToken cancellationToken)
+        int convoyId, string vin, Guid personId, CrewRole role, CancellationToken cancellationToken)
     {
+        var seat = crew.Find(existing => existing.ConvoyId == convoyId && existing.PersonId == personId);
+        if (seat is not null)
+        {
+            return Task.FromResult(Same(seat.Vin, vin) ? AssignDriverResult.AlreadyAssigned : AssignDriverResult.OnAnotherVehicle);
+        }
+
         if (!IsOn(convoyId, vin))
         {
             return Task.FromResult(AssignDriverResult.VehicleNotOnConvoy);
         }
 
-        var drivers = DriversOf(vin);
-        if (drivers.Contains(personId))
-        {
-            return Task.FromResult(AssignDriverResult.AlreadyAssigned);
-        }
-
-        drivers.Add(personId);
+        crew.Add(new CrewSeat(convoyId, vin, personId, role));
         return Task.FromResult(AssignDriverResult.Assigned);
     }
 
     public Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken) =>
-        Task.FromResult(IsOn(convoyId, vin) && DriversOf(vin).Remove(personId));
+        Task.FromResult(IsOn(convoyId, vin)
+            && crew.RemoveAll(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin) && seat.PersonId == personId) > 0);
 
     private bool IsOn(int convoyId, string vin) => ConvoyOf(vin) == convoyId;
 
     private List<string> VinsOn(int convoyId) =>
         vehicles.Where(entry => entry.Value.ConvoyId == convoyId).Select(entry => entry.Key).ToList();
 
-    private List<Guid> DriversOf(string vin)
-    {
-        if (!vehicleDrivers.TryGetValue(vin, out var drivers))
-        {
-            drivers = [];
-            vehicleDrivers[vin] = drivers;
-        }
+    private int CountOf(int convoyId, string vin, CrewRole role) =>
+        crew.Count(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin) && seat.Role == role);
 
-        return drivers;
-    }
+    private static bool Same(string left, string right) => string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
     private void Release(string vin)
     {
+        var convoyId = ConvoyOf(vin);
+        crew.RemoveAll(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin));
         vehicles[vin] = vehicles[vin] with { ConvoyId = null };
-        vehicleDrivers.Remove(vin);
     }
 }

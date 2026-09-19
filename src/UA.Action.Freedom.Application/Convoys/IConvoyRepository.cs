@@ -1,3 +1,5 @@
+using UA.Action.Freedom.Domain;
+
 namespace UA.Action.Freedom.Application.Convoys;
 
 /// <summary>What <see cref="IConvoyRepository.AssignVehicleAsync"/> found when it tried.</summary>
@@ -14,7 +16,8 @@ public enum AssignDriverResult
 {
     Assigned,
     VehicleNotOnConvoy,
-    AlreadyAssigned
+    AlreadyAssigned,
+    OnAnotherVehicle
 }
 
 /// <summary>
@@ -74,8 +77,12 @@ public interface IConvoyRepository
     /// </summary>
     Task<IReadOnlyList<VehicleDriverReadModel>?> ListVehicleDriversAsync(int convoyId, string vin, CancellationToken cancellationToken);
 
-    /// <summary>Assigns a driver to a vehicle, provided the vehicle is on this convoy.</summary>
-    Task<AssignDriverResult> AssignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Puts a person on a vehicle's crew in the given role, provided the vehicle is on this convoy
+    /// and the person is not already crewing another vehicle of it — one seat per convoy.
+    /// </summary>
+    Task<AssignDriverResult> AssignDriverAsync(
+        int convoyId, string vin, Guid personId, CrewRole role, CancellationToken cancellationToken);
 
     /// <summary>
     /// Unassigns a driver from a vehicle on a convoy. Returns false when there is no such vehicle

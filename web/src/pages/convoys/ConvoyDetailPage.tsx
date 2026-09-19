@@ -63,7 +63,7 @@ export function ConvoyDetailPage(): JSX.Element {
           { id: 'overview', label: 'Overview' },
           { id: 'route', label: 'Route' },
           { id: 'vehicles', label: 'Vehicles' },
-          { id: 'drivers', label: 'Drivers' },
+          { id: 'drivers', label: 'Crew' },
         ]}
         active={tab}
         onChange={selectTab}

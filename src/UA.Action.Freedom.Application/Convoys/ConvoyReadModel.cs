@@ -1,3 +1,5 @@
+using UA.Action.Freedom.Domain;
+
 namespace UA.Action.Freedom.Application.Convoys;
 
 /// <summary>
@@ -35,12 +37,12 @@ public sealed record RouteStopReadModel(
 
 /// <summary>
 /// A vehicle as it appears on a convoy's truck list — enough to recognise it and to add up a
-/// border-check weight, not the whole vehicle record. Also includes a driver count for planning
-/// (advisory warning when fewer than two).
+/// border-check weight, not the whole vehicle record. The crew counts are for planning: a vehicle
+/// is ready with two drivers, and passengers do not count towards that.
 /// </summary>
-public sealed record ConvoyVehicleReadModel(string Vin, string Plate, int WeightKg, int DriverCount);
+public sealed record ConvoyVehicleReadModel(string Vin, string Plate, int WeightKg, int DriverCount, int PassengerCount);
 
 /// <summary>
-/// A driver assigned to a specific vehicle within a convoy during planning.
+/// A crew member of a vehicle on one convoy — a driver or a passenger.
 /// </summary>
-public sealed record VehicleDriverReadModel(Guid PersonId, string FirstName, string LastName);
+public sealed record VehicleDriverReadModel(Guid PersonId, string FirstName, string LastName, CrewRole Role);

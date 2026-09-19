@@ -16,6 +16,7 @@ import type {
   ConvoyReadModel,
   ConvoyVehicleReadModel,
   CreateConvoyRequest,
+  CrewRole,
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
   UpdateConvoyRequest,
@@ -80,8 +81,17 @@ export function fetchVehicleDrivers(
   return getCollection(`${vinPath(id, vin)}/drivers`, vehicleDriverReadModelSchema);
 }
 
-export function assignDriver(id: number, vin: string, personId: string): Promise<void> {
-  return put204(`${vinPath(id, vin)}/drivers/${encodeURIComponent(personId)}`);
+export interface CrewAssignment {
+  personId: string;
+  role: CrewRole;
+}
+
+export function assignDriver(
+  id: number,
+  vin: string,
+  { personId, role }: CrewAssignment,
+): Promise<void> {
+  return put204(`${vinPath(id, vin)}/drivers/${encodeURIComponent(personId)}`, { role });
 }
 
 export function unassignDriver(id: number, vin: string, personId: string): Promise<void> {
@@ -185,10 +195,10 @@ export function useVehicleDrivers(
 export function useAssignDriver(
   id: number,
   vin: string,
-): UseMutationResult<void, Error, string> {
+): UseMutationResult<void, Error, CrewAssignment> {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (personId: string) => assignDriver(id, vin, personId),
+    mutationFn: (assignment: CrewAssignment) => assignDriver(id, vin, assignment),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleDrivers(id, vin) });
       await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
@@ -196,10 +206,7 @@ export function useAssignDriver(
   });
 }
 
-export function useUnassignDriver(
-  id: number,
-  vin: string,
-): UseMutationResult<void, Error, string> {
+export function useUnassignDriver(id: number, vin: string): UseMutationResult<void, Error, string> {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (personId: string) => unassignDriver(id, vin, personId),
