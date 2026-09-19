@@ -128,7 +128,10 @@ security controls, not housekeeping:
 
 - Azure Budget on the subscription with alerts at £5 / £10 / £25.
 - Log Analytics **daily ingestion cap** (e.g. 200 MB/day) so a logging loop cannot burn the 5 GB allowance.
-- Application Insights **sampling** enabled from day one.
+- Application Insights **sampling** enabled from day one. *(Not yet configured: the services use the
+  OpenTelemetry SDK, whose default is 100%. Set `OTEL_TRACES_SAMPLER=parentbased_traceidratio` and
+  `OTEL_TRACES_SAMPLER_ARG` on the Container App and Function App — see `gotchas-and-open-questions.md`
+  §9 Q15.)*
 - `maxReplicas` capped on both the Container App and the Function App.
 - Azure SQL free-offer exhaustion set to auto-pause (§2.3).
 - Cloudflare rate limiting on the free tier plus in-app rate limiting (§4.6).
@@ -252,8 +255,10 @@ Concrete measures:
 2. **Redact what travels.** The printed manifest and the border-guard view show cargo, weights and a
    region-level destination — never the street address or contact name. Full detail is released to the driver at
    the point of delivery, not at load time.
-3. **Audit every read.** Log who resolved a receiver's full address and when, to the telemetry container. This is
-   the one place where an audit trail matters more than the data itself.
+3. **Audit every read.** Record who resolved a receiver's full address and when. This is the one place where an
+   audit trail matters more than the data itself. *(Built as `sensitive.ReceiverDetailAccessLog`, written in the
+   same transaction as the read — not in telemetry: retention there is 31 days and far more people can read it.
+   Telemetry receives only the aggregate `freedom.receiver.detail.resolves{result}`.)*
 4. **Consider Always Encrypted** on the address and contact columns. It is available on Azure SQL at no extra
    cost and keeps plaintext out of the database engine entirely. Weigh it against the operational complexity of
    key management before committing.
@@ -307,7 +312,9 @@ detail onto the manifest, but it needs a conversation with someone who has actua
 
 - Keep it in **UK South**. Do not let a telemetry pipeline or a backup copy leave the UK.
 - Keep it **out of logs**. Log identifiers, never names, phone numbers or dates of birth. Application Insights
-  retains data for 31 days on the free tier — assume anything logged is stored.
+  retains data for 31 days on the free tier — assume anything logged is stored. *(Enforced structurally for
+  traces and metrics by `RedactingActivityProcessor` and bounded metric tags — see
+  `gotchas-and-open-questions.md` § Observability.)*
 - Have a **retention and deletion answer** before launch, not after someone asks for their data to be erased.
 - Ask why date of birth is needed. If it is for driver eligibility or insurance, store the derived fact
   ("eligible to drive: yes/no") and consider not storing the date at all.

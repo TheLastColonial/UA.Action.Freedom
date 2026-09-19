@@ -11,6 +11,7 @@ WORKDIR /source
 
 COPY global.json Directory.Packages.props ./
 COPY src/UA.Action.Freedom.ManifestWorker/UA.Action.Freedom.ManifestWorker.csproj src/UA.Action.Freedom.ManifestWorker/
+COPY src/UA.Action.Freedom.Telemetry/UA.Action.Freedom.Telemetry.csproj src/UA.Action.Freedom.Telemetry/
 
 RUN dotnet restore src/UA.Action.Freedom.ManifestWorker/UA.Action.Freedom.ManifestWorker.csproj
 

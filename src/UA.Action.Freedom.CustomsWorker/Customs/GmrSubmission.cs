@@ -17,9 +17,14 @@ namespace UA.Action.Freedom.CustomsWorker.Customs;
 /// <param name="VehicleRegistration">Registration plate of the vehicle making the crossing.</param>
 /// <param name="RouteId">HMRC route identifier for the planned crossing.</param>
 /// <param name="LocalDateTimeOfDeparture">Planned departure, local to the port, as <c>yyyy-MM-ddTHH:mm</c>.</param>
+/// <param name="Traceparent">
+/// W3C trace context of the approval that queued this, so the submission's span can link back to
+/// it. Absent on a message queued while nothing was being traced.
+/// </param>
 public sealed record GmrSubmission(
     string ManifestId,
     string HaulierEori,
     string VehicleRegistration,
     string RouteId,
-    string LocalDateTimeOfDeparture);
+    string LocalDateTimeOfDeparture,
+    string? Traceparent = null);

@@ -25,7 +25,11 @@ public sealed class AzureManifestDocumentQueue(
         return message.Value is null
             ? null
             : new ManifestDocumentWorkItem(
-                message.Value.MessageId, message.Value.PopReceipt, message.Value.Body.ToString());
+                message.Value.MessageId,
+                message.Value.PopReceipt,
+                message.Value.Body.ToString(),
+                message.Value.DequeueCount,
+                message.Value.InsertedOn);
     }
 
     public async Task CompleteAsync(ManifestDocumentWorkItem item, CancellationToken cancellationToken)

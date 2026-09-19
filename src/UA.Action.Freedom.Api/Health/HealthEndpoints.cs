@@ -35,19 +35,22 @@ public static class HealthEndpoints
 
     public static WebApplication MapFreedomHealthChecks(this WebApplication app)
     {
+        // Probes arrive every few seconds from the container runtime and the edge. Left in, they
+        // outnumber real traffic in every request-rate and latency panel — so they are excluded
+        // from the HTTP metrics here, and from tracing by the filter in TelemetryInstaller.
         // Liveness answers only "is this process worth keeping". It runs no checks at all,
         // so a database still waking from auto-pause cannot get the container killed and
         // restarted into the same wait.
         app.MapHealthChecks("/health/live", new HealthCheckOptions
         {
             Predicate = _ => false,
-        });
+        }).DisableHttpMetrics();
 
         app.MapHealthChecks("/health/ready", new HealthCheckOptions
         {
             Predicate = registration => registration.Tags.Contains(ReadyTag),
             ResponseWriter = WriteReport,
-        });
+        }).DisableHttpMetrics();
 
         return app;
     }

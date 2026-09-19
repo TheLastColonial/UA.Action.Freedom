@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Diagnostics.Metrics;
+using Microsoft.Extensions.DependencyInjection;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
@@ -6,6 +7,7 @@ using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
+using UA.Action.Freedom.Application.Telemetry;
 using UA.Action.Freedom.Application.Vehicles;
 
 namespace UA.Action.Freedom.Application;
@@ -100,6 +102,38 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RemoveManifestBoxCommand, ManifestBoxOutcome>, RemoveManifestBoxHandler>();
         services.AddScoped<IQueryHandler<ListManifestBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListManifestBoxesHandler>();
         services.AddScoped<IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>, GetManifestWeightHandler>();
+
+        return services.AddInstrumentedCommandHandlers();
+    }
+
+    /// <summary>
+    /// Wraps every command handler registered so far in
+    /// <see cref="InstrumentedCommandHandler{TCommand,TResult}"/>. Must stay the last step of
+    /// <see cref="AddFreedomApplication"/>, or a handler registered after it goes uninstrumented.
+    /// </summary>
+    private static IServiceCollection AddInstrumentedCommandHandlers(this IServiceCollection services)
+    {
+        services.AddSingleton(provider => FreedomMetrics.Create(provider.GetRequiredService<IMeterFactory>()));
+
+        var handlers = services
+            .Where(descriptor => descriptor.ServiceType is { IsGenericType: true } service
+                                 && service.GetGenericTypeDefinition() == typeof(ICommandHandler<,>)
+                                 && descriptor.ImplementationType is not null)
+            .ToList();
+
+        foreach (var handler in handlers)
+        {
+            var implementation = handler.ImplementationType!;
+            var decorator = typeof(InstrumentedCommandHandler<,>)
+                .MakeGenericType(handler.ServiceType.GetGenericArguments());
+
+            services.Remove(handler);
+            services.Add(new ServiceDescriptor(
+                handler.ServiceType,
+                provider => ActivatorUtilities.CreateInstance(
+                    provider, decorator, ActivatorUtilities.CreateInstance(provider, implementation)),
+                handler.Lifetime));
+        }
 
         return services;
     }

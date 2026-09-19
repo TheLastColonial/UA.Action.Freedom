@@ -106,7 +106,7 @@ tofu apply
 | Public website | <http://localhost:8080/site> |
 | Identity (Keycloak) | <http://localhost:8081> — admin `admin` / `admin` |
 | HMRC stubs (WireMock admin) | <http://localhost:8082/__admin/mappings> |
-| Telemetry (Grafana) | <http://localhost:3000> — dashboard at <http://localhost:3000/d/freedom-dotnet> |
+| Telemetry (Grafana) | <http://localhost:3000> — dashboards in the *Freedom* folder, e.g. <http://localhost:3000/d/freedom-manifest-pipeline> |
 | Email inbox (Mailpit) | <http://localhost:8025> |
 | Edge dashboard (Traefik) | <http://localhost:8090/dashboard/> |
 | Azurite | blob `:10000`, queue `:10001`, table `:10002` |
@@ -213,20 +213,30 @@ The notification stubs form a scenario: the first poll returns one pending GMR o
 acknowledging it empties the box. That is deliberate — it makes the polling loop terminate
 the way it does against the real API instead of spinning on the same message forever.
 
-### Changing the Grafana dashboard
+### Changing the Grafana dashboards
 
-`local/grafana/dashboards/freedom-dotnet.json` is provisioned into Grafana on every
-container start — a `.NET Runtime & HTTP` dashboard in a `Freedom` folder, capturing the key
-metrics from the application's OpenTelemetry instrumentation (HTTP server RED, outbound
-dependency calls, the .NET runtime, Kestrel) plus a service logs panel and a recent-traces
-table. It is parameterised by a `Service` variable so it also covers the Customs Worker once
-that is instrumented.
+Every `local/grafana/dashboards/*.json` is provisioned into Grafana on container start, into a
+`Freedom` folder. All three services — `freedom-app` and both workers — emit traces, metrics
+and logs through the shared `UA.Action.Freedom.Telemetry` wiring; each dashboard reads them:
 
-The JSON file is the source of truth. Edit it, then either wait ~30s (Grafana re-reads on an
+| Dashboard | For |
+| --- | --- |
+| `.NET Runtime & HTTP` | HTTP RED, outbound calls, runtime, Kestrel — any service, by the `Service` variable |
+| `Freedom Application (API)` | Routes, auth, command outcomes, SQL, dependencies |
+| `Customs Worker`, `Manifest Worker` | Queue depth/age, dispositions, HMRC / rendering, loop heartbeats |
+| `Manifest Approval Pipeline` | An approval end to end: transitions, both queues, GMR states |
+| `Convoy Operations` | Convoy, box, bay and volunteer command outcomes |
+| `Access & Sensitive Data` | Aggregate address lookups and 401/403 rates — never who or which |
+
+The JSON files are the source of truth. Edit one, then either wait ~30s (Grafana re-reads on an
 interval) or `docker compose restart telemetry`. UI edits are **not** persisted — Grafana
 overwrites them from the file. To iterate in the UI, make the changes there, then export via
-*Dashboard settings → JSON Model* and paste back into the file. See
-`local/grafana/README.md`.
+*Dashboard settings → JSON Model* and paste back into the file. `DashboardFileTests` (Unit) fails
+if a dashboard is malformed, reuses a uid or names an unknown datasource. See
+`local/grafana/README.md` for the metric catalogue.
+
+The image is pinned (`grafana/otel-lgtm:0.32.0`): the datasource uids and how metric names are
+mapped into Prometheus have moved between releases, and every dashboard depends on both.
 
 ### Tearing down
 

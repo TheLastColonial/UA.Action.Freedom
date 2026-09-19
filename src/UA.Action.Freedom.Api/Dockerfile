@@ -29,6 +29,7 @@ COPY src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj          src/UA.Acti
 COPY src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj src/UA.Action.Freedom.Application/
 COPY src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj        src/UA.Action.Freedom.Data/
 COPY src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj    src/UA.Action.Freedom.Domain/
+COPY src/UA.Action.Freedom.Telemetry/UA.Action.Freedom.Telemetry.csproj src/UA.Action.Freedom.Telemetry/
 COPY src/HMRC.GVMS/HMRC.GVMS.csproj                                  src/HMRC.GVMS/
 COPY src/HMRC.PushPullNotifications/HMRC.PushPullNotifications.csproj src/HMRC.PushPullNotifications/
 

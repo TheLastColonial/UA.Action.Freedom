@@ -26,8 +26,10 @@
   <ItemGroup>
     <ProjectReference Include="../../src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj" />
     <ProjectReference Include="../../src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.CustomsWorker.csproj" />
+    <ProjectReference Include="../../src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj" />
     <ProjectReference Include="../../src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj" />
     <ProjectReference Include="../../src/UA.Action.Freedom.ManifestWorker/UA.Action.Freedom.ManifestWorker.csproj" />
+    <ProjectReference Include="../../src/UA.Action.Freedom.Telemetry/UA.Action.Freedom.Telemetry.csproj" />
   </ItemGroup>
 
   <ItemGroup>

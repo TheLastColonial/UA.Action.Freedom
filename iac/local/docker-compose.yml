@@ -26,6 +26,9 @@ x-mssql-sensitive: &freedom-sensitive-connection-string "Server=mssql,1433;Datab
 x-telemetry: &telemetry
   OTEL_EXPORTER_OTLP_ENDPOINT: http://telemetry:4317
   OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+  # Deliberately no service.namespace: it becomes a prefix of the Prometheus job label and
+  # every dashboard filters on job = service.name.
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=local
 
 services:
 
@@ -368,7 +371,9 @@ services:
   # Stands in for Application Insights + Log Analytics. One container providing an
   # OTLP endpoint plus Prometheus, Loki, Tempo and Grafana to read it back.
   telemetry:
-    image: grafana/otel-lgtm:latest
+    # Pinned: dashboards and alert rules depend on the datasource uids and on how metric names are
+    # mapped into Prometheus, both of which have moved between releases of this image.
+    image: grafana/otel-lgtm:0.32.0
     container_name: freedom-telemetry
     restart: unless-stopped
     ports:

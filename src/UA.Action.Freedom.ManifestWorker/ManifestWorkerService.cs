@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using UA.Action.Freedom.ManifestWorker.Configuration;
 using UA.Action.Freedom.ManifestWorker.Documents;
+using UA.Action.Freedom.Telemetry;
 
 namespace UA.Action.Freedom.ManifestWorker;
 
@@ -21,9 +22,13 @@ namespace UA.Action.Freedom.ManifestWorker;
 public sealed class ManifestWorkerService(
     ManifestDocumentProcessor documents,
     IOptions<WorkerOptions> options,
-    ILogger<ManifestWorkerService> logger) : BackgroundService
+    ILogger<ManifestWorkerService> logger,
+    WorkerLoopMetrics? loopMetrics = null) : BackgroundService
 {
+    private const string DrainLoop = "drain";
+
     private readonly WorkerOptions _worker = options.Value;
+    private readonly WorkerLoopMetrics _loops = loopMetrics ?? WorkerLoopMetrics.Unobserved;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -42,6 +47,10 @@ public sealed class ManifestWorkerService(
                 while (await documents.ProcessNextAsync(stoppingToken))
                 {
                 }
+
+                // Reported on every pass, including empty ones, so a stale heartbeat means the
+                // loop is stuck or dead rather than merely idle.
+                _loops.Succeeded(DrainLoop);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -51,6 +60,7 @@ public sealed class ManifestWorkerService(
             {
                 // The loop must survive anything the queue or storage does to it. A worker that
                 // dies on an unexpected error stops rendering for every other manifest too.
+                _loops.Failed(DrainLoop);
                 logger.LogError(exception, "Unhandled error draining the manifest document queue.");
             }
 

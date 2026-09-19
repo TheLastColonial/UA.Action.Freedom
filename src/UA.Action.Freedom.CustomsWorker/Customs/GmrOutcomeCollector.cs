@@ -1,6 +1,7 @@
 using System.Text.Json;
 using HMRC.PushPullNotifications;
 using Microsoft.Extensions.Logging;
+using UA.Action.Freedom.CustomsWorker.Telemetry;
 
 namespace UA.Action.Freedom.CustomsWorker.Customs;
 
@@ -18,9 +19,12 @@ public sealed class GmrOutcomeCollector(
     IPushPullNotificationsClient notifications,
     IGmrDocumentStore documents,
     string boxId,
-    ILogger<GmrOutcomeCollector> logger)
+    ILogger<GmrOutcomeCollector> logger,
+    CustomsMetrics? customsMetrics = null)
 {
     private const string Pending = "PENDING";
+
+    private readonly CustomsMetrics _customs = customsMetrics ?? CustomsMetrics.Unobserved;
 
     /// <summary>
     /// Reads every unread notification, stores the outcomes and acknowledges what it dealt
@@ -69,6 +73,7 @@ public sealed class GmrOutcomeCollector(
     private async Task<bool> TryHandle(Notification notification, CancellationToken cancellationToken)
     {
         string? gmrId;
+        string? state;
 
         try
         {
@@ -77,9 +82,15 @@ public sealed class GmrOutcomeCollector(
             // wrong, and it fails quietly: the notification looks handled either way.
             using var outcome = JsonDocument.Parse(notification.Message);
             gmrId = outcome.RootElement.TryGetProperty("gmrId", out var id) ? id.GetString() : null;
+            state = outcome.RootElement.TryGetProperty("state", out var reported)
+                    && reported.ValueKind == JsonValueKind.String
+                ? reported.GetString()
+                : null;
         }
         catch (JsonException exception)
         {
+            _customs.OutcomeCollected("unreadable", reportedState: null);
+
             logger.LogError(
                 exception,
                 "Notification {NotificationId} does not carry a readable outcome; acknowledging it so it stops being polled.",
@@ -92,6 +103,7 @@ public sealed class GmrOutcomeCollector(
 
         if (string.IsNullOrWhiteSpace(gmrId))
         {
+            _customs.OutcomeCollected("no_gmr_id", state);
             logger.LogError(
                 "Notification {NotificationId} carries no gmrId; acknowledging it so it stops being polled.",
                 notification.NotificationId);
@@ -103,12 +115,14 @@ public sealed class GmrOutcomeCollector(
         {
             await documents.SaveAsync(gmrId, notification.Message, cancellationToken);
 
+            _customs.OutcomeCollected("stored", state);
             logger.LogInformation("Stored the outcome for goods movement record {GmrId}.", gmrId);
 
             return true;
         }
         catch (Exception exception)
         {
+            _customs.OutcomeCollected("store_failed", state);
             logger.LogWarning(
                 exception,
                 "Could not store the outcome for {GmrId}; leaving notification {NotificationId} unacknowledged.",
