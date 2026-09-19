@@ -261,38 +261,85 @@ END
 GO
 
 -- --------------------------------------------------------------------------
--- Volunteers — dbo.Person
+-- Volunteers — dbo.Person and dbo.PersonDetail (split identity)
 --
--- One row per individual supporting Ukrainian Action. The domain models a Driver as a
--- subtype of Person; the database keeps one table with IsDriver telling them apart, because
--- everything a driver adds (Committed) is two columns rather than a second identity.
+-- A volunteer is two rows. dbo.Person is the identity — a random uniqueidentifier and nothing
+-- about the person — and it is what every foreign key points at: vehicle crews, manifest
+-- teams, who validated a box, who shelved it. dbo.PersonDetail holds the personal data and
+-- cascades from it.
 --
--- Personal data (recommendations 4.8): UK residency, never written to a log, and a defined
--- retention period. The key is a uniqueidentifier rather than an IDENTITY sequence so that a
--- volunteer's URL does not disclose how many volunteers the charity has.
+-- UK data protection (recommendations 4.8): erasing a volunteer deletes their PersonDetail row
+-- — a genuine delete of the personal data — and stamps Person.ErasedAt. The records they appear
+-- in keep a seat filled by an identity nothing links back to anyone, and read "Former
+-- volunteer". Erasure is refused while they are on a live crew or manifest team; a volunteer
+-- nothing names is removed outright. The key is a uniqueidentifier rather than an IDENTITY so a
+-- URL does not disclose how many volunteers the charity has; that is also what keeps an erased
+-- stub from being guessable. Never written to a log.
 --
--- Convoy history (Driver.Convoys) is not modelled yet — it arrives with dbo.Convoy.
+-- The domain models a Driver as a subtype of Person; the database keeps IsDriver on the detail,
+-- because everything a driver adds (Committed) is two columns rather than a second identity.
 -- freedom_app already holds full DML on SCHEMA::dbo (above), so no new grant.
 -- --------------------------------------------------------------------------
 
 IF OBJECT_ID('dbo.Person') IS NULL
 BEGIN
     CREATE TABLE dbo.Person (
-        Id           uniqueidentifier NOT NULL CONSTRAINT PK_Person PRIMARY KEY,
-        FirstName    nvarchar(100)    NOT NULL,
-        LastName     nvarchar(100)    NOT NULL,
-        DateOfBirth  datetime2(0)     NOT NULL,
-        Joined       datetime2(0)     NOT NULL,
-        Phone        nvarchar(50)     NULL,
-        IsDriver     bit              NOT NULL CONSTRAINT DF_Person_IsDriver DEFAULT 0,
-        Committed    bit              NOT NULL CONSTRAINT DF_Person_Committed DEFAULT 0,
-        CreatedAt    datetime2(0)     NOT NULL CONSTRAINT DF_Person_CreatedAt DEFAULT SYSUTCDATETIME(),
-        UpdatedAt    datetime2(0)     NOT NULL CONSTRAINT DF_Person_UpdatedAt DEFAULT SYSUTCDATETIME()
+        Id        uniqueidentifier NOT NULL CONSTRAINT PK_Person PRIMARY KEY,
+        CreatedAt datetime2(0)     NOT NULL CONSTRAINT DF_Person_CreatedAt DEFAULT SYSUTCDATETIME(),
+        ErasedAt  datetime2(0)     NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.PersonDetail') IS NULL
+BEGIN
+    CREATE TABLE dbo.PersonDetail (
+        PersonId    uniqueidentifier NOT NULL CONSTRAINT PK_PersonDetail PRIMARY KEY,
+        FirstName   nvarchar(100)    NOT NULL,
+        LastName    nvarchar(100)    NOT NULL,
+        DateOfBirth datetime2(0)     NOT NULL,
+        Joined      datetime2(0)     NOT NULL,
+        Phone       nvarchar(50)     NULL,
+        IsDriver    bit              NOT NULL CONSTRAINT DF_PersonDetail_IsDriver DEFAULT 0,
+        Committed   bit              NOT NULL CONSTRAINT DF_PersonDetail_Committed DEFAULT 0,
+        UpdatedAt   datetime2(0)     NOT NULL CONSTRAINT DF_PersonDetail_UpdatedAt DEFAULT SYSUTCDATETIME(),
+
+        CONSTRAINT FK_PersonDetail_Person FOREIGN KEY (PersonId) REFERENCES dbo.Person (Id) ON DELETE CASCADE
     );
 
     -- The dispatcher's shortlist is "drivers, by name". Everything else pages the full roster
     -- in the same order, so one index serves both reads.
-    CREATE INDEX IX_Person_IsDriver_Name ON dbo.Person (IsDriver, LastName, FirstName, Id);
+    CREATE INDEX IX_PersonDetail_IsDriver_Name ON dbo.PersonDetail (IsDriver, LastName, FirstName, PersonId);
+END
+GO
+
+IF COL_LENGTH('dbo.Person', 'ErasedAt') IS NULL
+    ALTER TABLE dbo.Person ADD ErasedAt datetime2(0) NULL;
+GO
+
+-- A database from before the split still has the personal columns on dbo.Person. Move them
+-- across and drop them. Dynamic SQL, because a batch naming a column that no longer exists
+-- would not compile on a database that has already been migrated.
+IF COL_LENGTH('dbo.Person', 'FirstName') IS NOT NULL
+BEGIN
+    EXEC(N'
+        INSERT INTO dbo.PersonDetail (PersonId, FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed, UpdatedAt)
+        SELECT p.Id, p.FirstName, p.LastName, p.DateOfBirth, p.Joined, p.Phone, p.IsDriver, p.Committed, p.UpdatedAt
+        FROM dbo.Person AS p
+        WHERE NOT EXISTS (SELECT 1 FROM dbo.PersonDetail AS d WHERE d.PersonId = p.Id);');
+
+    IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Person_IsDriver_Name')
+        DROP INDEX IX_Person_IsDriver_Name ON dbo.Person;
+
+    DECLARE @drop nvarchar(max) = N'';
+    SELECT @drop += N'ALTER TABLE dbo.Person DROP CONSTRAINT ' + QUOTENAME(dc.name) + N';'
+    FROM sys.default_constraints AS dc
+    JOIN sys.columns AS c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
+    WHERE dc.parent_object_id = OBJECT_ID('dbo.Person')
+      AND c.name IN ('IsDriver', 'Committed', 'UpdatedAt');
+    EXEC(@drop);
+
+    EXEC(N'ALTER TABLE dbo.Person DROP COLUMN FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed, UpdatedAt;');
 END
 GO
 

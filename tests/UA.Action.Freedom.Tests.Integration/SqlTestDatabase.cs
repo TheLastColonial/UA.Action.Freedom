@@ -67,6 +67,28 @@ internal static class SqlTestDatabase
     internal static Task<object?> ValueAsync(string sql, params (string Name, object Value)[] parameters) =>
         RunAsync(sql, parameters, command => command.ExecuteScalarAsync());
 
+    /// <summary>
+    /// A volunteer on file: the anonymous <c>dbo.Person</c> identity every foreign key points at,
+    /// plus the <c>dbo.PersonDetail</c> row holding their personal data. Removing the person row
+    /// cascades the detail.
+    /// </summary>
+    internal static async Task<Guid> AddVolunteerAsync(
+        string firstName = "Integration", string lastName = "Volunteer", bool isDriver = true)
+    {
+        var id = Guid.NewGuid();
+        await ExecuteAsync(
+            """
+            INSERT INTO dbo.Person (Id) VALUES (@id);
+            INSERT INTO dbo.PersonDetail (PersonId, FirstName, LastName, DateOfBirth, Joined, IsDriver)
+            VALUES (@id, @firstName, @lastName, '1985-01-01', '2024-01-01', @isDriver);
+            """,
+            ("@id", id),
+            ("@firstName", firstName),
+            ("@lastName", lastName),
+            ("@isDriver", isDriver));
+        return id;
+    }
+
     private static async Task<T> RunAsync<T>(
         string sql, (string Name, object Value)[] parameters, Func<SqlCommand, Task<T>> run)
     {

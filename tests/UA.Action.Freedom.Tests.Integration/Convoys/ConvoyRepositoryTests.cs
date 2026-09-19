@@ -48,19 +48,8 @@ public class ConvoyRepositoryTests
     private static Task RemoveConvoyAsync(int id) =>
         ExecuteAsync("DELETE FROM dbo.Convoy WHERE Id = @id", ("@id", id));
 
-    private static async Task<Guid> AddDriverAsync(string firstName, string lastName)
-    {
-        var id = Guid.NewGuid();
-        await ExecuteAsync(
-            """
-            INSERT INTO dbo.Person (Id, FirstName, LastName, DateOfBirth, Joined, IsDriver)
-            VALUES (@id, @firstName, @lastName, '1985-01-01', '2024-01-01', 1)
-            """,
-            ("@id", id),
-            ("@firstName", firstName),
-            ("@lastName", lastName));
-        return id;
-    }
+    private static Task<Guid> AddDriverAsync(string firstName, string lastName) =>
+        AddVolunteerAsync(firstName, lastName, isDriver: true);
 
     private static Task RemovePeopleAsync(params Guid[] ids) => Task.WhenAll(ids.Select(id =>
         ExecuteAsync("DELETE FROM dbo.VehicleDriver WHERE PersonId = @id; DELETE FROM dbo.Person WHERE Id = @id", ("@id", id))));

@@ -14,7 +14,7 @@ public class DeletePersonHandlerTests
     [Theory]
     [InlineData(DeletePersonResult.Deleted, DeletePersonOutcome.Deleted)]
     [InlineData(DeletePersonResult.NotFound, DeletePersonOutcome.NotFound)]
-    [InlineData(DeletePersonResult.StillReferenced, DeletePersonOutcome.StillReferenced)]
+    [InlineData(DeletePersonResult.StillActive, DeletePersonOutcome.StillActive)]
     public async Task Reports_what_the_delete_found(DeletePersonResult result, DeletePersonOutcome expected)
     {
         var repository = Substitute.For<IPersonRepository>();

@@ -9,7 +9,7 @@ public enum DeletePersonOutcome
 {
     Deleted,
     NotFound,
-    StillReferenced
+    StillActive
 }
 
 public sealed class DeletePersonHandler(IPersonRepository repository)
@@ -19,7 +19,7 @@ public sealed class DeletePersonHandler(IPersonRepository repository)
         await repository.DeleteAsync(command.Id, cancellationToken) switch
         {
             DeletePersonResult.Deleted => DeletePersonOutcome.Deleted,
-            DeletePersonResult.StillReferenced => DeletePersonOutcome.StillReferenced,
+            DeletePersonResult.StillActive => DeletePersonOutcome.StillActive,
             _ => DeletePersonOutcome.NotFound,
         };
 }

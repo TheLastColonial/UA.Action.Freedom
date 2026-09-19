@@ -22,9 +22,11 @@ public interface IPersonRepository
     Task<bool> UpdateAsync(PersonReadModel person, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Removes the volunteer, unless something still names them — a vehicle crew, a manifest
-    /// team, or the record of who validated or shelved a box. Those records are the charity's
-    /// account of who did what, so they keep the volunteer rather than lose the name.
+    /// Erases the volunteer (UK data protection): their personal data is deleted. Records that
+    /// name them — past crews, manifest teams, who validated or shelved a box — keep an anonymous
+    /// identity and read "Former volunteer". Refused (<see cref="DeletePersonResult.StillActive"/>)
+    /// while they are on the crew of a convoy that has not arrived or on an unfinished manifest's
+    /// team: take them off it first.
     /// </summary>
     Task<DeletePersonResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }
@@ -33,5 +35,5 @@ public enum DeletePersonResult
 {
     Deleted,
     NotFound,
-    StillReferenced
+    StillActive
 }

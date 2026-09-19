@@ -22,6 +22,7 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
     private const string ManifestKey = "manifest";
     private const string ConvoyKey = "convoy-for-manifest";
     private const string VehicleKey = "vehicle-for-manifest";
+    private const string CrewKey = "crew-for-manifest";
 
     private const string ConvoyBody =
         """
@@ -64,6 +65,19 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
         (await api.SendAsync(HttpMethod.Put, $"/vehicles/{vin}/inspection", operatorToken, """{ "status": "Passed" }"""))
             .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
         (await api.SendAsync(HttpMethod.Put, $"/convoys/{convoyId}/vehicles/{vin}", operatorToken, null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
+
+        // Crewed before it is insured: the policy names the crew, and a later change would void it.
+        var admin = await api.TokenForAsync("admin");
+        var volunteer = await api.SendAsync(HttpMethod.Post, "/people", admin, """
+            { "firstName": "Olena", "lastName": "Bondar", "dateOfBirth": "1985-01-01T00:00:00Z", "joined": "2024-01-01T00:00:00Z", "isDriver": true, "committed": true }
+            """);
+        volunteer.StatusCode.Should().Be(HttpStatusCode.Created, "the body was: {0}", api.LastBody);
+        var volunteerPath = volunteer.Headers.Location!.IsAbsoluteUri ? volunteer.Headers.Location.AbsolutePath : volunteer.Headers.Location.ToString();
+        var driverId = volunteerPath.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
+        state.CreatedResources.Add(("people", driverId));
+        state.Pin(CrewKey, driverId);
+        (await api.SendAsync(HttpMethod.Put, $"/convoys/{convoyId}/vehicles/{vin}/drivers/{driverId}", operatorToken, null))
             .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
 
         var today = DateTime.UtcNow.Date;
@@ -123,6 +137,29 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
             HttpMethod.Put, $"/convoys/{next}/vehicles/{state.Pinned(VehicleKey)}", state.CurrentToken, null);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict, "the body was: {0}", api.LastBody);
+    }
+
+    [When("the administrator erases the vehicle's driver")]
+    public async Task WhenTheAdministratorErasesTheVehiclesDriver()
+    {
+        var admin = await api.TokenForAsync("admin");
+        await api.SendAsync(HttpMethod.Delete, $"/people/{state.Pinned(CrewKey)}", admin, null);
+    }
+
+    [Then("the vehicle's crew on that convoy shows a former volunteer")]
+    public async Task ThenTheVehiclesCrewShowsAFormerVolunteer()
+    {
+        var response = await api.SendAsync(
+            HttpMethod.Get,
+            $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{state.Pinned(VehicleKey)}/drivers",
+            state.CurrentToken,
+            null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "the body was: {0}", api.LastBody);
+        var member = JsonDocument.Parse(api.LastBody).RootElement.EnumerateArray().Single();
+        member.GetProperty("personId").GetString().Should().Be(state.Pinned(CrewKey));
+        $"{member.GetProperty("firstName").GetString()} {member.GetProperty("lastName").GetString()}"
+            .Should().Be("Former volunteer");
     }
 
     [Given("a convoy exists whose truck list is not published")]

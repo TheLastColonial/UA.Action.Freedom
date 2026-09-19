@@ -10,8 +10,8 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
 {
     private readonly Dictionary<Guid, PersonReadModel> store = [];
 
-    /// <summary>Volunteers some other record still names, standing in for the foreign keys onto dbo.Person.</summary>
-    private readonly HashSet<Guid> referenced = [];
+    /// <summary>Volunteers on a live crew or manifest team, whom erasure refuses.</summary>
+    private readonly HashSet<Guid> active = [];
 
     public InMemoryPersonRepository(params PersonReadModel[] seed)
     {
@@ -21,9 +21,9 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
         }
     }
 
-    public InMemoryPersonRepository NamedElsewhere(Guid id)
+    public InMemoryPersonRepository OnALiveCrew(Guid id)
     {
-        referenced.Add(id);
+        active.Add(id);
         return this;
     }
 
@@ -69,9 +69,9 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
 
     public Task<DeletePersonResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
-        if (referenced.Contains(id) && store.ContainsKey(id))
+        if (active.Contains(id) && store.ContainsKey(id))
         {
-            return Task.FromResult(DeletePersonResult.StillReferenced);
+            return Task.FromResult(DeletePersonResult.StillActive);
         }
 
         return Task.FromResult(store.Remove(id) ? DeletePersonResult.Deleted : DeletePersonResult.NotFound);

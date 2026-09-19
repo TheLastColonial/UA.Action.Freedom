@@ -311,14 +311,15 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         var rows = await connection.QueryAsync<VehicleDriverReadModel>(new CommandDefinition(
             """
             SELECT
-                p.Id AS PersonId,
-                p.FirstName,
-                p.LastName,
+                vd.PersonId,
+                COALESCE(d.FirstName, N'Former') AS FirstName,
+                COALESCE(d.LastName, N'volunteer') AS LastName,
                 vd.[Role]
             FROM dbo.VehicleDriver vd
-            JOIN dbo.Person p ON vd.PersonId = p.Id
+            -- LEFT: an erased volunteer keeps their seat in the history, but not their name.
+            LEFT JOIN dbo.PersonDetail d ON d.PersonId = vd.PersonId
             WHERE vd.ConvoyId = @convoyId AND vd.Vin = @vin
-            ORDER BY vd.[Role], p.LastName, p.FirstName
+            ORDER BY vd.[Role], LastName, FirstName
             """,
             new { convoyId, vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));

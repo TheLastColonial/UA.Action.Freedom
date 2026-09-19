@@ -74,9 +74,9 @@ public static class PersonEndpoints
             return outcome switch
             {
                 DeletePersonOutcome.Deleted => Results.NoContent(),
-                DeletePersonOutcome.StillReferenced => Results.Problem(
-                    detail: "This volunteer is still named on a vehicle crew, a manifest team, or a box record, " +
-                            "so they cannot be removed until they are taken off it.",
+                DeletePersonOutcome.StillActive => Results.Problem(
+                    detail: "This volunteer is on the crew of a convoy that has not arrived, or on the team of a " +
+                            "manifest still under way. Take them off it before erasing their details.",
                     statusCode: StatusCodes.Status409Conflict),
                 _ => Results.NotFound(),
             };

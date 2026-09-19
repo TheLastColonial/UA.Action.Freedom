@@ -28,18 +28,7 @@ public class BoxRepositoryTests
         Id: 0, WeightKg: 0, WidthCm: null, DepthCm: null, HeightCm: null, ReceiverRef: null,
         LocationId: null, ValidatedByPersonId: null, ValidatedAt: null);
 
-    /// <summary>A volunteer to act as the Loader, since the validator is a real foreign key.</summary>
-    private static async Task<Guid> AddVolunteerAsync()
-    {
-        var id = Guid.NewGuid();
-        await ExecuteAsync(
-            """
-            INSERT INTO dbo.Person (Id, FirstName, LastName, DateOfBirth, Joined)
-            VALUES (@id, 'Integration', 'Loader', '1990-01-01', '2024-01-01')
-            """,
-            ("@id", id));
-        return id;
-    }
+    private static Task<Guid> AddVolunteerAsync() => SqlTestDatabase.AddVolunteerAsync("Integration", "Loader", isDriver: false);
 
     private static Task RemoveVolunteerAsync(Guid id) =>
         ExecuteAsync("DELETE FROM dbo.Person WHERE Id = @id", ("@id", id));
