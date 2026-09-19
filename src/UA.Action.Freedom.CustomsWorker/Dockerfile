@@ -12,6 +12,7 @@ COPY global.json Directory.Packages.props ./
 COPY src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.CustomsWorker.csproj src/UA.Action.Freedom.CustomsWorker/
 COPY src/HMRC.GVMS/HMRC.GVMS.csproj                                            src/HMRC.GVMS/
 COPY src/HMRC.PushPullNotifications/HMRC.PushPullNotifications.csproj          src/HMRC.PushPullNotifications/
+COPY src/UA.Action.Freedom.Telemetry/UA.Action.Freedom.Telemetry.csproj              src/UA.Action.Freedom.Telemetry/
 
 RUN dotnet restore src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.CustomsWorker.csproj
 

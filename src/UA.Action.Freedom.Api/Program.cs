@@ -19,6 +19,7 @@ using UA.Action.Freedom.Api.Vehicles;
 using UA.Action.Freedom.Application;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Data;
+using UA.Action.Freedom.Telemetry;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,7 +44,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-builder.AddFreedomTelemetry();
+builder.AddFreedomApiTelemetry();
 
 builder.Services.AddFreedomStorage(storage);
 builder.Services.AddFreedomDataProtection(storage);
@@ -57,6 +58,7 @@ builder.Services.AddFreedomAuthorization();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddFreedomApplication();
 builder.Services.AddFreedomData();
+builder.Services.AddFreedomQueueFlowMetrics();
 
 // The durable hand-off to the Customs Worker. Pull, not push: Freedom exposes no callback
 // endpoint and the worker polls HMRC for outcomes (recommendations 4.1).
@@ -65,7 +67,8 @@ builder.Services.AddScoped<IManifestWorkQueue>(provider => new AzureManifestWork
     // account is configured, and the application is expected to start without one.
     provider.GetService<QueueServiceClient>(),
     provider.GetRequiredService<IOptions<StorageOptions>>(),
-    provider.GetRequiredService<IOptions<CustomsOptions>>()));
+    provider.GetRequiredService<IOptions<CustomsOptions>>(),
+    provider.GetRequiredService<QueueFlowMetrics>()));
 
 static string ExtractJsonErrorMessage(string errorMessage)
 {
@@ -93,6 +96,11 @@ static string ExtractJsonErrorMessage(string errorMessage)
     return "Request body contains invalid data. Check that fields are using the correct types (e.g., GUIDs for ID fields).";
 }
 
+// The id of the trace this request is part of — what an operator quotes back to find it in
+// Tempo. Falls back to ASP.NET Core's own identifier when nothing is being traced.
+static string TraceIdOf(HttpContext context) =>
+    System.Diagnostics.Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+
 var app = builder.Build();
 
 app.UseExceptionHandler(exceptionHandlerApp =>
@@ -100,6 +108,10 @@ app.UseExceptionHandler(exceptionHandlerApp =>
     exceptionHandlerApp.Run(async context =>
     {
         var exceptionHandler = context.Features.Get<IExceptionHandlerFeature>();
+
+        // A SQL error that got this far was not anticipated by any repository. Count its class.
+        DbErrors.Record(exceptionHandler?.Error);
+
         if (exceptionHandler?.Error is BadHttpRequestException badHttpEx)
         {
             // Check if this is a JSON deserialization error
@@ -119,7 +131,8 @@ app.UseExceptionHandler(exceptionHandlerApp =>
                     type = "https://httpwg.org/specs/rfc9110.html#status.500",
                     title = "Internal Server Error",
                     status = StatusCodes.Status500InternalServerError,
-                    detail = "An unexpected error occurred."
+                    detail = "An unexpected error occurred.",
+                    traceId = TraceIdOf(context)
                 };
 
                 await context.Response.WriteAsJsonAsync(problem);
@@ -136,7 +149,8 @@ app.UseExceptionHandler(exceptionHandlerApp =>
                 type = "https://httpwg.org/specs/rfc9110.html#status.400",
                 title = "Bad Request",
                 status = StatusCodes.Status400BadRequest,
-                detail = detail
+                detail = detail,
+                traceId = TraceIdOf(context)
             };
 
             await context.Response.WriteAsJsonAsync(problemDetails);
@@ -152,7 +166,8 @@ app.UseExceptionHandler(exceptionHandlerApp =>
                 type = "https://httpwg.org/specs/rfc9110.html#status.500",
                 title = "Internal Server Error",
                 status = StatusCodes.Status500InternalServerError,
-                detail = "An unexpected error occurred."
+                detail = "An unexpected error occurred.",
+                traceId = TraceIdOf(context)
             };
 
             await context.Response.WriteAsJsonAsync(problemDetails);

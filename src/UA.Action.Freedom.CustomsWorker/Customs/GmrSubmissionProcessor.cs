@@ -1,7 +1,10 @@
+using System.Diagnostics;
 using System.Text.Json;
 using HMRC.GVMS;
 using Microsoft.Extensions.Logging;
 using UA.Action.Freedom.CustomsWorker.Queueing;
+using UA.Action.Freedom.CustomsWorker.Telemetry;
+using UA.Action.Freedom.Telemetry;
 
 namespace UA.Action.Freedom.CustomsWorker.Customs;
 
@@ -17,8 +20,13 @@ namespace UA.Action.Freedom.CustomsWorker.Customs;
 public sealed class GmrSubmissionProcessor(
     ICustomsWorkQueue queue,
     IGvmsClient gvms,
-    ILogger<GmrSubmissionProcessor> logger)
+    ILogger<GmrSubmissionProcessor> logger,
+    QueueFlowMetrics? queueMetrics = null,
+    CustomsMetrics? customsMetrics = null)
 {
+    private readonly QueueFlowMetrics _queueMetrics = queueMetrics ?? QueueFlowMetrics.Unobserved;
+    private readonly CustomsMetrics _customs = customsMetrics ?? CustomsMetrics.Unobserved;
+
     /// <summary>
     /// camelCase, and case-insensitive on the way in.
     /// </summary>
@@ -49,6 +57,8 @@ public sealed class GmrSubmissionProcessor(
             return false;
         }
 
+        _queueMetrics.Received(QueueNames.CustomsWork, item.InsertedOn, item.DequeueCount);
+
         GmrSubmission? submission;
 
         try
@@ -60,52 +70,100 @@ public sealed class GmrSubmissionProcessor(
             // Note what could not be read, never what it said: a manifest-shaped message
             // may carry personal data, and logs are retained (recommendations 4.8).
             logger.LogError(exception, "Work item {MessageId} is not a readable GMR submission.", item.MessageId);
-            await queue.DeadLetterAsync(item, "Message body could not be deserialised.", cancellationToken);
+            await DeadLetter(item, "unreadable", "Message body could not be deserialised.", null, cancellationToken);
             return true;
         }
 
         if (submission is null || string.IsNullOrWhiteSpace(submission.ManifestId))
         {
             logger.LogError("Work item {MessageId} carries no manifest reference.", item.MessageId);
-            await queue.DeadLetterAsync(item, "Message body carries no manifest reference.", cancellationToken);
+            await DeadLetter(item, "no_manifest_ref", "Message body carries no manifest reference.", null, cancellationToken);
             return true;
         }
+
+        // Everything from here — including HMRC's HTTP client span — belongs to this message.
+        using var activity = QueueTelemetry.StartConsumer(QueueNames.CustomsWork, item.MessageId, submission.Traceparent);
+        using var scope = logger.BeginScope(
+            "Manifest {ManifestId}, work item {MessageId}", submission.ManifestId, item.MessageId);
+        var started = Stopwatch.GetTimestamp();
+        var timed = false;
 
         try
         {
             await gvms.CreateGoodsMovementRecordAsync(ToRequest(submission), cancellationToken);
 
+            timed = true;
+            _customs.SubmissionCompleted("accepted", Stopwatch.GetElapsedTime(started));
             logger.LogInformation(
                 "Submitted a goods movement record for manifest {ManifestId}.", submission.ManifestId);
 
             await queue.CompleteAsync(item, cancellationToken);
+            _queueMetrics.Settled(QueueNames.CustomsWork, QueueOutcome.Completed);
         }
         catch (GvmsApiException exception) when (exception.StatusCode is >= 400 and < 500)
         {
             // HMRC has judged the submission itself. Retrying produces the same answer, so
             // this needs a person, not another attempt.
+            _customs.SubmissionCompleted("rejected", Stopwatch.GetElapsedTime(started));
+            activity?.SetStatus(ActivityStatusCode.Error);
+
+            // The status, never the exception: GvmsApiException carries up to 512 characters of
+            // HMRC's response in its message, and that can echo the vehicle and the haulier.
             logger.LogError(
-                exception,
                 "HMRC rejected the goods movement record for manifest {ManifestId} with {StatusCode}.",
                 submission.ManifestId,
                 exception.StatusCode);
 
-            await queue.DeadLetterAsync(
-                item, $"HMRC rejected the submission with {exception.StatusCode}.", cancellationToken);
+            await DeadLetter(
+                item,
+                "hmrc_rejected",
+                $"HMRC rejected the submission with {exception.StatusCode}.",
+                exception.StatusCode,
+                cancellationToken);
         }
         catch (Exception exception)
         {
             // Transient: a timeout, a 5xx, a dropped connection. Leave the message alone —
             // its visibility timeout will expire and it will be tried again. Completing or
             // poisoning it here would throw away a request nobody has recorded elsewhere.
-            logger.LogWarning(
-                exception,
-                "Could not reach HMRC for manifest {ManifestId}; leaving work item {MessageId} to be retried.",
-                submission.ManifestId,
-                item.MessageId);
+            if (!timed)
+            {
+                // HMRC did answer if it was only settling the message that failed; that call
+                // has already been timed as accepted.
+                _customs.SubmissionCompleted("error", Stopwatch.GetElapsedTime(started));
+            }
+
+            _queueMetrics.Settled(QueueNames.CustomsWork, QueueOutcome.LeftForRetry);
+            activity?.SetStatus(ActivityStatusCode.Error);
+
+            LogCouldNotReachHmrc(exception, submission.ManifestId, item.MessageId);
         }
 
         return true;
+    }
+
+    private async Task DeadLetter(
+        CustomsWorkItem item, string reason, string message, int? httpStatus, CancellationToken cancellationToken)
+    {
+        await queue.DeadLetterAsync(item, message, cancellationToken);
+
+        _customs.DeadLettered(reason, httpStatus);
+        _queueMetrics.Settled(QueueNames.CustomsWork, QueueOutcome.DeadLettered);
+    }
+
+    private void LogCouldNotReachHmrc(Exception exception, string manifestId, string messageId)
+    {
+        const string Message =
+            "Could not reach HMRC for manifest {ManifestId}; leaving work item {MessageId} to be retried.";
+
+        if (exception is GvmsApiException api)
+        {
+            // A 5xx still carries HMRC's response body in its message; log the status only.
+            logger.LogWarning(Message + " HMRC answered {StatusCode}.", manifestId, messageId, api.StatusCode);
+            return;
+        }
+
+        logger.LogWarning(exception, Message, manifestId, messageId);
     }
 
     private static GoodsMovementRecordRequest ToRequest(GmrSubmission submission) => new()

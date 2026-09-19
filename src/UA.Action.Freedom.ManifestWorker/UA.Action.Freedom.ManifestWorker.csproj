@@ -13,4 +13,8 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../UA.Action.Freedom.Telemetry/UA.Action.Freedom.Telemetry.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -31,7 +31,9 @@ public sealed class AzureCustomsWorkQueue(
             : new CustomsWorkItem(
                 message.Value.MessageId,
                 message.Value.PopReceipt,
-                message.Value.Body.ToString());
+                message.Value.Body.ToString(),
+                message.Value.DequeueCount,
+                message.Value.InsertedOn);
     }
 
     public async Task CompleteAsync(CustomsWorkItem item, CancellationToken cancellationToken)

@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Azure.Core;
 using Azure.Storage.Blobs;
 using Azure.Storage.Queues;
@@ -11,8 +12,12 @@ using UA.Action.Freedom.CustomsWorker;
 using UA.Action.Freedom.CustomsWorker.Configuration;
 using UA.Action.Freedom.CustomsWorker.Customs;
 using UA.Action.Freedom.CustomsWorker.Queueing;
+using UA.Action.Freedom.CustomsWorker.Telemetry;
+using UA.Action.Freedom.Telemetry;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.AddFreedomTelemetry();
 
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.SectionName));
@@ -74,6 +79,10 @@ builder.Services.AddPushPullNotificationsClient(options =>
     }
 });
 
+builder.Services.AddFreedomWorkerTelemetry(
+    new WatchedQueue(QueueNames.CustomsWork, storage.CustomsQueue, storage.PoisonQueue));
+builder.Services.AddSingleton(provider => CustomsMetrics.Create(provider.GetRequiredService<IMeterFactory>()));
+
 builder.Services.AddSingleton<ICustomsWorkQueue, AzureCustomsWorkQueue>();
 builder.Services.AddSingleton<IGmrDocumentStore, BlobGmrDocumentStore>();
 
@@ -84,7 +93,8 @@ builder.Services.AddSingleton(provider => new GmrOutcomeCollector(
     provider.GetRequiredService<IOptions<HmrcOptions>>().Value.Ppns.BoxId
         ?? throw new InvalidOperationException(
             "Hmrc:Ppns:BoxId is required. Without a box there is nowhere to collect GMR outcomes from."),
-    provider.GetRequiredService<ILogger<GmrOutcomeCollector>>()));
+    provider.GetRequiredService<ILogger<GmrOutcomeCollector>>(),
+    provider.GetRequiredService<CustomsMetrics>()));
 
 builder.Services.AddHostedService<CustomsWorkerService>();
 

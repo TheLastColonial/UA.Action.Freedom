@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Logging;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Telemetry;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Manifests;
@@ -33,9 +35,12 @@ public enum TransitionManifestOutcome
 /// </remarks>
 public sealed class TransitionManifestHandler(
     IManifestRepository repository,
-    IConvoyRepository convoys)
+    IConvoyRepository convoys,
+    FreedomMetrics? metrics = null)
     : ICommandHandler<TransitionManifestCommand, TransitionManifestOutcome>
 {
+    private readonly FreedomMetrics _metrics = metrics ?? FreedomMetrics.Unobserved;
+
     /// <summary>
     /// The states that would reopen a manifest for editing.
     /// </summary>
@@ -57,7 +62,16 @@ public sealed class TransitionManifestHandler(
         TransitionManifestCommand command, CancellationToken cancellationToken)
     {
         var manifest = await repository.GetByIdAsync(command.Id, cancellationToken);
+        var outcome = await Decide(manifest, command, cancellationToken);
 
+        _metrics.ManifestTransition(manifest?.Status, command.To, outcome);
+
+        return outcome;
+    }
+
+    private async Task<TransitionManifestOutcome> Decide(
+        ManifestReadModel? manifest, TransitionManifestCommand command, CancellationToken cancellationToken)
+    {
         if (manifest is null)
         {
             return TransitionManifestOutcome.NotFound;
@@ -138,14 +152,27 @@ public sealed record ApproveManifestCommand(string Id);
 public sealed class ApproveManifestHandler(
     IManifestRepository repository,
     IConvoyRepository convoys,
-    IManifestWorkQueue queue)
+    IManifestWorkQueue queue,
+    FreedomMetrics? metrics = null,
+    ILogger<ApproveManifestHandler>? logger = null)
     : ICommandHandler<ApproveManifestCommand, TransitionManifestOutcome>
 {
+    private readonly FreedomMetrics _metrics = metrics ?? FreedomMetrics.Unobserved;
+
     public async Task<TransitionManifestOutcome> HandleAsync(
         ApproveManifestCommand command, CancellationToken cancellationToken)
     {
         var manifest = await repository.GetByIdAsync(command.Id, cancellationToken);
+        var outcome = await Approve(manifest, command, cancellationToken);
 
+        _metrics.ManifestTransition(manifest?.Status, ManifestStatus.Confirmed, outcome);
+
+        return outcome;
+    }
+
+    private async Task<TransitionManifestOutcome> Approve(
+        ManifestReadModel? manifest, ApproveManifestCommand command, CancellationToken cancellationToken)
+    {
         if (manifest is null)
         {
             return TransitionManifestOutcome.NotFound;
@@ -170,25 +197,49 @@ public sealed class ApproveManifestHandler(
             return TransitionManifestOutcome.IllegalTransition;
         }
 
-        // HMRC needs a crossing time and the convoy is what knows it.
-        var convoy = manifest.ConvoyId is { } convoyId
-            ? await convoys.GetByIdAsync(convoyId, cancellationToken)
-            : null;
+        // From here the manifest is frozen. A failure in either hand-off below leaves it frozen
+        // with paperwork that will never be produced — visible and retryable, but only if someone
+        // is told, so each is counted and logged before it propagates.
+        await HandOff("gmr", command.Id, async () =>
+        {
+            // HMRC needs a crossing time and the convoy is what knows it.
+            var convoy = manifest.ConvoyId is { } convoyId
+                ? await convoys.GetByIdAsync(convoyId, cancellationToken)
+                : null;
 
-        // The message carries the reference, the plate and the departure. No receiver, no
-        // address: the worker talks to HMRC, and where in Ukraine the load is going is none of
-        // its business — and a queue message is durable and widely readable (§4.4).
-        await queue.EnqueueGmrSubmissionAsync(
-            new GmrSubmissionRequest(command.Id, manifest.Vin ?? string.Empty, convoy?.Start),
-            cancellationToken);
+            // The message carries the reference, the plate and the departure. No receiver, no
+            // address: the worker talks to HMRC, and where in Ukraine the load is going is none of
+            // its business — and a queue message is durable and widely readable (§4.4).
+            await queue.EnqueueGmrSubmissionAsync(
+                new GmrSubmissionRequest(command.Id, manifest.Vin ?? string.Empty, convoy?.Start),
+                cancellationToken);
+        });
 
         // The other half of the fork in docs/process.puml: the document that travels with the
         // vehicle. Composed here, where the database is, so the worker that renders it needs no
         // database access — and therefore cannot read a delivery address even in principle.
-        await queue.EnqueueDocumentAsync(
-            await ComposeDocument(command.Id, manifest, cancellationToken), cancellationToken);
+        await HandOff("document", command.Id, async () =>
+            await queue.EnqueueDocumentAsync(
+                await ComposeDocument(command.Id, manifest, cancellationToken), cancellationToken));
 
         return TransitionManifestOutcome.Transitioned;
+    }
+
+    private async Task HandOff(string stage, string manifestId, Func<Task> handOff)
+    {
+        try
+        {
+            await handOff();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _metrics.ApproveFailedAfterFreeze(stage);
+            logger?.LogWarning(
+                "Manifest {ManifestId} was frozen but its {Stage} hand-off failed ({ExceptionType}); an operator must retry it.",
+                manifestId, stage, exception.GetType().Name);
+
+            throw;
+        }
     }
 
     /// <summary>Two drivers and their bags. A border-check estimate, deliberately fixed.</summary>

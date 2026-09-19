@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Azure.Storage.Queues;
 using Microsoft.Extensions.Options;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Manifests;
+using UA.Action.Freedom.Telemetry;
 
 namespace UA.Action.Freedom.Api.Messaging;
 
@@ -29,25 +31,20 @@ namespace UA.Action.Freedom.Api.Messaging;
 public sealed class AzureManifestWorkQueue(
     QueueServiceClient? queues,
     IOptions<StorageOptions> storage,
-    IOptions<CustomsOptions> customs) : IManifestWorkQueue
+    IOptions<CustomsOptions> customs,
+    QueueFlowMetrics? metrics = null) : IManifestWorkQueue
 {
     private readonly StorageOptions _storage = storage.Value;
     private readonly CustomsOptions _customs = customs.Value;
 
-    public async Task EnqueueGmrSubmissionAsync(
-        GmrSubmissionRequest submission, CancellationToken cancellationToken)
-    {
-        if (queues is null)
-        {
-            throw new InvalidOperationException(
-                "Storage:ConnectionString is not configured, so the Goods Movement Reference for this manifest "
-                + "cannot be handed to the Customs Worker. Approving a manifest is the point of no return, so it "
-                + "fails here rather than confirming a manifest whose paperwork will never be submitted.");
-        }
-
-        var queue = queues.GetQueueClient(_storage.CustomsQueue);
-
-        var message = JsonSerializer.Serialize(
+    public Task EnqueueGmrSubmissionAsync(
+        GmrSubmissionRequest submission, CancellationToken cancellationToken) =>
+        Enqueue(
+            QueueNames.CustomsWork,
+            _storage.CustomsQueue,
+            "Storage:ConnectionString is not configured, so the Goods Movement Reference for this manifest "
+            + "cannot be handed to the Customs Worker. Approving a manifest is the point of no return, so it "
+            + "fails here rather than confirming a manifest whose paperwork will never be submitted.",
             new
             {
                 manifestId = submission.ManifestId,
@@ -59,26 +56,48 @@ public sealed class AzureManifestWorkQueue(
                 localDateTimeOfDeparture = (submission.DepartsAt ?? DateTime.UtcNow)
                     .ToString("yyyy-MM-ddTHH:mm"),
             },
-            JsonSerializerOptions.Web);
+            cancellationToken);
 
-        await queue.SendMessageAsync(message, cancellationToken);
-    }
-
-    public async Task EnqueueDocumentAsync(
-        ManifestDocumentRequest document, CancellationToken cancellationToken)
-    {
-        if (queues is null)
-        {
-            throw new InvalidOperationException(
-                "Storage:ConnectionString is not configured, so the document for this manifest cannot be handed "
-                + "to the Manifest Worker.");
-        }
-
-        var queue = queues.GetQueueClient(_storage.DocumentQueue);
-
+    public Task EnqueueDocumentAsync(
+        ManifestDocumentRequest document, CancellationToken cancellationToken) =>
         // The record serialises as-is: it already contains exactly what the document may show,
         // so there is no mapping step here that could add something it must not.
-        await queue.SendMessageAsync(
-            JsonSerializer.Serialize(document, JsonSerializerOptions.Web), cancellationToken);
+        Enqueue(
+            QueueNames.ManifestDocuments,
+            _storage.DocumentQueue,
+            "Storage:ConnectionString is not configured, so the document for this manifest cannot be handed "
+            + "to the Manifest Worker.",
+            document,
+            cancellationToken);
+
+    /// <summary>
+    /// Sends one message inside a producer span, with that span's <c>traceparent</c> beside the
+    /// payload so the worker's span can link back to the approval that caused it. Counted as ok or
+    /// failed; the failure still propagates, because a message that was not queued must not be
+    /// reported as queued.
+    /// </summary>
+    private async Task Enqueue(
+        string label, string queueName, string notConfigured, object payload, CancellationToken cancellationToken)
+    {
+        using var producer = QueueTelemetry.StartProducer(label);
+
+        try
+        {
+            if (queues is null)
+            {
+                throw new InvalidOperationException(notConfigured);
+            }
+
+            await queues.GetQueueClient(queueName).SendMessageAsync(
+                QueueTelemetry.Serialize(payload, QueueTelemetry.CurrentTraceparent()), cancellationToken);
+
+            metrics?.Enqueued(label, succeeded: true);
+        }
+        catch
+        {
+            producer?.SetStatus(ActivityStatusCode.Error);
+            metrics?.Enqueued(label, succeeded: false);
+            throw;
+        }
     }
 }

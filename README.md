@@ -37,6 +37,7 @@ src/
 ├── UA.Action.Freedom.Api/              # ASP.NET Core minimal API host
 ├── UA.Action.Freedom.CustomsWorker/    # HMRC GMR submission & outcome collection
 ├── UA.Action.Freedom.ManifestWorker/   # Manifest document rendering
+├── UA.Action.Freedom.Telemetry/         # Shared OpenTelemetry wiring, span redaction, queue & worker metrics
 ├── HMRC.GVMS/                          # HMRC Goods Vehicle Movements SDK
 └── HMRC.PushPullNotifications/         # HMRC Push Pull Notifications SDK
 
@@ -394,7 +395,10 @@ To add a new domain concept (e.g., a new `Donation` slice):
 
 1. Define domain model in `src/UA.Action.Freedom.Domain/`
 2. Create repository interface in `src/UA.Action.Freedom.Application/Donations/`
-3. Write handlers (CQRS) in `src/UA.Action.Freedom.Application/Donations/`
+3. Write handlers (CQRS) in `src/UA.Action.Freedom.Application/Donations/`. Put the **success case
+   first** in each outcome enum: command handlers are wrapped by `InstrumentedCommandHandler`, which
+   reports member zero as `result="ok"` and any other member as `result="rejected"` on
+   `freedom.handler.invocations` — no telemetry code is needed in the handler itself
 4. Implement Dapper repository in `src/UA.Action.Freedom.Data/Donations/`
 5. Create endpoints in `src/UA.Action.Freedom.Api/Donations/DonationEndpoints.cs`
 6. Register in `Program.cs` via `AddFreedomApplication()` and `AddFreedomData()`
@@ -414,10 +418,33 @@ To add a new domain concept (e.g., a new `Donation` slice):
 
 ## Observability
 
-- **OpenTelemetry** instrumentation (traces, metrics, logs)
-- **Local exporter** to Grafana OTEL-LGTM container
-- **Azure exporter** to Application Insights (via `OTEL_EXPORTER_OTLP_ENDPOINT`)
-- **Health checks** on `/health/live` and `/health/ready` (SQL, Blob, Queue, OIDC)
+All three services — `freedom-app`, `freedom-customs-worker`, `freedom-manifest-worker` — share one
+wiring, `UA.Action.Freedom.Telemetry` (`AddFreedomTelemetry()`): traces, metrics and logs over OTLP
+to whatever `OTEL_EXPORTER_OTLP_ENDPOINT` names. Locally that is the Grafana OTEL-LGTM container
+(<http://localhost:3000>, no login); in Azure it is the collector or Application Insights ingest.
+Unset, nothing is exported. Sampling is the SDK's own (`OTEL_TRACES_SAMPLER`, 100% locally).
+
+- **Traces.** ASP.NET Core, HttpClient, SQL and the Azure Storage SDK, plus a span per command
+  handler and per queue message. An approval's trace does not continue into the workers: the
+  worker's span *links* to it (the producer writes `traceparent` into the queue message), because a
+  retried message is processed minutes later. In Tempo, follow the link from the worker's
+  `process customs-work` / `process manifest-documents` span.
+- **Metrics.** The `freedom.*` business metrics — command outcomes, manifest transitions, queue
+  depth/age/dispositions, GMR submission and dead-letter reasons, document rendering, worker-loop
+  heartbeats — plus the ASP.NET Core, HttpClient and runtime built-ins. The full catalogue is in
+  `iac/local/grafana/README.md`. Every tag is a bounded set; a person, receiver, plate, VIN or
+  manifest reference is never a label.
+- **Nothing sensitive in telemetry, by construction.** A span processor
+  (`RedactingActivityProcessor`) records the *route* not the path, drops query strings, reduces
+  client URLs to the peer, and blanks SQL statements on the `sensitive` schema. HMRC error bodies
+  are never logged (status and type only). `docs/gotchas-and-open-questions.md` § Observability.
+- **Dashboards** (Grafana → folder *Freedom*, provisioned from `iac/local/grafana/dashboards/`):
+  `.NET Runtime & HTTP`, `Freedom Application (API)`, `Customs Worker`, `Manifest Worker`, `Manifest Approval Pipeline`,
+  `Convoy Operations`, `Access & Sensitive Data`.
+- **Failures carry a `traceId`.** A 500 or 400 from the API returns the id of the trace that
+  recorded it, so an operator can quote it back and find the request in Tempo.
+- **Health checks** on `/health/live` and `/health/ready` (SQL, Blob, Queue, OIDC). Probes are not
+  traced or counted in the HTTP metrics.
 
 ## Known Issues & Gotchas
 

@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Azure.Core;
 using Azure.Storage.Blobs;
 using Azure.Storage.Queues;
@@ -7,8 +8,12 @@ using UA.Action.Freedom.ManifestWorker;
 using UA.Action.Freedom.ManifestWorker.Configuration;
 using UA.Action.Freedom.ManifestWorker.Documents;
 using UA.Action.Freedom.ManifestWorker.Queueing;
+using UA.Action.Freedom.ManifestWorker.Telemetry;
+using UA.Action.Freedom.Telemetry;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.AddFreedomTelemetry();
 
 // Configuration comes from the environment and nothing else, like the rest of the solution.
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
@@ -48,6 +53,10 @@ builder.Services.AddSingleton(_ =>
     ConfigureRetry(options.Retry);
     return new BlobServiceClient(storage.ConnectionString, options);
 });
+
+builder.Services.AddFreedomWorkerTelemetry(
+    new WatchedQueue(QueueNames.ManifestDocuments, storage.DocumentQueue, storage.PoisonQueue));
+builder.Services.AddSingleton(provider => ManifestWorkerMetrics.Create(provider.GetRequiredService<IMeterFactory>()));
 
 builder.Services.AddSingleton<IManifestDocumentQueue, AzureManifestDocumentQueue>();
 builder.Services.AddSingleton<IManifestDocumentStore, BlobManifestDocumentStore>();

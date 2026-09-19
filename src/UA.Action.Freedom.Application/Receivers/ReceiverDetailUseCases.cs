@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Telemetry;
 
 namespace UA.Action.Freedom.Application.Receivers;
 
@@ -9,12 +10,25 @@ namespace UA.Action.Freedom.Application.Receivers;
 /// <param name="Reason">Why, if they gave one. Free text, recorded verbatim.</param>
 public sealed record GetReceiverDetailQuery(Guid Ref, string PrincipalId, string? Reason);
 
-public sealed class GetReceiverDetailHandler(IReceiverDetailRepository repository)
+public sealed class GetReceiverDetailHandler(
+    IReceiverDetailRepository repository,
+    FreedomMetrics? metrics = null)
     : IQueryHandler<GetReceiverDetailQuery, ReceiverDetailReadModel?>
 {
-    public Task<ReceiverDetailReadModel?> HandleAsync(
+    private readonly FreedomMetrics _metrics = metrics ?? FreedomMetrics.Unobserved;
+
+    public async Task<ReceiverDetailReadModel?> HandleAsync(
         GetReceiverDetailQuery query, CancellationToken cancellationToken)
-        => repository.ResolveAsync(query.Ref, query.PrincipalId, query.Reason, cancellationToken);
+    {
+        var detail = await repository.ResolveAsync(query.Ref, query.PrincipalId, query.Reason, cancellationToken);
+
+        // Aggregate only: who asked and about which receiver is in the audit table, written in
+        // the same transaction as the read. Duplicating it here would build a second, weaker
+        // trail with a 31-day retention.
+        _metrics.ReceiverDetailResolved(found: detail is not null);
+
+        return detail;
+    }
 }
 
 /// <summary>Record or replace the delivery detail for a receiver.</summary>

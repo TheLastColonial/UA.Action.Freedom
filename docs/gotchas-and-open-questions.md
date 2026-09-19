@@ -5,7 +5,7 @@ still outstanding. Written up while building out the API and workers across the 
 entries are here because they actually bit somebody rather than because they seemed likely to.
 
 **How to read this.** §1–§7 are things that are true now and will surprise you (§7 is the
-operator UI in `web/`). §8 is work that has been decided but not built. §9 is genuinely
+operator UI in `web/`; the unnumbered *Observability* section before it covers telemetry). §8 is work that has been decided but not built. §9 is genuinely
 undecided and needs a person. §10 is a per-slice index if you are looking for the history of
 one area.
 
@@ -424,9 +424,21 @@ down -v` clears it.
 
 ### Health probes are a poor subject for a telemetry test
 
-`TelemetryTests` deliberately asserts on `/vehicles`, not `/health/live`: probes are the first
-thing anyone filters out of tracing, which would silently break the test later. The 401 path is
-used on purpose — an authorization problem in production has to be traceable too.
+`TelemetryTests` deliberately asserts on `/vehicles`, not `/health/live`: probes are filtered out
+of tracing and of the HTTP metrics (§ Observability below), so a test built on one would fail for
+the right reason and look like a regression. The 401 path is used on purpose — an authorization
+problem in production has to be traceable too. `TelemetryRedactionTests` asserts the filtering
+itself, with a real request as the positive control.
+
+### Telemetry component tests must scope to their own trace
+
+A tracer provider listens to `ActivitySource`s **process-wide**, so a test host also receives the
+spans of every other host running in parallel. Send a `traceparent` with a known trace id and
+assert only on that trace (`TelemetryRedactionTests.ClientTracedAs`). The response also reaches the
+client slightly *before* ASP.NET Core stops the request's span, so wait for the span rather than
+reading straight after the response — `TelemetryTests` was flaky one run in ten until it did.
+Unit tests that read metrics use a `MetricCapture` bound to one `Meter` *instance* for the same
+reason; never a listener keyed on the meter's name.
 
 ### Component tests assert on `JsonElement`
 
@@ -437,7 +449,9 @@ under test only proves it agrees with itself.
 
 `GmrSubmissionProcessorTests` and `ManifestDocumentProcessorTests` both hold the wire shape as a
 raw string. Round-tripping through the serialiser would keep passing while the producer wrote
-camelCase and the consumer expected PascalCase.
+camelCase and the consumer expected PascalCase. Both messages may also carry an optional
+`traceparent` (§ Observability); it is absent on a message queued while nothing was being traced,
+so an untraced message is byte-for-byte what it was before tracing existed.
 
 ### Storage clients are optional dependencies
 
@@ -447,6 +461,108 @@ itself on `/health/ready`. Registering `AzureManifestWorkQueue` with `AddScoped<
 TImplementation>` broke **every** component test at once — DI validation fails at
 `WebApplicationBuilder.Build()`. It is registered with a factory using `GetService` (not
 `GetRequiredService`), and throws a message naming the missing setting if used.
+
+---
+
+## Observability (between §6 and §7)
+
+How the three services describe themselves to Grafana, and what they are built never to say. The
+wiring is `src/UA.Action.Freedom.Telemetry`; dashboards and the metric catalogue are in
+`iac/local/grafana/`. Unnumbered so the section numbers everything else refers to stay put.
+
+### Never set `service.namespace`
+
+The OTLP-to-Prometheus mapping turns `service.namespace` into a prefix of the `job` label
+(`freedom/freedom-app`), and every dashboard filters on `job = service.name`. Setting it in
+`OTEL_RESOURCE_ATTRIBUTES` — or in code — silently empties every panel.
+
+### What is never a tag, an attribute or a log field
+
+Receiver address, contact or free-text `reason`; volunteer names, dates of birth, phone numbers;
+plates and VINs; EORI and insurance detail; route stops; principal ids (`sub`); HMRC error bodies.
+A metric tag must be a **bounded set** — a handler name, an outcome enum member, a `ManifestStatus`,
+a fixed reason. `ManifestId` and the queue `MessageId` are allowed on spans and in log scopes (the
+workers already log them) but never on a metric, where each would mint a series.
+`GmrOutcomeCollector` maps HMRC's `state` through the `State` enum and reports anything else as
+`unknown`, so a surprising payload cannot mint labels either.
+
+### Redaction is a span processor, and its order matters
+
+`RedactingActivityProcessor` rewrites spans in `OnEnd` — `http.route` is only known once routing
+has run — so it must be registered **before** the exporter (`AddFreedomTelemetry` does this; the
+exporter is added last). It keeps the route template and drops the concrete path and query on server
+spans, reduces client `url.full` to `scheme://host:port`, and blanks any SQL statement that names the
+`sensitive` schema (column names would describe the shape of the address data). Other statements
+are kept — parameterised, so they hold no values — because a slow query is found by its text. The
+ASP.NET Core instrumentation already replaces query *values* with `Redacted`; the processor drops
+the query entirely, and the exposure it actually closes is the concrete **path**
+(`/boxes/scan/{token}`, `/people/{id}`, a VIN).
+
+### HMRC's exception messages carry response bodies
+
+`GvmsApiException` and `PushPullNotificationsApiException` put up to 512 characters of HMRC's
+response in their message (`ToString()` includes all of it), and that can echo a plate or an EORI.
+The workers log the **status and exception type only** — `GmrSubmissionProcessor` and
+`CustomsWorkerService.LogUnhandled` — pinned by tests that feed a body containing a name. Do not
+"improve" a worker log line by passing the exception object. The cost: the known PPNS deserialisation
+failure (§ "Known bug, not ours to fix cheaply") logs as `HMRC answered 200 (PushPullNotificationsApiException)`;
+reproduce it locally to see the underlying message.
+
+### Queue traces link; they do not parent
+
+Queue Storage has no message headers, so `AzureManifestWorkQueue` writes the producer span's
+`traceparent` into the JSON body, and each worker starts a **consumer** span with an `ActivityLink`
+to it. A message that is retried is processed minutes after the request that produced it; a child
+span would stretch the approval's trace across that gap. In Tempo, open the worker's
+`process customs-work` span and follow its link. The property is optional and `JsonSerializerOptions.Web`
+ignores unknown members, so old and new producers and consumers interoperate.
+
+### Queue metrics carry logical queue names
+
+Queue metrics carry the **logical** queue name (`customs-work`, `manifest-documents` — `QueueNames`),
+never the configured storage-queue name, so a dashboard does not need to know the environment.
+The class is `QueueFlowMetrics` because `QueueMetrics` collides with an Azure SDK type of that name.
+
+### Probes are excluded twice, and old series linger
+
+Health probes are dropped from tracing by the ASP.NET Core `Filter` in `TelemetryInstaller` and from
+the HTTP metrics by `DisableHttpMetrics()` on the health endpoints. Prometheus keeps a stopped
+container's series for the length of the query window, so after a redeploy `increase(...[10m])` on
+`/health/live` still shows the *previous* container's probes — check `service_instance_id` before
+concluding the exclusion failed.
+
+### Metrics take up to a minute to appear
+
+The SDK exports metrics every 60 s. A panel that is empty a few seconds after an event is not
+broken. Observable gauges (`freedom_queue_depth`, `freedom_worker_loop_last_success_seconds`) report
+only while the worker is running, and a queue that cannot be read reports *nothing* rather than a
+stale number — an absent series is the signal.
+
+### A worker loop that has stopped looks like a worker with nothing to do
+
+Each loop reports `freedom_worker_loop_last_success_seconds` on every completed pass, idle or not, so
+a stale heartbeat means stuck or dead. The customs worker's `outcomes` loop currently fails every
+poll (the PPNS enum bug above), which shows as `freedom_worker_loop_errors_total{loop="outcomes"}`
+climbing and no `outcomes` heartbeat at all. That is the telemetry working, not a telemetry fault.
+
+### Errors carry a `traceId`
+
+Every 400/500 body from the exception handler includes `traceId`. It is the *trace* id (what Tempo
+searches on), not ASP.NET Core's request id, and falls back to that only when nothing is being traced.
+
+### Azure SDK spans: `Azure.Storage.*` only
+
+`AppContext` switch `Azure.Experimental.EnableActivitySource` makes the SDK emit a span per queue and
+blob operation (`QueueClient.SendMessage`). The source pattern is `Azure.Storage.*` deliberately:
+`Azure.Core.Http` would repeat every HTTP call that the HttpClient instrumentation already records,
+doubling the spans. Add another `Azure.<Library>.*` source when another SDK is adopted.
+
+### Unobserved instances
+
+Metric classes (`FreedomMetrics`, `QueueFlowMetrics`, `CustomsMetrics`, …) have a static `Unobserved`
+instance backed by a meter nothing listens to, and the processors/handlers take the real one as an
+**optional trailing parameter**. That keeps every existing positional construction in the unit tests
+compiling and removes null checks; production always gets the DI-registered one.
 
 ---
 
@@ -602,6 +718,33 @@ Questions 9–12 from the previous round are **decided and built**:
     to travel again, and hands Delivered and Lost ones over. If Returned can also mean the cargo
     came back but the vehicle stayed, that rule needs revisiting.
 
+14. **Worker retry and failure semantics** — found while instrumenting the workers, and now visible
+    in the dashboards (`freedom_queue_redeliveries_total`, `freedom_gmr_dead_letters_total`), but
+    deliberately not changed, because each is a behaviour decision:
+    - `GmrSubmissionProcessor` dead-letters **every** HMRC 4xx — including 401/403 (an expired
+      credential), 408 and 429 (a throttle). Those would succeed later; poisoning them loses the
+      submission until someone re-queues it by hand. `freedom_gmr_dead_letters_total` is tagged with
+      the status so this is at least countable.
+    - Retries are **unbounded**. A message left for retry comes back every two minutes with no
+      `DequeueCount` cap, and silently expires after Queue Storage's 7-day TTL — a manifest whose
+      paperwork was never produced, with nothing recording that it gave up.
+    - If HMRC accepts (202) and `CompleteAsync` then throws, the message is redelivered and the GMR
+      submitted twice. `freedom_gmr_submission_duration_seconds` records that call as `accepted`,
+      and the message as `left_for_retry`.
+    - A dead-lettered message carries no reason; it exists only in a log line.
+    - A non-JSON `BadHttpRequestException` (413, 415…) is mapped to a 500 by the exception handler,
+      which inflates the 5xx panels with what are really client errors.
+    - `/health/ready` is unauthenticated and returns exception messages, which can name hosts.
+
+15. **Is OTLP straight to Application Insights actually supported?** The design and
+    `AddFreedomTelemetry` assume `OTEL_EXPORTER_OTLP_ENDPOINT` can point at App Insights. Nothing in
+    this repository verifies it. The alternatives are the Azure Monitor exporter or an OpenTelemetry
+    Collector in front. The Grafana dashboards are PromQL/LogQL/TraceQL and do not port to App
+    Insights (KQL / Workbooks); Azure Managed Grafana over Azure Monitor is the likely equivalent.
+    Also unset until decided: sampling (`OTEL_TRACES_SAMPLER=parentbased_traceidratio` and
+    `OTEL_TRACES_SAMPLER_ARG`) — the SDK default is 100%, so the "sampling from day one" in
+    `recommendations.md` §2.4 is not yet true.
+
 ### Web coverage backlog
 
 Pages with no test file of their own (some are exercised through a parent page's test):
@@ -630,3 +773,4 @@ rather than parsing them against the contract.
 | 9 | Box QR labels | `dbo.BoxQrCode` — opaque non-enumerable token, revoke/reissue, revoked rows kept. `IssueQrCodeAsync` holds a transaction, same shape as the others in §2. "One active label" enforced there, not by a filtered index (§1). `QRCoder` is the first drawing dependency — managed renderers only, never the `System.Drawing`-based `QRCode` (§2). The label renderer's signature carries no receiver data, so the "no delivery detail on a travelling label" rule is structural (§3). New `App:PublicBaseUrl` env-only config with a request-host fallback; the local sim sets `App__PublicBaseUrl` because the container sees the edge, not the browser host. BDD probes `/boxes/scan/{all-zero-guid}` — auth runs before the handler, so a present route answers 401 and an old image answers 404. |
 | 10 | Vehicle servicing + Mechanic | The inspection was silently dropped by the API and faked by the mock — see §6 "A test double must be exactly as strict". New `Mechanic` role and `vehicles:service` policy; `PUT /vehicles/{vin}/inspection` is the only writer. Convoy assignment gated on `Passed` in SQL, and no longer steals a vehicle from another convoy. Crew clean-up on convoy delete (a sixth transaction). Person delete 500 → 409. Schema guards for columns added after `CREATE TABLE`. Shared `SqlTestDatabase`, `freedom_app` everywhere, `FREEDOM_REQUIRE_INTEGRATION` in CI. Reload keeps the page (§7). |
 | 11 | Crew, insurance, readiness, arrival, erasure | Passengers and one seat per person per convoy (`VehicleDriver` gained `ConvoyId` and `Role`, key `(ConvoyId, Vin, PersonId)`). Insurance per vehicle per convoy, voided by a crew change in the same transaction, gating `depart`. Advisory readiness as one pure function. Arrival hands vehicles over for good. Split volunteer identity for UK-data-protection erasure, with an in-place migration checked on a fresh SQL Server. Found and fixed: `nvarchar` VIN parameters scanning the table (deadlocks), and 500s deleting a vehicle or convoy a manifest names. |
+| 12 | Observability | One shared wiring (`UA.Action.Freedom.Telemetry`) for all three services; the workers were previously not instrumented at all. Business metrics (command outcomes, manifest transitions, queue depth/age/dispositions, GMR reasons, worker heartbeats), queue trace *links*, and a span processor that keeps paths, queries, HMRC bodies and `sensitive`-schema SQL out of telemetry. Seven Grafana dashboards. Found and left for a decision: §9 Q14 (retry/dead-letter semantics) and Q15 (App Insights). See the *Observability* section. |

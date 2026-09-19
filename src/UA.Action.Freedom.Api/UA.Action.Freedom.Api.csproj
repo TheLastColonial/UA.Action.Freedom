@@ -14,12 +14,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
-    <PackageReference Include="OpenTelemetry.Api" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.SqlClient" />
     <PackageReference Include="QRCoder" />
     <PackageReference Include="Scalar.AspNetCore.Swashbuckle" />
   </ItemGroup>
@@ -27,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="../UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj" />
     <ProjectReference Include="../UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj" />
+    <ProjectReference Include="../UA.Action.Freedom.Telemetry/UA.Action.Freedom.Telemetry.csproj" />
   </ItemGroup>
 
 </Project>

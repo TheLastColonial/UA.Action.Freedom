@@ -23,6 +23,10 @@ namespace UA.Action.Freedom.ManifestWorker.Documents;
 /// <param name="ManifestId">The manifest reference, printed at the top of the document.</param>
 /// <param name="VehicleRegistration">The plate a border officer reads off the vehicle.</param>
 /// <param name="Lines">One line per box: what is being carried, and roughly where to.</param>
+/// <param name="Traceparent">
+/// W3C trace context of the approval that queued this, so the render's span can link back to it.
+/// Never printed on the document.
+/// </param>
 public sealed record ManifestDocumentRequest(
     string ManifestId,
     string? VehicleRegistration,
@@ -31,7 +35,8 @@ public sealed record ManifestDocumentRequest(
     int CrewAndBagsKg,
     int FuelKg,
     int TotalKg,
-    IReadOnlyList<ManifestDocumentLine> Lines);
+    IReadOnlyList<ManifestDocumentLine> Lines,
+    string? Traceparent = null);
 
 /// <param name="ReceiverRegion">Region-level destination. Never a street or a city address.</param>
 public sealed record ManifestDocumentLine(
