@@ -10,6 +10,7 @@ import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
 import { ConvoyDriversPanel } from './ConvoyDriversPanel';
+import { ConvoyReadinessPanel } from './ConvoyReadinessPanel';
 import { ConvoyVehiclesPanel } from './ConvoyVehiclesPanel';
 import { RouteEditor } from './RouteEditor';
 
@@ -89,6 +90,8 @@ export function ConvoyDetailPage(): JSX.Element {
               </dd>
             </dl>
           </DetailCard>
+
+          <ConvoyReadinessPanel convoyId={convoy.id} />
 
           <Gate policy="convoys:write">
             <span style={{ display: 'flex', gap: 'var(--space-3)' }}>

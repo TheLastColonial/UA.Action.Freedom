@@ -89,3 +89,22 @@ export interface RecordInsuranceRequest {
   coverEnd: string;
   costGbp?: number;
 }
+
+// src/UA.Action.Freedom.Application/Convoys/ReadinessUseCases.cs. Advisory: it says what is
+// missing and blocks nothing.
+export const vehicleReadinessReadModelSchema = z.object({
+  vin: z.string(),
+  plate: z.string(),
+  drivers: z.number().int(),
+  insured: z.boolean(),
+  ready: z.boolean(),
+  reasons: z.array(z.string()),
+});
+
+export const convoyReadinessReadModelSchema = z.object({
+  ready: z.boolean(),
+  routePlanned: z.boolean(),
+  reasons: z.array(z.string()),
+  vehicles: z.array(vehicleReadinessReadModelSchema),
+});
+export type ConvoyReadinessReadModel = z.infer<typeof convoyReadinessReadModelSchema>;

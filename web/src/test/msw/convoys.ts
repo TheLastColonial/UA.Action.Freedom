@@ -242,6 +242,54 @@ export function convoyApi(
       return new HttpResponse(null, { status: 204 });
     }),
 
+    // The same rules as ConvoyReadiness.Assess: two drivers and insurance covering the departure
+    // date per vehicle; a route and at least one vehicle for the convoy.
+    http.get('/convoys/:id/readiness', ({ params }) => {
+      const id = idFrom(params['id']);
+      const convoy = db.get(id);
+      if (!convoy) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const departs = convoy.start.slice(0, 10);
+      const assessed = (vehicles.get(id) ?? []).map((vehicle) => {
+        const policy = insurance.get(driverKey(id, vehicle.vin));
+        const insuranceProblem = !policy
+          ? 'Insurance not recorded'
+          : policy.voided
+            ? 'Insurance voided by a crew change'
+            : policy.coverStart.slice(0, 10) > departs || policy.coverEnd.slice(0, 10) < departs
+              ? 'Insurance does not cover the departure date'
+              : null;
+        const reasons = [
+          ...(vehicle.driverCount >= 2 ? [] : ['Fewer than two drivers']),
+          ...(insuranceProblem ? [insuranceProblem] : []),
+        ];
+        return {
+          vin: vehicle.vin,
+          plate: vehicle.plate,
+          drivers: vehicle.driverCount,
+          insured: insuranceProblem === null,
+          ready: reasons.length === 0,
+          reasons,
+        };
+      });
+      const routePlanned = (routes.get(id) ?? []).length > 0;
+      const notReady = assessed.filter((vehicle) => !vehicle.ready).length;
+      const reasons = [
+        ...(routePlanned ? [] : ['No route planned']),
+        ...(assessed.length > 0 ? [] : ['No vehicles on the truck list']),
+        ...(notReady === 0
+          ? []
+          : [notReady === 1 ? '1 vehicle not ready' : `${String(notReady)} vehicles not ready`]),
+      ];
+      return HttpResponse.json({
+        ready: reasons.length === 0,
+        routePlanned,
+        reasons,
+        vehicles: assessed,
+      });
+    }),
+
     http.post('/convoys/:id/arrive', ({ params }) => {
       const id = idFrom(params['id']);
       const convoy = db.get(id);

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 import { signIn } from './auth';
 import { stackIsUp } from './stack';
@@ -31,22 +32,41 @@ test('@smoke operator plans a convoy, adds a route stop and publishes the truck 
   await expect(page.getByText('Truck list published')).toBeVisible();
 });
 
-test('@smoke a passed vehicle joins a convoy and a dispatcher crews it', async ({ page }) => {
+async function addVolunteer(page: Page, first: string, last: string, drives: boolean) {
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+  await nav.getByRole('link', { name: 'Volunteers' }).click();
+  await page.getByRole('link', { name: 'New volunteer' }).click();
+  await page.getByLabel('First name').fill(first);
+  await page.getByLabel('Last name').fill(last);
+  await page.getByLabel('Date of birth').fill('1985-01-01');
+  if (drives) {
+    await page.getByLabel('Volunteers to drive').check();
+  }
+  await page.getByRole('button', { name: 'Create volunteer' }).click();
+  await expect(page.getByRole('heading', { name: `${first} ${last}` })).toBeVisible();
+}
+
+async function assignCrew(page: Page, role: 'Driver' | 'Passenger', name: string) {
+  await page.getByLabel('Role on E2E 002').selectOption(role);
+  await page.getByLabel(`Add ${role.toLowerCase()} to E2E 002`).selectOption({ label: name });
+  await page.getByRole('button', { name: 'Assign' }).click();
+  await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
+}
+
+test('@smoke a convoy is planned to readiness: passed vehicle, two drivers, a passenger, insurance', async ({
+  page,
+}) => {
   const stamp = String(Date.now());
   const vin = `E2E${stamp}`;
-  const surname = `Driver${stamp}`;
+  const first = `Olena Driver${stamp}`;
+  const second = `Taras Driver${stamp}`;
+  const rider = `Mykola Rider${stamp}`;
 
   // Only the Administrator adds volunteers.
   await signIn(page, 'admin');
-  const adminNav = page.getByRole('navigation', { name: 'Sections' });
-  await adminNav.getByRole('link', { name: 'Volunteers' }).click();
-  await page.getByRole('link', { name: 'New volunteer' }).click();
-  await page.getByLabel('First name').fill('Olena');
-  await page.getByLabel('Last name').fill(surname);
-  await page.getByLabel('Date of birth').fill('1985-01-01');
-  await page.getByLabel('Volunteers to drive').check();
-  await page.getByRole('button', { name: 'Create volunteer' }).click();
-  await expect(page.getByRole('heading', { name: `Olena ${surname}` })).toBeVisible();
+  await addVolunteer(page, 'Olena', `Driver${stamp}`, true);
+  await addVolunteer(page, 'Taras', `Driver${stamp}`, true);
+  await addVolunteer(page, 'Mykola', `Rider${stamp}`, false);
 
   // operator is Purchaser + Mechanic + Dispatcher: add the vehicle, pass it, plan the convoy.
   await signIn(page, 'operator');
@@ -70,13 +90,38 @@ test('@smoke a passed vehicle joins a convoy and a dispatcher crews it', async (
   await page.getByRole('button', { name: 'Create convoy' }).click();
   await expect(page.getByRole('heading', { name: /Convoy #/ })).toBeVisible();
 
+  await page.getByRole('tab', { name: 'Route' }).click();
+  await page.getByRole('button', { name: 'Add stop' }).click();
+  await page.getByLabel('Postcode').fill('M1 1AA');
+  await page.getByRole('button', { name: 'Save route' }).click();
+
   await page.getByRole('tab', { name: 'Vehicles' }).click();
   await page.getByRole('combobox', { name: 'Vehicle' }).fill(vin);
   await page.getByRole('option', { name: new RegExp(vin) }).click();
   await expect(page.getByRole('cell', { name: vin })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Crew' }).click();
-  await page.getByLabel('Add driver to E2E 002').selectOption({ label: `Olena ${surname}` });
-  await page.getByRole('button', { name: 'Assign' }).click();
-  await expect(page.getByRole('cell', { name: `Olena ${surname}`, exact: true })).toBeVisible();
+  await assignCrew(page, 'Driver', first);
+  await assignCrew(page, 'Driver', second);
+  await assignCrew(page, 'Passenger', rider);
+
+  const insurance = page.getByRole('form', { name: 'Insurance for E2E 002' });
+  await insurance.getByLabel('Insurer').fill('Ukraine Aid Mutual');
+  await insurance.getByLabel('Policy number').fill(`E2E-${stamp}`);
+  await insurance.getByLabel('Cover starts').fill('2026-06-30');
+  await insurance.getByLabel('Cover ends').fill('2026-07-10');
+  await insurance.getByRole('button', { name: 'Record insurance' }).click();
+  await expect(page.getByText(/Insured with Ukraine Aid Mutual/)).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByRole('heading', { name: 'Ready to travel' })).toBeVisible();
+
+  // The policy names the crew: standing the passenger down voids it, and readiness notices.
+  await page.getByRole('tab', { name: 'Crew' }).click();
+  await page.getByRole('button', { name: `Remove ${rider}` }).click();
+  await expect(page.getByText(/voided by a crew change/)).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByRole('heading', { name: 'Not ready yet' })).toBeVisible();
+  await expect(page.getByText('E2E 002: Insurance voided by a crew change')).toBeVisible();
 });

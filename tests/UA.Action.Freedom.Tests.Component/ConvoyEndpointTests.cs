@@ -776,4 +776,37 @@ public class ConvoyEndpointTests
         insurance.StatusCode.Should().Be(HttpStatusCode.Conflict);
         repository.DriverIdsOf(Vin).Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task Readiness_lists_what_each_vehicle_still_needs()
+    {
+        var repository = AConvoyWithAVehicleOnIt().WithDriver(Vin, DriverId);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Loader");
+        using var client = api.CreateClient();
+
+        var readiness = await client.GetFromJsonAsync<JsonElement>(
+            $"/convoys/{Id}/readiness", TestContext.Current.CancellationToken);
+
+        readiness.GetProperty("ready").GetBoolean().Should().BeFalse();
+        readiness.GetProperty("routePlanned").GetBoolean().Should().BeFalse();
+        readiness.GetProperty("reasons").EnumerateArray().Select(reason => reason.GetString())
+            .Should().Equal("No route planned", "1 vehicle not ready");
+        var vehicle = readiness.GetProperty("vehicles").EnumerateArray().Single();
+        vehicle.GetProperty("vin").GetString().Should().Be(Vin);
+        vehicle.GetProperty("drivers").GetInt32().Should().Be(1);
+        vehicle.GetProperty("insured").GetBoolean().Should().BeFalse();
+        vehicle.GetProperty("reasons").EnumerateArray().Select(reason => reason.GetString())
+            .Should().Equal("Fewer than two drivers", "Insurance not recorded");
+    }
+
+    [Fact]
+    public async Task The_readiness_of_an_unknown_convoy_is_a_404()
+    {
+        await using var api = FreedomApi.WithConvoys(new InMemoryConvoyRepository(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.GetAsync("/convoys/999/readiness", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }

@@ -35,23 +35,6 @@ test('says when the convoy has no vehicles to crew', async () => {
     .toBeInTheDocument();
 });
 
-test('warns about each vehicle with fewer than two drivers', async () => {
-  const convoys = serve();
-  convoys.vehicles.set(7, [
-    makeConvoyVehicle({ vin: 'VIN-TEST-1', plate: 'PL-001', driverCount: 1 }),
-    makeConvoyVehicle({ vin: 'VIN-TEST-2', plate: 'PL-002', driverCount: 2 }),
-    makeConvoyVehicle({ vin: 'VIN-TEST-3', plate: 'PL-003', driverCount: 0 }),
-  ]);
-
-  const screen = await renderPanel();
-
-  await expect
-    .element(screen.getByText(/have fewer than two drivers/))
-    .toHaveTextContent(
-      'Vehicles VIN-TEST-1 (PL-001), VIN-TEST-3 (PL-003) have fewer than two drivers',
-    );
-});
-
 test('a dispatcher crews a vehicle with a registered driver', async () => {
   const convoys = serve();
   const screen = await renderPanel();

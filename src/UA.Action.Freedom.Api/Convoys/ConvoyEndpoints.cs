@@ -285,6 +285,17 @@ public static class ConvoyEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        convoys.MapGet("/{id:int}/readiness", async (
+            int id,
+            IQueryHandler<GetConvoyReadinessQuery, ConvoyReadinessReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            // Advisory: it says what is missing, it blocks nothing.
+            var readiness = await handler.HandleAsync(new GetConvoyReadinessQuery(id), cancellationToken);
+            return readiness is null ? Results.NotFound() : Results.Ok(readiness);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+
         convoys.MapPost("/{id:int}/arrive", async (
             int id,
             ICommandHandler<ArriveConvoyCommand, ArriveConvoyResult> handler,

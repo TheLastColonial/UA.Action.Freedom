@@ -9,6 +9,7 @@ import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
 import {
   convoyReadModelSchema,
+  convoyReadinessReadModelSchema,
   convoyVehicleReadModelSchema,
   routeStopReadModelSchema,
   vehicleDriverReadModelSchema,
@@ -16,6 +17,7 @@ import {
 } from './schemas/convoys';
 import type {
   ConvoyReadModel,
+  ConvoyReadinessReadModel,
   ConvoyVehicleReadModel,
   CreateConvoyRequest,
   CrewRole,
@@ -293,5 +295,15 @@ export function useArriveConvoy(id: number): UseMutationResult<void, Error, void
       await queryClient.invalidateQueries({ queryKey: qk.convoys.all });
       await queryClient.invalidateQueries({ queryKey: qk.vehicles.all });
     },
+  });
+}
+
+// Readiness is derived from the crew, the insurance and the route, all edited on other tabs, so
+// it is fetched afresh whenever it is shown rather than trusted from the cache.
+export function useConvoyReadiness(id: number): UseQueryResult<ConvoyReadinessReadModel> {
+  return useQuery({
+    queryKey: qk.convoys.readiness(id),
+    queryFn: () => getJson(`${idPath(id)}/readiness`, convoyReadinessReadModelSchema),
+    refetchOnMount: 'always',
   });
 }

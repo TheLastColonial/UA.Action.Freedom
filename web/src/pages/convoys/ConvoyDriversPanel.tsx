@@ -34,26 +34,6 @@ function problemMessage(error: unknown): string | undefined {
 const fullName = (person: { firstName: string; lastName: string }) =>
   `${person.firstName} ${person.lastName}`;
 
-function UndercrewedWarning({
-  vehicles,
-}: {
-  vehicles: readonly ConvoyVehicleReadModel[];
-}): JSX.Element | null {
-  const undercrewed = vehicles.filter((vehicle) => vehicle.driverCount < 2);
-  if (undercrewed.length === 0) {
-    return null;
-  }
-
-  const one = undercrewed.length === 1;
-  const names = undercrewed.map((vehicle) => `${vehicle.vin} (${vehicle.plate})`).join(', ');
-  return (
-    <p role="status">
-      {one ? 'Vehicle' : 'Vehicles'} {names} {one ? 'has' : 'have'} fewer than two drivers assigned.
-      This is advisory only — nothing is blocked.
-    </p>
-  );
-}
-
 export function ConvoyDriversPanel({ convoyId }: ConvoyDriversPanelProps): JSX.Element {
   const vehiclesQuery = useConvoyVehicles(convoyId);
   const peopleQuery = usePeople({ page: 1, pageSize: 200 });
@@ -75,7 +55,6 @@ export function ConvoyDriversPanel({ convoyId }: ConvoyDriversPanelProps): JSX.E
 
   return (
     <div>
-      <UndercrewedWarning vehicles={vehicles} />
       {vehicles.map((vehicle) => (
         <section key={vehicle.vin} aria-label={`Crew for ${vehicle.plate}`}>
           <h3>{vehicle.plate}</h3>
