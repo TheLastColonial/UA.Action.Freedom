@@ -9,6 +9,7 @@ import type { PageParams } from './queryKeys';
 import { vehicleReadModelSchema } from './schemas/vehicles';
 import type {
   CreateVehicleRequest,
+  RecordInspectionRequest,
   UpdateVehicleRequest,
   VehicleReadModel,
 } from './schemas/vehicles';
@@ -33,6 +34,10 @@ export function createVehicle(body: CreateVehicleRequest): Promise<CreatedResour
 
 export function updateVehicle(vin: string, body: UpdateVehicleRequest): Promise<void> {
   return put204(vinPath(vin), body);
+}
+
+export function recordInspection(vin: string, body: RecordInspectionRequest): Promise<void> {
+  return put204(`${vinPath(vin)}/inspection`, body);
 }
 
 export function deleteVehicle(vin: string): Promise<void> {
@@ -71,6 +76,19 @@ export function useUpdateVehicle(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: UpdateVehicleRequest) => updateVehicle(vin, body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.vehicles.all });
+      await queryClient.invalidateQueries({ queryKey: qk.vehicles.detail(vin) });
+    },
+  });
+}
+
+export function useRecordInspection(
+  vin: string,
+): UseMutationResult<void, Error, RecordInspectionRequest> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RecordInspectionRequest) => recordInspection(vin, body),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.vehicles.all });
       await queryClient.invalidateQueries({ queryKey: qk.vehicles.detail(vin) });

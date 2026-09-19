@@ -47,6 +47,16 @@ public class Vehicle
     public bool Servicing { get; init; }
 
     /// <summary>
+    /// Current inspection status: Pending, Inspecting, Passed, or Failed
+    /// </summary>
+    public InspectionStatus InspectionStatus { get; init; } = InspectionStatus.Pending;
+
+    /// <summary>
+    /// Notes from the mechanic about defects or issues found during inspection
+    /// </summary>
+    public string? InspectionNotes { get; init; }
+
+    /// <summary>
     /// Year of manufacture
     /// </summary>
     public int Year { get; init; }
@@ -117,4 +127,22 @@ public enum FuelType
     Diesel,
     Electric,
     Hybrid
+}
+
+/// <summary>
+/// Status of vehicle inspection during servicing
+/// </summary>
+public enum InspectionStatus
+{
+    /// <summary>Vehicle has not been inspected yet</summary>
+    Pending = 0,
+
+    /// <summary>Vehicle is currently being inspected by the mechanic</summary>
+    Inspecting = 1,
+
+    /// <summary>Vehicle has passed inspection and is ready for convoy</summary>
+    Passed = 2,
+
+    /// <summary>Vehicle has failed inspection and is not ready for convoy</summary>
+    Failed = 3
 }

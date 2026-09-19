@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeConvoy } from '../../test/factories/convoy';
 import { makeManifest } from '../../test/factories/manifest';
 import { convoyApi } from '../../test/msw/convoys';
@@ -15,13 +14,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'manifests', children: manifestRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('renders the overview and Not found for an unknown reference', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'D1', vin: 'VIN9' })]).handlers);
@@ -96,16 +88,16 @@ test('the tabs open the Status, Teams, Cargo and Weight panels', async () => {
     roles: ['Dispatcher'],
   });
 
-  await screen.getByRole('button', { name: 'Status' }).click();
+  await screen.getByRole('tab', { name: 'Status' }).click();
   await expect.element(screen.getByRole('heading', { name: /Status:/ })).toBeInTheDocument();
 
-  await screen.getByRole('button', { name: 'Teams' }).click();
+  await screen.getByRole('tab', { name: 'Teams' }).click();
   await expect.element(screen.getByRole('heading', { name: 'Driver teams' })).toBeInTheDocument();
 
-  await screen.getByRole('button', { name: 'Cargo' }).click();
+  await screen.getByRole('tab', { name: 'Cargo' }).click();
   await expect.element(screen.getByRole('heading', { name: 'Cargo' })).toBeInTheDocument();
 
-  await screen.getByRole('button', { name: 'Weight' }).click();
+  await screen.getByRole('tab', { name: 'Weight' }).click();
   await expect
     .element(screen.getByRole('heading', { name: 'Border-check weight' }))
     .toBeInTheDocument();

@@ -73,7 +73,7 @@ public class TruckListHandlerTests
         repository.GetByIdAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>())
             .Returns(ConvoyTestData.AReadModel());
         repository.AssignVehicleAsync(ConvoyTestData.Id, "WVWZZZ1JZXW000001", Arg.Any<CancellationToken>())
-            .Returns(true);
+            .Returns(AssignVehicleResult.Assigned);
         var handler = new AssignVehicleToConvoyHandler(repository);
 
         var outcome = await handler.HandleAsync(
@@ -121,7 +121,7 @@ public class TruckListHandlerTests
         repository.GetByIdAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>())
             .Returns(ConvoyTestData.AReadModel());
         repository.AssignVehicleAsync(ConvoyTestData.Id, "NOSUCHVIN", Arg.Any<CancellationToken>())
-            .Returns(false);
+            .Returns(AssignVehicleResult.VehicleNotFound);
         var handler = new AssignVehicleToConvoyHandler(repository);
 
         var outcome = await handler.HandleAsync(
@@ -142,5 +142,37 @@ public class TruckListHandlerTests
             new AssignVehicleToConvoyCommand(ConvoyTestData.Id, "WVWZZZ1JZXW000001"), CancellationToken.None);
 
         outcome.Should().Be(AssignVehicleOutcome.ConvoyNotFound);
+    }
+
+    [Fact]
+    public async Task Refuses_a_vehicle_that_has_not_passed_its_inspection()
+    {
+        var repository = Substitute.For<IConvoyRepository>();
+        repository.GetByIdAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>())
+            .Returns(ConvoyTestData.AReadModel());
+        repository.AssignVehicleAsync(ConvoyTestData.Id, "WVWZZZ1JZXW000001", Arg.Any<CancellationToken>())
+            .Returns(AssignVehicleResult.NotPassedInspection);
+        var handler = new AssignVehicleToConvoyHandler(repository);
+
+        var outcome = await handler.HandleAsync(
+            new AssignVehicleToConvoyCommand(ConvoyTestData.Id, "WVWZZZ1JZXW000001"), CancellationToken.None);
+
+        outcome.Should().Be(AssignVehicleOutcome.VehicleNotPassedInspection);
+    }
+
+    [Fact]
+    public async Task Refuses_a_vehicle_that_is_already_on_another_convoy()
+    {
+        var repository = Substitute.For<IConvoyRepository>();
+        repository.GetByIdAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>())
+            .Returns(ConvoyTestData.AReadModel());
+        repository.AssignVehicleAsync(ConvoyTestData.Id, "WVWZZZ1JZXW000001", Arg.Any<CancellationToken>())
+            .Returns(AssignVehicleResult.OnAnotherConvoy);
+        var handler = new AssignVehicleToConvoyHandler(repository);
+
+        var outcome = await handler.HandleAsync(
+            new AssignVehicleToConvoyCommand(ConvoyTestData.Id, "WVWZZZ1JZXW000001"), CancellationToken.None);
+
+        outcome.Should().Be(AssignVehicleOutcome.VehicleOnAnotherConvoy);
     }
 }

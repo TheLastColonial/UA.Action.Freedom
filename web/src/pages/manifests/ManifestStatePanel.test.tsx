@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeConvoy } from '../../test/factories/convoy';
 import { makeManifest } from '../../test/factories/manifest';
 import { convoyApi } from '../../test/msw/convoys';
@@ -8,13 +7,6 @@ import { manifestApi } from '../../test/msw/manifests';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { ManifestStatePanel } from './ManifestStatePanel';
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('from Created without a convoy: Reject is offered, Propose is disabled with a reason', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'M1', status: 'Created' })]).handlers);
@@ -107,4 +99,33 @@ test('an illegal transition surfaces the API detail', async () => {
   await expect
     .element(screen.getByText('A manifest cannot move to that state from the one it is in.'))
     .toBeInTheDocument();
+});
+
+test('a vehicle without insurance does not depart, and the reason is shown', async () => {
+  const manifest = makeManifest({ id: 'M9', status: 'Ready', convoyId: 7, vin: 'VIN-9' });
+  const mApi = manifestApi([manifest], { publishedConvoyIds: [7] });
+  worker.use(...mApi.handlers);
+
+  const screen = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
+    roles: ['Dispatcher'],
+  });
+
+  await screen.getByRole('button', { name: 'Depart' }).click();
+
+  await expect.element(screen.getByRole('alert')).toHaveTextContent('insurance');
+  expect(mApi.db.get('M9')?.status).toBe('Ready');
+});
+
+test('an insured vehicle departs', async () => {
+  const manifest = makeManifest({ id: 'M10', status: 'Ready', convoyId: 7, vin: 'VIN-10' });
+  const mApi = manifestApi([manifest], { publishedConvoyIds: [7], insuredVins: ['VIN-10'] });
+  worker.use(...mApi.handlers);
+
+  const screen = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
+    roles: ['Dispatcher'],
+  });
+
+  await screen.getByRole('button', { name: 'Depart' }).click();
+
+  await expect.poll(() => mApi.db.get('M10')?.status).toBe('InTransit');
 });

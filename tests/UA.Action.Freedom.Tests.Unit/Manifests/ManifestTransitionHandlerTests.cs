@@ -25,16 +25,32 @@ public class ManifestTransitionHandlerTests
         bool frozen = false,
         int? convoyId = ConvoyId) => new(
         Id,
-        Vin: "WVWZZZ1JZXW000001",
+        Vin: Vin,
         ConvoyId: convoyId,
         Status: status,
         DeliveryNotes: null,
         FerryBookingComplete: false,
         GmrSubmittedAt: frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
 
-    private static IConvoyRepository AConvoyWithPublishedTruckList(bool published = true)
+    private const string Vin = "WVWZZZ1JZXW000001";
+
+    private static VehicleInsuranceReadModel APolicy(
+        DateTime? coverStart = null, DateTime? coverEnd = null, DateTime? voidedAt = null) => new(
+        ConvoyId, Vin, "Ukraine Aid Mutual", "POL-1",
+        coverStart ?? DateTime.UtcNow.Date.AddDays(-7), coverEnd ?? DateTime.UtcNow.Date.AddDays(30),
+        400m, "operator-sub", DateTime.UtcNow.AddDays(-7), voidedAt);
+
+    /// <summary>
+    /// A convoy with its truck list published and the vehicle insured and in cover — the state
+    /// every test here assumes unless it is about one of those.
+    /// </summary>
+    private static IConvoyRepository AConvoyWithPublishedTruckList(bool published = true) =>
+        AConvoyInsuredBy(APolicy(), published);
+
+    private static IConvoyRepository AConvoyInsuredBy(VehicleInsuranceReadModel? policy, bool published = true)
     {
         var convoys = Substitute.For<IConvoyRepository>();
+        convoys.GetInsuranceAsync(ConvoyId, Vin, Arg.Any<CancellationToken>()).Returns(policy);
         convoys.GetByIdAsync(ConvoyId, Arg.Any<CancellationToken>()).Returns(
             new ConvoyReadModel(
                 ConvoyId,
@@ -206,6 +222,53 @@ public class ManifestTransitionHandlerTests
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.Rejected), CancellationToken.None);
+
+        outcome.Should().Be(TransitionManifestOutcome.Transitioned);
+    }
+
+    [Fact]
+    public async Task A_vehicle_departs_when_its_insurance_is_recorded_and_in_cover()
+    {
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Ready, frozen: true));
+        var handler = new TransitionManifestHandler(repository, AConvoyInsuredBy(APolicy()));
+
+        var outcome = await handler.HandleAsync(
+            new TransitionManifestCommand(Id, ManifestStatus.InTransit), TestContext.Current.CancellationToken);
+
+        outcome.Should().Be(TransitionManifestOutcome.Transitioned);
+    }
+
+    public static TheoryData<string, VehicleInsuranceReadModel?> UninsuredPolicies => new()
+    {
+        { "never recorded", null },
+        { "voided by a crew change", APolicy(voidedAt: DateTime.UtcNow.AddHours(-1)) },
+        { "cover already ended", APolicy(coverEnd: DateTime.UtcNow.Date.AddDays(-1)) },
+        { "cover not yet started", APolicy(coverStart: DateTime.UtcNow.Date.AddDays(1)) },
+    };
+
+    [Theory]
+    [MemberData(nameof(UninsuredPolicies))]
+    public async Task A_vehicle_does_not_depart_without_insurance_in_cover(string why, VehicleInsuranceReadModel? policy)
+    {
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Ready, frozen: true));
+        var handler = new TransitionManifestHandler(repository, AConvoyInsuredBy(policy));
+
+        var outcome = await handler.HandleAsync(
+            new TransitionManifestCommand(Id, ManifestStatus.InTransit), TestContext.Current.CancellationToken);
+
+        outcome.Should().Be(TransitionManifestOutcome.NotInsured, why);
+        await repository.DidNotReceive().TransitionAsync(
+            Arg.Any<string>(), Arg.Any<ManifestStatus>(), Arg.Any<ManifestStatus>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Insurance_is_only_checked_on_departure()
+    {
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Preparing, frozen: true));
+        var handler = new TransitionManifestHandler(repository, AConvoyInsuredBy(policy: null));
+
+        var outcome = await handler.HandleAsync(
+            new TransitionManifestCommand(Id, ManifestStatus.Ready), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(TransitionManifestOutcome.Transitioned);
     }

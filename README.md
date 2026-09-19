@@ -153,7 +153,7 @@ through the browser.
 
 **Test logins** (all have password `password`):
 - `admin` — Administrator role
-- `operator` — Dispatcher, Loader, Purchaser roles
+- `operator` — Dispatcher, Loader, Mechanic, Purchaser roles
 - `groundofficer` — GroundOfficer role (segregated access to delivery addresses)
 
 ### Container images
@@ -181,11 +181,16 @@ to force a run.
 ### API Endpoints
 
 Core resource endpoints:
-- `GET|POST /vehicles` — Vehicle inventory (natural key: VIN), including optional cargo capacity (max weight, dimensions)
-- `GET|POST /people` — Volunteers & drivers
+- `GET|POST /vehicles` — Vehicle inventory (natural key: VIN), including optional cargo capacity (max weight, dimensions); writes are Administrator, Purchaser and Mechanic (`vehicles:write`)
+  - `PUT /vehicles/{vin}/inspection` — Record the servicing inspection (`Pending`/`Inspecting`/`Passed`/`Failed` + notes) — **Administrator and Mechanic only** (`vehicles:service`). The ordinary `PUT /vehicles/{vin}` cannot change it — nor which convoy the vehicle is on, which only `/convoys/{id}/vehicles/{vin}` changes
+- `GET|POST /people` — Volunteers & drivers; `DELETE /people/{id}` **erases** a volunteer (their personal data is deleted; past records show "Former volunteer"), refused with 409 while they are on a live crew or manifest team
 - `GET|POST /convoys` — Convoy groups with routes
   - `PUT|GET /convoys/{id}/route` — Ordered stop list
-  - `PUT|DELETE /convoys/{id}/vehicles/{vin}` — Vehicle assignment
+  - `PUT|DELETE /convoys/{id}/vehicles/{vin}` — Vehicle assignment; only a vehicle that has **Passed** its inspection, and is not on another convoy, may join (409 otherwise)
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/drivers/{personId}` — Vehicle crew: an optional `{ "role": "Driver" | "Passenger" }` body; a person takes one seat per convoy (**Dispatcher only** for `PUT`/`DELETE`; `GET` is included in `convoys:read`)
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/insurance` — The vehicle's insurance for this convoy; any crew change voids it, and a manifest cannot depart without it (`convoys:write`)
+  - `GET /convoys/{id}/readiness` — Advisory readiness: two drivers and insurance per vehicle, and a route (`convoys:read`)
+  - `POST /convoys/{id}/arrive` — Mark arrived once every vehicle has a finished manifest; Delivered/Lost vehicles are handed over for good, Returned ones released (`convoys:write`)
   - `POST /convoys/{id}/publish-truck-list` — Lock vehicle manifest
 - `GET|POST /receivers` — Delivery contacts (reference/org/region)
   - `GET|PUT /receivers/{ref}/detail` — **GroundOfficer only**: delivery address + contact
@@ -229,14 +234,15 @@ printed label, not the operator UI.
 - Sign-in is **Authorization Code + PKCE** against the public Keycloak client `freedom-spa`
   (`iac/tofu/keycloak.tf`); the resulting JWT is sent as `Authorization: Bearer`. The API is
   unchanged — still a pure JWT resource server.
-- Nav and actions are gated by the same 18-policy matrix the API enforces
+- Nav and actions are gated by the same 20-policy matrix the API enforces
   (`docs/local-authentication.md`); the API remains the enforcement point. Receiver street
   addresses are never rendered on any print/verification view.
 
 ### Authentication & Authorization
 
 - JWT bearer tokens via OIDC (Keycloak locally, Microsoft Entra External ID in Azure)
-- Role-based policies: `Administrator`, `Dispatcher`, `Loader`, `Purchaser`, `GroundOfficer`
+- Role-based policies: `Administrator`, `Dispatcher`, `Loader`, `Purchaser`, `Mechanic`, `GroundOfficer`
+- `Mechanic` is vehicles-only: it edits the fleet and records servicing inspections (`vehicles:service`, shared with Administrator), and nothing else
 - **Critical**: `GroundOfficer` has segregated access to receiver delivery addresses only
 
 ### Security Boundaries
@@ -258,9 +264,40 @@ Manifests follow a 10-state model (see `docs/manifest-status.puml`):
 - **Dapper** for SQL mapping (typed constructor, rows map to primary constructor CLR types)
 - One repository per slice with dedicated `I*Repository` port
 - **CQRS read models** (flat shapes) separate from domain objects
-- **Transactions** only where required: route replacement, and QR-label re-issue
-  (`BoxRepository.IssueQrCodeAsync` revokes the old row and inserts the new one atomically —
-  see below)
+- **Transactions** only where one fact spans several rows: route replacement; a vehicle leaving
+  a convoy or a convoy being cancelled (crew and insurance go too); a crew change (it voids the
+  vehicle's insurance); convoy arrival (handover and release); volunteer add and erasure; receiver
+  detail resolve + audit; QR-label re-issue and bay assignment. See CLAUDE.md for the list.
+- **VIN and manifest keys are `varchar(32)`** — pass them with `SqlKey.Of(...)`. Dapper's default
+  `nvarchar` would make every key lookup a table scan under the SQL collation, and it caused
+  deadlocks before it was fixed.
+
+### Convoy crew, insurance, readiness and arrival
+
+- **Crew** — drivers (registered to drive) and passengers (any volunteer); one seat per person per
+  convoy, enforced by `UQ_VehicleDriver_Convoy_Person`.
+- **Insurance** — per vehicle per convoy, naming the crew. A crew change voids it in the same
+  transaction; `TransitionManifestHandler` refuses `depart` without insurance in cover.
+- **Readiness** — `ConvoyReadiness.Assess`, one pure function, advisory only.
+- **Arrival** — allowed once every vehicle has a finished manifest; stamps `Convoy.ArrivedAt`, hands
+  Delivered/Lost vehicles over (`Vehicle.HandedOverAt`, never offered again) and releases Returned
+  ones, in one transaction. An arrived convoy's crew and insurance no longer change.
+
+### Volunteer erasure (split identity)
+
+`dbo.Person` holds only the anonymous key every foreign key points at; `dbo.PersonDetail` holds the
+personal data. Erasure deletes the detail (UK data protection) and removes the key too unless past
+records name it — they then show "Former volunteer". Refused while the volunteer is still on a live
+crew or manifest team.
+
+### Vehicle servicing and the convoy gate
+
+A vehicle's **inspection status** is the Mechanic's result, recorded through its own route
+(`PUT /vehicles/{vin}/inspection`) and absent from the ordinary vehicle `PUT` and `INSERT`, so an
+edit cannot set, clear or forge it. It gates convoy assignment: `ConvoyRepository.AssignVehicleAsync`
+puts the rule in the `UPDATE` itself (`WHERE InspectionStatus = Passed AND (ConvoyId IS NULL OR
+ConvoyId = @convoyId)`), so the database settles a race with a Mechanic changing the result, and a
+vehicle already on one convoy is never silently moved to another.
 
 ### Box QR labels
 
@@ -322,7 +359,11 @@ To add a new domain concept (e.g., a new `Donation` slice):
 4. Implement Dapper repository in `src/UA.Action.Freedom.Data/Donations/`
 5. Create endpoints in `src/UA.Action.Freedom.Api/Donations/DonationEndpoints.cs`
 6. Register in `Program.cs` via `AddFreedomApplication()` and `AddFreedomData()`
-7. Add test suites: Unit, Component, Integration, and BDD feature files
+7. Add test suites: Unit, Component, Integration, and BDD feature files. Integration tests use
+   the shared `SqlTestDatabase` helper (connects as `freedom_app`, skips when the database is
+   down, fails instead when `FREEDOM_REQUIRE_INTEGRATION=true`). Component tests use
+   `FreedomApi.With*`; the `InMemory*Repository` fake must enforce the same rules as the SQL —
+   a fake kinder than the database lets a test pass that production fails.
 8. Update schema in `iac/local/sql/001-schemas.sql` and re-run `tofu apply`
 9. Build the operator-UI slice — see the 8-step recipe in `web/README.md` (Zod schemas,
    `api/<slice>.ts` hooks, pages + routes, MSW handlers + factory, a Vitest Browser test per
@@ -342,6 +383,8 @@ See `docs/gotchas-and-open-questions.md` for:
 - Integration test deadlock (assembly parallelization disabled)
 - HMRC PPNS enum deserialization bug (codegen issue, affects real HMRC)
 - SQL `QUOTED_IDENTIFIER` quirks with sqlcmd
+- MSW mocks must mirror the API contract — a mock that accepts fields the API ignores hid the
+  lost-inspection bug for a whole feature
 
 ## Contributing
 

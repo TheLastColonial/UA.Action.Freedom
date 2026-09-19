@@ -1,9 +1,7 @@
 using AwesomeAssertions;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
 using UA.Action.Freedom.Application.Boxes;
-using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Data.Boxes;
+using static UA.Action.Freedom.Tests.Integration.SqlTestDatabase;
 
 namespace UA.Action.Freedom.Tests.Integration.Boxes;
 
@@ -19,72 +17,25 @@ namespace UA.Action.Freedom.Tests.Integration.Boxes;
 [Trait("Category", "Integration")]
 public class BoxBayRepositoryTests
 {
-    private const string DefaultLocalConnectionString =
-        "Server=localhost,1433;Database=Freedom;User Id=freedom_app;Password=Local_Freedom_App_1;TrustServerCertificate=True;Encrypt=False;Connect Timeout=3";
-
-    private static string ConnectionString =>
-        Environment.GetEnvironmentVariable("ConnectionStrings__Freedom") ?? DefaultLocalConnectionString;
-
     private static async Task<BoxRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await using var connection = new SqlConnection(ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(1) FROM dbo.BoxBayAssignment";
-            await command.ExecuteScalarAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            Assert.Skip($"Freedom database with dbo.BoxBayAssignment is not reachable: {exception.Message}");
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Freedom"] = ConnectionString })
-            .Build();
-
-        return new BoxRepository(new SqlConnectionFactory(configuration));
+        await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.BoxBayAssignment", cancellationToken);
+        return new BoxRepository(ConnectionFactory());
     }
 
     private static BoxReadModel ANewBox() => new(
         Id: 0, WeightKg: 0, WidthCm: null, DepthCm: null, HeightCm: null, ReceiverRef: null,
         LocationId: null, ValidatedByPersonId: null, ValidatedAt: null);
 
-    private static async Task<Guid> AddVolunteerAsync()
-    {
-        var id = Guid.NewGuid();
-        await ExecuteAsync(
-            """
-            INSERT INTO dbo.Person (Id, FirstName, LastName, DateOfBirth, Joined)
-            VALUES (@id, 'Integration', 'Loader', '1990-01-01', '2024-01-01')
-            """,
-            ("@id", id));
-        return id;
-    }
+    private static Task<Guid> AddVolunteerAsync() => SqlTestDatabase.AddVolunteerAsync("Integration", "Loader", isDriver: false);
 
-    private static async Task<int> AddLocationAsync()
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            "INSERT INTO dbo.Location (Name) VALUES ('Integration Depot'); SELECT CAST(SCOPE_IDENTITY() AS int);";
-        return Convert.ToInt32(await command.ExecuteScalarAsync());
-    }
+    private static Task<int> AddLocationAsync() => ScalarAsync(
+        "INSERT INTO dbo.Location (Name) VALUES ('Integration Depot'); SELECT CAST(SCOPE_IDENTITY() AS int);");
 
-    private static async Task<int> AddBayAsync(int locationId, string code)
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            "INSERT INTO dbo.Bay (LocationId, Code) VALUES (@locationId, @code); SELECT CAST(SCOPE_IDENTITY() AS int);";
-        command.Parameters.AddWithValue("@locationId", locationId);
-        command.Parameters.AddWithValue("@code", code);
-        return Convert.ToInt32(await command.ExecuteScalarAsync());
-    }
+    private static Task<int> AddBayAsync(int locationId, string code) => ScalarAsync(
+        "INSERT INTO dbo.Bay (LocationId, Code) VALUES (@locationId, @code); SELECT CAST(SCOPE_IDENTITY() AS int);",
+        ("@locationId", locationId),
+        ("@code", code));
 
     private static Task RemoveBoxAsync(int id) =>
         ExecuteAsync("DELETE FROM dbo.Box WHERE Id = @id", ("@id", id));
@@ -94,36 +45,6 @@ public class BoxBayRepositoryTests
 
     private static Task RemoveVolunteerAsync(Guid id) =>
         ExecuteAsync("DELETE FROM dbo.Person WHERE Id = @id", ("@id", id));
-
-    private static async Task ExecuteAsync(string sql, params (string Name, object Value)[] parameters)
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-
-        foreach (var (name, value) in parameters)
-        {
-            command.Parameters.AddWithValue(name, value);
-        }
-
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<int> ScalarAsync(string sql, params (string Name, object Value)[] parameters)
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-
-        foreach (var (name, value) in parameters)
-        {
-            command.Parameters.AddWithValue(name, value);
-        }
-
-        return Convert.ToInt32(await command.ExecuteScalarAsync());
-    }
 
     [Fact]
     public async Task Assigning_a_bay_and_reading_it_back_as_the_active_one()

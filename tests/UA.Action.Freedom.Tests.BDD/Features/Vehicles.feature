@@ -1,7 +1,9 @@
 Feature: Vehicles API
     The deployed Freedom service exposes CRUD for donated vehicles at /vehicles.
     VIN is the natural key, reads are open to every operational role, writes are
-    limited to Purchaser and Administrator, and the Ground Officer is excluded.
+    limited to Administrator, Purchaser and Mechanic, and the Ground Officer is excluded.
+    The servicing inspection is recorded through its own route by a Mechanic or
+    Administrator, and an ordinary edit cannot change it.
 
     These scenarios run against the running containers (the edge on
     http://localhost:8080, Keycloak on http://localhost:8081) and skip themselves
@@ -103,3 +105,36 @@ Scenario: Deleting an unknown vehicle is a 404
     Given I am authenticated as "operator"
     When I DELETE "/vehicles/NOSUCHVIN0000BDD1"
     Then the response status is 404
+
+Scenario: A mechanic records a vehicle's inspection and it is read back
+    Given I am authenticated as "operator"
+    And a vehicle exists with VIN "WDB9066331S0BDD01"
+    When I PUT "/vehicles/WDB9066331S0BDD01/inspection" with body:
+        """
+        { "status": "Failed", "notes": "Nearside rear tyre below legal tread" }
+        """
+    Then the response status is 204
+    When I GET "/vehicles/WDB9066331S0BDD01"
+    Then the response body field "inspectionStatus" is "Failed"
+    And the response body field "inspectionNotes" is "Nearside rear tyre below legal tread"
+
+Scenario: Editing a vehicle leaves its inspection alone
+    Given I am authenticated as "operator"
+    And a vehicle exists with VIN "WDB9066331S0BDD01"
+    And the vehicle "WDB9066331S0BDD01" has passed its inspection
+    When I PUT "/vehicles/WDB9066331S0BDD01" with body:
+        """
+        { "plate": "UA99ACT", "year": 2014, "fuel": "Diesel", "transmission": "Manual", "weightKg": 2200, "inspectionStatus": "Failed" }
+        """
+    Then the response status is 204
+    When I GET "/vehicles/WDB9066331S0BDD01"
+    Then the response body field "plate" is "UA99ACT"
+    And the response body field "inspectionStatus" is "Passed"
+
+Scenario: A ground officer may not record an inspection
+    Given I am authenticated as "groundofficer"
+    When I PUT "/vehicles/WDB9066331S0BDD01/inspection" with body:
+        """
+        { "status": "Passed" }
+        """
+    Then the response status is 403

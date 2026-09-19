@@ -1,3 +1,5 @@
+using UA.Action.Freedom.Domain;
+
 namespace UA.Action.Freedom.Application.Convoys;
 
 /// <summary>
@@ -12,8 +14,15 @@ public sealed record ConvoyReadModel(
     int Id,
     DateTime Start,
     DateTime ExpectedEnd,
-    DateTime? TruckListPublishedAt)
+    DateTime? TruckListPublishedAt,
+    DateTime? ArrivedAt = null)
 {
+    /// <summary>
+    /// Whether the convoy has arrived. After that nothing about it changes — its vehicles are
+    /// handed over or released, and its crew and insurance are history.
+    /// </summary>
+    public bool Arrived => this.ArrivedAt is not null;
+
     /// <summary>
     /// Whether the set of vehicles is closed. See <c>docs/process.puml</c>: manifests are
     /// proposed against a published truck list, so publication fixes what is on it.
@@ -35,6 +44,12 @@ public sealed record RouteStopReadModel(
 
 /// <summary>
 /// A vehicle as it appears on a convoy's truck list — enough to recognise it and to add up a
-/// border-check weight, not the whole vehicle record.
+/// border-check weight, not the whole vehicle record. The crew counts are for planning: a vehicle
+/// is ready with two drivers, and passengers do not count towards that.
 /// </summary>
-public sealed record ConvoyVehicleReadModel(string Vin, string Plate, int WeightKg);
+public sealed record ConvoyVehicleReadModel(string Vin, string Plate, int WeightKg, int DriverCount, int PassengerCount);
+
+/// <summary>
+/// A crew member of a vehicle on one convoy — a driver or a passenger.
+/// </summary>
+public sealed record VehicleDriverReadModel(Guid PersonId, string FirstName, string LastName, CrewRole Role);

@@ -15,8 +15,18 @@ public static class AuthenticationExtensions
     /// <summary>Read any vehicle — every operational role.</summary>
     public const string VehiclesRead = "vehicles:read";
 
-    /// <summary>Create, change or remove a vehicle — Purchaser and Administrator only.</summary>
+    /// <summary>Create, change or remove a vehicle — Administrator, Purchaser and Mechanic.</summary>
     public const string VehiclesWrite = "vehicles:write";
+
+    /// <summary>
+    /// Record a vehicle's servicing inspection — Administrator and Mechanic.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="VehiclesWrite"/> because the result is what decides whether a
+    /// vehicle may join a convoy: a Purchaser who can edit a vehicle's details cannot also pass
+    /// it as roadworthy (docs/domain/key-concepts.md § Mechanic).
+    /// </remarks>
+    public const string VehiclesService = "vehicles:service";
 
     /// <summary>Read the volunteer roster — every operational role.</summary>
     public const string PeopleRead = "people:read";
@@ -115,12 +125,29 @@ public static class AuthenticationExtensions
     /// </remarks>
     public const string ManifestsApprove = "manifests:approve";
 
+    /// <summary>
+    /// Assign or unassign a driver to/from a vehicle on a convoy — Dispatcher only.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than <see cref="ConvoysWrite"/> (which also allows Administrator): crewing
+    /// vehicles is day-to-day convoy coordination, which is what the Dispatcher role exists for
+    /// (docs/domain/key-concepts.md § Roles). Every operational role can still read the crew
+    /// list via <see cref="ConvoysRead"/>.
+    /// </remarks>
+    public const string ConvoysAssignDrivers = "convoys:assign-drivers";
+
     private const string RoleClaimType = "roles";
 
     private const string Administrator = "Administrator";
     private const string Purchaser = "Purchaser";
     private const string Dispatcher = "Dispatcher";
     private const string Loader = "Loader";
+
+    /// <summary>
+    /// Vehicles only: reads and edits the fleet and records servicing inspections. Absent from
+    /// every other policy — a Mechanic has no reason to see convoys, cargo or volunteers.
+    /// </summary>
+    private const string Mechanic = "Mechanic";
 
     /// <summary>
     /// The only role that sees full receiver detail. Deliberately absent from every other
@@ -171,9 +198,11 @@ public static class AuthenticationExtensions
         services
             .AddAuthorizationBuilder()
             .AddPolicy(VehiclesRead, policy =>
-                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader, Mechanic))
             .AddPolicy(VehiclesWrite, policy =>
-                policy.RequireRole(Administrator, Purchaser))
+                policy.RequireRole(Administrator, Purchaser, Mechanic))
+            .AddPolicy(VehiclesService, policy =>
+                policy.RequireRole(Administrator, Mechanic))
             .AddPolicy(PeopleRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(PeopleWrite, policy =>
@@ -182,6 +211,8 @@ public static class AuthenticationExtensions
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(ConvoysWrite, policy =>
                 policy.RequireRole(Administrator, Dispatcher))
+            .AddPolicy(ConvoysAssignDrivers, policy =>
+                policy.RequireRole(Dispatcher))
             .AddPolicy(ReceiversRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader, GroundOfficer))
             .AddPolicy(ReceiversWrite, policy =>

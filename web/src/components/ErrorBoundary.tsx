@@ -1,6 +1,8 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 
+import { Button } from './Button';
+
 interface Props {
   children: ReactNode;
 }
@@ -28,14 +30,14 @@ export class ErrorBoundary extends Component<Props, State> {
         <section role="alert">
           <h1>Something went wrong</h1>
           <p>The page could not be displayed. Reloading usually clears it.</p>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={() => {
               window.location.reload();
             }}
           >
             Reload
-          </button>
+          </Button>
         </section>
       );
     }

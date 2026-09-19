@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { convoyApi } from '../../test/msw/convoys';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
@@ -11,13 +10,6 @@ const routes: RouteObject[] = [
   { path: '/', element: <div>home</div> },
   { path: 'convoys', children: convoyRoutes },
 ];
-
-beforeEach(() => {
-  resetApiClient();
-});
-afterEach(() => {
-  resetApiClient();
-});
 
 test('rejects an arrival before departure', async () => {
   worker.use(...convoyApi([]).handlers);

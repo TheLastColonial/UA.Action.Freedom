@@ -1,5 +1,4 @@
 import type { JSX } from 'react';
-import { useState } from 'react';
 
 import { useAssignVehicle, useConvoyVehicles, useUnassignVehicle } from '../../api/convoys';
 import { ApiDomainProblem } from '../../api/problem';
@@ -8,6 +7,7 @@ import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import type { ConvoyVehicleReadModel } from '../../api/schemas/convoys';
+import { VehicleSearchDropdown } from '../../components/form/VehicleSearchDropdown';
 
 interface ConvoyVehiclesPanelProps {
   convoyId: number;
@@ -18,7 +18,6 @@ export function ConvoyVehiclesPanel({ convoyId, disabled }: ConvoyVehiclesPanelP
   const query = useConvoyVehicles(convoyId);
   const assign = useAssignVehicle(convoyId);
   const unassign = useUnassignVehicle(convoyId);
-  const [vin, setVin] = useState('');
 
   if (query.isPending) {
     return <PageSkeleton />;
@@ -27,7 +26,8 @@ export function ConvoyVehiclesPanel({ convoyId, disabled }: ConvoyVehiclesPanelP
     return <p role="alert">The convoy vehicles could not be loaded.</p>;
   }
 
-  const rows: readonly ConvoyVehicleReadModel[] = 'parentMissing' in query.data ? [] : query.data;
+  const rows = 'parentMissing' in query.data ? [] : query.data;
+  const assignedVins = rows.map((v) => v.vin);
 
   const problemMessage = (error: unknown) =>
     error instanceof ApiDomainProblem ? (error.detail ?? error.message) : undefined;
@@ -72,32 +72,15 @@ export function ConvoyVehiclesPanel({ convoyId, disabled }: ConvoyVehiclesPanelP
       />
 
       {!disabled ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (vin.trim().length > 0) {
-              assign.mutate(vin.trim(), {
-                onSuccess: () => {
-                  setVin('');
-                },
-              });
-            }
-          }}
-          style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'end' }}
-        >
-          <label style={{ display: 'flex', flexDirection: 'column' }}>
-            VIN to assign
-            <input
-              value={vin}
-              onChange={(event) => {
-                setVin(event.target.value);
-              }}
-            />
-          </label>
-          <Button type="submit" disabled={assign.isPending}>
-            Assign vehicle
-          </Button>
-        </form>
+        <div>
+          <VehicleSearchDropdown
+            onSelect={(vin) => {
+              assign.mutate(vin);
+            }}
+            disabled={assign.isPending}
+            excludeVins={assignedVins}
+          />
+        </div>
       ) : null}
     </div>
   );

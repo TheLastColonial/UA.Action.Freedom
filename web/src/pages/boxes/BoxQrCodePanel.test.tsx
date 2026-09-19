@@ -1,17 +1,12 @@
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
-import { resetApiClient } from '../../api/client';
 import { makeBox } from '../../test/factories/box';
 import { boxApi } from '../../test/msw/boxes';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { BoxQrCodePanel } from './BoxQrCodePanel';
 
-beforeEach(() => {
-  resetApiClient();
-});
 afterEach(() => {
-  resetApiClient();
   vi.restoreAllMocks();
 });
 

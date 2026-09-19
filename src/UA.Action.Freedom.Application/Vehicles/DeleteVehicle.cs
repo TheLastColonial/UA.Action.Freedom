@@ -8,7 +8,8 @@ public sealed record DeleteVehicleCommand(string Vin);
 public enum DeleteVehicleOutcome
 {
     Deleted,
-    NotFound
+    NotFound,
+    StillReferenced
 }
 
 public sealed class DeleteVehicleHandler(IVehicleRepository repository)
@@ -16,7 +17,11 @@ public sealed class DeleteVehicleHandler(IVehicleRepository repository)
 {
     public async Task<DeleteVehicleOutcome> HandleAsync(DeleteVehicleCommand command, CancellationToken cancellationToken)
     {
-        var deleted = await repository.DeleteAsync(command.Vin, cancellationToken);
-        return deleted ? DeleteVehicleOutcome.Deleted : DeleteVehicleOutcome.NotFound;
+        return await repository.DeleteAsync(command.Vin, cancellationToken) switch
+        {
+            DeleteResult.Deleted => DeleteVehicleOutcome.Deleted,
+            DeleteResult.StillReferenced => DeleteVehicleOutcome.StillReferenced,
+            _ => DeleteVehicleOutcome.NotFound,
+        };
     }
 }

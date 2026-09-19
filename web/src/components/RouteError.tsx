@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { useRouteError } from 'react-router-dom';
 
 import { ApiNotFound } from '../api/problem';
+import { Button } from './Button';
 import { NotFound } from './NotFound';
 
 export function RouteError(): JSX.Element {
@@ -17,14 +18,14 @@ export function RouteError(): JSX.Element {
     <section role="alert">
       <h1>Something went wrong</h1>
       <p>{message}</p>
-      <button
-        type="button"
+      <Button
+        variant="secondary"
         onClick={() => {
           window.location.reload();
         }}
       >
         Reload
-      </button>
+      </Button>
     </section>
   );
 }

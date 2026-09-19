@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Abstractions;
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Convoys;
@@ -51,7 +52,7 @@ public class ConvoyHandlerTests
     public async Task Reports_deleted_when_a_row_was_removed()
     {
         var repository = Substitute.For<IConvoyRepository>();
-        repository.DeleteAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(true);
+        repository.DeleteAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(DeleteResult.Deleted);
         var handler = new DeleteConvoyHandler(repository);
 
         var outcome = await handler.HandleAsync(new DeleteConvoyCommand(ConvoyTestData.Id), CancellationToken.None);
@@ -63,7 +64,7 @@ public class ConvoyHandlerTests
     public async Task Reports_not_found_when_deleting_a_convoy_that_does_not_exist()
     {
         var repository = Substitute.For<IConvoyRepository>();
-        repository.DeleteAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(false);
+        repository.DeleteAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(DeleteResult.NotFound);
         var handler = new DeleteConvoyHandler(repository);
 
         var outcome = await handler.HandleAsync(new DeleteConvoyCommand(ConvoyTestData.Id), CancellationToken.None);

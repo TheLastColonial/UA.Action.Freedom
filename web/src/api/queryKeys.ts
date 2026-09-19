@@ -27,6 +27,10 @@ export const qk = {
     detail: (id: number) => ['convoys', 'detail', id] as const,
     route: (id: number) => ['convoys', id, 'route'] as const,
     vehicles: (id: number) => ['convoys', id, 'vehicles'] as const,
+    vehicleDrivers: (id: number, vin: string) =>
+      ['convoys', id, 'vehicles', vin, 'drivers'] as const,
+    insurance: (id: number, vin: string) => ['convoys', id, 'vehicles', vin, 'insurance'] as const,
+    readiness: (id: number) => ['convoys', id, 'readiness'] as const,
   },
   receivers: {
     all: ['receivers'] as const,

@@ -24,11 +24,7 @@ public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
             return;
         }
 
-        // Boxes before everything else: a box's bay assignment carries a foreign key to
-        // dbo.Bay that is NO ACTION (bay history is not casually deleted, docs/domain/
-        // key-concepts.md § Bay), so a location's bays cannot be removed by cascade while a
-        // box still references one. Deleting the box first clears that reference.
-        foreach (var (resource, key) in state.CreatedResources.OrderBy(r => r.Resource == "boxes" ? 0 : 1))
+        foreach (var (resource, key) in state.CreatedResources.OrderBy(r => DeletionOrder(r.Resource)))
         {
             try
             {
@@ -41,6 +37,21 @@ public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
             }
         }
     }
+
+    /// <summary>
+    /// Things that name other things go first. A box's bay assignment carries a NO ACTION foreign
+    /// key to dbo.Bay (bay history is not casually deleted, docs/domain/key-concepts.md § Bay), so
+    /// a location cannot go while a box still references one of its bays. A vehicle's crew rows
+    /// name a volunteer, and a volunteer still named anywhere is refused deletion with a 409 —
+    /// deleting the vehicle cascades its crew away. Volunteers therefore go last.
+    /// </summary>
+    private static int DeletionOrder(string resource) => resource switch
+    {
+        "boxes" => 0,
+        "vehicles" => 1,
+        "people" => 3,
+        _ => 2,
+    };
 
     /// <summary>
     /// The seed login that may delete this kind of resource. Everything is the Administrator's

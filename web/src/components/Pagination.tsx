@@ -1,5 +1,7 @@
 import type { JSX } from 'react';
 
+import { Button } from './Button';
+
 interface PaginationProps {
   page: number;
   hasNext: boolean;
@@ -16,25 +18,25 @@ export function Pagination({ page, hasNext, onPageChange }: PaginationProps): JS
       aria-label="Pagination"
       style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}
     >
-      <button
-        type="button"
+      <Button
+        variant="secondary"
         disabled={page <= 1}
         onClick={() => {
           onPageChange(page - 1);
         }}
       >
         Previous
-      </button>
+      </Button>
       <span aria-current="page">Page {page}</span>
-      <button
-        type="button"
+      <Button
+        variant="secondary"
         disabled={!hasNext}
         onClick={() => {
           onPageChange(page + 1);
         }}
       >
         Next
-      </button>
+      </Button>
     </nav>
   );
 }

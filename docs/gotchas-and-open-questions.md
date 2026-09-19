@@ -289,6 +289,20 @@ requirement** — see §9.
 No items in or out, no new receiver, no second validation. The Loader's confirmed weight is what
 the border check relies on; any of those would leave it describing something no longer true.
 
+### Only a Passed vehicle joins a convoy — and it cannot be moved from another
+
+`PUT /convoys/{id}/vehicles/{vin}` is a 409 unless the vehicle's inspection is `Passed`, and a
+409 if it is already on a *different* convoy. The second rule closed a hole: assigning to convoy B
+used to silently take the vehicle off convoy A, even when A's truck list was already published and
+manifested. Both rules are in the `UPDATE`'s `WHERE`, so a Mechanic failing the vehicle at the
+same moment cannot race it on.
+
+### A volunteer still named anywhere cannot be deleted
+
+None of the five foreign keys onto `dbo.Person` cascades — they are the record of who crewed,
+validated and shelved what. `PersonRepository.DeleteAsync` catches the FK violation (547) and the
+API answers 409, rather than the 500 it used to. See §9 Q9 for the erasure question this raises.
+
 ### `Committed` requires `IsDriver`
 
 Commitment is a commitment to *drive a leg*. Letting the two disagree would put a non-driver on
@@ -344,6 +358,60 @@ than one thing.
 Cleanup deletes as `admin` **except receivers**, which are deleted as `groundofficer` — an admin
 token is correctly refused there, and a hook that silently 403s would leave delivery detail
 behind.
+
+### A test double must be exactly as strict as the thing it replaces
+
+The vehicle inspection "did not persist" for a whole feature while every test was green. The
+web page sent `inspectionStatus` in the vehicle `PUT`; the C# request record had no such field,
+System.Text.Json dropped it silently, and the zod read schema's `.default('Pending')` papered
+over its absence on the way back. The MSW mock, meanwhile, *stored* the field — so the web tests
+proved the page talked to a mock that did not exist. The same shape was in the backend:
+`InMemoryConvoyRepository` returned `[]` where the SQL returned `null`, and kept crews the SQL
+deleted.
+
+The rules that came out of it:
+
+- An MSW handler accepts **only** the fields the C# request declares, and applies the same rules
+  (404 / 409 / 422 and their `detail` text). `web/src/test/msw/convoys.ts` takes the fleet and
+  roster as lookups (`convoyApi(seed, { fleet, people })`) for exactly this reason.
+- No `.default()` on a **response** schema: a field the API omits must fail parsing, loudly.
+- A save test asserts on the store (`api.db`) *and* on what a fresh render reads back — not on
+  the button still being on screen after the click.
+- Every `InMemory*Repository` mirrors its SQL's keys, conditional `WHERE`s and clean-up.
+- The end-to-end check that would have caught it is a Playwright spec that saves, **reloads**,
+  and reads the value back (`e2e/vehicles.smoke.spec.ts`).
+
+### Integration tests share one helper, connect as `freedom_app`, and can be made mandatory
+
+`tests/UA.Action.Freedom.Tests.Integration/SqlTestDatabase.cs` replaced nine copies of
+`ConnectOrSkipAsync`/`ExecuteAsync`/`ScalarAsync`. Three of those copies connected as `sa`, which
+bypasses every grant — a repository test could pass against a permission `freedom_app` does not
+hold (§3). `FREEDOM_REQUIRE_INTEGRATION=true` turns "database unreachable" from a skip into a
+failure; the CI `acceptance` job sets it, because a skipped suite there means broken
+infrastructure, not absent infrastructure.
+
+### A domain 404 keeps its reason
+
+The web client used to turn *every* 404 into `ApiNotFound("Not found")`, which the crew panel
+then swallowed — "There is no vehicle with VIN … on this convoy" never reached the user. A 404
+whose problem body carries a `detail` is now an `ApiDomainProblem`; a bare 404 (the resource
+addressed does not exist) is still `ApiNotFound`, which detail pages render as "Not found".
+
+### VIN and manifest keys must be sent as `varchar`
+
+Dapper sends every .NET string as `nvarchar(4000)`. Under `SQL_Latin1_General_CP1_CI_AS` — the local
+database's collation and Azure SQL's default — `WHERE Vin = @vin` against a `varchar(32)` column then
+converts the **column**, so the key lookup becomes a scan that locks every row it reads. It was
+invisible until the convoy-arrival transaction touched several vehicles at once and began
+deadlocking with single-vehicle inspection updates (found in the `system_health` deadlock graph,
+not in any exception). `SqlKey.Of(vin)` sends the value as `varchar(32)`; where a whole record is
+the parameter object, the SQL casts the parameter instead.
+
+### Running the suites in parallel is a concurrency test — keep it
+
+`dotnet test --solution` runs the Integration and BDD projects at the same time against one
+database. That is how the deadlock above surfaced, as a BDD scenario failing one run in two. A
+flaky scenario there is worth a deadlock graph before it is worth a retry.
 
 ### Frozen manifests accumulate in the local database
 
@@ -405,6 +473,11 @@ cookie) to get a fresh one. In a Playwright spec this means **never `page.goto` 
 SPA pages** — navigate by clicking links, or the reload loses both the token and the target
 route. A spec that switches seed users calls `signIn` (which clears cookies first);
 `e2e/auth.setup.ts` captures the SSO cookie per user so single-user specs skip the form.
+
+A reload now **returns to the page it was on**: `RequireAuth` passes the in-app path to
+`signIn`, it travels through Keycloak in the OIDC `state`, and `onSigninCallback` navigates the
+router there (`auth/returnPath.ts` validates it — an in-app path only, never `//host` or `/\`).
+Before, every reload landed on the dashboard.
 
 ### `Hosting__ServeStaticFrontend` — default on, a no-op without `wwwroot`
 
@@ -509,6 +582,35 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 
 ---
 
+Questions 9–12 from the previous round are **decided and built**:
+
+- **Erasing a volunteer named on old records** — split identity: the personal data is deleted,
+  the anonymous key stays for the records, which read "Former volunteer". Refused while they are
+  on a live crew or manifest team.
+- **One driver on two vehicles of a convoy** — no: one seat per person per convoy, enforced by
+  `UQ_VehicleDriver_Convoy_Person`. Passengers exist, and are any volunteer.
+- **Crew changes after publication** — allowed, but they void the vehicle's insurance, which must
+  be recorded again before departure. An arrived convoy's crew cannot change at all.
+- **The 200-vehicle picker limit** — never reached: arrived vehicles are handed over and leave the
+  picker for good, and a convoy is a handful of vans.
+
+13. **Is "Returned" at arrival really "the vehicle came back"?** Arrival releases Returned vehicles
+    to travel again, and hands Delivered and Lost ones over. If Returned can also mean the cargo
+    came back but the vehicle stayed, that rule needs revisiting.
+
+### Web coverage backlog
+
+Pages with no test file of their own (some are exercised through a parent page's test):
+`BoxBayPanel`, `BoxEditPage`, `BoxForm`, `BoxValidatePanel`, `ConvoyEditPage`, `ConvoyForm`,
+`BaysPanel`, `LocationCreatePage`, `LocationEditPage`, `LocationForm`, `ManifestEditPage`,
+`ReasonModal`, `ReceiverCreatePage`, `ReceiverEditPage`, `ReceiverForm`, `ReceiverDetailForm`,
+`VehicleForm`; components `AppShell`, `ColdStartIndicator`, `DataTable`, `DetailCard`,
+`NotAuthorized`, `NotFound`, `PageSkeleton`, `FormCard`. The API hook modules are covered only
+through the pages. MSW handlers other than vehicles/convoys still cast request bodies with `as`
+rather than parsing them against the contract.
+
+---
+
 ## 10. Per-increment index
 
 | # | Slice | The things worth remembering |
@@ -522,3 +624,5 @@ the local stub — do not "fix" it by changing the WireMock mapping.** The fix b
 | 7 | Manifest worker | No database access at all, by design. Plain text output. The integration-test deadlock and its fix (§1). CI's `acceptance` job now starts both workers — it previously started only `app edge website`, so the queue hand-offs were never exercised there. |
 | 8 | Operator UI (`web/`) | A React + Vite SPA co-served by the API under `/app` — see §7 for the load-bearing traps (`/app` not `/`, `UseStaticFiles` before `UseRouting`, in-memory token, Browser Mode config, the hand-rolled reason modal, the un-cached receiver-detail read). New `frontend` CI job (typecheck/lint/format/test/build) and Playwright `@smoke` specs in the `acceptance` job; `publish` needs both. A new public PKCE Keycloak client `freedom-spa` — the API's confidential client is unchanged. |
 | 9 | Box QR labels | `dbo.BoxQrCode` — opaque non-enumerable token, revoke/reissue, revoked rows kept. `IssueQrCodeAsync` holds a transaction, same shape as the others in §2. "One active label" enforced there, not by a filtered index (§1). `QRCoder` is the first drawing dependency — managed renderers only, never the `System.Drawing`-based `QRCode` (§2). The label renderer's signature carries no receiver data, so the "no delivery detail on a travelling label" rule is structural (§3). New `App:PublicBaseUrl` env-only config with a request-host fallback; the local sim sets `App__PublicBaseUrl` because the container sees the edge, not the browser host. BDD probes `/boxes/scan/{all-zero-guid}` — auth runs before the handler, so a present route answers 401 and an old image answers 404. |
+| 10 | Vehicle servicing + Mechanic | The inspection was silently dropped by the API and faked by the mock — see §6 "A test double must be exactly as strict". New `Mechanic` role and `vehicles:service` policy; `PUT /vehicles/{vin}/inspection` is the only writer. Convoy assignment gated on `Passed` in SQL, and no longer steals a vehicle from another convoy. Crew clean-up on convoy delete (a sixth transaction). Person delete 500 → 409. Schema guards for columns added after `CREATE TABLE`. Shared `SqlTestDatabase`, `freedom_app` everywhere, `FREEDOM_REQUIRE_INTEGRATION` in CI. Reload keeps the page (§7). |
+| 11 | Crew, insurance, readiness, arrival, erasure | Passengers and one seat per person per convoy (`VehicleDriver` gained `ConvoyId` and `Role`, key `(ConvoyId, Vin, PersonId)`). Insurance per vehicle per convoy, voided by a crew change in the same transaction, gating `depart`. Advisory readiness as one pure function. Arrival hands vehicles over for good. Split volunteer identity for UK-data-protection erasure, with an in-place migration checked on a fresh SQL Server. Found and fixed: `nvarchar` VIN parameters scanning the table (deadlocks), and 500s deleting a vehicle or convoy a manifest names. |

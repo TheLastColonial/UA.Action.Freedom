@@ -10,12 +10,21 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
 {
     private readonly Dictionary<Guid, PersonReadModel> store = [];
 
+    /// <summary>Volunteers on a live crew or manifest team, whom erasure refuses.</summary>
+    private readonly HashSet<Guid> active = [];
+
     public InMemoryPersonRepository(params PersonReadModel[] seed)
     {
         foreach (var person in seed)
         {
             store[person.Id] = person;
         }
+    }
+
+    public InMemoryPersonRepository OnALiveCrew(Guid id)
+    {
+        active.Add(id);
+        return this;
     }
 
     public int Count => store.Count;
@@ -58,6 +67,13 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
         return Task.FromResult(true);
     }
 
-    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken) =>
-        Task.FromResult(store.Remove(id));
+    public Task<DeletePersonResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (active.Contains(id) && store.ContainsKey(id))
+        {
+            return Task.FromResult(DeletePersonResult.StillActive);
+        }
+
+        return Task.FromResult(store.Remove(id) ? DeletePersonResult.Deleted : DeletePersonResult.NotFound);
+    }
 }

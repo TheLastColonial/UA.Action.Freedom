@@ -125,7 +125,7 @@ volunteer names would put invented personal data in version control for no benef
 | Login | Roles | Use it for |
 | --- | --- | --- |
 | `admin` | `Administrator` | Approving manifests, managing volunteers — anything an Administrator alone may do. |
-| `operator` | `Dispatcher`, `Loader`, `Purchaser` | The day-to-day operational path. One login walks the whole convoy workflow. |
+| `operator` | `Dispatcher`, `Loader`, `Mechanic`, `Purchaser` | The day-to-day operational path. One login walks the whole convoy workflow — including passing a vehicle at inspection, which a convoy requires before the vehicle may join. |
 | `groundofficer` | `GroundOfficer` | Receivers, and **the only login that can resolve a Ukrainian delivery address.** |
 
 `groundofficer` is deliberately isolated: it holds *no* other role, so it cannot read vehicles,
@@ -143,7 +143,7 @@ not the same as holding it.
 iss   : http://localhost:8081/realms/freedom
 aud   : account
 sub   : 5be71467-97fa-4c13-a208-46f0279d8812
-roles : Purchaser, Loader, Dispatcher
+roles : Purchaser, Loader, Mechanic, Dispatcher
 ```
 
 Three details matter, and each corresponds to a line in
@@ -173,29 +173,41 @@ switch ($p.Length % 4) { 2 { $p += '==' } 3 { $p += '=' } }
 Policies live in `AddFreedomAuthorization()`. A request with no token is **401**; a request with a
 token lacking the role is **403**.
 
-| Policy | Administrator | Dispatcher | Loader | Purchaser | GroundOfficer |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| `vehicles:read` | ✓ | ✓ | ✓ | ✓ | |
-| `vehicles:write` | ✓ | | | ✓ | |
-| `people:read` | ✓ | ✓ | ✓ | ✓ | |
-| `people:write` | ✓ | | | | |
-| `convoys:read` | ✓ | ✓ | ✓ | ✓ | |
-| `convoys:write` | ✓ | ✓ | | | |
-| `boxes:read` | ✓ | ✓ | ✓ | ✓ | |
-| `boxes:write` | ✓ | ✓ | ✓ | | |
-| `boxes:validate` | ✓ | | ✓ | | |
-| `boxes:allocate-bay` | | | ✓ | | |
-| `locations:read` | ✓ | ✓ | ✓ | ✓ | |
-| `locations:write` | ✓ | | | | |
-| `manifests:read` | ✓ | ✓ | ✓ | ✓ | |
-| `manifests:write` | ✓ | ✓ | | | |
-| `manifests:approve` | ✓ | | | | |
-| `receivers:read` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `receivers:write` | ✓ | | | | ✓ |
-| `receivers:detail` | | | | | ✓ |
+| Policy | Administrator | Dispatcher | Loader | Purchaser | Mechanic | GroundOfficer |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| `vehicles:read` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| `vehicles:write` | ✓ | | | ✓ | ✓ | |
+| `vehicles:service` | ✓ | | | | ✓ | |
+| `people:read` | ✓ | ✓ | ✓ | ✓ | | |
+| `people:write` | ✓ | | | | | |
+| `convoys:read` | ✓ | ✓ | ✓ | ✓ | | |
+| `convoys:write` | ✓ | ✓ | | | | |
+| `convoys:assign-drivers` | | ✓ | | | | |
+| `boxes:read` | ✓ | ✓ | ✓ | ✓ | | |
+| `boxes:write` | ✓ | ✓ | ✓ | | | |
+| `boxes:validate` | ✓ | | ✓ | | | |
+| `boxes:allocate-bay` | | | ✓ | | | |
+| `locations:read` | ✓ | ✓ | ✓ | ✓ | | |
+| `locations:write` | ✓ | | | | | |
+| `manifests:read` | ✓ | ✓ | ✓ | ✓ | | |
+| `manifests:write` | ✓ | ✓ | | | | |
+| `manifests:approve` | ✓ | | | | | |
+| `receivers:read` | ✓ | ✓ | ✓ | ✓ | | ✓ |
+| `receivers:write` | ✓ | | | | | ✓ |
+| `receivers:detail` | | | | | | ✓ |
 
-Three rows are worth understanding rather than memorising:
+A few rows are worth understanding rather than memorising:
 
+- **`convoys:write` also covers a vehicle's insurance and marking a convoy arrived** — both are the
+  Dispatcher's (and Administrator's) coordination work. Crewing stays narrower, `convoys:assign-drivers`.
+- **`people:write` is also volunteer erasure.** `DELETE /people/{id}` permanently deletes the
+  volunteer's personal data (UK data protection); it is refused while they are on a live crew or
+  manifest team.
+- **`vehicles:service` is Administrator and Mechanic** and separate from `vehicles:write`. The
+  inspection result decides whether a vehicle may join a convoy, so a Purchaser who can edit a
+  vehicle's details cannot also pass it as roadworthy. It is recorded through its own route,
+  `PUT /vehicles/{vin}/inspection`; the ordinary `PUT /vehicles/{vin}` ignores it. The Mechanic
+  is in no policy outside vehicles.
 - **`manifests:approve` is Administrator-only** and separate from `manifests:write`, because
   approval is not another edit — it releases the Goods Movement Reference to HMRC and freezes the
   manifest permanently. The person who builds a manifest is not the person who signs it off.

@@ -1,9 +1,7 @@
 using AwesomeAssertions;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
 using UA.Action.Freedom.Application.Boxes;
-using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Data.Boxes;
+using static UA.Action.Freedom.Tests.Integration.SqlTestDatabase;
 
 namespace UA.Action.Freedom.Tests.Integration.Boxes;
 
@@ -20,80 +18,24 @@ namespace UA.Action.Freedom.Tests.Integration.Boxes;
 [Trait("Category", "Integration")]
 public class BoxRepositoryTests
 {
-    private const string DefaultLocalConnectionString =
-        "Server=localhost,1433;Database=Freedom;User Id=freedom_app;Password=Local_Freedom_App_1;TrustServerCertificate=True;Encrypt=False;Connect Timeout=3";
-
-    private static string ConnectionString =>
-        Environment.GetEnvironmentVariable("ConnectionStrings__Freedom") ?? DefaultLocalConnectionString;
-
     private static async Task<BoxRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await using var connection = new SqlConnection(ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(1) FROM dbo.Box; SELECT COUNT(1) FROM dbo.BoxItem;";
-            await command.ExecuteScalarAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            Assert.Skip($"Freedom database with dbo.Box is not reachable: {exception.Message}");
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Freedom"] = ConnectionString })
-            .Build();
-
-        return new BoxRepository(new SqlConnectionFactory(configuration));
+        await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Box; SELECT COUNT(1) FROM dbo.BoxItem;", cancellationToken);
+        return new BoxRepository(ConnectionFactory());
     }
 
     private static BoxReadModel ANewBox() => new(
         Id: 0, WeightKg: 0, WidthCm: null, DepthCm: null, HeightCm: null, ReceiverRef: null,
         LocationId: null, ValidatedByPersonId: null, ValidatedAt: null);
 
-    private static async Task ExecuteAsync(string sql, params (string Name, object Value)[] parameters)
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-
-        foreach (var (name, value) in parameters)
-        {
-            command.Parameters.AddWithValue(name, value);
-        }
-
-        await command.ExecuteNonQueryAsync();
-    }
-
-    /// <summary>A volunteer to act as the Loader, since the validator is a real foreign key.</summary>
-    private static async Task<Guid> AddVolunteerAsync()
-    {
-        var id = Guid.NewGuid();
-        await ExecuteAsync(
-            """
-            INSERT INTO dbo.Person (Id, FirstName, LastName, DateOfBirth, Joined)
-            VALUES (@id, 'Integration', 'Loader', '1990-01-01', '2024-01-01')
-            """,
-            ("@id", id));
-        return id;
-    }
+    private static Task<Guid> AddVolunteerAsync() => SqlTestDatabase.AddVolunteerAsync("Integration", "Loader", isDriver: false);
 
     private static Task RemoveVolunteerAsync(Guid id) =>
         ExecuteAsync("DELETE FROM dbo.Person WHERE Id = @id", ("@id", id));
 
     /// <summary>A location to point a box at, since LocationId is a real foreign key.</summary>
-    private static async Task<int> AddLocationAsync()
-    {
-        await using var connection = new SqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            "INSERT INTO dbo.Location (Name) VALUES ('Integration Depot'); SELECT CAST(SCOPE_IDENTITY() AS int);";
-        return Convert.ToInt32(await command.ExecuteScalarAsync());
-    }
+    private static Task<int> AddLocationAsync() => ScalarAsync(
+        "INSERT INTO dbo.Location (Name) VALUES ('Integration Depot'); SELECT CAST(SCOPE_IDENTITY() AS int);");
 
     private static Task RemoveLocationAsync(int id) =>
         ExecuteAsync("DELETE FROM dbo.Location WHERE Id = @id", ("@id", id));

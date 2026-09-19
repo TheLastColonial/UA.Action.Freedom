@@ -37,7 +37,9 @@ access when they leave.
 
 Responsible for creating a [Manifest](#manifest) and acting as the communication point for convoy team leaders.
 Books ferry crossings and triggers the [GMR](#gmr--goods-movement-reference) and [ELO](#elo--obligatory-logistics-envelope)
-paperwork. Also the booking of hotel accomidation for the trip. They will also coordinate with third parties to ensure servicing process.
+paperwork. Also the booking of hotel accommodation for the trip. They will also coordinate with third parties to
+arrange servicing — though recording the result of a vehicle's inspection is the [Mechanic](#mechanic)'s job, not
+theirs.
 Also to find insurance for the [Driver](#driver) and [Vehicle](#vehicle).
 
 ### Loader
@@ -54,6 +56,24 @@ because it is the physical, on-site act of shelving one so it can be found again
 Responsible for the sourcing of vehicles, equipment and other sundries consumed in a convoy.
 Including transportation of the purchase to the logistical hubs.
 
+### Mechanic
+
+Responsible for the mechanical readiness of the donated [Vehicles](#vehicle). A Mechanic records vehicles as they
+come in, keeps each one's details current — mileage, condition notes, kerb weight, cargo capacity — and carries out
+the servicing inspection: moving a vehicle through **Pending → Inspecting → Passed** or **Failed**, and writing down
+any defects found in the inspection notes (see [Inspection Status](#inspection-status)).
+
+That result matters beyond the workshop. A vehicle is itself part of the aid and is handed over in Ukraine, so a
+vehicle that fails on the road is a failed delivery: **only a vehicle the Mechanic has marked Passed may be assigned
+to a [Convoy](#convoy)**, and the API refuses any other.
+
+- An Administrator may also record an inspection. A Purchaser, who can edit a vehicle's details, cannot — sourcing a
+  vehicle and vouching that it is roadworthy are different acts (the `vehicles:service` policy).
+- The inspection is recorded through its own route, `PUT /vehicles/{vin}/inspection`; an ordinary vehicle edit
+  cannot set, clear or forge it.
+- The role is deliberately narrow, like the others: a Mechanic has no access to convoys, manifests, boxes,
+  volunteers or receivers.
+
 ### Ground Officer
 
 Responsible for communicating with the local authorities in Ukraine:
@@ -68,6 +88,18 @@ The Ground Officer is the only role that sees full [Receiver](#receiver) detail.
 
 A volunteer who drives a vehicle on one leg of a convoy. Drivers are notified of their allocation and receive
 their manifest, but do not administer the system. A driver may be *committed* to a convoy or merely available.
+
+### Volunteer erasure
+
+A volunteer who leaves can ask to be erased, and UK data protection gives them that right. Freedom **deletes their
+personal data** — name, date of birth, phone, driving status — rather than hiding it. The records they were part of
+(past convoy crews, manifest teams, who validated or shelved a box) keep an anonymous identity in their place and read
+**"Former volunteer"**; nothing links that identity back to the person. Someone no record names is removed
+outright.
+
+Erasure is **refused while the volunteer is still needed**: on the crew of a convoy that has not arrived, or on the
+team of a manifest still under way. Take them off it first. Only the Administrator erases, and the operator UI asks
+for confirmation, since it cannot be undone.
 
 ### Donor _(external)_
 
@@ -89,6 +121,25 @@ A collection of [Vehicles](#vehicle) travelling together to Ukraine, with a depa
 arrival timestamp and a [Route](#route). The convoy is the unit that is planned; the [Manifest](#manifest) is the
 unit that is executed per vehicle.
 
+#### Readiness
+
+A convoy is **ready** when it has a route, has vehicles, and every vehicle on it is ready; a vehicle is ready with
+**at least two drivers** (passengers do not count) and [insurance](#vehicle-insurance) that is recorded, not voided,
+and in cover on the departure date. Readiness is **advisory** — it says what is missing and blocks nothing — and is
+shown on the convoy's overview. Cargo checks will join it later.
+
+#### Arrival
+
+A convoy **arrives** when the Dispatcher marks it so (`POST /convoys/{id}/arrive`), which is allowed only once its
+truck list is published and **every vehicle on it has a finished manifest** — Delivered, Lost or Returned. Until
+then the request is refused and names the vehicles still travelling. Arrival, in one step:
+
+- **Delivered and Lost vehicles are handed over.** A vehicle is itself part of the aid and stays in Ukraine, so it
+  is stamped `HandedOverAt` and is never offered for a convoy again.
+- **Returned vehicles are released** — taken off the convoy so they can travel again.
+- **The journey becomes history.** An arrived convoy takes no further crew or insurance changes; its crew list is
+  the record of who went.
+
 ### Vehicle
 
 A truck or car that has been donated, and which is itself part of the aid — vehicles are handed over in Ukraine,
@@ -103,8 +154,55 @@ is distinct from the kerb weight above (the vehicle's own weight) and exists to 
 convoy leaves, whether the [Boxes](#box) assigned to a [Manifest](#manifest) are too heavy or too large for the
 vehicle carrying them — see the note under Manifest.
 
+#### Inspection Status
+
+Every vehicle carries an **inspection status**, recorded by a [Mechanic](#mechanic), that tracks its mechanical
+inspection:
+
+- **Pending**: The vehicle has not been inspected yet — the state every new vehicle starts in.
+- **Inspecting**: The vehicle is currently being inspected by a Mechanic.
+- **Passed**: The vehicle has completed inspection and is ready for convoy. Only vehicles in this state are eligible
+  for assignment to a convoy.
+- **Failed**: The vehicle has completed inspection but was found to have issues that prevent it from being used in a
+  convoy.
+
+The inspection status is separate from the `Servicing` flag: `Servicing=true` means a vehicle is in for servicing,
+while the inspection status tracks how far through that process it has progressed. The Mechanic may also record
+**inspection notes** (up to 2,000 characters) documenting any defects, damage, or issues found during inspection.
+
 > **Naming:** the domain type was renamed from `Veichle` to `Vehicle`. The rename is complete across the
 > solution.
+
+### Vehicle Crew
+
+The people travelling in a [Vehicle](#vehicle) on one [Convoy](#convoy), decided while it is planned — before any
+[Manifest](#manifest) exists for the leg. Each crew member is either:
+
+- a **Driver** — a volunteer registered to drive; or
+- a **Passenger** — any volunteer.
+
+**A person takes one seat per convoy**: they cannot be on two vehicles of the same journey (the database enforces
+it). A vehicle needs **two drivers** to be [ready](#readiness) — the norm for sustained driving and border
+compliance; passengers do not count. Crewing is the [Dispatcher](#dispatcher)'s alone.
+
+The crew can still change after the truck list is published — a driver falls ill — but **any change voids the
+vehicle's [insurance](#vehicle-insurance)**, which names the crew, and it must be recorded again before the vehicle
+departs. Once the convoy has [arrived](#arrival) the crew is history and cannot change.
+
+### Vehicle Insurance
+
+Bought by the Dispatcher for each vehicle on a convoy, and it **names that vehicle's crew**. Recorded per vehicle
+per convoy: insurer, policy number, cover start and end, optional cost, and who recorded it (taken from their login,
+never typed in). Dispatcher and Administrator may record it (`PUT /convoys/{id}/vehicles/{vin}/insurance`).
+
+- **A crew change voids it**, in the same step as the change. Recording it again renews it.
+- **A manifest cannot depart without it** — recorded, not voided, and in cover on the day — and is refused with the
+  reason.
+- Taking the vehicle off the convoy, or cancelling the convoy, removes it.
+
+This is distinct from a [Driver Team](#driver-team): the crew is a property of the vehicle within the convoy,
+decided during planning, while a Driver Team is a primary/secondary pair fixed to one specific leg once a manifest
+exists for that vehicle.
 
 ### Route
 
@@ -184,6 +282,8 @@ Ukraine.
 A pair of drivers — a primary and a secondary — allocated to one leg of a journey. A [Manifest](#manifest)
 carries two teams: `DriverUK` for the UK→Europe leg and `DriverBorder` for the Europe→Ukraine leg.
 
+See [Vehicle Crew](#vehicle-crew) for the earlier, convoy-planning-stage assignment this narrows down from.
+
 ### Manifest
 
 **The central document of the system.** A manifest ties together, for one vehicle on one convoy:
@@ -255,7 +355,7 @@ Not all data in Freedom carries the same risk, and the difference drives how it 
 | Class | Examples | Handling |
 | --- | --- | --- |
 | **Sensitive** | Ukrainian delivery addresses, receiver contact names and organisations | Segregated storage, Ground Officer access only, every read audited, redacted from anything that crosses a border |
-| **Personal** | Volunteer names, dates of birth, phone numbers, driving license | UK data residency, never written to logs, defined retention period |
+| **Personal** | Volunteer names, dates of birth, phone numbers, driving license | UK data residency, never written to logs, defined retention period, **erased on request** (see [Volunteer erasure](#volunteer-erasure)) |
 | **Operational** | Convoys, vehicles, boxes, weights, routes within the UK/EU | Standard role-based access |
 
 **Why this matters.** A manifest listing precise Ukrainian delivery addresses is a targeting document, and it

@@ -8,6 +8,7 @@ import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
+import { TabPanel, Tabs } from '../../components/Tabs';
 import { ManifestBoxesPanel } from './ManifestBoxesPanel';
 import { ManifestStatePanel } from './ManifestStatePanel';
 import { ManifestTeamsPanel } from './ManifestTeamsPanel';
@@ -66,23 +67,21 @@ export function ManifestDetailPage(): JSX.Element {
         </span>
       </header>
 
-      <nav aria-label="Manifest sections" style={{ display: 'flex', gap: 'var(--space-3)' }}>
-        {TABS.map((name) => (
-          <button
-            key={name}
-            type="button"
-            aria-current={tab === name ? 'page' : undefined}
-            onClick={() => {
-              selectTab(name);
-            }}
-          >
-            {TAB_LABEL[name]}
-          </button>
-        ))}
-      </nav>
+      <Tabs
+        label="Manifest sections"
+        tabs={[
+          { id: 'overview', label: TAB_LABEL.overview },
+          { id: 'status', label: TAB_LABEL.status },
+          { id: 'teams', label: TAB_LABEL.teams },
+          { id: 'cargo', label: TAB_LABEL.cargo },
+          { id: 'weight', label: TAB_LABEL.weight },
+        ]}
+        active={tab}
+        onChange={selectTab}
+      />
 
       {tab === 'overview' ? (
-        <div>
+        <TabPanel id="overview">
           <DetailCard title="Manifest details">
             <dl>
               <dt>Vehicle</dt>
@@ -125,17 +124,29 @@ export function ManifestDetailPage(): JSX.Element {
               {deleteError}
             </p>
           ) : null}
-        </div>
+        </TabPanel>
       ) : null}
 
-      {tab === 'status' ? <ManifestStatePanel manifest={manifest} /> : null}
+      {tab === 'status' ? (
+        <TabPanel id="status">
+          <ManifestStatePanel manifest={manifest} />
+        </TabPanel>
+      ) : null}
       {tab === 'teams' ? (
-        <ManifestTeamsPanel manifestId={manifest.id} frozen={manifest.frozen} />
+        <TabPanel id="teams">
+          <ManifestTeamsPanel manifestId={manifest.id} frozen={manifest.frozen} />
+        </TabPanel>
       ) : null}
       {tab === 'cargo' ? (
-        <ManifestBoxesPanel manifestId={manifest.id} frozen={manifest.frozen} />
+        <TabPanel id="cargo">
+          <ManifestBoxesPanel manifestId={manifest.id} frozen={manifest.frozen} />
+        </TabPanel>
       ) : null}
-      {tab === 'weight' ? <ManifestWeightPanel manifestId={manifest.id} /> : null}
+      {tab === 'weight' ? (
+        <TabPanel id="weight">
+          <ManifestWeightPanel manifestId={manifest.id} />
+        </TabPanel>
+      ) : null}
     </section>
   );
 }

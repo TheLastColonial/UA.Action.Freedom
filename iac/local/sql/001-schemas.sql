@@ -250,6 +250,10 @@ BEGIN
         CargoDepthCm     decimal(10,2) NULL,
         CargoHeightCm    decimal(10,2) NULL,
 
+        -- The Mechanic's inspection result — see the "Columns added to dbo.Vehicle" block below.
+        InspectionStatus int            NOT NULL CONSTRAINT DF_Vehicle_InspectionStatus DEFAULT 0,
+        InspectionNotes  nvarchar(2000) NULL,
+
         CreatedAt     datetime2(0)   NOT NULL CONSTRAINT DF_Vehicle_CreatedAt DEFAULT SYSUTCDATETIME(),
         UpdatedAt     datetime2(0)   NOT NULL CONSTRAINT DF_Vehicle_UpdatedAt DEFAULT SYSUTCDATETIME()
     );
@@ -257,38 +261,85 @@ END
 GO
 
 -- --------------------------------------------------------------------------
--- Volunteers — dbo.Person
+-- Volunteers — dbo.Person and dbo.PersonDetail (split identity)
 --
--- One row per individual supporting Ukrainian Action. The domain models a Driver as a
--- subtype of Person; the database keeps one table with IsDriver telling them apart, because
--- everything a driver adds (Committed) is two columns rather than a second identity.
+-- A volunteer is two rows. dbo.Person is the identity — a random uniqueidentifier and nothing
+-- about the person — and it is what every foreign key points at: vehicle crews, manifest
+-- teams, who validated a box, who shelved it. dbo.PersonDetail holds the personal data and
+-- cascades from it.
 --
--- Personal data (recommendations 4.8): UK residency, never written to a log, and a defined
--- retention period. The key is a uniqueidentifier rather than an IDENTITY sequence so that a
--- volunteer's URL does not disclose how many volunteers the charity has.
+-- UK data protection (recommendations 4.8): erasing a volunteer deletes their PersonDetail row
+-- — a genuine delete of the personal data — and stamps Person.ErasedAt. The records they appear
+-- in keep a seat filled by an identity nothing links back to anyone, and read "Former
+-- volunteer". Erasure is refused while they are on a live crew or manifest team; a volunteer
+-- nothing names is removed outright. The key is a uniqueidentifier rather than an IDENTITY so a
+-- URL does not disclose how many volunteers the charity has; that is also what keeps an erased
+-- stub from being guessable. Never written to a log.
 --
--- Convoy history (Driver.Convoys) is not modelled yet — it arrives with dbo.Convoy.
+-- The domain models a Driver as a subtype of Person; the database keeps IsDriver on the detail,
+-- because everything a driver adds (Committed) is two columns rather than a second identity.
 -- freedom_app already holds full DML on SCHEMA::dbo (above), so no new grant.
 -- --------------------------------------------------------------------------
 
 IF OBJECT_ID('dbo.Person') IS NULL
 BEGIN
     CREATE TABLE dbo.Person (
-        Id           uniqueidentifier NOT NULL CONSTRAINT PK_Person PRIMARY KEY,
-        FirstName    nvarchar(100)    NOT NULL,
-        LastName     nvarchar(100)    NOT NULL,
-        DateOfBirth  datetime2(0)     NOT NULL,
-        Joined       datetime2(0)     NOT NULL,
-        Phone        nvarchar(50)     NULL,
-        IsDriver     bit              NOT NULL CONSTRAINT DF_Person_IsDriver DEFAULT 0,
-        Committed    bit              NOT NULL CONSTRAINT DF_Person_Committed DEFAULT 0,
-        CreatedAt    datetime2(0)     NOT NULL CONSTRAINT DF_Person_CreatedAt DEFAULT SYSUTCDATETIME(),
-        UpdatedAt    datetime2(0)     NOT NULL CONSTRAINT DF_Person_UpdatedAt DEFAULT SYSUTCDATETIME()
+        Id        uniqueidentifier NOT NULL CONSTRAINT PK_Person PRIMARY KEY,
+        CreatedAt datetime2(0)     NOT NULL CONSTRAINT DF_Person_CreatedAt DEFAULT SYSUTCDATETIME(),
+        ErasedAt  datetime2(0)     NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.PersonDetail') IS NULL
+BEGIN
+    CREATE TABLE dbo.PersonDetail (
+        PersonId    uniqueidentifier NOT NULL CONSTRAINT PK_PersonDetail PRIMARY KEY,
+        FirstName   nvarchar(100)    NOT NULL,
+        LastName    nvarchar(100)    NOT NULL,
+        DateOfBirth datetime2(0)     NOT NULL,
+        Joined      datetime2(0)     NOT NULL,
+        Phone       nvarchar(50)     NULL,
+        IsDriver    bit              NOT NULL CONSTRAINT DF_PersonDetail_IsDriver DEFAULT 0,
+        Committed   bit              NOT NULL CONSTRAINT DF_PersonDetail_Committed DEFAULT 0,
+        UpdatedAt   datetime2(0)     NOT NULL CONSTRAINT DF_PersonDetail_UpdatedAt DEFAULT SYSUTCDATETIME(),
+
+        CONSTRAINT FK_PersonDetail_Person FOREIGN KEY (PersonId) REFERENCES dbo.Person (Id) ON DELETE CASCADE
     );
 
     -- The dispatcher's shortlist is "drivers, by name". Everything else pages the full roster
     -- in the same order, so one index serves both reads.
-    CREATE INDEX IX_Person_IsDriver_Name ON dbo.Person (IsDriver, LastName, FirstName, Id);
+    CREATE INDEX IX_PersonDetail_IsDriver_Name ON dbo.PersonDetail (IsDriver, LastName, FirstName, PersonId);
+END
+GO
+
+IF COL_LENGTH('dbo.Person', 'ErasedAt') IS NULL
+    ALTER TABLE dbo.Person ADD ErasedAt datetime2(0) NULL;
+GO
+
+-- A database from before the split still has the personal columns on dbo.Person. Move them
+-- across and drop them. Dynamic SQL, because a batch naming a column that no longer exists
+-- would not compile on a database that has already been migrated.
+IF COL_LENGTH('dbo.Person', 'FirstName') IS NOT NULL
+BEGIN
+    EXEC(N'
+        INSERT INTO dbo.PersonDetail (PersonId, FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed, UpdatedAt)
+        SELECT p.Id, p.FirstName, p.LastName, p.DateOfBirth, p.Joined, p.Phone, p.IsDriver, p.Committed, p.UpdatedAt
+        FROM dbo.Person AS p
+        WHERE NOT EXISTS (SELECT 1 FROM dbo.PersonDetail AS d WHERE d.PersonId = p.Id);');
+
+    IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Person_IsDriver_Name')
+        DROP INDEX IX_Person_IsDriver_Name ON dbo.Person;
+
+    DECLARE @drop nvarchar(max) = N'';
+    SELECT @drop += N'ALTER TABLE dbo.Person DROP CONSTRAINT ' + QUOTENAME(dc.name) + N';'
+    FROM sys.default_constraints AS dc
+    JOIN sys.columns AS c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
+    WHERE dc.parent_object_id = OBJECT_ID('dbo.Person')
+      AND c.name IN ('IsDriver', 'Committed', 'UpdatedAt');
+    EXEC(@drop);
+
+    EXEC(N'ALTER TABLE dbo.Person DROP COLUMN FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed, UpdatedAt;');
 END
 GO
 
@@ -363,6 +414,39 @@ BEGIN
     ALTER TABLE dbo.Vehicle ADD CONSTRAINT FK_Vehicle_Convoy
         FOREIGN KEY (ConvoyId) REFERENCES dbo.Convoy (Id) ON DELETE SET NULL;
 END
+GO
+
+-- --------------------------------------------------------------------------
+-- Columns added to dbo.Vehicle after it was first created
+--
+-- CREATE TABLE above runs once, so a database built before these columns existed never gets
+-- them from it — and VehicleRepository selects every one, so a missing column is a 500 on
+-- every vehicle read. Each is guarded by COL_LENGTH so the script stays re-runnable.
+--
+-- InspectionStatus is written only by PUT /vehicles/{vin}/inspection (the Mechanic's result)
+-- and gates convoy assignment: only Passed (2) may join a convoy. The CHECK keeps it inside
+-- the Domain InspectionStatus enum, because an out-of-range int maps to an enum value Dapper
+-- will happily construct and nothing downstream expects.
+-- --------------------------------------------------------------------------
+
+IF COL_LENGTH('dbo.Vehicle', 'MaxCargoWeightKg') IS NULL
+    ALTER TABLE dbo.Vehicle ADD MaxCargoWeightKg decimal(10,2) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'CargoWidthCm') IS NULL
+    ALTER TABLE dbo.Vehicle ADD CargoWidthCm decimal(10,2) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'CargoDepthCm') IS NULL
+    ALTER TABLE dbo.Vehicle ADD CargoDepthCm decimal(10,2) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'CargoHeightCm') IS NULL
+    ALTER TABLE dbo.Vehicle ADD CargoHeightCm decimal(10,2) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'InspectionStatus') IS NULL
+    ALTER TABLE dbo.Vehicle ADD InspectionStatus int NOT NULL
+        CONSTRAINT DF_Vehicle_InspectionStatus DEFAULT 0;
+IF COL_LENGTH('dbo.Vehicle', 'InspectionNotes') IS NULL
+    ALTER TABLE dbo.Vehicle ADD InspectionNotes nvarchar(2000) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_Vehicle_InspectionStatus')
+    ALTER TABLE dbo.Vehicle ADD CONSTRAINT CK_Vehicle_InspectionStatus
+        CHECK (InspectionStatus BETWEEN 0 AND 3);
 GO
 
 -- The truck list is read by convoy: "which vehicles are travelling together".
@@ -641,6 +725,138 @@ BEGIN
         -- somebody driving a leg to Ukraine alone.
         CONSTRAINT CK_ManifestDriverTeam_DistinctDrivers CHECK (
             SecondaryPersonId IS NULL OR SecondaryPersonId <> PrimaryPersonId)
+    );
+END
+GO
+
+-- Convoy vehicle crews. Deleting a vehicle cascades the row; unassigning a vehicle from a
+-- convoy explicitly deletes these rows in the same transaction. Created with its original
+-- (Vin, PersonId) shape; the block after it brings every database to the current one.
+IF OBJECT_ID('dbo.VehicleDriver') IS NULL
+BEGIN
+    CREATE TABLE dbo.VehicleDriver (
+        Vin       varchar(32)      NOT NULL,
+        PersonId  uniqueidentifier NOT NULL,
+        CreatedAt datetime2        NOT NULL CONSTRAINT DF_VehicleDriver_CreatedAt DEFAULT (SYSUTCDATETIME()),
+
+        CONSTRAINT PK_VehicleDriver PRIMARY KEY (Vin, PersonId),
+        CONSTRAINT FK_VehicleDriver_Vehicle FOREIGN KEY (Vin) REFERENCES dbo.Vehicle (Vin) ON DELETE CASCADE,
+        CONSTRAINT FK_VehicleDriver_Person FOREIGN KEY (PersonId) REFERENCES dbo.Person (Id)
+    );
+
+    CREATE INDEX IX_VehicleDriver_PersonId ON dbo.VehicleDriver (PersonId);
+END
+GO
+
+-- --------------------------------------------------------------------------
+-- dbo.VehicleDriver holds the whole crew, per convoy
+--
+-- The table keeps its name, but a crew member is now a Driver (0) or a Passenger (1) — a
+-- passenger can be any volunteer — and each row names the convoy. Three things follow:
+--
+--   * One seat per person per convoy: UQ_VehicleDriver_Convoy_Person. A person cannot be on
+--     two vehicles of the same journey.
+--   * The key is (ConvoyId, Vin, PersonId), not (Vin, PersonId): a Returned vehicle can join
+--     a later convoy, and the crew of the earlier journey stays as history.
+--   * FK_VehicleDriver_Convoy is NO ACTION rather than CASCADE. Convoy already reaches this
+--     table through Vehicle (SET NULL, then CASCADE), and SQL Server refuses a second cascade
+--     path; ConvoyRepository.DeleteAsync clears the crew itself, in the same transaction.
+--
+-- Rows written before ConvoyId existed take it from their vehicle; rows whose vehicle is on
+-- no convoy were crew of nothing and are removed.
+-- --------------------------------------------------------------------------
+
+IF COL_LENGTH('dbo.VehicleDriver', 'ConvoyId') IS NULL
+    ALTER TABLE dbo.VehicleDriver ADD ConvoyId int NULL;
+IF COL_LENGTH('dbo.VehicleDriver', 'Role') IS NULL
+    ALTER TABLE dbo.VehicleDriver ADD Role int NOT NULL CONSTRAINT DF_VehicleDriver_Role DEFAULT 0;
+GO
+
+IF EXISTS (SELECT 1 FROM sys.columns
+           WHERE object_id = OBJECT_ID('dbo.VehicleDriver') AND name = 'ConvoyId' AND is_nullable = 1)
+BEGIN
+    DELETE vd FROM dbo.VehicleDriver AS vd
+    JOIN dbo.Vehicle AS v ON v.Vin = vd.Vin
+    WHERE v.ConvoyId IS NULL;
+
+    UPDATE vd SET ConvoyId = v.ConvoyId
+    FROM dbo.VehicleDriver AS vd
+    JOIN dbo.Vehicle AS v ON v.Vin = vd.Vin;
+
+    ALTER TABLE dbo.VehicleDriver ALTER COLUMN ConvoyId int NOT NULL;
+END
+GO
+
+IF EXISTS (SELECT 1 FROM sys.index_columns AS ic
+           JOIN sys.indexes AS i ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+           WHERE i.name = 'PK_VehicleDriver' AND i.object_id = OBJECT_ID('dbo.VehicleDriver')
+           GROUP BY i.name HAVING COUNT(*) = 2)
+BEGIN
+    ALTER TABLE dbo.VehicleDriver DROP CONSTRAINT PK_VehicleDriver;
+    ALTER TABLE dbo.VehicleDriver ADD CONSTRAINT PK_VehicleDriver PRIMARY KEY (ConvoyId, Vin, PersonId);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_VehicleDriver_Convoy')
+    ALTER TABLE dbo.VehicleDriver ADD CONSTRAINT FK_VehicleDriver_Convoy
+        FOREIGN KEY (ConvoyId) REFERENCES dbo.Convoy (Id);
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_VehicleDriver_Role')
+    ALTER TABLE dbo.VehicleDriver ADD CONSTRAINT CK_VehicleDriver_Role CHECK (Role IN (0, 1));
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_VehicleDriver_Convoy_Person')
+    ALTER TABLE dbo.VehicleDriver ADD CONSTRAINT UQ_VehicleDriver_Convoy_Person UNIQUE (ConvoyId, PersonId);
+GO
+
+-- --------------------------------------------------------------------------
+-- Convoy arrival and vehicle handover
+--
+-- POST /convoys/{id}/arrive stamps Convoy.ArrivedAt once every vehicle on it has a finished
+-- manifest (Delivered, Lost or Returned). Delivered and Lost vehicles get Vehicle.HandedOverAt
+-- — they are part of the aid and stay in Ukraine — and are never offered for a convoy again;
+-- Returned vehicles are released (ConvoyId NULL) and can travel again. Both are write-once,
+-- stamped by that transition alone and absent from every UPDATE an ordinary edit issues.
+-- --------------------------------------------------------------------------
+
+IF COL_LENGTH('dbo.Convoy', 'ArrivedAt') IS NULL
+    ALTER TABLE dbo.Convoy ADD ArrivedAt datetime2(0) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'HandedOverAt') IS NULL
+    ALTER TABLE dbo.Vehicle ADD HandedOverAt datetime2(0) NULL;
+GO
+
+-- --------------------------------------------------------------------------
+-- Vehicle insurance — dbo.VehicleInsurance
+--
+-- Bought per vehicle per convoy by the Dispatcher, and it names the crew. So a crew change
+-- after it was recorded sets VoidedAt (in the same transaction as the crew write, in
+-- ConvoyRepository), and recording it again clears it. A manifest cannot depart unless its
+-- vehicle's insurance is recorded, not voided, and in cover on the day.
+--
+-- RecordedBySub is the token subject of whoever recorded it, never a request field — the same
+-- rule as dbo.ReceiverAccessLog. Cover dates are `date`; cost is optional.
+--
+-- FK_VehicleInsurance_Convoy is NO ACTION for the reason given for dbo.VehicleDriver above: a
+-- second cascade path from Convoy is refused. ConvoyRepository clears it when a vehicle leaves
+-- a convoy or a convoy is cancelled.
+-- --------------------------------------------------------------------------
+
+IF OBJECT_ID('dbo.VehicleInsurance') IS NULL
+BEGIN
+    CREATE TABLE dbo.VehicleInsurance (
+        ConvoyId      int            NOT NULL,
+        Vin           varchar(32)    NOT NULL,
+        Insurer       nvarchar(200)  NOT NULL,
+        PolicyNumber  nvarchar(100)  NOT NULL,
+        CoverStart    date           NOT NULL,
+        CoverEnd      date           NOT NULL,
+        CostGbp       decimal(10,2)  NULL,
+        RecordedBySub nvarchar(200)  NOT NULL,
+        RecordedAt    datetime2(0)   NOT NULL CONSTRAINT DF_VehicleInsurance_RecordedAt DEFAULT SYSUTCDATETIME(),
+        VoidedAt      datetime2(0)   NULL,
+
+        CONSTRAINT PK_VehicleInsurance PRIMARY KEY (ConvoyId, Vin),
+        CONSTRAINT FK_VehicleInsurance_Convoy FOREIGN KEY (ConvoyId) REFERENCES dbo.Convoy (Id),
+        CONSTRAINT FK_VehicleInsurance_Vehicle FOREIGN KEY (Vin) REFERENCES dbo.Vehicle (Vin) ON DELETE CASCADE,
+        CONSTRAINT CK_VehicleInsurance_Cover CHECK (CoverEnd >= CoverStart),
+        CONSTRAINT CK_VehicleInsurance_Cost CHECK (CostGbp IS NULL OR CostGbp >= 0)
     );
 END
 GO
