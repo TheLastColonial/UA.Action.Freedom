@@ -39,6 +39,8 @@ export interface VehicleCargoCapacity {
 
 export interface ManifestApiOptions {
   publishedConvoyIds?: readonly number[];
+  /** VINs whose insurance is recorded, not voided and in cover — the API refuses `depart` otherwise. */
+  insuredVins?: readonly string[];
   knownDriverIds?: readonly string[];
   vehicleCargoCapacity?: VehicleCargoCapacity;
 }
@@ -82,6 +84,7 @@ export function manifestApi(
   const teams = new Map<string, ManifestDriverTeamReadModel[]>();
   const boxes = new Map<string, ManifestBoxReadModel[]>();
   const publishedConvoys = new Set(options.publishedConvoyIds ?? []);
+  const insuredVins = new Set(options.insuredVins ?? []);
   const drivers = new Set(options.knownDriverIds ?? []);
   const idFrom = (raw: string | readonly string[] | undefined) => decodeURIComponent(String(raw));
 
@@ -287,6 +290,12 @@ export function manifestApi(
               "This manifest's convoy has not published its truck list, so it cannot be proposed.",
             );
           }
+        }
+        if (edge.verb === 'depart' && (manifest.vin === null || !insuredVins.has(manifest.vin))) {
+          return problem(
+            409,
+            'This vehicle cannot depart: its insurance is not recorded, was voided by a crew change, or does not cover today. Record the insurance for its current crew first.',
+          );
         }
         db.set(id, {
           ...manifest,

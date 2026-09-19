@@ -175,6 +175,112 @@ public class ConvoyRepositoryTests
         }
     }
 
+    private static VehicleInsuranceRecord AnInsurance(int convoyId, string vin, string policy = "POL-1") => new(
+        convoyId, vin, "Ukraine Aid Mutual", policy,
+        new DateTime(2026, 8, 25), new DateTime(2026, 9, 30), 412.50m, "operator-sub");
+
+    [Fact]
+    public async Task Records_insurance_for_a_vehicle_on_the_convoy_and_reads_it_back()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var elsewhere = NewVin();
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await AddVehicleAsync(elsewhere);
+            await repository.AssignVehicleAsync(id, vin, cancellationToken);
+
+            (await repository.RecordInsuranceAsync(AnInsurance(id, vin), cancellationToken)).Should().BeTrue();
+            (await repository.RecordInsuranceAsync(AnInsurance(id, elsewhere), cancellationToken)).Should().BeFalse();
+
+            var stored = await repository.GetInsuranceAsync(id, vin, cancellationToken);
+            stored!.PolicyNumber.Should().Be("POL-1");
+            stored.CoverEnd.Should().Be(new DateTime(2026, 9, 30));
+            stored.CostGbp.Should().Be(412.50m);
+            stored.RecordedBy.Should().Be("operator-sub");
+            stored.VoidedAt.Should().BeNull();
+            (await repository.GetInsuranceAsync(id, elsewhere, cancellationToken)).Should().BeNull();
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveVehicleAsync(elsewhere);
+            await RemoveConvoyAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task Changing_the_crew_voids_the_insurance_and_recording_it_again_restores_it()
+    {
+        // Insurance is bought for the named crew of that vehicle; a different crew is not covered.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var driver = await AddDriverAsync("Olena", "Bondar");
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await repository.AssignVehicleAsync(id, vin, cancellationToken);
+            await repository.RecordInsuranceAsync(AnInsurance(id, vin), cancellationToken);
+
+            await repository.AssignDriverAsync(id, vin, driver, CrewRole.Driver, cancellationToken);
+            (await repository.GetInsuranceAsync(id, vin, cancellationToken))!.VoidedAt.Should().NotBeNull();
+
+            await repository.RecordInsuranceAsync(AnInsurance(id, vin, "POL-2"), cancellationToken);
+            var renewed = await repository.GetInsuranceAsync(id, vin, cancellationToken);
+            renewed!.VoidedAt.Should().BeNull();
+            renewed.PolicyNumber.Should().Be("POL-2");
+
+            await repository.UnassignDriverAsync(id, vin, driver, cancellationToken);
+            (await repository.GetInsuranceAsync(id, vin, cancellationToken))!.VoidedAt.Should().NotBeNull();
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(id);
+            await RemovePeopleAsync(driver);
+        }
+    }
+
+    [Fact]
+    public async Task Insurance_goes_with_the_vehicle_off_the_convoy_and_with_a_cancelled_convoy()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var cancelled = await repository.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var other = NewVin();
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await AddVehicleAsync(other);
+            await repository.AssignVehicleAsync(id, vin, cancellationToken);
+            await repository.AssignVehicleAsync(cancelled, other, cancellationToken);
+            await repository.RecordInsuranceAsync(AnInsurance(id, vin), cancellationToken);
+            await repository.RecordInsuranceAsync(AnInsurance(cancelled, other), cancellationToken);
+
+            await repository.UnassignVehicleAsync(id, vin, cancellationToken);
+            (await repository.DeleteAsync(cancelled, cancellationToken)).Should().BeTrue();
+
+            (await repository.GetInsuranceAsync(id, vin, cancellationToken)).Should().BeNull();
+            (await ScalarAsync("SELECT COUNT(1) FROM dbo.VehicleInsurance WHERE Vin = @vin", ("@vin", other))).Should().Be(0);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveVehicleAsync(other);
+            await RemoveConvoyAsync(id);
+        }
+    }
+
     [Fact]
     public async Task Will_not_crew_or_list_a_vehicle_that_is_not_on_the_convoy()
     {

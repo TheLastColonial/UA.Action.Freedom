@@ -90,4 +90,14 @@ public interface IConvoyRepository
     /// not only of the handler's check.
     /// </summary>
     Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
+
+    Task<VehicleInsuranceReadModel?> GetInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records or replaces the insurance, clearing any void. Returns false when the vehicle is not
+    /// on this convoy. Crew changes void it — see <see cref="AssignDriverAsync"/>.
+    /// </summary>
+    Task<bool> RecordInsuranceAsync(VehicleInsuranceRecord insurance, CancellationToken cancellationToken);
+
+    Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken);
 }

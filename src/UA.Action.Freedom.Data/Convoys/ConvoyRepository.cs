@@ -109,7 +109,8 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            DELETE FROM dbo.VehicleDriver WHERE ConvoyId = @id
+            DELETE FROM dbo.VehicleDriver WHERE ConvoyId = @id;
+            DELETE FROM dbo.VehicleInsurance WHERE ConvoyId = @id;
             """,
             new { id },
             transaction,
@@ -250,7 +251,10 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         // Scoped to this convoy: removing a vehicle from a convoy it was never on is a caller
         // mistake worth reporting, not a silent success that clears someone else's truck list.
         await connection.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM dbo.VehicleDriver WHERE ConvoyId = @convoyId AND Vin = @vin",
+            """
+            DELETE FROM dbo.VehicleDriver WHERE ConvoyId = @convoyId AND Vin = @vin;
+            DELETE FROM dbo.VehicleInsurance WHERE ConvoyId = @convoyId AND Vin = @vin;
+            """,
             new { convoyId, vin },
             transaction,
             cancellationToken: cancellationToken));
@@ -307,12 +311,16 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         int convoyId, string vin, Guid personId, CrewRole role, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
 
         // One conditional INSERT rather than check-then-insert: the vehicle has to be on this
         // convoy, and the person in no other seat of it, at the moment the row is written.
-        // UQ_VehicleDriver_Convoy_Person settles a race the WHERE cannot see.
+        // UQ_VehicleDriver_Convoy_Person settles a race the WHERE cannot see. The crew and the
+        // insurance that names it change together, so the void is in the same transaction.
         try
         {
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
             var inserted = await connection.ExecuteAsync(new CommandDefinition(
                 """
                 INSERT INTO dbo.VehicleDriver (ConvoyId, Vin, PersonId, [Role])
@@ -321,10 +329,13 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
                   AND NOT EXISTS (SELECT 1 FROM dbo.VehicleDriver WHERE ConvoyId = @convoyId AND PersonId = @personId)
                 """,
                 new { convoyId, vin, personId, role = (int)role },
+                transaction,
                 cancellationToken: cancellationToken));
 
             if (inserted > 0)
             {
+                await VoidInsuranceAsync(connection, transaction, convoyId, vin, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
                 return AssignDriverResult.Assigned;
             }
         }
@@ -335,6 +346,17 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
 
         return await WhyNotSeatedAsync(connection, convoyId, vin, personId, cancellationToken);
     }
+
+    private static Task VoidInsuranceAsync(
+        DbConnection connection, DbTransaction transaction, int convoyId, string vin, CancellationToken cancellationToken) =>
+        connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.VehicleInsurance SET VoidedAt = SYSUTCDATETIME()
+            WHERE ConvoyId = @convoyId AND Vin = @vin AND VoidedAt IS NULL
+            """,
+            new { convoyId, vin },
+            transaction,
+            cancellationToken: cancellationToken));
 
     private static async Task<AssignDriverResult> WhyNotSeatedAsync(
         DbConnection connection, int convoyId, string vin, Guid personId, CancellationToken cancellationToken)
@@ -357,6 +379,8 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
     public async Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             """
@@ -365,6 +389,66 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
               AND EXISTS (SELECT 1 FROM dbo.Vehicle WHERE Vin = @vin AND ConvoyId = @convoyId)
             """,
             new { convoyId, vin, personId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (affected > 0)
+        {
+            await VoidInsuranceAsync(connection, transaction, convoyId, vin, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return affected > 0;
+    }
+
+    public async Task<VehicleInsuranceReadModel?> GetInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<VehicleInsuranceReadModel>(new CommandDefinition(
+            """
+            SELECT ConvoyId, Vin, Insurer, PolicyNumber, CoverStart, CoverEnd, CostGbp,
+                   RecordedBySub AS RecordedBy, RecordedAt, VoidedAt
+            FROM dbo.VehicleInsurance
+            WHERE ConvoyId = @convoyId AND Vin = @vin
+            """,
+            new { convoyId, vin },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<bool> RecordInsuranceAsync(VehicleInsuranceRecord insurance, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // Replace rather than accumulate: the latest policy is the one that covers the crew. The
+        // vehicle has to be on the convoy at the moment it is written.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            MERGE dbo.VehicleInsurance WITH (HOLDLOCK) AS target
+            USING (SELECT @ConvoyId AS ConvoyId, @Vin AS Vin
+                   WHERE EXISTS (SELECT 1 FROM dbo.Vehicle WHERE Vin = @Vin AND ConvoyId = @ConvoyId)) AS source
+            ON target.ConvoyId = source.ConvoyId AND target.Vin = source.Vin
+            WHEN MATCHED THEN UPDATE SET
+                Insurer = @Insurer, PolicyNumber = @PolicyNumber, CoverStart = @CoverStart,
+                CoverEnd = @CoverEnd, CostGbp = @CostGbp, RecordedBySub = @RecordedBy,
+                RecordedAt = SYSUTCDATETIME(), VoidedAt = NULL
+            WHEN NOT MATCHED THEN INSERT
+                (ConvoyId, Vin, Insurer, PolicyNumber, CoverStart, CoverEnd, CostGbp, RecordedBySub)
+                VALUES (@ConvoyId, @Vin, @Insurer, @PolicyNumber, @CoverStart, @CoverEnd, @CostGbp, @RecordedBy);
+            """,
+            insurance,
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM dbo.VehicleInsurance WHERE ConvoyId = @convoyId AND Vin = @vin",
+            new { convoyId, vin },
             cancellationToken: cancellationToken));
 
         return affected > 0;

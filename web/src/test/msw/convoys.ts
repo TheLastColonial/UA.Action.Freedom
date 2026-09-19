@@ -9,11 +9,21 @@ import type {
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
   VehicleDriverReadModel,
+  VehicleInsuranceReadModel,
 } from '../../api/schemas/convoys';
 import type { PersonReadModel } from '../../api/schemas/people';
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
 import { crewRoleSchema } from '../../api/schemas/convoys';
-import { problem } from './problem';
+import { problem, validationProblem } from './problem';
+
+// Mirrors RecordInsuranceRequest and its validator.
+const insuranceBodySchema = z.object({
+  insurer: z.string().min(1).max(200),
+  policyNumber: z.string().min(1).max(100),
+  coverStart: z.string(),
+  coverEnd: z.string(),
+  costGbp: z.number().min(0).optional(),
+});
 
 // Mirrors AssignCrewRequest: an optional body, and no body means a driver.
 const crewBodySchema = z.object({ role: crewRoleSchema.optional() });
@@ -34,6 +44,8 @@ export interface ConvoyApi {
   routes: Map<number, RouteStopReadModel[]>;
   vehicles: Map<number, ConvoyVehicleReadModel[]>;
   drivers: Map<string, VehicleDriverReadModel[]>;
+  /** Keyed `${convoyId}:${vin}`, like `drivers`. */
+  insurance: Map<string, VehicleInsuranceReadModel>;
   handlers: RequestHandler[];
 }
 
@@ -47,6 +59,7 @@ export function convoyApi(
   const routes = new Map<number, RouteStopReadModel[]>();
   const vehicles = new Map<number, ConvoyVehicleReadModel[]>();
   const drivers = new Map<string, VehicleDriverReadModel[]>();
+  const insurance = new Map<string, VehicleInsuranceReadModel>();
 
   const idFrom = (raw: string | readonly string[] | undefined) => Number(String(raw));
   const driverKey = (convoyId: number, vin: string) => `${String(convoyId)}:${vin}`;
@@ -54,6 +67,15 @@ export function convoyApi(
     (vehicles.get(convoyId) ?? []).some((v) => v.vin === vin);
   const convoyOf = (vin: string) =>
     [...vehicles.entries()].find(([, list]) => list.some((v) => v.vin === vin))?.[0];
+  // The policy names the crew, so any crew change voids it — as ConvoyRepository does.
+  const voidInsurance = (convoyId: number, vin: string) => {
+    const key = driverKey(convoyId, vin);
+    const policy = insurance.get(key);
+    if (policy && !policy.voided) {
+      insurance.set(key, { ...policy, voided: true, voidedAt: '2026-09-01T10:00:00' });
+    }
+  };
+
   const setDriverCount = (convoyId: number, vin: string) => {
     const crew = drivers.get(driverKey(convoyId, vin)) ?? [];
     const driverCount = crew.filter((member) => member.role === 'Driver').length;
@@ -202,6 +224,7 @@ export function convoyApi(
       }
       vehicles.set(id, next);
       drivers.delete(driverKey(id, vin));
+      insurance.delete(driverKey(id, vin));
       return new HttpResponse(null, { status: 204 });
     }),
 
@@ -274,6 +297,7 @@ export function convoyApi(
         { personId: person.id, firstName: person.firstName, lastName: person.lastName, role },
       ]);
       setDriverCount(convoyId, vin);
+      voidInsurance(convoyId, vin);
       return new HttpResponse(null, { status: 204 });
     }),
 
@@ -291,9 +315,55 @@ export function convoyApi(
       }
       drivers.set(key, next);
       setDriverCount(convoyId, vin);
+      voidInsurance(convoyId, vin);
       return new HttpResponse(null, { status: 204 });
     }),
+
+    http.get('/convoys/:id/vehicles/:vin/insurance', ({ params }) => {
+      const policy = insurance.get(
+        driverKey(idFrom(params['id']), decodeURIComponent(String(params['vin']))),
+      );
+      return policy ? HttpResponse.json(policy) : new HttpResponse(null, { status: 404 });
+    }),
+
+    http.put('/convoys/:id/vehicles/:vin/insurance', async ({ params, request }) => {
+      const convoyId = idFrom(params['id']);
+      const vin = decodeURIComponent(String(params['vin']));
+      if (!db.has(convoyId)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      if (!onConvoy(convoyId, vin)) {
+        return problem(404, `There is no vehicle with VIN '${vin}' on this convoy.`);
+      }
+      const parsed = insuranceBodySchema.safeParse(await request.json());
+      if (!parsed.success) {
+        return validationProblem({ Insurer: [parsed.error.message] });
+      }
+      if (parsed.data.coverEnd < parsed.data.coverStart) {
+        return validationProblem({ CoverEnd: ['Cover cannot end before it starts.'] });
+      }
+      insurance.set(driverKey(convoyId, vin), {
+        convoyId,
+        vin,
+        insurer: parsed.data.insurer,
+        policyNumber: parsed.data.policyNumber,
+        coverStart: `${parsed.data.coverStart}T00:00:00`,
+        coverEnd: `${parsed.data.coverEnd}T00:00:00`,
+        costGbp: parsed.data.costGbp ?? null,
+        recordedBy: 'test-user',
+        recordedAt: '2026-08-24T12:00:00',
+        voidedAt: null,
+        voided: false,
+      });
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.delete('/convoys/:id/vehicles/:vin/insurance', ({ params }) =>
+      insurance.delete(driverKey(idFrom(params['id']), decodeURIComponent(String(params['vin']))))
+        ? new HttpResponse(null, { status: 204 })
+        : new HttpResponse(null, { status: 404 }),
+    ),
   ];
 
-  return { db, routes, vehicles, drivers, handlers };
+  return { db, routes, vehicles, drivers, insurance, handlers };
 }

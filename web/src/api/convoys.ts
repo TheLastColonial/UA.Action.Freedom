@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import type { CreatedResource, ParentMissing } from './client';
 import { delete204, getCollection, getJson, postCreate, postTransition, put204 } from './http';
+import { ApiNotFound } from './problem';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
 import {
@@ -11,16 +12,19 @@ import {
   convoyVehicleReadModelSchema,
   routeStopReadModelSchema,
   vehicleDriverReadModelSchema,
+  vehicleInsuranceReadModelSchema,
 } from './schemas/convoys';
 import type {
   ConvoyReadModel,
   ConvoyVehicleReadModel,
   CreateConvoyRequest,
   CrewRole,
+  RecordInsuranceRequest,
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
   UpdateConvoyRequest,
   VehicleDriverReadModel,
+  VehicleInsuranceReadModel,
 } from './schemas/convoys';
 
 const BASE = '/convoys';
@@ -96,6 +100,30 @@ export function assignDriver(
 
 export function unassignDriver(id: number, vin: string, personId: string): Promise<void> {
   return delete204(`${vinPath(id, vin)}/drivers/${encodeURIComponent(personId)}`);
+}
+
+// A vehicle with no insurance recorded is a bare 404; that is an answer ("not recorded"), not
+// an error, so it resolves to null.
+export async function fetchInsurance(
+  id: number,
+  vin: string,
+): Promise<VehicleInsuranceReadModel | null> {
+  try {
+    return await getJson(`${vinPath(id, vin)}/insurance`, vehicleInsuranceReadModelSchema);
+  } catch (error) {
+    if (error instanceof ApiNotFound) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export function recordInsurance(
+  id: number,
+  vin: string,
+  body: RecordInsuranceRequest,
+): Promise<void> {
+  return put204(`${vinPath(id, vin)}/insurance`, body);
 }
 
 export function publishTruckList(id: number): Promise<void> {
@@ -202,6 +230,7 @@ export function useAssignDriver(
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleDrivers(id, vin) });
       await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) });
     },
   });
 }
@@ -213,6 +242,7 @@ export function useUnassignDriver(id: number, vin: string): UseMutationResult<vo
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleDrivers(id, vin) });
       await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) });
     },
   });
 }
@@ -227,5 +257,26 @@ export function usePublishTruckList(id: number): UseMutationResult<void, Error, 
       // A published truck list is a precondition for proposing a manifest against the convoy.
       await queryClient.invalidateQueries({ queryKey: qk.manifests.all });
     },
+  });
+}
+
+export function useVehicleInsurance(
+  id: number,
+  vin: string,
+): UseQueryResult<VehicleInsuranceReadModel | null> {
+  return useQuery({
+    queryKey: qk.convoys.insurance(id, vin),
+    queryFn: () => fetchInsurance(id, vin),
+  });
+}
+
+export function useRecordInsurance(
+  id: number,
+  vin: string,
+): UseMutationResult<void, Error, RecordInsuranceRequest> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RecordInsuranceRequest) => recordInsurance(id, vin, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) }),
   });
 }

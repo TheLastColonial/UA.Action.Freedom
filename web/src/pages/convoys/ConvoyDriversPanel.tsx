@@ -21,6 +21,7 @@ import { DataTable } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { SelectField } from '../../components/form/fields';
+import { VehicleInsurancePanel } from './VehicleInsurancePanel';
 
 interface ConvoyDriversPanelProps {
   convoyId: number;
@@ -79,6 +80,7 @@ export function ConvoyDriversPanel({ convoyId }: ConvoyDriversPanelProps): JSX.E
         <section key={vehicle.vin} aria-label={`Crew for ${vehicle.plate}`}>
           <h3>{vehicle.plate}</h3>
           <VehicleCrew convoyId={convoyId} vehicle={vehicle} volunteers={peopleQuery.data} />
+          <VehicleInsurancePanel convoyId={convoyId} vin={vehicle.vin} plate={vehicle.plate} />
         </section>
       ))}
     </div>

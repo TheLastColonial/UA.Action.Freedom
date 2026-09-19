@@ -20,6 +20,7 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
 {
     private const string ManifestKey = "manifest";
     private const string ConvoyKey = "convoy-for-manifest";
+    private const string VehicleKey = "vehicle-for-manifest";
 
     private const string ConvoyBody =
         """
@@ -39,6 +40,58 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
             HttpMethod.Post, $"/convoys/{state.Pinned(ConvoyKey)}/publish-truck-list", state.CurrentToken, null);
 
         published.StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
+    }
+
+    /// <summary>
+    /// Everything departure needs: a vehicle that passed its inspection, on the convoy, insured
+    /// for today — and then the truck list published. Insurance is recorded before publishing
+    /// only because nothing here changes the crew afterwards; a crew change would void it.
+    /// </summary>
+    [Given("a convoy exists with an insured vehicle on its published truck list")]
+    public async Task GivenAConvoyExistsWithAnInsuredVehicleOnItsPublishedTruckList()
+    {
+        await CreateConvoy();
+        var convoyId = state.Pinned(ConvoyKey);
+        var vin = "BDDM" + Guid.NewGuid().ToString("N")[..13].ToUpperInvariant();
+        var operatorToken = await api.TokenForAsync("operator");
+
+        (await api.SendAsync(HttpMethod.Post, "/vehicles", operatorToken, $$"""
+            { "vin": "{{vin}}", "plate": "UA20ACT", "year": 2015, "fuel": "Diesel", "transmission": "Manual", "weightKg": 2100 }
+            """)).StatusCode.Should().Be(HttpStatusCode.Created, "the body was: {0}", api.LastBody);
+        state.CreatedResources.Add(("vehicles", vin));
+
+        (await api.SendAsync(HttpMethod.Put, $"/vehicles/{vin}/inspection", operatorToken, """{ "status": "Passed" }"""))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
+        (await api.SendAsync(HttpMethod.Put, $"/convoys/{convoyId}/vehicles/{vin}", operatorToken, null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
+
+        var today = DateTime.UtcNow.Date;
+        (await api.SendAsync(HttpMethod.Put, $"/convoys/{convoyId}/vehicles/{vin}/insurance", operatorToken, $$"""
+            { "insurer": "Ukraine Aid Mutual", "policyNumber": "BDD-1", "coverStart": "{{today.AddDays(-1):yyyy-MM-dd}}", "coverEnd": "{{today.AddDays(30):yyyy-MM-dd}}" }
+            """)).StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
+
+        (await api.SendAsync(HttpMethod.Post, $"/convoys/{convoyId}/publish-truck-list", operatorToken, null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
+
+        state.Pin(VehicleKey, vin);
+    }
+
+    [When("I POST a manifest for the insured vehicle on the remembered convoy")]
+    public Task WhenIPostAManifestForTheInsuredVehicle() =>
+        PostManifest($$"""
+            { "id": "{{state.Pinned(ManifestKey)}}", "convoyId": {{state.Pinned(ConvoyKey)}}, "vin": "{{state.Pinned(VehicleKey)}}" }
+            """);
+
+    [When("I remove the insurance of the insured vehicle")]
+    public async Task WhenIRemoveTheInsuranceOfTheInsuredVehicle()
+    {
+        var operatorToken = await api.TokenForAsync("operator");
+        (await api.SendAsync(
+                HttpMethod.Delete,
+                $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{state.Pinned(VehicleKey)}/insurance",
+                operatorToken,
+                null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
     }
 
     [Given("a convoy exists whose truck list is not published")]

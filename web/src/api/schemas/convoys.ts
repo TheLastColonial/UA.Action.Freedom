@@ -60,3 +60,30 @@ export interface RouteStopRequest {
 export interface ReplaceConvoyRouteRequest {
   stops: RouteStopRequest[];
 }
+
+// src/UA.Action.Freedom.Application/Convoys/InsuranceUseCases.cs — VehicleInsuranceReadModel.
+// `voided` is set when the crew changed after it was recorded: the policy names the crew.
+export const vehicleInsuranceReadModelSchema = z.object({
+  convoyId: z.number().int(),
+  vin: z.string(),
+  insurer: z.string(),
+  policyNumber: z.string(),
+  coverStart: z.string(),
+  coverEnd: z.string(),
+  costGbp: z.number().nullable(),
+  recordedBy: z.string(),
+  recordedAt: z.string(),
+  voidedAt: z.string().nullable(),
+  voided: z.boolean(),
+});
+export type VehicleInsuranceReadModel = z.infer<typeof vehicleInsuranceReadModelSchema>;
+
+// Body of PUT /convoys/{id}/vehicles/{vin}/insurance — RecordInsuranceRequest. Who recorded it
+// comes from the token, not from here.
+export interface RecordInsuranceRequest {
+  insurer: string;
+  policyNumber: string;
+  coverStart: string;
+  coverEnd: string;
+  costGbp?: number;
+}

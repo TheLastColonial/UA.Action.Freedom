@@ -30,6 +30,9 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
     /// </summary>
     private readonly List<CrewSeat> crew = [];
 
+    /// <summary>Standing in for <c>dbo.VehicleInsurance</c>, keyed (ConvoyId, Vin).</summary>
+    private readonly Dictionary<(int ConvoyId, string Vin), VehicleInsuranceReadModel> insurance = [];
+
     /// <summary>Names for the crew list, standing in for the join to <c>dbo.Person</c>; the role comes from the seat.</summary>
     private readonly Dictionary<Guid, VehicleDriverReadModel> persons = [];
 
@@ -66,6 +69,15 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
         crew.Add(new CrewSeat(ConvoyOf(vin) ?? throw new InvalidOperationException($"{vin} is on no convoy."), vin, personId, role));
         return this;
     }
+
+    public InMemoryConvoyRepository WithInsurance(VehicleInsuranceReadModel policy)
+    {
+        insurance[(policy.ConvoyId, policy.Vin.ToUpperInvariant())] = policy;
+        return this;
+    }
+
+    public VehicleInsuranceReadModel? InsuranceOf(int convoyId, string vin) =>
+        insurance.GetValueOrDefault((convoyId, vin.ToUpperInvariant()));
 
     public int Count => convoys.Count;
 
@@ -115,6 +127,10 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
     {
         routes.Remove(id);
         crew.RemoveAll(seat => seat.ConvoyId == id);
+        foreach (var key in insurance.Keys.Where(key => key.ConvoyId == id).ToList())
+        {
+            insurance.Remove(key);
+        }
 
         foreach (var vin in VinsOn(id))
         {
@@ -219,12 +235,48 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
         }
 
         crew.Add(new CrewSeat(convoyId, vin, personId, role));
+        VoidInsurance(convoyId, vin);
         return Task.FromResult(AssignDriverResult.Assigned);
     }
 
-    public Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken) =>
-        Task.FromResult(IsOn(convoyId, vin)
-            && crew.RemoveAll(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin) && seat.PersonId == personId) > 0);
+    public Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken)
+    {
+        var removed = IsOn(convoyId, vin)
+            && crew.RemoveAll(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin) && seat.PersonId == personId) > 0;
+        if (removed)
+        {
+            VoidInsurance(convoyId, vin);
+        }
+
+        return Task.FromResult(removed);
+    }
+
+    public Task<VehicleInsuranceReadModel?> GetInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken) =>
+        Task.FromResult(InsuranceOf(convoyId, vin));
+
+    public Task<bool> RecordInsuranceAsync(VehicleInsuranceRecord policy, CancellationToken cancellationToken)
+    {
+        if (!IsOn(policy.ConvoyId, policy.Vin))
+        {
+            return Task.FromResult(false);
+        }
+
+        insurance[(policy.ConvoyId, policy.Vin.ToUpperInvariant())] = new VehicleInsuranceReadModel(
+            policy.ConvoyId, policy.Vin, policy.Insurer, policy.PolicyNumber, policy.CoverStart, policy.CoverEnd,
+            policy.CostGbp, policy.RecordedBy, DateTime.UtcNow, VoidedAt: null);
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken) =>
+        Task.FromResult(insurance.Remove((convoyId, vin.ToUpperInvariant())));
+
+    private void VoidInsurance(int convoyId, string vin)
+    {
+        if (InsuranceOf(convoyId, vin) is { VoidedAt: null } policy)
+        {
+            insurance[(convoyId, vin.ToUpperInvariant())] = policy with { VoidedAt = DateTime.UtcNow };
+        }
+    }
 
     private bool IsOn(int convoyId, string vin) => ConvoyOf(vin) == convoyId;
 
@@ -240,6 +292,11 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
     {
         var convoyId = ConvoyOf(vin);
         crew.RemoveAll(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin));
+        if (convoyId is { } id)
+        {
+            insurance.Remove((id, vin.ToUpperInvariant()));
+        }
+
         vehicles[vin] = vehicles[vin] with { ConvoyId = null };
     }
 }

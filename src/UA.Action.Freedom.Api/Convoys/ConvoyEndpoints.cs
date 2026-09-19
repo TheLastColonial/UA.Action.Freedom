@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
@@ -222,6 +223,55 @@ public static class ConvoyEndpoints
             };
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysAssignDrivers);
+
+        convoys.MapGet("/{id:int}/vehicles/{vin}/insurance", async (
+            int id,
+            string vin,
+            IQueryHandler<GetInsuranceQuery, VehicleInsuranceReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var policy = await handler.HandleAsync(new GetInsuranceQuery(id, vin), cancellationToken);
+            return policy is null ? Results.NotFound() : Results.Ok(policy);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+
+        convoys.MapPut("/{id:int}/vehicles/{vin}/insurance", async (
+            int id,
+            string vin,
+            RecordInsuranceRequest request,
+            ClaimsPrincipal caller,
+            ICommandHandler<RecordInsuranceCommand, RecordInsuranceOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            // Who recorded the policy comes from the token, never the body.
+            var recordedBy = caller.FindFirstValue(ClaimTypes.NameIdentifier)
+                             ?? caller.FindFirstValue("sub")
+                             ?? "unknown";
+
+            var outcome = await handler.HandleAsync(request.ToCommand(id, vin, recordedBy), cancellationToken);
+
+            return outcome switch
+            {
+                RecordInsuranceOutcome.Recorded => Results.NoContent(),
+                RecordInsuranceOutcome.ConvoyNotFound => Results.NotFound(),
+                _ => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+            };
+        })
+        .AddEndpointFilter<ValidationFilter<RecordInsuranceRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
+        convoys.MapDelete("/{id:int}/vehicles/{vin}/insurance", async (
+            int id,
+            string vin,
+            ICommandHandler<RemoveInsuranceCommand, RemoveInsuranceOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new RemoveInsuranceCommand(id, vin), cancellationToken);
+            return outcome == RemoveInsuranceOutcome.Removed ? Results.NoContent() : Results.NotFound();
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
         convoys.MapPost("/{id:int}/publish-truck-list", async (
             int id,

@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 
 import type { Role } from '../../auth/roles';
-import { makeConvoy, makeConvoyVehicle } from '../../test/factories/convoy';
+import { makeConvoy, makeConvoyVehicle, makeInsurance } from '../../test/factories/convoy';
 import { makePerson } from '../../test/factories/person';
 import { convoyApi } from '../../test/msw/convoys';
 import { personApi } from '../../test/msw/people';
@@ -46,7 +46,7 @@ test('warns about each vehicle with fewer than two drivers', async () => {
   const screen = await renderPanel();
 
   await expect
-    .element(screen.getByRole('status'))
+    .element(screen.getByText(/have fewer than two drivers/))
     .toHaveTextContent(
       'Vehicles VIN-TEST-1 (PL-001), VIN-TEST-3 (PL-003) have fewer than two drivers',
     );
@@ -156,3 +156,15 @@ test.each<[Role]>([['Loader'], ['Administrator'], ['Purchaser']])(
       .not.toBeInTheDocument();
   },
 );
+
+test('changing the crew after insuring the vehicle shows the policy as voided', async () => {
+  const convoys = serve();
+  convoys.insurance.set('7:VIN-TEST-1', makeInsurance({ convoyId: 7, vin: 'VIN-TEST-1' }));
+  const screen = await renderPanel();
+  await expect.element(screen.getByText(/Insured with Ukraine Aid Mutual/)).toBeInTheDocument();
+
+  await screen.getByLabelText('Add driver to PL-001').selectOptions(alice.id);
+  await screen.getByRole('button', { name: 'Assign' }).click();
+
+  await expect.element(screen.getByText(/voided by a crew change/)).toBeInTheDocument();
+});

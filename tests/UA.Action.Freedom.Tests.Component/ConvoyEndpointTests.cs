@@ -565,4 +565,120 @@ public class ConvoyEndpointTests
 
         repository.DriverIdsOf(Vin).Should().BeEmpty();
     }
+
+    private static object AnInsuranceBody(string coverEnd = "2026-09-30") => new
+    {
+        insurer = "Ukraine Aid Mutual",
+        policyNumber = "POL-1",
+        coverStart = "2026-08-25",
+        coverEnd,
+        costGbp = 412.50m,
+        recordedBy = "forged-by-the-client",
+    };
+
+    [Theory]
+    [InlineData("Dispatcher")]
+    [InlineData("Administrator")]
+    public async Task Insurance_is_recorded_against_the_caller_and_read_back(string role)
+    {
+        var repository = AConvoyWithAVehicleOnIt();
+        await using var api = FreedomApi.WithConvoys(repository, roles: role);
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var policy = await client.GetFromJsonAsync<JsonElement>(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", TestContext.Current.CancellationToken);
+        policy.GetProperty("policyNumber").GetString().Should().Be("POL-1");
+        policy.GetProperty("costGbp").GetDecimal().Should().Be(412.50m);
+        policy.GetProperty("recordedBy").GetString().Should().Be("test-user");
+        policy.GetProperty("voided").GetBoolean().Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Loader")]
+    [InlineData("Purchaser")]
+    [InlineData("Mechanic")]
+    public async Task Only_a_dispatcher_or_administrator_records_insurance(string role)
+    {
+        var repository = AConvoyWithAVehicleOnIt();
+        await using var api = FreedomApi.WithConvoys(repository, roles: role);
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        repository.InsuranceOf(Id, Vin).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Cover_that_ends_before_it_starts_is_a_validation_problem()
+    {
+        await using var api = FreedomApi.WithConvoys(AConvoyWithAVehicleOnIt(), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(coverEnd: "2026-08-01"), TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").TryGetProperty("CoverEnd", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Insuring_a_vehicle_that_is_not_on_the_convoy_is_a_404()
+    {
+        await using var api = FreedomApi.WithConvoys(
+            new InMemoryConvoyRepository(AConvoy()).WithVehicle(Vin), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_vehicle_with_no_insurance_recorded_reads_as_a_404()
+    {
+        await using var api = FreedomApi.WithConvoys(AConvoyWithAVehicleOnIt(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.GetAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Changing_the_crew_after_insuring_voids_the_insurance()
+    {
+        var repository = AConvoyWithAVehicleOnIt();
+        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        using var client = api.CreateClient();
+        await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+
+        await client.PutAsync($"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", content: null, TestContext.Current.CancellationToken);
+
+        var policy = await client.GetFromJsonAsync<JsonElement>(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", TestContext.Current.CancellationToken);
+        policy.GetProperty("voided").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Insurance_can_be_removed()
+    {
+        var repository = AConvoyWithAVehicleOnIt();
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+        await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+
+        var removed = await client.DeleteAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", TestContext.Current.CancellationToken);
+        var again = await client.DeleteAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", TestContext.Current.CancellationToken);
+
+        removed.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        again.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }
