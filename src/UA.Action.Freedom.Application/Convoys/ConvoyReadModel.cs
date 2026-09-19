@@ -35,6 +35,12 @@ public sealed record RouteStopReadModel(
 
 /// <summary>
 /// A vehicle as it appears on a convoy's truck list — enough to recognise it and to add up a
-/// border-check weight, not the whole vehicle record.
+/// border-check weight, not the whole vehicle record. Also includes a driver count for planning
+/// (advisory warning when fewer than two).
 /// </summary>
-public sealed record ConvoyVehicleReadModel(string Vin, string Plate, int WeightKg);
+public sealed record ConvoyVehicleReadModel(string Vin, string Plate, int WeightKg, int DriverCount);
+
+/// <summary>
+/// A driver assigned to a specific vehicle within a convoy during planning.
+/// </summary>
+public sealed record VehicleDriverReadModel(Guid PersonId, string FirstName, string LastName);

@@ -645,6 +645,26 @@ BEGIN
 END
 GO
 
+-- Convoy vehicle crews: drivers assigned to specific vehicles within a convoy during planning.
+-- A vehicle is on at most one convoy at a time, so we don't need ConvoyId here — the join
+-- is on Vin alone. Deleting a vehicle cascades the row; unassigning a vehicle from a convoy
+-- (ConvoyId = NULL) explicitly deletes these rows in the same transaction.
+IF OBJECT_ID('dbo.VehicleDriver') IS NULL
+BEGIN
+    CREATE TABLE dbo.VehicleDriver (
+        Vin       varchar(32)      NOT NULL,
+        PersonId  uniqueidentifier NOT NULL,
+        CreatedAt datetime2        NOT NULL CONSTRAINT DF_VehicleDriver_CreatedAt DEFAULT (SYSUTCDATETIME()),
+
+        CONSTRAINT PK_VehicleDriver PRIMARY KEY (Vin, PersonId),
+        CONSTRAINT FK_VehicleDriver_Vehicle FOREIGN KEY (Vin) REFERENCES dbo.Vehicle (Vin) ON DELETE CASCADE,
+        CONSTRAINT FK_VehicleDriver_Person FOREIGN KEY (PersonId) REFERENCES dbo.Person (Id)
+    );
+
+    CREATE INDEX IX_VehicleDriver_PersonId ON dbo.VehicleDriver (PersonId);
+END
+GO
+
 -- Cargo. A box travels on at most one manifest, which the primary key on BoxId enforces:
 -- the same box on two manifests would be counted twice at a border and arrive once.
 IF OBJECT_ID('dbo.ManifestBox') IS NULL

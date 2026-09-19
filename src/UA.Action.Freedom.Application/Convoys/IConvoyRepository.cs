@@ -47,4 +47,21 @@ public interface IConvoyRepository
     /// distinguishes those by reading the convoy.
     /// </summary>
     Task<bool> PublishTruckListAsync(int convoyId, DateTime publishedAt, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the drivers assigned to a specific vehicle on this convoy, or null when the convoy does not exist.
+    /// </summary>
+    Task<IReadOnlyList<VehicleDriverReadModel>?> ListVehicleDriversAsync(int convoyId, string vin, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Assigns a driver to a vehicle on a convoy. Returns false when there is no such vehicle on this convoy or
+    /// the driver is already assigned to this vehicle.
+    /// </summary>
+    Task<bool> AssignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Unassigns a driver from a vehicle on a convoy. Returns false when there is no such vehicle on this convoy or
+    /// the driver is not assigned to this vehicle.
+    /// </summary>
+    Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
 }

@@ -41,6 +41,9 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<AssignVehicleToConvoyCommand, AssignVehicleOutcome>, AssignVehicleToConvoyHandler>();
         services.AddScoped<ICommandHandler<UnassignVehicleFromConvoyCommand, UnassignVehicleOutcome>, UnassignVehicleFromConvoyHandler>();
         services.AddScoped<IQueryHandler<ListConvoyVehiclesQuery, IReadOnlyList<ConvoyVehicleReadModel>?>, ListConvoyVehiclesHandler>();
+        services.AddScoped<ICommandHandler<AssignDriverToVehicleCommand, AssignDriverOutcome>, AssignDriverToVehicleHandler>();
+        services.AddScoped<ICommandHandler<UnassignDriverFromVehicleCommand, UnassignDriverOutcome>, UnassignDriverFromVehicleHandler>();
+        services.AddScoped<IQueryHandler<ListVehicleDriversQuery, IReadOnlyList<VehicleDriverReadModel>?>, ListVehicleDriversHandler>();
 
         services.AddScoped<ICommandHandler<CreateReceiverCommand, Guid>, CreateReceiverHandler>();
         services.AddScoped<ICommandHandler<UpdateReceiverCommand, UpdateReceiverOutcome>, UpdateReceiverHandler>();
