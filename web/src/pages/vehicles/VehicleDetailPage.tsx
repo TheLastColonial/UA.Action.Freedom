@@ -114,6 +114,12 @@ export function VehicleDetailPage(): JSX.Element {
         <dl>
           <dt>Convoy</dt>
           <dd>{vehicle.convoyId ?? 'Unassigned'}</dd>
+          {vehicle.handedOverAt ? (
+            <>
+              <dt>Handed over</dt>
+              <dd>Handed over on {vehicle.handedOverAt.slice(0, 10)}</dd>
+            </>
+          ) : null}
           <dt>In for servicing</dt>
           <dd>{vehicle.servicing ? 'Yes' : 'No'}</dd>
           <dt>Inspection status</dt>

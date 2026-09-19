@@ -26,7 +26,10 @@ export interface VehicleApi {
 function toReadModel(
   vin: string,
   body: CreateVehicleRequest | UpdateVehicleRequest,
-  kept: Pick<VehicleReadModel, 'convoyId' | 'inspectionStatus' | 'inspectionNotes'>,
+  kept: Pick<
+    VehicleReadModel,
+    'convoyId' | 'inspectionStatus' | 'inspectionNotes' | 'handedOverAt'
+  >,
 ): VehicleReadModel {
   return {
     vin,
@@ -50,6 +53,7 @@ function toReadModel(
     cargoHeightCm: body.cargoHeightCm ?? null,
     inspectionStatus: kept.inspectionStatus,
     inspectionNotes: kept.inspectionNotes,
+    handedOverAt: kept.handedOverAt,
   };
 }
 
@@ -84,6 +88,7 @@ export function vehicleApi(seed: readonly VehicleReadModel[] = []): VehicleApi {
           convoyId: null,
           inspectionStatus: 'Pending',
           inspectionNotes: null,
+          handedOverAt: null,
         }),
       );
       return new HttpResponse(null, {

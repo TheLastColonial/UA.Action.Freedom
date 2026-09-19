@@ -14,7 +14,11 @@ namespace UA.Action.Freedom.Data.Convoys;
 /// </summary>
 public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : IConvoyRepository
 {
-    private const string Columns = "Id, Start, ExpectedEnd, TruckListPublishedAt";
+    private const string Columns = "Id, Start, ExpectedEnd, TruckListPublishedAt, ArrivedAt";
+
+    /// <summary>A manifest in one of these says what became of its vehicle; the journey is over for it.</summary>
+    private static readonly string FinishedStatuses =
+        $"({(int)ManifestStatus.Delivered}, {(int)ManifestStatus.Lost}, {(int)ManifestStatus.Returned})";
 
     private const string StopColumns = "Sequence, House, Street, City, Country, Postcode";
 
@@ -215,6 +219,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             UPDATE dbo.Vehicle SET ConvoyId = @convoyId, UpdatedAt = SYSUTCDATETIME()
             WHERE Vin = @vin
               AND InspectionStatus = @passed
+              AND HandedOverAt IS NULL
               AND (ConvoyId IS NULL OR ConvoyId = @convoyId)
             """,
             new { convoyId, vin, passed = (int)InspectionStatus.Passed },
@@ -225,15 +230,19 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             return AssignVehicleResult.Assigned;
         }
 
-        var inspection = await connection.QuerySingleOrDefaultAsync<int?>(new CommandDefinition(
-            "SELECT InspectionStatus FROM dbo.Vehicle WHERE Vin = @vin",
+        var vehicle = await connection.QuerySingleOrDefaultAsync<(int InspectionStatus, bool HandedOver)?>(new CommandDefinition(
+            """
+            SELECT InspectionStatus, CAST(CASE WHEN HandedOverAt IS NULL THEN 0 ELSE 1 END AS bit) AS HandedOver
+            FROM dbo.Vehicle WHERE Vin = @vin
+            """,
             new { vin },
             cancellationToken: cancellationToken));
 
-        return inspection switch
+        return vehicle switch
         {
             null => AssignVehicleResult.VehicleNotFound,
-            (int)InspectionStatus.Passed => AssignVehicleResult.OnAnotherConvoy,
+            { HandedOver: true } => AssignVehicleResult.HandedOver,
+            { InspectionStatus: (int)InspectionStatus.Passed } => AssignVehicleResult.OnAnotherConvoy,
             _ => AssignVehicleResult.NotPassedInspection,
         };
     }
@@ -399,6 +408,94 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
 
         await transaction.CommitAsync(cancellationToken);
         return affected > 0;
+    }
+
+    public async Task<ArriveResult> ArriveAsync(int convoyId, DateTime arrivedAt, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+
+        // Arrival, handover and release are one fact about the journey: a convoy marked arrived
+        // with its vehicles still offered for the next one, or the reverse, must not be possible.
+        // UPDLOCK on the convoy row makes a second dispatcher wait rather than both succeed.
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var stillTravelling = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            $"""
+             SELECT COUNT(1)
+             FROM dbo.Vehicle AS v WITH (UPDLOCK)
+             WHERE v.ConvoyId = @convoyId
+               AND NOT EXISTS (SELECT 1 FROM dbo.Manifest AS m
+                               WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN {FinishedStatuses})
+             """,
+            new { convoyId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (stillTravelling > 0)
+        {
+            return ArriveResult.VehiclesStillTravelling;
+        }
+
+        var arrived = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.Convoy SET ArrivedAt = @arrivedAt, UpdatedAt = SYSUTCDATETIME()
+            WHERE Id = @convoyId AND ArrivedAt IS NULL AND TruckListPublishedAt IS NOT NULL
+            """,
+            new { convoyId, arrivedAt },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (arrived == 0)
+        {
+            return ArriveResult.AlreadyArrived;
+        }
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE v SET HandedOverAt = @arrivedAt, UpdatedAt = SYSUTCDATETIME()
+            FROM dbo.Vehicle AS v
+            WHERE v.ConvoyId = @convoyId
+              AND EXISTS (SELECT 1 FROM dbo.Manifest AS m
+                          WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN (@delivered, @lost));
+
+            UPDATE v SET ConvoyId = NULL, UpdatedAt = SYSUTCDATETIME()
+            FROM dbo.Vehicle AS v
+            WHERE v.ConvoyId = @convoyId AND v.HandedOverAt IS NULL
+              AND EXISTS (SELECT 1 FROM dbo.Manifest AS m
+                          WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status = @returned);
+            """,
+            new
+            {
+                convoyId,
+                arrivedAt,
+                delivered = (int)ManifestStatus.Delivered,
+                lost = (int)ManifestStatus.Lost,
+                returned = (int)ManifestStatus.Returned,
+            },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return ArriveResult.Arrived;
+    }
+
+    public async Task<IReadOnlyList<string>> ListVehiclesStillTravellingAsync(int convoyId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var rows = await connection.QueryAsync<string>(new CommandDefinition(
+            $"""
+             SELECT v.Vin FROM dbo.Vehicle AS v
+             WHERE v.ConvoyId = @convoyId
+               AND NOT EXISTS (SELECT 1 FROM dbo.Manifest AS m
+                               WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN {FinishedStatuses})
+             ORDER BY v.Vin
+             """,
+            new { convoyId },
+            cancellationToken: cancellationToken));
+
+        return rows.ToList();
     }
 
     public async Task<VehicleInsuranceReadModel?> GetInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken)

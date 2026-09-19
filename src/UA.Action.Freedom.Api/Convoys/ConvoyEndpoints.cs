@@ -131,6 +131,9 @@ public static class ConvoyEndpoints
                 AssignVehicleOutcome.VehicleOnAnotherConvoy => Results.Problem(
                     detail: $"Vehicle '{vin}' is already on another convoy. Remove it from that convoy first.",
                     statusCode: StatusCodes.Status409Conflict),
+                AssignVehicleOutcome.VehicleHandedOver => Results.Problem(
+                    detail: $"Vehicle '{vin}' was handed over in Ukraine at the end of an earlier convoy.",
+                    statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Problem(
                     detail: "The truck list for this convoy has been published, so its vehicles can no longer change.",
                     statusCode: StatusCodes.Status409Conflict),
@@ -193,6 +196,7 @@ public static class ConvoyEndpoints
                 AssignDriverOutcome.PersonNotADriver => Results.Problem(
                     detail: "That volunteer is not registered as a driver. They can ride as a passenger instead.",
                     statusCode: StatusCodes.Status422UnprocessableEntity),
+                AssignDriverOutcome.ConvoyArrived => ConvoyArrived(),
                 AssignDriverOutcome.OnAnotherVehicle => Results.Problem(
                     detail: "That volunteer is already crewing another vehicle on this convoy. A person takes one seat per convoy.",
                     statusCode: StatusCodes.Status409Conflict),
@@ -216,6 +220,7 @@ public static class ConvoyEndpoints
             {
                 UnassignDriverOutcome.Unassigned => Results.NoContent(),
                 UnassignDriverOutcome.ConvoyNotFound => Results.NotFound(),
+                UnassignDriverOutcome.ConvoyArrived => ConvoyArrived(),
                 UnassignDriverOutcome.NotOnThisConvoy => Results.Problem(
                     detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
                     statusCode: StatusCodes.Status404NotFound),
@@ -254,6 +259,7 @@ public static class ConvoyEndpoints
             {
                 RecordInsuranceOutcome.Recorded => Results.NoContent(),
                 RecordInsuranceOutcome.ConvoyNotFound => Results.NotFound(),
+                RecordInsuranceOutcome.ConvoyArrived => ConvoyArrived(),
                 _ => Results.Problem(
                     detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
                     statusCode: StatusCodes.Status404NotFound),
@@ -269,7 +275,38 @@ public static class ConvoyEndpoints
             CancellationToken cancellationToken) =>
         {
             var outcome = await handler.HandleAsync(new RemoveInsuranceCommand(id, vin), cancellationToken);
-            return outcome == RemoveInsuranceOutcome.Removed ? Results.NoContent() : Results.NotFound();
+
+            return outcome switch
+            {
+                RemoveInsuranceOutcome.Removed => Results.NoContent(),
+                RemoveInsuranceOutcome.ConvoyArrived => ConvoyArrived(),
+                _ => Results.NotFound(),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
+        convoys.MapPost("/{id:int}/arrive", async (
+            int id,
+            ICommandHandler<ArriveConvoyCommand, ArriveConvoyResult> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new ArriveConvoyCommand(id), cancellationToken);
+
+            return result.Outcome switch
+            {
+                ArriveConvoyOutcome.Arrived => Results.NoContent(),
+                ArriveConvoyOutcome.NotFound => Results.NotFound(),
+                ArriveConvoyOutcome.TruckListNotPublished => Results.Problem(
+                    detail: "This convoy's truck list was never published, so it has not travelled.",
+                    statusCode: StatusCodes.Status409Conflict),
+                ArriveConvoyOutcome.AlreadyArrived => Results.Problem(
+                    detail: "This convoy has already arrived.",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.Problem(
+                    detail: "These vehicles have no Delivered, Lost or Returned manifest yet: "
+                            + string.Join(", ", result.StillTravelling) + ".",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
@@ -293,4 +330,8 @@ public static class ConvoyEndpoints
 
         return app;
     }
+
+    private static IResult ConvoyArrived() => Results.Problem(
+        detail: "This convoy has arrived. Its crew and insurance are a record of the journey and can no longer change.",
+        statusCode: StatusCodes.Status409Conflict);
 }

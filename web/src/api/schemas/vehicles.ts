@@ -30,6 +30,8 @@ export const vehicleReadModelSchema = z.object({
   cargoHeightCm: z.number().nullable(),
   inspectionStatus: inspectionStatusSchema,
   inspectionNotes: z.string().nullable(),
+  // Set when the convoy it travelled on arrived and it stayed in Ukraine. Never offered again.
+  handedOverAt: z.string().nullable(),
 });
 
 export type VehicleReadModel = z.infer<typeof vehicleReadModelSchema>;

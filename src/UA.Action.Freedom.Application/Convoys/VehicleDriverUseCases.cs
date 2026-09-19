@@ -18,7 +18,8 @@ public enum AssignDriverOutcome
     PersonNotFound,
     PersonNotADriver,
     AlreadyAssigned,
-    OnAnotherVehicle
+    OnAnotherVehicle,
+    ConvoyArrived
 }
 
 public sealed class AssignDriverToVehicleHandler(IConvoyRepository convoyRepository, IPersonRepository personRepository)
@@ -31,6 +32,12 @@ public sealed class AssignDriverToVehicleHandler(IConvoyRepository convoyReposit
         if (convoy is null)
         {
             return AssignDriverOutcome.ConvoyNotFound;
+        }
+
+        // After arrival the crew is history: the policy it was insured under has run its course.
+        if (convoy.Arrived)
+        {
+            return AssignDriverOutcome.ConvoyArrived;
         }
 
         var person = await personRepository.GetByIdAsync(command.PersonId, cancellationToken);
@@ -63,7 +70,8 @@ public enum UnassignDriverOutcome
     Unassigned,
     ConvoyNotFound,
     NotOnThisConvoy,
-    NotAssigned
+    NotAssigned,
+    ConvoyArrived
 }
 
 public sealed class UnassignDriverFromVehicleHandler(IConvoyRepository repository)
@@ -76,6 +84,11 @@ public sealed class UnassignDriverFromVehicleHandler(IConvoyRepository repositor
         if (convoy is null)
         {
             return UnassignDriverOutcome.ConvoyNotFound;
+        }
+
+        if (convoy.Arrived)
+        {
+            return UnassignDriverOutcome.ConvoyArrived;
         }
 
         var drivers = await repository.ListVehicleDriversAsync(command.ConvoyId, command.Vin, cancellationToken);

@@ -213,3 +213,17 @@ test('deletes the vehicle and returns to the list', async () => {
   await expect.element(screen.getByRole('heading', { name: 'Vehicles' })).toBeInTheDocument();
   await expect.element(screen.getByText('No vehicles recorded yet.')).toBeInTheDocument();
 });
+
+test('a vehicle handed over in Ukraine says so', async () => {
+  worker.use(
+    ...vehicleApi([makeVehicle({ vin: 'VIN-X', handedOverAt: '2026-06-05T17:00:00' })]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Loader'],
+  });
+
+  await expect.element(screen.getByText('Handed over on 2026-06-05')).toBeInTheDocument();
+});

@@ -187,3 +187,23 @@ Scenario: A vehicle cannot depart once its insurance is gone
     When I remove the insurance of the insured vehicle
     And I POST "depart" on the remembered manifest
     Then the response status is 409
+
+Scenario: A convoy arrives once its vehicles are delivered, and the vehicle is handed over for good
+    Given I am authenticated as "operator"
+    And a convoy exists with an insured vehicle on its published truck list
+    And a manifest reference that is not yet used
+    When I POST a manifest for the insured vehicle on the remembered convoy
+    And I POST "propose" on the remembered manifest
+    Given I am authenticated as "admin"
+    When I POST "approve" on the remembered manifest
+    And I POST "prepare" on the remembered manifest
+    And I POST "ready" on the remembered manifest
+    And I POST "depart" on the remembered manifest
+    Then the response status is 204
+    When I mark the manifest's convoy arrived
+    Then the response status is 409
+    When I POST "deliver" on the remembered manifest
+    And I mark the manifest's convoy arrived
+    Then the response status is 204
+    And the insured vehicle has been handed over
+    And the insured vehicle cannot join another convoy

@@ -681,4 +681,99 @@ public class ConvoyEndpointTests
         removed.StatusCode.Should().Be(HttpStatusCode.NoContent);
         again.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    private static ConvoyReadModel AnArrivedConvoy() =>
+        AConvoy(published: true) with { ArrivedAt = new DateTime(2026, 9, 5, 17, 0, 0, DateTimeKind.Utc) };
+
+    [Fact]
+    public async Task A_dispatcher_marks_a_convoy_arrived_and_its_delivered_vehicles_are_handed_over()
+    {
+        const string returnedVin = "WVWZZZ1JZXW000009";
+        var repository = new InMemoryConvoyRepository(AConvoy(published: true))
+            .WithVehicle(Vin, onConvoy: Id).WithManifest(Vin, ManifestStatus.Delivered)
+            .WithVehicle(returnedVin, onConvoy: Id).WithManifest(returnedVin, ManifestStatus.Returned);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsync($"/convoys/{Id}/arrive", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var convoy = await client.GetFromJsonAsync<JsonElement>($"/convoys/{Id}", TestContext.Current.CancellationToken);
+        convoy.GetProperty("arrived").GetBoolean().Should().BeTrue();
+        repository.IsHandedOver(Vin).Should().BeTrue();
+        repository.IsHandedOver(returnedVin).Should().BeFalse();
+        repository.ConvoyOf(returnedVin).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_convoy_with_a_vehicle_still_on_the_road_has_not_arrived()
+    {
+        var repository = new InMemoryConvoyRepository(AConvoy(published: true))
+            .WithVehicle(Vin, onConvoy: Id).WithManifest(Vin, ManifestStatus.InTransit);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsync($"/convoys/{Id}/arrive", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().Should().Contain(Vin);
+        repository.IsHandedOver(Vin).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_convoy_whose_truck_list_was_never_published_cannot_arrive()
+    {
+        await using var api = FreedomApi.WithConvoys(new InMemoryConvoyRepository(AConvoy()), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsync($"/convoys/{Id}/arrive", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Theory]
+    [InlineData("Loader")]
+    [InlineData("Mechanic")]
+    public async Task Only_a_dispatcher_or_administrator_marks_arrival(string role)
+    {
+        await using var api = FreedomApi.WithConvoys(new InMemoryConvoyRepository(AConvoy(published: true)), roles: role);
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsync($"/convoys/{Id}/arrive", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task A_handed_over_vehicle_is_never_offered_another_convoy()
+    {
+        var repository = new InMemoryConvoyRepository(AConvoy()).WithHandedOverVehicle(Vin);
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsync($"/convoys/{Id}/vehicles/{Vin}", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().Should().Contain("handed over");
+    }
+
+    [Fact]
+    public async Task An_arrived_convoy_takes_no_crew_or_insurance_changes()
+    {
+        var repository = new InMemoryConvoyRepository(AnArrivedConvoy())
+            .WithVehicle(Vin, onConvoy: Id).WithPerson(DriverId, "Olena", "Bondar");
+        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var crew = await client.PutAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/drivers/{DriverId}", content: null, TestContext.Current.CancellationToken);
+        var insurance = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+
+        crew.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        insurance.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        repository.DriverIdsOf(Vin).Should().BeEmpty();
+    }
 }

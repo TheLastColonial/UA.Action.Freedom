@@ -22,7 +22,7 @@ public class InsuranceHandlerTests
     public async Task Reports_what_the_write_found(bool written, RecordInsuranceOutcome expected)
     {
         var repository = Substitute.For<IConvoyRepository>();
-        repository.ExistsAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetByIdAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(ConvoyTestData.AReadModel());
         repository.RecordInsuranceAsync(APolicy(), Arg.Any<CancellationToken>()).Returns(written);
 
         var outcome = await new RecordInsuranceHandler(repository).HandleAsync(
@@ -35,7 +35,7 @@ public class InsuranceHandlerTests
     public async Task Reports_an_unknown_convoy_without_writing()
     {
         var repository = Substitute.For<IConvoyRepository>();
-        repository.ExistsAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(false);
+        repository.GetByIdAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns((ConvoyReadModel?)null);
 
         var outcome = await new RecordInsuranceHandler(repository).HandleAsync(
             new RecordInsuranceCommand(APolicy()), TestContext.Current.CancellationToken);

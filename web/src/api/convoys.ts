@@ -126,6 +126,10 @@ export function recordInsurance(
   return put204(`${vinPath(id, vin)}/insurance`, body);
 }
 
+export function arriveConvoy(id: number): Promise<void> {
+  return postTransition(`${idPath(id)}/arrive`);
+}
+
 export function publishTruckList(id: number): Promise<void> {
   return postTransition(`${idPath(id)}/publish-truck-list`);
 }
@@ -278,5 +282,16 @@ export function useRecordInsurance(
   return useMutation({
     mutationFn: (body: RecordInsuranceRequest) => recordInsurance(id, vin, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) }),
+  });
+}
+
+export function useArriveConvoy(id: number): UseMutationResult<void, Error, void> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => arriveConvoy(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.all });
+      await queryClient.invalidateQueries({ queryKey: qk.vehicles.all });
+    },
   });
 }

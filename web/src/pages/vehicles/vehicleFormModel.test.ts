@@ -116,6 +116,7 @@ describe('vehicleToFormValues', () => {
       cargoHeightCm: null,
       inspectionStatus: 'Pending',
       inspectionNotes: null,
+      handedOverAt: null,
     };
 
     const values = vehicleToFormValues(vehicle);

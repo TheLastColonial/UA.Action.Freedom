@@ -14,7 +14,13 @@ namespace UA.Action.Freedom.Tests.Component;
 /// </remarks>
 internal sealed class InMemoryConvoyRepository : IConvoyRepository
 {
-    private sealed record StoredVehicle(int? ConvoyId, InspectionStatus Inspection);
+    private sealed record StoredVehicle(int? ConvoyId, InspectionStatus Inspection, bool HandedOver = false);
+
+    /// <summary>
+    /// The status of each vehicle's manifest on its convoy — standing in for the join to
+    /// <c>dbo.Manifest</c> that arrival makes.
+    /// </summary>
+    private readonly Dictionary<string, ManifestStatus> manifestStatus = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly Dictionary<int, ConvoyReadModel> convoys = [];
     private readonly Dictionary<int, List<RouteStopReadModel>> routes = [];
@@ -69,6 +75,20 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
         crew.Add(new CrewSeat(ConvoyOf(vin) ?? throw new InvalidOperationException($"{vin} is on no convoy."), vin, personId, role));
         return this;
     }
+
+    public InMemoryConvoyRepository WithManifest(string vin, ManifestStatus status)
+    {
+        manifestStatus[vin] = status;
+        return this;
+    }
+
+    public InMemoryConvoyRepository WithHandedOverVehicle(string vin)
+    {
+        vehicles[vin] = new StoredVehicle(null, InspectionStatus.Passed, HandedOver: true);
+        return this;
+    }
+
+    public bool IsHandedOver(string vin) => vehicles.GetValueOrDefault(vin)?.HandedOver ?? false;
 
     public InMemoryConvoyRepository WithInsurance(VehicleInsuranceReadModel policy)
     {
@@ -165,6 +185,11 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
             return Task.FromResult(AssignVehicleResult.VehicleNotFound);
         }
 
+        if (vehicle.HandedOver)
+        {
+            return Task.FromResult(AssignVehicleResult.HandedOver);
+        }
+
         if (vehicle.Inspection != InspectionStatus.Passed)
         {
             return Task.FromResult(AssignVehicleResult.NotPassedInspection);
@@ -250,6 +275,38 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository
 
         return Task.FromResult(removed);
     }
+
+    public Task<ArriveResult> ArriveAsync(int convoyId, DateTime arrivedAt, CancellationToken cancellationToken)
+    {
+        if (StillTravelling(convoyId).Count > 0)
+        {
+            return Task.FromResult(ArriveResult.VehiclesStillTravelling);
+        }
+
+        if (!convoys.TryGetValue(convoyId, out var convoy) || convoy.Arrived || !convoy.TruckListPublished)
+        {
+            return Task.FromResult(ArriveResult.AlreadyArrived);
+        }
+
+        convoys[convoyId] = convoy with { ArrivedAt = arrivedAt };
+        foreach (var vin in VinsOn(convoyId))
+        {
+            vehicles[vin] = manifestStatus[vin] == ManifestStatus.Returned
+                ? vehicles[vin] with { ConvoyId = null }
+                : vehicles[vin] with { HandedOver = true };
+        }
+
+        return Task.FromResult(ArriveResult.Arrived);
+    }
+
+    public Task<IReadOnlyList<string>> ListVehiclesStillTravellingAsync(int convoyId, CancellationToken cancellationToken) =>
+        Task.FromResult(StillTravelling(convoyId));
+
+    private IReadOnlyList<string> StillTravelling(int convoyId) =>
+        VinsOn(convoyId)
+            .Where(vin => manifestStatus.GetValueOrDefault(vin) is not (ManifestStatus.Delivered or ManifestStatus.Lost or ManifestStatus.Returned))
+            .Order(StringComparer.Ordinal)
+            .ToList();
 
     public Task<VehicleInsuranceReadModel?> GetInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken) =>
         Task.FromResult(InsuranceOf(convoyId, vin));

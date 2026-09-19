@@ -15,6 +15,8 @@ export function makeConvoy(overrides: Partial<ConvoyReadModel> = {}): ConvoyRead
     expectedEnd: '2026-03-06T20:00:00',
     truckListPublishedAt: null,
     truckListPublished: false,
+    arrivedAt: null,
+    arrived: false,
     ...overrides,
   };
 }

@@ -42,7 +42,10 @@ export function VehicleSearchDropdown({
   const eligible = useMemo(() => {
     const excluded = new Set(excludeVins);
     return (query.data ?? []).filter(
-      (vehicle) => vehicle.inspectionStatus === 'Passed' && !excluded.has(vehicle.vin),
+      (vehicle) =>
+        vehicle.inspectionStatus === 'Passed' &&
+        vehicle.handedOverAt === null &&
+        !excluded.has(vehicle.vin),
     );
   }, [query.data, excludeVins]);
 

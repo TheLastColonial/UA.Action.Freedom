@@ -50,7 +50,8 @@ public enum AssignVehicleOutcome
     VehicleNotFound,
     TruckListPublished,
     VehicleNotPassedInspection,
-    VehicleOnAnotherConvoy
+    VehicleOnAnotherConvoy,
+    VehicleHandedOver
 }
 
 public sealed class AssignVehicleToConvoyHandler(IConvoyRepository repository)
@@ -80,6 +81,7 @@ public sealed class AssignVehicleToConvoyHandler(IConvoyRepository repository)
             AssignVehicleResult.Assigned => AssignVehicleOutcome.Assigned,
             AssignVehicleResult.NotPassedInspection => AssignVehicleOutcome.VehicleNotPassedInspection,
             AssignVehicleResult.OnAnotherConvoy => AssignVehicleOutcome.VehicleOnAnotherConvoy,
+            AssignVehicleResult.HandedOver => AssignVehicleOutcome.VehicleHandedOver,
             _ => AssignVehicleOutcome.VehicleNotFound,
         };
     }

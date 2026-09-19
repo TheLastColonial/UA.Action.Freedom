@@ -760,6 +760,22 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_VehicleDriver_Convoy_P
 GO
 
 -- --------------------------------------------------------------------------
+-- Convoy arrival and vehicle handover
+--
+-- POST /convoys/{id}/arrive stamps Convoy.ArrivedAt once every vehicle on it has a finished
+-- manifest (Delivered, Lost or Returned). Delivered and Lost vehicles get Vehicle.HandedOverAt
+-- — they are part of the aid and stay in Ukraine — and are never offered for a convoy again;
+-- Returned vehicles are released (ConvoyId NULL) and can travel again. Both are write-once,
+-- stamped by that transition alone and absent from every UPDATE an ordinary edit issues.
+-- --------------------------------------------------------------------------
+
+IF COL_LENGTH('dbo.Convoy', 'ArrivedAt') IS NULL
+    ALTER TABLE dbo.Convoy ADD ArrivedAt datetime2(0) NULL;
+IF COL_LENGTH('dbo.Vehicle', 'HandedOverAt') IS NULL
+    ALTER TABLE dbo.Vehicle ADD HandedOverAt datetime2(0) NULL;
+GO
+
+-- --------------------------------------------------------------------------
 -- Vehicle insurance — dbo.VehicleInsurance
 --
 -- Bought per vehicle per convoy by the Dispatcher, and it names the crew. So a crew change

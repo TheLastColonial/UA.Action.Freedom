@@ -26,6 +26,7 @@ export function makeVehicle(overrides: Partial<VehicleReadModel> = {}): VehicleR
     cargoHeightCm: null,
     inspectionStatus: 'Pending',
     inspectionNotes: null,
+    handedOverAt: null,
     ...overrides,
   };
 }

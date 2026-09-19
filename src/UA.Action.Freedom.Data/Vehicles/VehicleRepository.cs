@@ -17,7 +17,7 @@ namespace UA.Action.Freedom.Data.Vehicles;
 public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : IVehicleRepository
 {
     private const string Columns =
-        "Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm, InspectionStatus, InspectionNotes";
+        "Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm, InspectionStatus, InspectionNotes, HandedOverAt";
 
     public async Task<VehicleReadModel?> GetByVinAsync(string vin, CancellationToken cancellationToken)
     {

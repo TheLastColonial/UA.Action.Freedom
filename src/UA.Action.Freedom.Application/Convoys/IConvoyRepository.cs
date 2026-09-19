@@ -8,7 +8,16 @@ public enum AssignVehicleResult
     Assigned,
     VehicleNotFound,
     NotPassedInspection,
-    OnAnotherConvoy
+    OnAnotherConvoy,
+    HandedOver
+}
+
+/// <summary>What <see cref="IConvoyRepository.ArriveAsync"/> found when it tried.</summary>
+public enum ArriveResult
+{
+    Arrived,
+    AlreadyArrived,
+    VehiclesStillTravelling
 }
 
 /// <summary>What <see cref="IConvoyRepository.AssignDriverAsync"/> found when it tried.</summary>
@@ -90,6 +99,16 @@ public interface IConvoyRepository
     /// not only of the handler's check.
     /// </summary>
     Task<bool> UnassignDriverAsync(int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Marks the convoy arrived, provided its truck list is published, it has not arrived yet, and
+    /// every vehicle on it has a finished manifest. In the same transaction, Delivered and Lost
+    /// vehicles are handed over and Returned ones released.
+    /// </summary>
+    Task<ArriveResult> ArriveAsync(int convoyId, DateTime arrivedAt, CancellationToken cancellationToken);
+
+    /// <summary>The VINs on this convoy with no Delivered, Lost or Returned manifest on it.</summary>
+    Task<IReadOnlyList<string>> ListVehiclesStillTravellingAsync(int convoyId, CancellationToken cancellationToken);
 
     Task<VehicleInsuranceReadModel?> GetInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken);
 

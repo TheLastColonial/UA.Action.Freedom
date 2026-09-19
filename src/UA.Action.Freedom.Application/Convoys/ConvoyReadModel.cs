@@ -14,8 +14,15 @@ public sealed record ConvoyReadModel(
     int Id,
     DateTime Start,
     DateTime ExpectedEnd,
-    DateTime? TruckListPublishedAt)
+    DateTime? TruckListPublishedAt,
+    DateTime? ArrivedAt = null)
 {
+    /// <summary>
+    /// Whether the convoy has arrived. After that nothing about it changes — its vehicles are
+    /// handed over or released, and its crew and insurance are history.
+    /// </summary>
+    public bool Arrived => this.ArrivedAt is not null;
+
     /// <summary>
     /// Whether the set of vehicles is closed. See <c>docs/process.puml</c>: manifests are
     /// proposed against a published truck list, so publication fixes what is on it.

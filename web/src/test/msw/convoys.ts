@@ -11,10 +11,13 @@ import type {
   VehicleDriverReadModel,
   VehicleInsuranceReadModel,
 } from '../../api/schemas/convoys';
+import type { ManifestStatus } from '../../api/schemas/common';
 import type { PersonReadModel } from '../../api/schemas/people';
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
 import { crewRoleSchema } from '../../api/schemas/convoys';
 import { problem, validationProblem } from './problem';
+
+const FINISHED: readonly ManifestStatus[] = ['Delivered', 'Lost', 'Returned'];
 
 // Mirrors RecordInsuranceRequest and its validator.
 const insuranceBodySchema = z.object({
@@ -35,8 +38,11 @@ const crewBodySchema = z.object({ role: crewRoleSchema.optional() });
  * inspection or is on another convoy is a 409, and only a registered driver can crew.
  */
 export interface ConvoyApiLookups {
-  fleet?: ReadonlyMap<string, VehicleReadModel>;
+  /** Written to on arrival — handed-over vehicles get `handedOverAt`, returned ones leave. */
+  fleet?: Map<string, VehicleReadModel>;
   people?: ReadonlyMap<string, PersonReadModel>;
+  /** The status of each vehicle's manifest on its convoy, which is what arrival checks. */
+  manifestStatusByVin?: ReadonlyMap<string, ManifestStatus>;
 }
 
 export interface ConvoyApi {
@@ -53,7 +59,7 @@ let minted = 100;
 
 export function convoyApi(
   seed: readonly ConvoyReadModel[] = [],
-  { fleet = new Map(), people = new Map() }: ConvoyApiLookups = {},
+  { fleet = new Map(), people = new Map(), manifestStatusByVin = new Map() }: ConvoyApiLookups = {},
 ): ConvoyApi {
   const db = new Map<number, ConvoyReadModel>(seed.map((c) => [c.id, c]));
   const routes = new Map<number, RouteStopReadModel[]>();
@@ -105,6 +111,8 @@ export function convoyApi(
         expectedEnd: body.expectedEnd,
         truckListPublishedAt: null,
         truckListPublished: false,
+        arrivedAt: null,
+        arrived: false,
       });
       return new HttpResponse(null, {
         status: 201,
@@ -179,6 +187,12 @@ export function convoyApi(
       if (!vehicle) {
         return problem(404, `There is no vehicle with VIN '${vin}'.`);
       }
+      if (vehicle.handedOverAt !== null) {
+        return problem(
+          409,
+          `Vehicle '${vin}' was handed over in Ukraine at the end of an earlier convoy.`,
+        );
+      }
       if (vehicle.inspectionStatus !== 'Passed') {
         return problem(
           409,
@@ -225,6 +239,48 @@ export function convoyApi(
       vehicles.set(id, next);
       drivers.delete(driverKey(id, vin));
       insurance.delete(driverKey(id, vin));
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.post('/convoys/:id/arrive', ({ params }) => {
+      const id = idFrom(params['id']);
+      const convoy = db.get(id);
+      if (!convoy) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      if (convoy.arrived) {
+        return problem(409, 'This convoy has already arrived.');
+      }
+      if (!convoy.truckListPublished) {
+        return problem(
+          409,
+          "This convoy's truck list was never published, so it has not travelled.",
+        );
+      }
+      const onIt = vehicles.get(id) ?? [];
+      const travelling = onIt
+        .filter((v) => !FINISHED.includes(manifestStatusByVin.get(v.vin) ?? 'Created'))
+        .map((v) => v.vin);
+      if (travelling.length > 0) {
+        return problem(
+          409,
+          `These vehicles have no Delivered, Lost or Returned manifest yet: ${travelling.join(', ')}.`,
+        );
+      }
+      const arrivedAt = '2026-09-05T17:00:00';
+      db.set(id, { ...convoy, arrived: true, arrivedAt });
+      for (const { vin } of onIt) {
+        const vehicle = fleet.get(vin);
+        if (!vehicle) {
+          continue;
+        }
+        fleet.set(
+          vin,
+          manifestStatusByVin.get(vin) === 'Returned'
+            ? { ...vehicle, convoyId: null }
+            : { ...vehicle, handedOverAt: arrivedAt },
+        );
+      }
       return new HttpResponse(null, { status: 204 });
     }),
 

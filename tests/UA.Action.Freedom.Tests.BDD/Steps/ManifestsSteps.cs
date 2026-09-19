@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using AwesomeAssertions;
 using Reqnroll;
 using UA.Action.Freedom.Tests.BDD.Support;
@@ -92,6 +93,36 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
                 operatorToken,
                 null))
             .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
+    }
+
+    [When("I mark the manifest's convoy arrived")]
+    public Task WhenIMarkTheManifestsConvoyArrived() =>
+        api.SendAsync(HttpMethod.Post, $"/convoys/{state.Pinned(ConvoyKey)}/arrive", state.CurrentToken, null);
+
+    [Then("the insured vehicle has been handed over")]
+    public async Task ThenTheInsuredVehicleHasBeenHandedOver()
+    {
+        var response = await api.SendAsync(HttpMethod.Get, $"/vehicles/{state.Pinned(VehicleKey)}", state.CurrentToken, null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        JsonDocument.Parse(api.LastBody).RootElement
+            .GetProperty("handedOverAt").ValueKind.Should().Be(JsonValueKind.String, "the body was: {0}", api.LastBody);
+    }
+
+    [Then("the insured vehicle cannot join another convoy")]
+    public async Task ThenTheInsuredVehicleCannotJoinAnotherConvoy()
+    {
+        var created = await api.SendAsync(HttpMethod.Post, "/convoys", state.CurrentToken, ConvoyBody);
+        created.StatusCode.Should().Be(HttpStatusCode.Created, "the body was: {0}", api.LastBody);
+        var location = created.Headers.Location!;
+        var path = location.IsAbsoluteUri ? location.AbsolutePath : location.ToString();
+        var next = path.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
+        state.CreatedResources.Add(("convoys", next));
+
+        var response = await api.SendAsync(
+            HttpMethod.Put, $"/convoys/{next}/vehicles/{state.Pinned(VehicleKey)}", state.CurrentToken, null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict, "the body was: {0}", api.LastBody);
     }
 
     [Given("a convoy exists whose truck list is not published")]

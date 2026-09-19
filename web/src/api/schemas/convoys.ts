@@ -7,6 +7,8 @@ export const convoyReadModelSchema = z.object({
   expectedEnd: z.string(),
   truckListPublishedAt: z.string().nullable(),
   truckListPublished: z.boolean(),
+  arrivedAt: z.string().nullable(),
+  arrived: z.boolean(),
 });
 export type ConvoyReadModel = z.infer<typeof convoyReadModelSchema>;
 

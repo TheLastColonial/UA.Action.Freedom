@@ -26,13 +26,18 @@ const passed = makeVehicle({
   inspectionStatus: 'Passed',
 });
 
-test('offers only vehicles that have passed their inspection', async () => {
+test('offers only vehicles that have passed their inspection and are still here', async () => {
   worker.use(
     ...vehicleApi([
       passed,
       makeVehicle({ vin: 'VIN-PENDING-01', inspectionStatus: 'Pending' }),
       makeVehicle({ vin: 'VIN-INSPECTING', inspectionStatus: 'Inspecting' }),
       makeVehicle({ vin: 'VIN-FAILED-001', inspectionStatus: 'Failed', servicing: true }),
+      makeVehicle({
+        vin: 'VIN-GONE-00001',
+        inspectionStatus: 'Passed',
+        handedOverAt: '2026-06-05T17:00:00',
+      }),
     ]).handlers,
   );
   const screen = await renderDropdown().screen;
