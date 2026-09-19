@@ -106,6 +106,17 @@ vehicle carrying them — see the note under Manifest.
 > **Naming:** the domain type was renamed from `Veichle` to `Vehicle`. The rename is complete across the
 > solution.
 
+### Vehicle Crew
+
+The set of volunteer [Drivers](#driver) assigned to a [Vehicle](#vehicle) while a [Convoy](#convoy) is being
+planned — decided before any [Manifest](#manifest) exists for the leg. A vehicle with fewer than two assigned
+drivers is flagged as a planning warning (advisory only — nothing is blocked), since a two-person crew is the norm
+for sustained driving and border compliance. Assigning drivers is a [Dispatcher](#dispatcher) responsibility.
+
+This is distinct from a [Driver Team](#driver-team): the crew is a property of the vehicle within the convoy,
+decided during planning, while a Driver Team is a primary/secondary pair fixed to one specific leg once a manifest
+exists for that vehicle.
+
 ### Route
 
 The ordered list of [Addresses](#address) a convoy will pass through, from UK departure to Ukrainian delivery.
@@ -183,6 +194,8 @@ Ukraine.
 
 A pair of drivers — a primary and a secondary — allocated to one leg of a journey. A [Manifest](#manifest)
 carries two teams: `DriverUK` for the UK→Europe leg and `DriverBorder` for the Europe→Ukraine leg.
+
+See [Vehicle Crew](#vehicle-crew) for the earlier, convoy-planning-stage assignment this narrows down from.
 
 ### Manifest
 

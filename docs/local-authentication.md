@@ -181,6 +181,7 @@ token lacking the role is **403**.
 | `people:write` | ✓ | | | | |
 | `convoys:read` | ✓ | ✓ | ✓ | ✓ | |
 | `convoys:write` | ✓ | ✓ | | | |
+| `convoys:assign-drivers` | | ✓ | | | |
 | `boxes:read` | ✓ | ✓ | ✓ | ✓ | |
 | `boxes:write` | ✓ | ✓ | ✓ | | |
 | `boxes:validate` | ✓ | | ✓ | | |

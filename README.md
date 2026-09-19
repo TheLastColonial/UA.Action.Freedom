@@ -186,6 +186,7 @@ Core resource endpoints:
 - `GET|POST /convoys` — Convoy groups with routes
   - `PUT|GET /convoys/{id}/route` — Ordered stop list
   - `PUT|DELETE /convoys/{id}/vehicles/{vin}` — Vehicle assignment
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/drivers/{personId}` — Vehicle crew assignment (**Dispatcher only** for `PUT`/`DELETE`; `GET` is included in `convoys:read`)
   - `POST /convoys/{id}/publish-truck-list` — Lock vehicle manifest
 - `GET|POST /receivers` — Delivery contacts (reference/org/region)
   - `GET|PUT /receivers/{ref}/detail` — **GroundOfficer only**: delivery address + contact
