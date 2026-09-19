@@ -173,7 +173,7 @@ public static class ConvoyEndpoints
             {
                 AssignDriverOutcome.Assigned => Results.NoContent(),
                 AssignDriverOutcome.ConvoyNotFound => Results.NotFound(),
-                AssignDriverOutcome.VehicleNotFound or AssignDriverOutcome.NotOnThisConvoy => Results.Problem(
+                AssignDriverOutcome.VehicleNotFound => Results.Problem(
                     detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
                     statusCode: StatusCodes.Status404NotFound),
                 AssignDriverOutcome.PersonNotFound => Results.Problem(
