@@ -1,22 +1,45 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Manifests;
 
 /// <summary>
-/// Open a manifest. The reference is supplied by the caller — it is a document number people
-/// say out loud at a border, so it is a natural key like a VIN rather than a minted identifier.
+/// Open the document pack for one vehicle on one convoy.
 /// </summary>
+/// <remarks>
+/// A manifest is opened <em>against a truck-list entry</em>, which is why the convoy and the
+/// vehicle come from the route rather than the body: <c>POST /convoys/{id}/vehicles/{vin}/manifest</c>.
+/// docs/process.puml has always ordered the work that way — Truck List Created, Truck List
+/// Published, Manifest Proposed — but the pair used to be two optional fields anyone could set to
+/// anything, so a manifest could name a truck that was on a different convoy, or none.
+///
+/// <para>
+/// The reference is still supplied by the caller. It is a document number people read out at a
+/// border, so it is a natural key like a VIN rather than a minted identifier.
+/// </para>
+/// </remarks>
 public sealed record CreateManifestCommand(
-    string Id, string? Vin, int? ConvoyId, string? DeliveryNotes, bool FerryBookingComplete);
+    string Id, int ConvoyId, string Vin, string? DeliveryNotes, bool FerryBookingComplete);
 
 public enum CreateManifestOutcome
 {
     Created,
-    Conflict
+
+    /// <summary>A manifest with that reference already exists.</summary>
+    Conflict,
+
+    /// <summary>That vehicle is not on that convoy's truck list.</summary>
+    VehicleNotOnConvoy,
+
+    /// <summary>It left the convoy, so there is nothing for it to carry across a border on this journey.</summary>
+    VehicleWithdrawn,
+
+    /// <summary>This vehicle already has a manifest for this convoy.</summary>
+    AlreadyHasManifest
 }
 
-public sealed class CreateManifestHandler(IManifestRepository repository)
+public sealed class CreateManifestHandler(IManifestRepository repository, IConvoyVehicleRepository truckList)
     : ICommandHandler<CreateManifestCommand, CreateManifestOutcome>
 {
     public async Task<CreateManifestOutcome> HandleAsync(
@@ -27,14 +50,33 @@ public sealed class CreateManifestHandler(IManifestRepository repository)
             return CreateManifestOutcome.Conflict;
         }
 
-        // A manifest is Created before it is populated — no vehicle, no teams, no cargo required
-        // yet. That is the first state of the diagram, and proposing it is what asserts it is
-        // complete enough to look at.
+        var entry = await truckList.GetAsync(command.ConvoyId, command.Vin, cancellationToken);
+
+        if (entry is null)
+        {
+            return CreateManifestOutcome.VehicleNotOnConvoy;
+        }
+
+        if (entry.Withdrawn)
+        {
+            return CreateManifestOutcome.VehicleWithdrawn;
+        }
+
+        // One manifest per vehicle per convoy. The unique constraint is the real guard; asking
+        // first is what turns a foreign-key exception into a 409 the caller can act on.
+        if (await repository.GetForVehicleAsync(command.ConvoyId, command.Vin, cancellationToken) is not null)
+        {
+            return CreateManifestOutcome.AlreadyHasManifest;
+        }
+
+        // A manifest is Created before it is populated — no teams, no cargo required yet. That is
+        // the first state of the diagram, and proposing it is what asserts it is complete enough
+        // to look at.
         await repository.AddAsync(
             new ManifestReadModel(
                 command.Id,
-                command.Vin,
                 command.ConvoyId,
+                command.Vin,
                 ManifestStatus.Created,
                 command.DeliveryNotes,
                 command.FerryBookingComplete,
@@ -45,9 +87,16 @@ public sealed class CreateManifestHandler(IManifestRepository repository)
     }
 }
 
-/// <summary>Change the vehicle, convoy, notes or ferry booking on a manifest.</summary>
-public sealed record UpdateManifestCommand(
-    string Id, string? Vin, int? ConvoyId, string? DeliveryNotes, bool FerryBookingComplete);
+/// <summary>
+/// Change the notes or the ferry booking on a manifest.
+/// </summary>
+/// <remarks>
+/// The convoy and the vehicle are deliberately absent. They are the manifest's identity — the
+/// truck-list entry it is the paperwork for — not attributes of it, and re-pointing a manifest at
+/// a different vehicle is not an edit: the Goods Movement Reference named a crossing. A vehicle
+/// that leaves the convoy is withdrawn from the truck list, which keeps this manifest intact.
+/// </remarks>
+public sealed record UpdateManifestCommand(string Id, string? DeliveryNotes, bool FerryBookingComplete);
 
 public enum UpdateManifestOutcome
 {
@@ -79,8 +128,6 @@ public sealed class UpdateManifestHandler(IManifestRepository repository)
         var updated = await repository.UpdateAsync(
             manifest with
             {
-                Vin = command.Vin,
-                ConvoyId = command.ConvoyId,
                 DeliveryNotes = command.DeliveryNotes,
                 FerryBookingComplete = command.FerryBookingComplete,
             },

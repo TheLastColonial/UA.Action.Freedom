@@ -31,25 +31,21 @@ test('lists manifests with status and freeze state', async () => {
   await expect.element(screen.getByText('Confirmed')).toBeInTheDocument();
 });
 
-test('only Admin/Dispatcher see "New manifest"', async () => {
+test('the list points at the convoys, because a manifest is opened from a truck list', async () => {
+  // There is no "New manifest" action any more: a manifest is the paperwork for one vehicle on
+  // one convoy, so it is opened from that convoy's truck list. The pointer is a link to the
+  // convoys, shown to anyone who may read them rather than gated on a write policy.
   worker.use(...manifestApi([]).handlers);
 
-  const asLoader = await renderWithProviders(null, {
+  const screen = await renderWithProviders(null, {
     routes,
     route: '/manifests',
     roles: ['Loader'],
   });
-  await expect.element(asLoader.getByText('No manifests yet.')).toBeInTheDocument();
-  await expect
-    .element(asLoader.getByRole('link', { name: 'New manifest' }))
-    .not.toBeInTheDocument();
 
-  const asDispatcher = await renderWithProviders(null, {
-    routes,
-    route: '/manifests',
-    roles: ['Dispatcher'],
-  });
+  await expect.element(screen.getByText('No manifests yet.')).toBeInTheDocument();
   await expect
-    .element(asDispatcher.getByRole('link', { name: 'New manifest' }))
+    .element(screen.getByRole('link', { name: 'Open one from a convoy' }))
     .toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: 'New manifest' })).not.toBeInTheDocument();
 });

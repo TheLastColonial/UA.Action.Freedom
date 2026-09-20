@@ -121,23 +121,26 @@ public class PersonRepositoryTests
         }
     }
 
-    /// <summary>A convoy with one vehicle on it and <paramref name="personId"/> in its crew.</summary>
+    /// <summary>A convoy with one vehicle on its truck list and <paramref name="personId"/> in its crew.</summary>
     private static Task<int> ACrewedConvoyAsync(string vin, Guid personId, bool arrived) => ScalarAsync(
         """
         INSERT INTO dbo.Convoy (Start, ExpectedEnd, TruckListPublishedAt, ArrivedAt)
         VALUES ('2026-09-01', '2026-09-05', '2026-08-20', CASE WHEN @arrived = 1 THEN '2026-09-05' END);
         DECLARE @convoyId int = CAST(SCOPE_IDENTITY() AS int);
-        INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg, ConvoyId) VALUES (@vin, 'IT12ABC', 2015, 1800, @convoyId);
-        INSERT INTO dbo.VehicleDriver (ConvoyId, Vin, PersonId) VALUES (@convoyId, @vin, @id);
+        INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg, InspectionStatus) VALUES (@vin, 'IT12ABC', 2015, 1800, 2);
+        INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin) VALUES (@convoyId, @vin);
+        INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, Leg) VALUES (@convoyId, @vin, @id, 0);
         SELECT @convoyId;
         """,
         ("@vin", vin),
         ("@id", personId),
         ("@arrived", arrived));
 
+    /// <summary>Deleting the vehicle cascades its truck-list row, and that cascades the crew.</summary>
     private static Task RemoveConvoyAsync(int convoyId, string vin) => ExecuteAsync(
         """
         DELETE FROM dbo.Vehicle WHERE Vin = @vin;
+        DELETE FROM dbo.ConvoyVehicle WHERE ConvoyId = @convoyId;
         DELETE FROM dbo.Convoy WHERE Id = @convoyId;
         """,
         ("@vin", vin),
@@ -189,7 +192,7 @@ public class PersonRepositoryTests
 
             (await PersonalDataRowsAsync(id)).Should().Be(0);
             (await IdentityRowsAsync(id)).Should().Be(1);
-            (await ScalarAsync("SELECT COUNT(1) FROM dbo.VehicleDriver WHERE PersonId = @id", ("@id", id))).Should().Be(1);
+            (await ScalarAsync("SELECT COUNT(1) FROM dbo.ConvoyVehicleCrew WHERE PersonId = @id", ("@id", id))).Should().Be(1);
             (await repository.GetByIdAsync(id, cancellationToken)).Should().BeNull();
             (await repository.ExistsAsync(id, cancellationToken)).Should().BeFalse();
             (await repository.ListAsync(1, 200, driversOnly: false, cancellationToken)).Should().NotContain(person => person.Id == id);
@@ -229,22 +232,26 @@ public class PersonRepositoryTests
     [Theory]
     [InlineData(ManifestStatus.Confirmed, DeletePersonResult.StillActive)]
     [InlineData(ManifestStatus.Delivered, DeletePersonResult.Deleted)]
-    public async Task A_volunteer_on_a_manifest_team_is_erased_only_once_the_manifest_is_finished(
+    public async Task A_volunteer_crewing_an_unfinished_load_is_erased_only_once_that_load_is_finished(
         ManifestStatus status, DeletePersonResult expected)
     {
+        // The convoy has arrived, so the first half of the erasure check is satisfied; what is
+        // left is the load the vehicle they crewed was carrying. The two used to be asked of two
+        // unconnected crew tables — the convoy's and the manifest's own driver teams — and there
+        // is one crew record now, reached from the same row by the truck-list key.
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var id = Guid.NewGuid();
+        var vin = "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
         var manifestId = "IT" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
         await repository.AddAsync(APerson(id, NewSurname(), isDriver: true), cancellationToken);
+        var convoyId = await ACrewedConvoyAsync(vin, id, arrived: true);
         await ExecuteAsync(
-            """
-            INSERT INTO dbo.Manifest (Id, Status) VALUES (@manifestId, @status);
-            INSERT INTO dbo.ManifestDriverTeam (ManifestId, Leg, PrimaryPersonId) VALUES (@manifestId, 0, @id);
-            """,
+            "INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status) VALUES (@manifestId, @convoyId, @vin, @status)",
             ("@manifestId", manifestId),
-            ("@status", (int)status),
-            ("@id", id));
+            ("@convoyId", convoyId),
+            ("@vin", vin),
+            ("@status", (int)status));
 
         try
         {
@@ -253,6 +260,7 @@ public class PersonRepositoryTests
         finally
         {
             await ExecuteAsync("DELETE FROM dbo.Manifest WHERE Id = @id", ("@id", manifestId));
+            await RemoveConvoyAsync(convoyId, vin);
             await RemoveAsync(id);
         }
     }

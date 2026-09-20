@@ -36,6 +36,7 @@ public enum TransitionManifestOutcome
 public sealed class TransitionManifestHandler(
     IManifestRepository repository,
     IConvoyRepository convoys,
+    IConvoyVehicleRepository truckList,
     FreedomMetrics? metrics = null)
     : ICommandHandler<TransitionManifestCommand, TransitionManifestOutcome>
 {
@@ -112,28 +113,24 @@ public sealed class TransitionManifestHandler(
     /// </summary>
     private async Task<bool> IsInsuredToday(ManifestReadModel manifest, CancellationToken cancellationToken)
     {
-        if (manifest is not { ConvoyId: { } convoyId, Vin: { } vin })
-        {
-            return false;
-        }
-
-        var policy = await convoys.GetInsuranceAsync(convoyId, vin, cancellationToken);
+        var policy = await truckList.GetInsuranceAsync(manifest.ConvoyId, manifest.Vin, cancellationToken);
 
         return policy?.CoversOn(DateTime.UtcNow) ?? false;
     }
 
     /// <summary>
     /// A manifest is proposed against the set of vehicles committed to a convoy, so that set has
-    /// to be fixed first. Without this, a manifest could name a truck that later left the convoy.
+    /// to be fixed first.
     /// </summary>
+    /// <remarks>
+    /// The manifest can no longer name a truck that is not on the convoy — the truck-list entry it
+    /// belongs to is a foreign key now. What is still worth asking is whether the list has been
+    /// closed, because proposing against a list somebody is still adding to is proposing against
+    /// nothing in particular.
+    /// </remarks>
     private async Task<bool> TruckListIsPublished(ManifestReadModel manifest, CancellationToken cancellationToken)
     {
-        if (manifest.ConvoyId is not { } convoyId)
-        {
-            return false;
-        }
-
-        var convoy = await convoys.GetByIdAsync(convoyId, cancellationToken);
+        var convoy = await convoys.GetByIdAsync(manifest.ConvoyId, cancellationToken);
 
         return convoy?.TruckListPublished ?? false;
     }
@@ -200,18 +197,21 @@ public sealed class ApproveManifestHandler(
         // From here the manifest is frozen. A failure in either hand-off below leaves it frozen
         // with paperwork that will never be produced — visible and retryable, but only if someone
         // is told, so each is counted and logged before it propagates.
+        // What the border reads off the front of the vehicle, not the chassis number. Both the GMR
+        // submission and the printed document were being handed the VIN despite both saying
+        // "registration"; the plate lives on dbo.Vehicle and was never read.
+        var plate = await repository.GetVehiclePlateAsync(command.Id, cancellationToken) ?? string.Empty;
+
         await HandOff("gmr", command.Id, async () =>
         {
             // HMRC needs a crossing time and the convoy is what knows it.
-            var convoy = manifest.ConvoyId is { } convoyId
-                ? await convoys.GetByIdAsync(convoyId, cancellationToken)
-                : null;
+            var convoy = await convoys.GetByIdAsync(manifest.ConvoyId, cancellationToken);
 
             // The message carries the reference, the plate and the departure. No receiver, no
             // address: the worker talks to HMRC, and where in Ukraine the load is going is none of
             // its business — and a queue message is durable and widely readable (§4.4).
             await queue.EnqueueGmrSubmissionAsync(
-                new GmrSubmissionRequest(command.Id, manifest.Vin ?? string.Empty, convoy?.Start),
+                new GmrSubmissionRequest(command.Id, plate, convoy?.Start),
                 cancellationToken);
         });
 
@@ -220,7 +220,7 @@ public sealed class ApproveManifestHandler(
         // database access — and therefore cannot read a delivery address even in principle.
         await HandOff("document", command.Id, async () =>
             await queue.EnqueueDocumentAsync(
-                await ComposeDocument(command.Id, manifest, cancellationToken), cancellationToken));
+                await ComposeDocument(command.Id, plate, cancellationToken), cancellationToken));
 
         return TransitionManifestOutcome.Transitioned;
     }
@@ -242,14 +242,8 @@ public sealed class ApproveManifestHandler(
         }
     }
 
-    /// <summary>Two drivers and their bags. A border-check estimate, deliberately fixed.</summary>
-    private const int CrewAndBagsKg = 100 * 2;
-
-    /// <summary>Fuel allowance. Also deliberately fixed.</summary>
-    private const int FuelKg = 45;
-
     private async Task<ManifestDocumentRequest> ComposeDocument(
-        string id, ManifestReadModel manifest, CancellationToken cancellationToken)
+        string id, string plate, CancellationToken cancellationToken)
     {
         var vehicleKg = await repository.GetVehicleWeightKgAsync(id, cancellationToken);
         var lines = await repository.GetDocumentLinesAsync(id, cancellationToken);
@@ -257,12 +251,12 @@ public sealed class ApproveManifestHandler(
 
         return new ManifestDocumentRequest(
             id,
-            manifest.Vin,
+            plate,
             vehicleKg,
             cargoKg,
-            CrewAndBagsKg,
-            FuelKg,
-            vehicleKg + cargoKg + CrewAndBagsKg + FuelKg,
+            ManifestWeight.CrewAndBagsKg,
+            ManifestWeight.FuelKg,
+            ManifestWeight.Total(vehicleKg, cargoKg),
             lines);
     }
 }

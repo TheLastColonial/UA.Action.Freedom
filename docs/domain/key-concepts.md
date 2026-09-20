@@ -93,7 +93,7 @@ their manifest, but do not administer the system. A driver may be *committed* to
 
 A volunteer who leaves can ask to be erased, and UK data protection gives them that right. Freedom **deletes their
 personal data** — name, date of birth, phone, driving status — rather than hiding it. The records they were part of
-(past convoy crews, manifest teams, who validated or shelved a box) keep an anonymous identity in their place and read
+(past convoy crews, who validated or shelved a box) keep an anonymous identity in their place and read
 **"Former volunteer"**; nothing links that identity back to the person. Someone no record names is removed
 outright.
 
@@ -121,22 +121,36 @@ A collection of [Vehicles](#vehicle) travelling together to Ukraine, with a depa
 arrival timestamp and a [Route](#route). The convoy is the unit that is planned; the [Manifest](#manifest) is the
 unit that is executed per vehicle.
 
+The fact that joins them — *this vehicle is travelling with this convoy* — is one row, the
+[Truck List](#truck-list) entry. The crew, the insurance and the manifest all hang off it, so none of them can
+describe a truck that is not on the list.
+
 #### Readiness
 
-A convoy is **ready** when it has a route, has vehicles, and every vehicle on it is ready; a vehicle is ready with
-**at least two drivers** (passengers do not count) and [insurance](#vehicle-insurance) that is recorded, not voided,
-and in cover on the departure date. Readiness is **advisory** — it says what is missing and blocks nothing — and is
-shown on the convoy's overview. Cargo checks will join it later.
+A convoy is **ready** when it has a route, has vehicles still travelling with it, and every one of them is ready; a
+vehicle is ready with **at least two drivers on each [leg](#journey-leg)** (passengers do not count) and
+[insurance](#vehicle-insurance) that is recorded, not voided, and in cover on the departure date. Crew is asked for
+per leg because a vehicle fully crewed out of the UK with nobody booked to take it into Ukraine is not ready, and a
+single count could not say so.
+
+A [withdrawn](#withdrawal) vehicle is skipped entirely rather than reported as unready: it has no crew to find and no
+insurance to renew. Readiness is **advisory** — it says what is missing and blocks nothing — and is shown on the
+convoy's overview. Cargo checks will join it later.
 
 #### Arrival
 
 A convoy **arrives** when the Dispatcher marks it so (`POST /convoys/{id}/arrive`), which is allowed only once its
-truck list is published and **every vehicle on it has a finished manifest** — Delivered, Lost or Returned. Until
-then the request is refused and names the vehicles still travelling. Arrival, in one step:
+truck list is published and **every vehicle still travelling with it has a finished manifest** — Delivered, Lost or
+Returned. Until then the request is refused and names the vehicles still travelling. A
+[withdrawn](#withdrawal) vehicle is not waited for: it broke down and left, and holding the convoy open for it would
+mean the convoy could never arrive. Arrival, in one step:
 
 - **Delivered and Lost vehicles are handed over.** A vehicle is itself part of the aid and stays in Ukraine, so it
   is stamped `HandedOverAt` and is never offered for a convoy again.
-- **Returned vehicles are released** — taken off the convoy so they can travel again.
+- **Everything else is simply free again.** Nothing is *released*: a vehicle that was not handed over may join the
+  next convoy because this one has arrived, not because a pointer was cleared — which is why the truck list survives
+  as the record of who went. (Before the truck list became a table, arrival nulled `Vehicle.ConvoyId` to release a
+  vehicle, and an arrived convoy lost its own list.)
 - **The journey becomes history.** An arrived convoy takes no further crew or insurance changes; its crew list is
   the record of who went.
 
@@ -173,21 +187,34 @@ while the inspection status tracks how far through that process it has progresse
 > **Naming:** the domain type was renamed from `Veichle` to `Vehicle`. The rename is complete across the
 > solution.
 
+### Journey Leg
+
+A journey has two halves, and a vehicle is crewed for each: **UK to Europe** (`Uk`) and **Europe to Ukraine**
+(`Border`), with a handover at the European border in between. The leg is a property of the convoy's journey, which
+is why it lives on the [crew](#vehicle-crew) row. It was once called a *manifest* leg, back when the manifest kept
+its own driver teams.
+
 ### Vehicle Crew
 
-The people travelling in a [Vehicle](#vehicle) on one [Convoy](#convoy), decided while it is planned — before any
-[Manifest](#manifest) exists for the leg. Each crew member is either:
+The people travelling in a [Vehicle](#vehicle) on one [Convoy](#convoy), for one [leg](#journey-leg) of the journey,
+decided while it is planned. Each crew member is either:
 
 - a **Driver** — a volunteer registered to drive; or
 - a **Passenger** — any volunteer.
 
-**A person takes one seat per convoy**: they cannot be on two vehicles of the same journey (the database enforces
-it). A vehicle needs **two drivers** to be [ready](#readiness) — the norm for sustained driving and border
+**This is the only crew record in the system.** The [Manifest](#manifest) reads it; it does not keep its own.
+
+**A person takes one seat per leg**: they cannot be in two vehicles on the same half of the same journey (the
+database enforces it). They may change vehicle at the border, which is exactly what the leg exists to record. A
+vehicle needs **two drivers on each leg** to be [ready](#readiness) — the norm for sustained driving and border
 compliance; passengers do not count. Crewing is the [Dispatcher](#dispatcher)'s alone.
+
+There is no primary/secondary distinction. Two drivers are two drivers, and readiness counts them.
 
 The crew can still change after the truck list is published — a driver falls ill — but **any change voids the
 vehicle's [insurance](#vehicle-insurance)**, which names the crew, and it must be recorded again before the vehicle
-departs. Once the convoy has [arrived](#arrival) the crew is history and cannot change.
+departs. Once the convoy has [arrived](#arrival), or the vehicle has [withdrawn](#withdrawal), the crew is history
+and cannot change.
 
 ### Vehicle Insurance
 
@@ -200,9 +227,10 @@ never typed in). Dispatcher and Administrator may record it (`PUT /convoys/{id}/
   reason.
 - Taking the vehicle off the convoy, or cancelling the convoy, removes it.
 
-This is distinct from a [Driver Team](#driver-team): the crew is a property of the vehicle within the convoy,
-decided during planning, while a Driver Team is a primary/secondary pair fixed to one specific leg once a manifest
-exists for that vehicle.
+The crew is a property of the vehicle within the convoy. A manifest used to carry its own primary/secondary
+*driver teams* alongside it, set through a different endpoint and connected to this by nothing at all — so a printed
+manifest could name a crew the insurance had never heard of, while the insurance is what actually gates departure.
+There is one record now.
 
 ### Route
 
@@ -277,22 +305,26 @@ Ukraine.
 > **Naming:** the domain type was spelled `Reciever` and has been renamed to `Receiver` across the solution,
 > along with `ResponsibleIndiviual` → `ResponsibleIndividual`.
 
-### Driver Team
-
-A pair of drivers — a primary and a secondary — allocated to one leg of a journey. A [Manifest](#manifest)
-carries two teams: `DriverUK` for the UK→Europe leg and `DriverBorder` for the Europe→Ukraine leg.
-
-See [Vehicle Crew](#vehicle-crew) for the earlier, convoy-planning-stage assignment this narrows down from.
-
 ### Manifest
 
-**The central document of the system.** A manifest ties together, for one vehicle on one convoy:
+**The central document of the system**, and the document *pack* for one entry on a convoy's
+[Truck List](#truck-list): one vehicle, on one convoy. A manifest carries:
 
-- the [Vehicle](#vehicle) carrying the load,
-- both [Driver Teams](#driver-team),
 - the [Boxes](#box) making up the cargo,
+- the border weight below,
+- its GMR and ELO paperwork,
 - the ferry booking status,
 - and free-text delivery notes.
+
+It is opened against that truck-list entry (`POST /convoys/{id}/vehicles/{vin}/manifest`) rather than created from
+nothing, and the pair is a composite foreign key: a manifest cannot name a truck that is not on the convoy, and one
+vehicle on one convoy carries exactly one manifest. That matters because [arrival](#arrival) asks each vehicle for
+its finished manifest and has to get one answer.
+
+**It carries no crew.** Who is driving is a fact about the vehicle on the convoy — see
+[Vehicle Crew](#vehicle-crew) — and `GET /manifests/{id}/crew` reads it. The convoy and the vehicle are the
+manifest's identity, not attributes of it, so `PUT /manifests/{id}` has no field for either: a vehicle that leaves
+mid-journey is [withdrawn](#withdrawal) from the truck list, which leaves the manifest intact.
 
 Its most important derived value is **total weight**, used for border checks. Total weight is the vehicle's kerb
 weight, plus the sum of box weights, plus a fixed allowance of 200 kg (two drivers and their bags) and 45 kg
@@ -323,8 +355,26 @@ lifecycle section for the freeze semantics.
 
 ### Truck List
 
-Produced at the start of the process: the set of vehicles committed to the next convoy, published so that
-manifests can be proposed against it. See [`process.puml`](../process.puml).
+The set of vehicles committed to a [Convoy](#convoy), produced at the start of the process and published so that
+manifests can be proposed against it (see [`process.puml`](../process.puml)). One row per vehicle per convoy, and
+the single statement of "this vehicle is travelling with this convoy" — the crew, the insurance and the
+[Manifest](#manifest) all hang off it.
+
+Publishing closes the list **to additions**: a vehicle cannot join afterwards, because a manifest would then be
+proposed against a set that is still moving.
+
+#### Withdrawal
+
+Publishing does not close the list to *departures*, because vehicles break down. A vehicle that leaves the convoy
+mid-journey is **withdrawn**: its entry is stamped with the time and a reason and stays on the list, along with its
+crew, its insurance and its manifest. Nothing is deleted, for three reasons:
+
+- its manifest and GMR still describe a load that is real,
+- the crew that set off is the record of who went, and
+- which convoy it left is part of what happened.
+
+A withdrawn vehicle is skipped by [readiness](#readiness) and by [arrival](#arrival), and is free to join a later
+convoy, or to make its own way after repair.
 
 ---
 

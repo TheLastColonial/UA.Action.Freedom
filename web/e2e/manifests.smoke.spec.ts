@@ -7,12 +7,28 @@ test.beforeEach(async () => {
   test.skip(!(await stackIsUp()), 'the local stack is not up (docker compose + tofu apply)');
 });
 
-test('@smoke a manifest is proposed against a published convoy, then approved and frozen', async ({
+test('@smoke a manifest is opened on a truck list, proposed, then approved and frozen', async ({
   page,
 }) => {
   // The Administrator can do the whole path — plan, publish, propose and (uniquely) approve.
+  const stamp = String(Date.now());
+  const vin = `E2EM${stamp}`;
   await signIn(page, 'admin');
   const nav = page.getByRole('navigation', { name: 'Sections' });
+
+  // A manifest is the paperwork for one vehicle on one convoy, so the convoy needs a vehicle on
+  // its truck list before there is anything to open a manifest against.
+  await nav.getByRole('link', { name: 'Vehicles' }).click();
+  await page.getByRole('link', { name: 'New vehicle' }).click();
+  await page.getByLabel('VIN').fill(vin);
+  await page.getByLabel('Number plate').fill('E2E 003');
+  await page.getByLabel('Year').fill('2016');
+  await page.getByLabel('Kerb weight (kg)').fill('2100');
+  await page.getByRole('button', { name: 'Create vehicle' }).click();
+  await page.getByRole('link', { name: 'Servicing' }).click();
+  await page.getByLabel('Inspection status').selectOption('Passed');
+  await page.getByRole('button', { name: 'Save inspection' }).click();
+  await expect(page.getByRole('status')).toHaveText('Inspection saved.');
 
   await nav.getByRole('link', { name: 'Convoys' }).click();
   await page.getByRole('link', { name: 'New convoy' }).click();
@@ -21,19 +37,20 @@ test('@smoke a manifest is proposed against a published convoy, then approved an
   await page.getByRole('button', { name: 'Create convoy' }).click();
   await expect(page.getByRole('heading', { name: /Convoy #/ })).toBeVisible();
 
-  const convoyId = ((await page.getByRole('heading', { name: /Convoy #/ }).textContent()) ?? '')
-    .replace(/\D/g, '')
-    .trim();
+  await page.getByRole('tab', { name: 'Vehicles' }).click();
+  await page.getByRole('combobox', { name: 'Vehicle' }).fill(vin);
+  await page.getByRole('option', { name: new RegExp(vin) }).click();
+  await expect(page.getByRole('cell', { name: vin })).toBeVisible();
 
   await page.getByRole('button', { name: 'Publish truck list' }).click();
   await expect(page.getByText('Truck list published')).toBeVisible();
 
-  await nav.getByRole('link', { name: 'Manifests' }).click();
-  await page.getByRole('link', { name: 'New manifest' }).click();
-  const reference = `E2E-${String(Date.now())}`;
+  // Opened from the truck-list entry: there is no form that names a convoy and a VIN.
+  await page.getByRole('tab', { name: 'Vehicles' }).click();
+  await page.getByRole('link', { name: 'Open manifest' }).click();
+  const reference = `E2E-${stamp}`;
   await page.getByLabel('Reference').fill(reference);
-  await page.getByLabel('Convoy id').fill(convoyId);
-  await page.getByRole('button', { name: 'Create manifest' }).click();
+  await page.getByRole('button', { name: 'Open manifest' }).click();
   await expect(page.getByRole('heading', { name: reference })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Status' }).click();

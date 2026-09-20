@@ -1,8 +1,4 @@
-import type {
-  ManifestBoxReadModel,
-  ManifestDriverTeamReadModel,
-  ManifestReadModel,
-} from '../../api/schemas/manifests';
+import type { ManifestBoxReadModel, ManifestReadModel } from '../../api/schemas/manifests';
 
 let seq = 0;
 
@@ -10,24 +6,15 @@ export function makeManifest(overrides: Partial<ManifestReadModel> = {}): Manife
   seq += 1;
   return {
     id: `UA-2026-${String(seq).padStart(3, '0')}`,
-    vin: null,
-    convoyId: null,
+    // Never null: a manifest is the paperwork for one vehicle on one convoy, and the pair is a
+    // composite foreign key to that truck-list entry.
+    convoyId: 1,
+    vin: 'VIN-CONVOY-1',
     status: 'Created',
     deliveryNotes: null,
     ferryBookingComplete: false,
     gmrSubmittedAt: null,
     frozen: false,
-    ...overrides,
-  };
-}
-
-export function makeManifestTeam(
-  overrides: Partial<ManifestDriverTeamReadModel> = {},
-): ManifestDriverTeamReadModel {
-  return {
-    leg: 'Uk',
-    primaryPersonId: 'driver-1',
-    secondaryPersonId: null,
     ...overrides,
   };
 }

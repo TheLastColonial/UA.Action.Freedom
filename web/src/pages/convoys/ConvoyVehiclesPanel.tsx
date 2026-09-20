@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 
 import { useAssignVehicle, useConvoyVehicles, useUnassignVehicle } from '../../api/convoys';
 import { ApiDomainProblem } from '../../api/problem';
-import { Button } from '../../components/Button';
+import { Button, LinkButton } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { PageSkeleton } from '../../components/PageSkeleton';
@@ -38,25 +38,53 @@ export function ConvoyVehiclesPanel({ convoyId, disabled }: ConvoyVehiclesPanelP
     { header: 'Plate', cell: (v) => v.plate },
     { header: 'Weight (kg)', cell: (v) => v.weightKg },
     {
+      header: 'Status',
+      cell: (v) => (v.withdrawn ? (v.withdrawnReason ?? 'Withdrawn') : 'Travelling'),
+    },
+    {
       header: '',
-      cell: (v) => (
-        <Button
-          type="button"
-          variant="danger"
-          disabled={disabled || unassign.isPending}
-          onClick={() => {
-            unassign.mutate(v.vin);
-          }}
-        >
-          Remove
-        </Button>
-      ),
+      // A manifest is the paperwork for one vehicle on one convoy, so it is opened from the
+      // truck-list entry rather than from a form that names a convoy and a VIN.
+      cell: (v) =>
+        v.withdrawn ? null : (
+          <LinkButton
+            to={`/convoys/${String(convoyId)}/vehicles/${encodeURIComponent(v.vin)}/manifest/new`}
+          >
+            Open manifest
+          </LinkButton>
+        ),
+    },
+    {
+      header: '',
+      // Before publication this takes the vehicle off the list. Afterwards it records that the
+      // vehicle left — a breakdown — and the entry stays, because its manifest still describes a
+      // real load.
+      cell: (v) =>
+        v.withdrawn ? null : (
+          <Button
+            type="button"
+            variant="danger"
+            disabled={unassign.isPending}
+            onClick={() => {
+              unassign.mutate(
+                disabled ? { vin: v.vin, reason: 'Withdrawn by the dispatcher' } : { vin: v.vin },
+              );
+            }}
+          >
+            {disabled ? 'Withdraw' : 'Remove'}
+          </Button>
+        ),
     },
   ];
 
   return (
     <div>
-      {disabled ? <p role="status">The truck list is published — vehicles are now fixed.</p> : null}
+      {disabled ? (
+        <p role="status">
+          The truck list is published — no more vehicles can join, but one that breaks down can be
+          withdrawn.
+        </p>
+      ) : null}
       {message ? (
         <p role="alert" className="field__error">
           {message}

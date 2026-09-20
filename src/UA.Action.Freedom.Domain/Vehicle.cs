@@ -67,9 +67,15 @@ public class Vehicle
     public FuelType Fuel { get; init; }
 
     /// <summary>
-    /// Grouping of vehicles. Null until the vehicle is assigned to a convoy.
+    /// When the vehicle was handed over in Ukraine, if it has been. A vehicle is itself part of
+    /// the aid, so once it is handed over it is never offered for a convoy again.
     /// </summary>
-    public Convoy? Convoy { get; init; }
+    /// <remarks>
+    /// Stamped by <c>POST /convoys/{id}/arrive</c> for vehicles whose manifest ended Delivered or
+    /// Lost. Which convoy a vehicle is travelling with is <em>not</em> a field here — that is the
+    /// truck list, <see cref="ConvoyVehicle"/>, which keeps its history instead of being nulled.
+    /// </remarks>
+    public DateTime? HandedOverAt { get; init; }
 
     /// <summary>
     /// Individual responsible for the purchase order of a vehicle. Null for a direct donation.
@@ -80,11 +86,6 @@ public class Vehicle
     /// Timestamp of the purchase. Null for a direct donation.
     /// </summary>
     public DateTime? PurchaseDate { get; init; }
-
-    /// <summary>
-    /// History of drivers
-    /// </summary>
-    public List<Driver>? Drivers { get; init; }
 
     /// <summary>
     /// Kerb Weight in Kilograms

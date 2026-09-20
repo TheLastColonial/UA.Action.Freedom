@@ -3,9 +3,13 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Application.Manifests;
 
 /// <summary>
-/// Persistence port for <see cref="ManifestReadModel"/> and the two things a manifest composes:
-/// its driver teams and its cargo.
+/// Persistence port for <see cref="ManifestReadModel"/> and its cargo.
 /// </summary>
+/// <remarks>
+/// Driver teams are gone from here. A manifest no longer keeps its own crew: who is driving is a
+/// fact about the vehicle on the convoy, recorded once on the crew row and read through
+/// <see cref="IConvoyVehicleRepository"/>.
+/// </remarks>
 public interface IManifestRepository
 {
     Task<ManifestReadModel?> GetByIdAsync(string id, CancellationToken cancellationToken);
@@ -14,11 +18,20 @@ public interface IManifestRepository
 
     Task<bool> ExistsAsync(string id, CancellationToken cancellationToken);
 
+    /// <summary>The manifest already opened for this truck-list entry, if there is one.</summary>
+    /// <remarks>
+    /// One manifest per vehicle per convoy: arrival asks each vehicle for its finished manifest and
+    /// has to get one answer. The unique constraint is the real guard; this makes the refusal a
+    /// 409 that names the existing reference rather than a foreign-key exception.
+    /// </remarks>
+    Task<ManifestReadModel?> GetForVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken);
+
     Task AddAsync(ManifestReadModel manifest, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Updates the vehicle, convoy, notes and ferry booking. Cannot touch the status or the GMR
-    /// stamp — those belong to the transitions.
+    /// Updates the notes and the ferry booking. Cannot touch the convoy, the vehicle, the status
+    /// or the GMR stamp — the first two are the manifest's identity, the last two belong to the
+    /// transitions.
     /// </summary>
     Task<bool> UpdateAsync(ManifestReadModel manifest, CancellationToken cancellationToken);
 
@@ -41,10 +54,6 @@ public interface IManifestRepository
     /// </remarks>
     Task<DateTime?> ConfirmAndFreezeAsync(string id, ManifestStatus from, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<ManifestDriverTeamReadModel>> ListTeamsAsync(string id, CancellationToken cancellationToken);
-
-    Task SetTeamAsync(string id, ManifestDriverTeamReadModel team, CancellationToken cancellationToken);
-
     Task<IReadOnlyList<ManifestBoxReadModel>> ListBoxesAsync(string id, CancellationToken cancellationToken);
 
     /// <summary>Returns false when there is no box with that identifier.</summary>
@@ -53,12 +62,22 @@ public interface IManifestRepository
     /// <summary>Returns false when that box is not on this manifest.</summary>
     Task<bool> RemoveBoxAsync(string id, int boxId, CancellationToken cancellationToken);
 
-    /// <summary>The kerb weight of the manifest's vehicle, or zero when none is assigned yet.</summary>
+    /// <summary>The kerb weight of the manifest's vehicle.</summary>
     Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The manifest's vehicle's cargo capacity, all-null when no vehicle is assigned yet or its
-    /// capacity has never been measured.
+    /// The registration plate of the manifest's vehicle — what a border officer reads, and what
+    /// HMRC is told.
+    /// </summary>
+    /// <remarks>
+    /// Not the VIN. <c>GmrSubmissionRequest.VehicleRegistration</c> and the printed document both
+    /// say "the plate the border expects to see", and both were being handed
+    /// <c>Manifest.Vin</c> — the chassis number, which is not on the front of the vehicle.
+    /// </remarks>
+    Task<string?> GetVehiclePlateAsync(string id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The manifest's vehicle's cargo capacity, all-null when its capacity has never been measured.
     /// </summary>
     Task<VehicleCargoCapacityReadModel> GetVehicleCargoCapacityAsync(string id, CancellationToken cancellationToken);
 

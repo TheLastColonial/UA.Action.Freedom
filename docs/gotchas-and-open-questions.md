@@ -143,15 +143,78 @@ created last time still exist and skips them, which is a *second* way to not tes
 
 | Relationship | Behaviour | Why |
 | --- | --- | --- |
-| `Vehicle → Convoy` | `ON DELETE SET NULL` | Vehicles *are* the aid. A cancelled convoy releases them; it must not delete donated vehicles. |
+| `ConvoyVehicle → Vehicle` | `ON DELETE CASCADE` | Deleting a donated vehicle takes its truck-list rows, and their crew and insurance, with it. |
+| `ConvoyVehicle → Convoy` | no action | Only **one** cascade path may reach a child, and the Vehicle one above is it. `ConvoyRepository.DeleteAsync` clears the truck list itself, in the same transaction — **inside the `catch`**, because a manifest refuses that statement, not the convoy delete. |
+| `ConvoyVehicleCrew` / `ConvoyVehicleInsurance → ConvoyVehicle` | `ON DELETE CASCADE` | Neither has a life without the truck-list entry. Taking a vehicle off an unpublished list is therefore one statement. |
 | `ConvoyRouteStop → Convoy` | `ON DELETE CASCADE` | A route has no life without its convoy. |
 | `BoxItem → Box` | `ON DELETE CASCADE` | Items have no life outside their box. |
 | `BoxQrCode → Box` | `ON DELETE CASCADE` | A label has no life outside its box; a stray one must not outlive it. |
 | `ManifestBox → Manifest` | `ON DELETE CASCADE` | Removes the *link*, not the box. |
 | `ManifestBox → Box` | `ON DELETE CASCADE` | Deleting a box takes it off the manifest. |
-| `Manifest → Vehicle` / `Convoy` | no action | Cannot delete a vehicle or convoy a manifest names. |
+| `Manifest → ConvoyVehicle` | no action | Composite, on `(ConvoyId, Vin)`. A manifest is the record of what a vehicle carried across a border, so neither cancelling a convoy nor deleting a vehicle may erase it — and a manifest cannot name a truck that is not on the convoy. |
 | `Box → Person` (validator) | no action | A volunteer who leaves must not take the record of what they signed for. |
 | `ReceiverDetail → Receiver` | no action | Makes "delete the reference, keep the address" impossible. |
+
+### A telemetry test flakes only in a full-solution run
+
+`GmrSubmissionProcessorTelemetryTests.The_submission_is_traced_as_a_consumer_span_linked_to_the_
+approval_that_queued_it` fails about one `dotnet test --solution` run in four, and passes every
+time the Unit project is run on its own. It is a **cross-assembly** race: the Unit and Component
+assemblies run in parallel, both start `ActivityListener`s over `UA.Action.Freedom.*` sources, and
+the span this test asserts on is occasionally sampled by the other listener first.
+
+Not caused by, and not fixed by, anything in the convoy/manifest consolidation — the Customs Worker
+is untouched by it. Noted here so the next person does not go looking for a real failure. The fix,
+when somebody wants it, is for the telemetry tests to scope their listener to a per-test
+`ActivitySource` name rather than the shared prefix.
+
+### The truck list is a table, and everything about a journey hangs off it
+
+`dbo.ConvoyVehicle`, keyed `(ConvoyId, Vin)`, is the single statement of "this vehicle is travelling
+with this convoy". Before it, that fact was written in four places and reconciled in none:
+
+- `dbo.Vehicle.ConvoyId`, a mutable pointer;
+- `dbo.Manifest.ConvoyId` + `Vin`, two independent nullable foreign keys;
+- the leading columns of the crew table;
+- and the leading columns of the insurance table.
+
+Two things went wrong with that, and both are worth knowing because they look like features:
+
+1. **An arrived convoy lost its own truck list.** Arrival nulled `Vehicle.ConvoyId` to *release* a
+   Returned vehicle, so "which vehicles were on convoy 5?" became unanswerable — while the crew and
+   insurance rows went on naming a parent that no longer existed.
+2. **Nothing checked a manifest's vehicle was on its convoy**, and nothing stopped one vehicle
+   carrying two manifests. That mattered because `ArriveAsync` asks each vehicle for its finished
+   manifest: two would have been satisfied by whichever finished first.
+
+Both are now structural. `Vehicle` has no `ConvoyId` at all — `VehicleReadModel.ConvoyId` is derived
+from the truck list on the way out — and `Manifest.(ConvoyId, Vin)` is `NOT NULL`, a composite
+foreign key and unique. **Do not add a convoy column back to `dbo.Vehicle`**, and do not relax that
+uniqueness.
+
+### There is one crew record, and the manifest reads it
+
+`dbo.ConvoyVehicleCrew` (was `dbo.VehicleDriver`) carries a `Leg` as well as a `Role`, and
+`dbo.ManifestDriverTeam` is gone. They used to coexist, unconnected by any foreign key or join:
+
+- the crew table decided the **insurance**, which a crew change voids, and therefore whether a
+  manifest could depart;
+- the manifest's own primary/secondary teams decided **nothing at all**.
+
+So a printed manifest could name a crew the insurance had never heard of, and
+`SetManifestTeamHandler` checked only that the person was a registered driver — never that they were
+in the vehicle. Crewing is now one act, on the truck-list entry, and `GET /manifests/{id}/crew` is a
+read of it. **Do not give the manifest a crew of its own.**
+
+One seat per person is now **per leg** (`UQ_ConvoyVehicleCrew_Convoy_Person_Leg`), not per convoy,
+because a crew handover at the European border is a real event and is the reason the leg exists.
+
+### The GMR carries the plate, not the VIN
+
+`GmrSubmissionRequest.VehicleRegistration` and `ManifestDocumentRequest.VehicleRegistration` are
+both documented as "the plate the border expects to see", and both were being handed `Manifest.Vin`
+— the chassis number, which is not on the front of the vehicle. `IManifestRepository` grew a
+`GetVehiclePlateAsync` for it. If you add another hand-off that names a vehicle, use the plate.
 
 ### `dbo.ManifestBox` is keyed on `BoxId`, not the pair
 
@@ -282,10 +345,16 @@ What the freeze actually blocks: `PUT`, team assignment, cargo changes, delete, 
 to `Proposed`/`Rejected`. That last is a guard against a future backward edge rather than a path
 anything takes today.
 
-### Publishing a truck list closes the convoy's vehicle list
+### Publishing a truck list closes it to additions, not to departures
 
-Adding or removing a vehicle after publication is a `409`. **This is an inference, not a quoted
-requirement** — see §9.
+Adding a vehicle after publication is a `409`: a manifest would otherwise be proposed against a set
+that is still moving. **That much is an inference, not a quoted requirement** — see §9.1.
+
+Removing one is not refused, because vehicles break down. After publication
+`DELETE /convoys/{id}/vehicles/{vin}?reason=` is a **withdrawal**: `ConvoyVehicle.WithdrawnAt` is
+stamped and the entry, its crew, its insurance and its manifest all stay. Deleting them would strand
+a manifest that still describes a real load, and lose the record of which convoy the vehicle set off
+with. A withdrawn vehicle is skipped by readiness and arrival and may join a later convoy.
 
 ### A box cannot be changed after validation
 
@@ -295,10 +364,14 @@ the border check relies on; any of those would leave it describing something no 
 ### Only a Passed vehicle joins a convoy — and it cannot be moved from another
 
 `PUT /convoys/{id}/vehicles/{vin}` is a 409 unless the vehicle's inspection is `Passed`, and a
-409 if it is already on a *different* convoy. The second rule closed a hole: assigning to convoy B
-used to silently take the vehicle off convoy A, even when A's truck list was already published and
-manifested. Both rules are in the `UPDATE`'s `WHERE`, so a Mechanic failing the vehicle at the
-same moment cannot race it on.
+409 if it is already travelling with a *different* convoy. The second rule closed a hole: assigning
+to convoy B used to silently take the vehicle off convoy A, even when A's truck list was already
+published and manifested. Both rules are in the conditional `INSERT`'s `WHERE`, so a Mechanic
+failing the vehicle at the same moment cannot race it on.
+
+"Travelling with another convoy" is an un-withdrawn `ConvoyVehicle` row on a convoy that has not
+arrived. A vehicle whose convoy has arrived without handing it over, or which withdrew from one, is
+free — and nothing has to be cleared for that to be true.
 
 ### A volunteer still named anywhere cannot be deleted
 
@@ -315,22 +388,23 @@ the dispatcher's committed-driver shortlist.
 
 ## 5. The write-once transition pattern
 
-Three records are stamped once and then freeze their aggregate. They are all built the same way,
-and a fourth should follow it:
+Four records are stamped once and then freeze their aggregate. They are all built the same way,
+and a fifth should follow it:
 
 | Record | Endpoint | Freezes |
 | --- | --- | --- |
-| `Convoy.TruckListPublishedAt` | `POST /convoys/{id}/publish-truck-list` | the convoy's vehicle list |
+| `Convoy.TruckListPublishedAt` | `POST /convoys/{id}/publish-truck-list` | the convoy's vehicle list, to additions |
 | `Box.ValidatedAt` + `ValidatedByPersonId` | `POST /boxes/{id}/validate` | the box's contents, weight and receiver |
 | `Manifest.Status` + `GmrSubmittedAt` | `POST /manifests/{id}/approve` | the manifest's content |
+| `ConvoyVehicle.WithdrawnAt` + `WithdrawnReason` | `DELETE /convoys/{id}/vehicles/{vin}?reason=` | the vehicle's part in this journey |
 
-The shape, in all three cases:
+The shape, in all four cases:
 
 - **Absent from the request body and from the `UPDATE` statement.** There is no way to set, clear
   or forge them through an ordinary edit. Tests send those fields anyway and assert nothing moves.
 - **The transition's SQL is conditional** — `AND TruckListPublishedAt IS NULL`,
-  `AND ValidatedAt IS NULL`, `AND Status = @from` — so the *database* settles a race between two
-  people pressing the same button, rather than a read-then-write in C#.
+  `AND ValidatedAt IS NULL`, `AND Status = @from`, `AND WithdrawnAt IS NULL` — so the *database*
+  settles a race between two people pressing the same button, rather than a read-then-write in C#.
 - **`ConfirmAndFreezeAsync` goes further** and does both in one statement with `OUTPUT INSERTED`.
   A manifest that is Confirmed but not yet frozen is editable, and that window is the thing §5.2
   rules out.
@@ -646,13 +720,15 @@ address field to leak.
 
 ## 9. Open questions — these need a person
 
-1. **Does publishing a truck list really close the convoy's vehicle list?**
-   Implemented as a `409`, inferred from `process.puml` ordering *Truck List Published → Manifest
-   Proposed* plus key-concepts.md describing the list as "published so manifests can be proposed
-   against it". The reasoning: if a vehicle could leave afterwards, a manifest would go on
-   describing a truck that is not travelling, and nobody would find out until loading day. **Not a
-   quoted requirement.** If the charity actually adds trucks late, this is a one-line relaxation
-   in `AssignVehicleToConvoyHandler`.
+1. **Does publishing a truck list really close the convoy's vehicle list to additions?**
+   Adding a vehicle afterwards is a `409`, inferred from `process.puml` ordering *Truck List
+   Published → Manifest Proposed* plus key-concepts.md describing the list as "published so
+   manifests can be proposed against it". **Not a quoted requirement.** If the charity actually
+   adds trucks late, this is a one-line relaxation in `AssignVehicleToConvoyHandler`.
+
+   The *departure* half of this is now answered rather than inferred: vehicles break down, so a
+   published list still takes a withdrawal. See "Publishing a truck list closes it to additions,
+   not to departures" above.
 
 2. **Is `Customs:RouteId` really route-level configuration?**
    It is currently one value for the whole application. If convoys ever cross by more than one
@@ -714,11 +790,22 @@ Questions 9–12 from the previous round are **decided and built**:
 - **The 200-vehicle picker limit** — never reached: arrived vehicles are handed over and leave the
   picker for good, and a convoy is a handful of vans.
 
-13. **Is "Returned" at arrival really "the vehicle came back"?** Arrival releases Returned vehicles
-    to travel again, and hands Delivered and Lost ones over. If Returned can also mean the cargo
-    came back but the vehicle stayed, that rule needs revisiting.
+13. **Is "Returned" at arrival really "the vehicle came back"?** Arrival hands Delivered and Lost
+    vehicles over; anything else is simply free for the next convoy. The question got sharper, not
+    softer, when withdrawal was modelled explicitly: a vehicle that physically came back mid-journey
+    is now *withdrawn*, which is a different fact from a *manifest* ending Returned. If Returned is
+    only ever "the cargo came back", the two are independent and the handling is right; if it also
+    means the vehicle came back, the two overlap and one of them is redundant. Needs a person.
 
-14. **Worker retry and failure semantics** — found while instrumenting the workers, and now visible
+14. **Should a withdrawn vehicle's manifest be re-issued when it joins a later convoy?**
+    A manifest is bound to one crossing: `(ConvoyId, Vin)` is its identity, and its GMR named the
+    original convoy's departure. A vehicle that is repaired and joins a later convoy therefore needs
+    a *new* manifest against the new truck-list entry, and the old one stays as the record of the
+    journey that did not finish. That is the safe reading of recommendations §5.2 — re-pointing a
+    frozen manifest at a different crossing would tell HMRC one thing and do another — but it is an
+    inference, and somebody at the charity should confirm the paperwork actually works that way.
+
+15. **Worker retry and failure semantics** — found while instrumenting the workers, and now visible
     in the dashboards (`freedom_queue_redeliveries_total`, `freedom_gmr_dead_letters_total`), but
     deliberately not changed, because each is a behaviour decision:
     - `GmrSubmissionProcessor` dead-letters **every** HMRC 4xx — including 401/403 (an expired
@@ -736,7 +823,7 @@ Questions 9–12 from the previous round are **decided and built**:
       which inflates the 5xx panels with what are really client errors.
     - `/health/ready` is unauthenticated and returns exception messages, which can name hosts.
 
-15. **Is OTLP straight to Application Insights actually supported?** The design and
+16. **Is OTLP straight to Application Insights actually supported?** The design and
     `AddFreedomTelemetry` assume `OTEL_EXPORTER_OTLP_ENDPOINT` can point at App Insights. Nothing in
     this repository verifies it. The alternatives are the Azure Monitor exporter or an OpenTelemetry
     Collector in front. The Grafana dashboards are PromQL/LogQL/TraceQL and do not port to App
@@ -773,4 +860,5 @@ rather than parsing them against the contract.
 | 9 | Box QR labels | `dbo.BoxQrCode` — opaque non-enumerable token, revoke/reissue, revoked rows kept. `IssueQrCodeAsync` holds a transaction, same shape as the others in §2. "One active label" enforced there, not by a filtered index (§1). `QRCoder` is the first drawing dependency — managed renderers only, never the `System.Drawing`-based `QRCode` (§2). The label renderer's signature carries no receiver data, so the "no delivery detail on a travelling label" rule is structural (§3). New `App:PublicBaseUrl` env-only config with a request-host fallback; the local sim sets `App__PublicBaseUrl` because the container sees the edge, not the browser host. BDD probes `/boxes/scan/{all-zero-guid}` — auth runs before the handler, so a present route answers 401 and an old image answers 404. |
 | 10 | Vehicle servicing + Mechanic | The inspection was silently dropped by the API and faked by the mock — see §6 "A test double must be exactly as strict". New `Mechanic` role and `vehicles:service` policy; `PUT /vehicles/{vin}/inspection` is the only writer. Convoy assignment gated on `Passed` in SQL, and no longer steals a vehicle from another convoy. Crew clean-up on convoy delete (a sixth transaction). Person delete 500 → 409. Schema guards for columns added after `CREATE TABLE`. Shared `SqlTestDatabase`, `freedom_app` everywhere, `FREEDOM_REQUIRE_INTEGRATION` in CI. Reload keeps the page (§7). |
 | 11 | Crew, insurance, readiness, arrival, erasure | Passengers and one seat per person per convoy (`VehicleDriver` gained `ConvoyId` and `Role`, key `(ConvoyId, Vin, PersonId)`). Insurance per vehicle per convoy, voided by a crew change in the same transaction, gating `depart`. Advisory readiness as one pure function. Arrival hands vehicles over for good. Split volunteer identity for UK-data-protection erasure, with an in-place migration checked on a fresh SQL Server. Found and fixed: `nvarchar` VIN parameters scanning the table (deadlocks), and 500s deleting a vehicle or convoy a manifest names. |
+| 13 | Convoy / manifest consolidation | The truck list became a table (`dbo.ConvoyVehicle`), and the manifest became its child: `(ConvoyId, Vin)` NOT NULL, composite FK, unique. `dbo.Vehicle.ConvoyId` removed — a pointer that arrival nulled, so an arrived convoy lost its own truck list. `dbo.ManifestDriverTeam` dropped; one crew record, now per journey leg, one seat per person per leg. Withdrawal added for the breakdown case: a stamp, not a delete. `IConvoyRepository` split in two. Found and fixed: the truck-list delete sat outside the `catch` that maps a foreign-key refusal to 409, and the GMR was being sent the VIN where its own comment said "plate". See `docs/adr/0001-truck-list-as-a-table.md`. |
 | 12 | Observability | One shared wiring (`UA.Action.Freedom.Telemetry`) for all three services; the workers were previously not instrumented at all. Business metrics (command outcomes, manifest transitions, queue depth/age/dispositions, GMR reasons, worker heartbeats), queue trace *links*, and a span processor that keeps paths, queries, HMRC bodies and `sensitive`-schema SQL out of telemetry. Seven Grafana dashboards. Found and left for a decision: §9 Q14 (retry/dead-letter semantics) and Q15 (App Insights). See the *Observability* section. |

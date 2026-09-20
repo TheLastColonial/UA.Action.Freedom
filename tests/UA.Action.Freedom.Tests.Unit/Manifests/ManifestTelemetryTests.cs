@@ -41,15 +41,20 @@ public sealed class ManifestTelemetryTests : IDisposable
     }
 
     private static ManifestReadModel AManifest(ManifestStatus status) => new(
-        Id, "WVWZZZ1JZXW000001", 42, status, null, FerryBookingComplete: false, GmrSubmittedAt: null);
+        Id, 42, "WVWZZZ1JZXW000001", status, null, FerryBookingComplete: false, GmrSubmittedAt: null);
 
+    /// <summary>One substitute for both convoy ports — see ManifestTransitionHandlerTests.</summary>
     private static IConvoyRepository AConvoy()
     {
-        var convoys = Substitute.For<IConvoyRepository>();
+        var convoys = Substitute.For<IConvoyRepository, IConvoyVehicleRepository>();
         convoys.GetByIdAsync(42, Arg.Any<CancellationToken>()).Returns(
             new ConvoyReadModel(42, Stamped, Stamped.AddDays(4), Stamped.AddDays(-5)));
         return convoys;
     }
+
+    private static TransitionManifestHandler AHandler(
+        IManifestRepository repository, IConvoyRepository convoys, FreedomMetrics metrics) =>
+        new(repository, convoys, (IConvoyVehicleRepository)convoys, metrics);
 
     private static IManifestRepository AProposedManifest()
     {
@@ -64,7 +69,7 @@ public sealed class ManifestTelemetryTests : IDisposable
     {
         var repository = Substitute.For<IManifestRepository>();
         repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest(ManifestStatus.Created));
-        var handler = new TransitionManifestHandler(repository, AConvoy(), _metrics);
+        var handler = AHandler(repository, AConvoy(), _metrics);
 
         await handler.HandleAsync(new TransitionManifestCommand(Id, ManifestStatus.Delivered), CancellationToken.None);
 
@@ -81,7 +86,7 @@ public sealed class ManifestTelemetryTests : IDisposable
         repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest(ManifestStatus.Confirmed));
         repository.TransitionAsync(Id, ManifestStatus.Confirmed, ManifestStatus.Preparing, Arg.Any<CancellationToken>())
             .Returns(true);
-        var handler = new TransitionManifestHandler(repository, AConvoy(), _metrics);
+        var handler = AHandler(repository, AConvoy(), _metrics);
 
         await handler.HandleAsync(new TransitionManifestCommand(Id, ManifestStatus.Preparing), CancellationToken.None);
 
@@ -95,7 +100,7 @@ public sealed class ManifestTelemetryTests : IDisposable
     public async Task A_transition_of_a_manifest_that_does_not_exist_has_no_starting_state()
     {
         var repository = Substitute.For<IManifestRepository>();
-        var handler = new TransitionManifestHandler(repository, AConvoy(), _metrics);
+        var handler = AHandler(repository, AConvoy(), _metrics);
 
         await handler.HandleAsync(new TransitionManifestCommand("MAN-NOPE", ManifestStatus.Proposed), CancellationToken.None);
 

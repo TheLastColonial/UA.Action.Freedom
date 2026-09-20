@@ -44,9 +44,9 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<AssignVehicleToConvoyCommand, AssignVehicleOutcome>, AssignVehicleToConvoyHandler>();
         services.AddScoped<ICommandHandler<UnassignVehicleFromConvoyCommand, UnassignVehicleOutcome>, UnassignVehicleFromConvoyHandler>();
         services.AddScoped<IQueryHandler<ListConvoyVehiclesQuery, IReadOnlyList<ConvoyVehicleReadModel>?>, ListConvoyVehiclesHandler>();
-        services.AddScoped<ICommandHandler<AssignDriverToVehicleCommand, AssignDriverOutcome>, AssignDriverToVehicleHandler>();
-        services.AddScoped<ICommandHandler<UnassignDriverFromVehicleCommand, UnassignDriverOutcome>, UnassignDriverFromVehicleHandler>();
-        services.AddScoped<IQueryHandler<ListVehicleDriversQuery, IReadOnlyList<VehicleDriverReadModel>?>, ListVehicleDriversHandler>();
+        services.AddScoped<ICommandHandler<AssignCrewToVehicleCommand, AssignCrewOutcome>, AssignCrewToVehicleHandler>();
+        services.AddScoped<ICommandHandler<UnassignCrewFromVehicleCommand, UnassignCrewOutcome>, UnassignCrewFromVehicleHandler>();
+        services.AddScoped<IQueryHandler<ListVehicleCrewQuery, IReadOnlyList<VehicleCrewReadModel>?>, ListVehicleCrewHandler>();
         services.AddScoped<ICommandHandler<RecordInsuranceCommand, RecordInsuranceOutcome>, RecordInsuranceHandler>();
         services.AddScoped<IQueryHandler<GetInsuranceQuery, VehicleInsuranceReadModel?>, GetInsuranceHandler>();
         services.AddScoped<ICommandHandler<RemoveInsuranceCommand, RemoveInsuranceOutcome>, RemoveInsuranceHandler>();
@@ -96,8 +96,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListManifestsQuery, IReadOnlyList<ManifestReadModel>>, ListManifestsHandler>();
         services.AddScoped<ICommandHandler<TransitionManifestCommand, TransitionManifestOutcome>, TransitionManifestHandler>();
         services.AddScoped<ICommandHandler<ApproveManifestCommand, TransitionManifestOutcome>, ApproveManifestHandler>();
-        services.AddScoped<ICommandHandler<SetManifestTeamCommand, SetManifestTeamOutcome>, SetManifestTeamHandler>();
-        services.AddScoped<IQueryHandler<ListManifestTeamsQuery, IReadOnlyList<ManifestDriverTeamReadModel>?>, ListManifestTeamsHandler>();
+        services.AddScoped<IQueryHandler<ListManifestCrewQuery, IReadOnlyList<VehicleCrewReadModel>?>, ListManifestCrewHandler>();
         services.AddScoped<ICommandHandler<AddManifestBoxCommand, ManifestBoxOutcome>, AddManifestBoxHandler>();
         services.AddScoped<ICommandHandler<RemoveManifestBoxCommand, ManifestBoxOutcome>, RemoveManifestBoxHandler>();
         services.AddScoped<IQueryHandler<ListManifestBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListManifestBoxesHandler>();

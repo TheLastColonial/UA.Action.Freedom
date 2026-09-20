@@ -9,11 +9,11 @@ namespace UA.Action.Freedom.Tests.Component;
 internal sealed class InMemoryManifestRepository : IManifestRepository
 {
     private readonly Dictionary<string, ManifestReadModel> manifests = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, List<ManifestDriverTeamReadModel>> teams = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<ManifestBoxReadModel>> boxes = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<int> knownBoxes = [];
 
     private int vehicleWeightKg;
+    private string? vehiclePlate = "AB12CDE";
     private VehicleCargoCapacityReadModel vehicleCargoCapacity = new(null, null, null, null);
 
     public InMemoryManifestRepository(params ManifestReadModel[] seed)
@@ -27,6 +27,12 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
     public InMemoryManifestRepository WithVehicleWeight(int weightKg)
     {
         vehicleWeightKg = weightKg;
+        return this;
+    }
+
+    public InMemoryManifestRepository WithVehiclePlate(string? plate)
+    {
+        vehiclePlate = plate;
         return this;
     }
 
@@ -54,8 +60,6 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
 
     public ManifestReadModel? Manifest(string id) => manifests.GetValueOrDefault(id);
 
-    public IReadOnlyList<ManifestDriverTeamReadModel> Teams(string id) => teams.GetValueOrDefault(id, []);
-
     public IReadOnlyList<ManifestBoxReadModel> Boxes(string id) => boxes.GetValueOrDefault(id, []);
 
     public Task<ManifestReadModel?> GetByIdAsync(string id, CancellationToken cancellationToken) =>
@@ -72,6 +76,11 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
     public Task<bool> ExistsAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult(manifests.ContainsKey(id));
 
+    /// <summary>Mirrors <c>UQ_Manifest_ConvoyVehicle</c>: one manifest per vehicle per convoy.</summary>
+    public Task<ManifestReadModel?> GetForVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken) =>
+        Task.FromResult(manifests.Values.FirstOrDefault(manifest =>
+            manifest.ConvoyId == convoyId && string.Equals(manifest.Vin, vin, StringComparison.OrdinalIgnoreCase)));
+
     public Task AddAsync(ManifestReadModel manifest, CancellationToken cancellationToken)
     {
         manifests[manifest.Id] = manifest;
@@ -85,11 +94,13 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
             return Task.FromResult(false);
         }
 
-        // Mirrors the SQL, which cannot reach the status or the GMR stamp on an update.
-        manifests[manifest.Id] = manifest with
+        // Mirrors the SQL, whose UPDATE lists only the notes and the ferry booking: the convoy and
+        // the vehicle are the manifest's identity, and the status and GMR stamp belong to the
+        // transitions.
+        manifests[manifest.Id] = existing with
         {
-            Status = existing.Status,
-            GmrSubmittedAt = existing.GmrSubmittedAt,
+            DeliveryNotes = manifest.DeliveryNotes,
+            FerryBookingComplete = manifest.FerryBookingComplete,
         };
 
         return Task.FromResult(true);
@@ -97,7 +108,6 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
 
     public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken)
     {
-        teams.Remove(id);
         boxes.Remove(id);
         return Task.FromResult(manifests.Remove(id));
     }
@@ -127,18 +137,6 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
         return Task.FromResult<DateTime?>(stamped);
     }
 
-    public Task<IReadOnlyList<ManifestDriverTeamReadModel>> ListTeamsAsync(string id, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<ManifestDriverTeamReadModel>>(
-            teams.GetValueOrDefault(id, []).OrderBy(team => team.Leg).ToList());
-
-    public Task SetTeamAsync(string id, ManifestDriverTeamReadModel team, CancellationToken cancellationToken)
-    {
-        teams.TryAdd(id, []);
-        teams[id].RemoveAll(existing => existing.Leg == team.Leg);
-        teams[id].Add(team);
-        return Task.CompletedTask;
-    }
-
     public Task<IReadOnlyList<ManifestBoxReadModel>> ListBoxesAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<ManifestBoxReadModel>>(boxes.GetValueOrDefault(id, []));
 
@@ -166,6 +164,9 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
 
     public Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult(vehicleWeightKg);
+
+    public Task<string?> GetVehiclePlateAsync(string id, CancellationToken cancellationToken) =>
+        Task.FromResult(manifests.ContainsKey(id) ? vehiclePlate : null);
 
     public Task<VehicleCargoCapacityReadModel> GetVehicleCargoCapacityAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult(vehicleCargoCapacity);

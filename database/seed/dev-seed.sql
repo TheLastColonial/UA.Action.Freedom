@@ -61,10 +61,23 @@ VALUES (@convoy, 1, N'Coventry', N'United Kingdom', N'CV1 0AA'),
 
 -- Vehicles. Transmission: 1 Manual, 2 Automatic. Fuel: 2 Diesel. InspectionStatus: 0 Pending,
 -- 2 Passed — only a Passed vehicle may join a convoy.
-INSERT INTO dbo.Vehicle (Vin, Plate, Brand, Model, Colour, Transmission, [Year], Fuel, WeightKg, InspectionStatus, ConvoyId)
-VALUES ('SEEDVIN0000000001', N'AB12 CDE', N'Ford',       N'Transit',  N'White', 1, 2015, 2, 2000, 2, @convoy),
-       ('SEEDVIN0000000002', N'FG34 HIJ', N'Volkswagen', N'Crafter',  N'Blue',  1, 2016, 2, 2100, 2, @convoy),
-       ('SEEDVIN0000000003', N'KL56 MNO', N'Toyota',     N'Hilux',    N'Grey',  2, 2014, 2, 1900, 0, NULL);
+INSERT INTO dbo.Vehicle (Vin, Plate, Brand, Model, Colour, Transmission, [Year], Fuel, WeightKg, InspectionStatus)
+VALUES ('SEEDVIN0000000001', N'AB12 CDE', N'Ford',       N'Transit',  N'White', 1, 2015, 2, 2000, 2),
+       ('SEEDVIN0000000002', N'FG34 HIJ', N'Volkswagen', N'Crafter',  N'Blue',  1, 2016, 2, 2100, 2),
+       ('SEEDVIN0000000003', N'KL56 MNO', N'Toyota',     N'Hilux',    N'Grey',  2, 2014, 2, 1900, 0);
+
+-- The truck list. The Hilux is left off it: it has not passed inspection, so it is the vehicle to
+-- try assigning when you want to see the 409.
+INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin)
+VALUES (@convoy, 'SEEDVIN0000000001'),
+       (@convoy, 'SEEDVIN0000000002');
+
+-- Crew, per leg: the same pair drives both legs of the Transit, which is the ordinary case. Role 0
+-- is Driver. Leg 0 is UK to Europe, 1 is Europe to Ukraine.
+INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, Leg, [Role])
+SELECT @convoy, 'SEEDVIN0000000001', p.Id, l.Leg, 0
+FROM (SELECT TOP 2 Id FROM @people WHERE IsDriver = 1 ORDER BY LastName) AS p
+CROSS JOIN (VALUES (0), (1)) AS l (Leg);
 
 -- Boxes waiting at the Coventry depot, not yet validated.
 INSERT INTO dbo.Box (WeightKg, LocationId) VALUES (12, @coventry), (8, @coventry), (15, @london);

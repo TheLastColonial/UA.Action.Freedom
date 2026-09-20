@@ -8,7 +8,7 @@ import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { ManifestStatePanel } from './ManifestStatePanel';
 
-test('from Created without a convoy: Reject is offered, Propose is disabled with a reason', async () => {
+test('from Created on an unpublished truck list: Reject is offered, Propose is disabled with a reason', async () => {
   worker.use(...manifestApi([makeManifest({ id: 'M1', status: 'Created' })]).handlers);
 
   const screen = await renderWithProviders(
@@ -21,7 +21,7 @@ test('from Created without a convoy: Reject is offered, Propose is disabled with
   await expect.element(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
   await expect.element(screen.getByRole('button', { name: 'Propose' })).toBeDisabled();
   await expect
-    .element(screen.getByText('Link this manifest to a convoy before proposing it.'))
+    .element(screen.getByText("The convoy's truck list has not been published yet."))
     .toBeInTheDocument();
 });
 

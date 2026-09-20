@@ -1,6 +1,6 @@
 # UA.Action.Freedom
 
-Automation to support Ukrainian Action, a charity that runs supply convoys (donated vehicles + cargo) from the UK to Ukraine. This system models the complete lifecycle of preparing a convoy: sourcing vehicles, packing boxes of items, assigning driver teams, building manifests per vehicle, and tracking convoy routes and status through to delivery.
+Automation to support Ukrainian Action, a charity that runs supply convoys (donated vehicles + cargo) from the UK to Ukraine. This system models the complete lifecycle of preparing a convoy: sourcing vehicles, packing boxes of items, crewing each vehicle for both legs of the journey, building a manifest per vehicle, and tracking convoy routes and status through to delivery.
 
 Built on .NET 10 with ASP.NET Core minimal APIs, Dapper for data access, and OpenTelemetry for observability.
 
@@ -208,15 +208,18 @@ Fetch it with `oras pull ghcr.io/thelastcolonial/ua-action-freedom-database:<tag
 Core resource endpoints:
 - `GET|POST /vehicles` — Vehicle inventory (natural key: VIN), including optional cargo capacity (max weight, dimensions); writes are Administrator, Purchaser and Mechanic (`vehicles:write`)
   - `PUT /vehicles/{vin}/inspection` — Record the servicing inspection (`Pending`/`Inspecting`/`Passed`/`Failed` + notes) — **Administrator and Mechanic only** (`vehicles:service`). The ordinary `PUT /vehicles/{vin}` cannot change it — nor which convoy the vehicle is on, which only `/convoys/{id}/vehicles/{vin}` changes
-- `GET|POST /people` — Volunteers & drivers; `DELETE /people/{id}` **erases** a volunteer (their personal data is deleted; past records show "Former volunteer"), refused with 409 while they are on a live crew or manifest team
+- `GET|POST /people` — Volunteers & drivers; `DELETE /people/{id}` **erases** a volunteer (their personal data is deleted; past records show "Former volunteer"), refused with 409 while they are crewing a convoy that has not arrived or a vehicle whose load is not yet finished
 - `GET|POST /convoys` — Convoy groups with routes
   - `PUT|GET /convoys/{id}/route` — Ordered stop list
-  - `PUT|DELETE /convoys/{id}/vehicles/{vin}` — Vehicle assignment; only a vehicle that has **Passed** its inspection, and is not on another convoy, may join (409 otherwise)
-  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/drivers/{personId}` — Vehicle crew: an optional `{ "role": "Driver" | "Passenger" }` body; a person takes one seat per convoy (**Dispatcher only** for `PUT`/`DELETE`; `GET` is included in `convoys:read`)
+  - `GET /convoys/{id}/vehicles` — The truck list, withdrawn vehicles included (each entry says which it is)
+  - `PUT /convoys/{id}/vehicles/{vin}` — Put a vehicle on the truck list; only one that has **Passed** its inspection, has not been handed over, and is not travelling with another convoy may join (409 otherwise)
+  - `DELETE /convoys/{id}/vehicles/{vin}` (`?reason=`) — Before publication this takes the vehicle off the list with its crew and insurance. **Afterwards it is a withdrawal**: the entry, its crew, its insurance and its manifest all stay, because a vehicle that breaks down still has paperwork describing a real load (`convoys:write`)
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/crew/{personId}` — Vehicle crew, **per leg**: `{ "leg": "Uk" | "Border", "role": "Driver" | "Passenger" }`; a person takes one seat per leg, so a crew handover at the European border is recordable (**Dispatcher only** for `PUT`/`DELETE`; `GET`, which takes an optional `?leg=`, is in `convoys:read`)
+  - `POST /convoys/{id}/vehicles/{vin}/manifest` — **Open the manifest for this vehicle on this convoy.** There is no `POST /manifests`: a manifest is the paperwork for a truck-list entry, and `(ConvoyId, Vin)` is a composite foreign key to it (`convoys:write`)
   - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/insurance` — The vehicle's insurance for this convoy; any crew change voids it, and a manifest cannot depart without it (`convoys:write`)
-  - `GET /convoys/{id}/readiness` — Advisory readiness: two drivers and insurance per vehicle, and a route (`convoys:read`)
-  - `POST /convoys/{id}/arrive` — Mark arrived once every vehicle has a finished manifest; Delivered/Lost vehicles are handed over for good, Returned ones released (`convoys:write`)
-  - `POST /convoys/{id}/publish-truck-list` — Lock vehicle manifest
+  - `GET /convoys/{id}/readiness` — Advisory readiness: **two drivers on each leg** and insurance per vehicle, and a route. Withdrawn vehicles are skipped (`convoys:read`)
+  - `POST /convoys/{id}/arrive` — Mark arrived once every vehicle still travelling has a finished manifest; Delivered/Lost vehicles are handed over for good (`convoys:write`)
+  - `POST /convoys/{id}/publish-truck-list` — Close the truck list to additions
 - `GET|POST /receivers` — Delivery contacts (reference/org/region)
   - `GET|PUT /receivers/{ref}/detail` — **GroundOfficer only**: delivery address + contact
 - `GET|POST /boxes` — Packing containers
@@ -226,8 +229,9 @@ Core resource endpoints:
   - `GET /boxes/{id}/qr-code/image` (`?format=svg\|png`) — The QR image alone (`boxes:read`)
   - `GET /boxes/{id}/label` — Printable SVG label: QR + box number, no receiver detail (`boxes:read`)
   - `GET /boxes/scan/{token}` — Resolve a scanned token to its box (`boxes:read`)
-- `GET|POST /manifests` — Vehicle + drivers + cargo units
-  - `GET|PUT /manifests/{id}/teams/{leg}` — Driver team assignment
+- `GET /manifests` — The document pack for one vehicle on one convoy: cargo, border weight, GMR, ferry booking. **Created on its convoy** (above), not here
+  - `PUT /manifests/{id}` — Notes and ferry booking only. The convoy and the vehicle are the manifest's identity, so there is no field for either
+  - `GET /manifests/{id}/crew` — Who is travelling with its vehicle, per leg. A **read**: crewing happens once, on the truck-list entry
   - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo assignment
   - `POST /manifests/{id}/{transition}` — State transitions: `propose`, `approve`, `reject`, `prepare`, `ready`, `depart`, `deliver`, `lose`, `return`
 - `GET|POST /locations` — Distribution hubs (garages/warehouses); writes are **Administrator only**
@@ -240,8 +244,9 @@ Core resource endpoints:
 See `docs/local-authentication.md` for the full role/policy matrix.
 
 The **operator UI (`web/`) covers every endpoint above** — all seven slices, every sub-resource
-(convoy route/vehicles, box items/validate/bay, box QR label issue/print/revoke, location bays,
-manifest teams/boxes/weight), all nine manifest transitions, and the reason-gated receiver-detail flow —
+(convoy route/truck list/crew/insurance, box items/validate/bay, box QR label issue/print/revoke,
+location bays, manifest crew/boxes/weight), all nine manifest transitions, and the reason-gated
+receiver-detail flow —
 with nav and actions gated by the same policy matrix (the API stays the enforcement point). The
 box detail page's **QR label** panel issues a label, shows it inline and prints it (a print
 stylesheet reveals the label alone); `/boxes/scan/{token}` is consumed by whatever scans the
@@ -277,6 +282,22 @@ Three independent controls enforce receiver address segregation:
 2. **Identity** — `ISensitiveDbConnectionFactory` grants read access only to the ground officer role
 3. **Database** — `DENY SELECT ON SCHEMA::sensitive TO freedom_app` — the app cannot read sensitive data
 
+### Convoy and Manifest — what each one is for
+
+The convoy is the unit that is **planned**; the manifest is the unit that is **executed per
+vehicle**. The fact that ties them, "this vehicle is travelling with this convoy", is one row:
+`dbo.ConvoyVehicle`, the truck list.
+
+- **Convoy** — the journey: departure and expected arrival, the route, the truck list, the crew of
+  each vehicle on it, their insurance, and arrival.
+- **Truck list entry** (`dbo.ConvoyVehicle`) — one vehicle on one convoy. The crew, the insurance
+  and the manifest all hang off it, so none of them can describe a truck that is not on the list.
+  Withdrawal is a stamp, not a delete: a vehicle that breaks down leaves the convoy and may join a
+  later one, but its manifest still describes a real load.
+- **Manifest** — the document pack for that entry: cargo, border weight, GMR, ELO, ferry booking,
+  delivery notes, and its own lifecycle. It carries **no crew**; `/manifests/{id}/crew` reads the
+  convoy's.
+
 ### Manifest Lifecycle
 
 Manifests follow a 10-state model (see `docs/manifest-status.puml`):
@@ -304,39 +325,50 @@ Manifests follow a 10-state model (see `docs/manifest-status.puml`):
 - **Dapper** for SQL mapping (typed constructor, rows map to primary constructor CLR types)
 - One repository per slice with dedicated `I*Repository` port
 - **CQRS read models** (flat shapes) separate from domain objects
-- **Transactions** only where one fact spans several rows: route replacement; a vehicle leaving
-  a convoy or a convoy being cancelled (crew and insurance go too); a crew change (it voids the
-  vehicle's insurance); convoy arrival (handover and release); volunteer add and erasure; receiver
-  detail resolve + audit; QR-label re-issue and bay assignment. See CLAUDE.md for the list.
+- **Transactions** only where one fact spans several rows: route replacement; a convoy being
+  cancelled (its truck list goes, and the crew and insurance cascade with it); a crew change (it
+  voids the vehicle's insurance); convoy arrival (the stamp and the handover); volunteer add and
+  erasure; receiver detail resolve + audit; QR-label re-issue and bay assignment. Taking a vehicle
+  off an unpublished truck list needs none: the crew and the insurance cascade from the entry.
+  See CLAUDE.md for the list.
 - **VIN and manifest keys are `varchar(32)`** — pass them with `SqlKey.Of(...)`. Dapper's default
   `nvarchar` would make every key lookup a table scan under the SQL collation, and it caused
   deadlocks before it was fixed.
 
 ### Convoy crew, insurance, readiness and arrival
 
-- **Crew** — drivers (registered to drive) and passengers (any volunteer); one seat per person per
-  convoy, enforced by `UQ_VehicleDriver_Convoy_Person`.
+- **Crew** — drivers (registered to drive) and passengers (any volunteer), assigned **per leg** of
+  the journey; one seat per person per leg, enforced by
+  `UQ_ConvoyVehicleCrew_Convoy_Person_Leg`. This is the only crew record in the system: the
+  manifest reads it rather than keeping its own.
 - **Insurance** — per vehicle per convoy, naming the crew. A crew change voids it in the same
   transaction; `TransitionManifestHandler` refuses `depart` without insurance in cover.
 - **Readiness** — `ConvoyReadiness.Assess`, one pure function, advisory only.
-- **Arrival** — allowed once every vehicle has a finished manifest; stamps `Convoy.ArrivedAt`, hands
-  Delivered/Lost vehicles over (`Vehicle.HandedOverAt`, never offered again) and releases Returned
-  ones, in one transaction. An arrived convoy's crew and insurance no longer change.
+- **Withdrawal** — once the truck list is published a vehicle can still *leave*, it just cannot be
+  erased: `DELETE /convoys/{id}/vehicles/{vin}?reason=` stamps `WithdrawnAt` and keeps everything.
+  A withdrawn vehicle is skipped by readiness and by arrival, and is free to join a later convoy.
+- **Arrival** — allowed once every vehicle still travelling has a finished manifest; stamps
+  `Convoy.ArrivedAt` and hands Delivered/Lost vehicles over (`Vehicle.HandedOverAt`, never offered
+  again), in one transaction. Nothing is *released*: a vehicle that was not handed over is free for
+  the next convoy because this one has arrived, so the truck list survives as the record of who
+  went. An arrived convoy's crew and insurance no longer change.
 
 ### Volunteer erasure (split identity)
 
 `dbo.Person` holds only the anonymous key every foreign key points at; `dbo.PersonDetail` holds the
 personal data. Erasure deletes the detail (UK data protection) and removes the key too unless past
-records name it — they then show "Former volunteer". Refused while the volunteer is still on a live
-crew or manifest team.
+records name it — they then show "Former volunteer". Refused while the volunteer is still crewing
+a convoy that has not arrived, or a vehicle whose load is not yet delivered, lost or returned —
+two questions of the one crew record, where they used to be two questions of two.
 
 ### Vehicle servicing and the convoy gate
 
 A vehicle's **inspection status** is the Mechanic's result, recorded through its own route
 (`PUT /vehicles/{vin}/inspection`) and absent from the ordinary vehicle `PUT` and `INSERT`, so an
 edit cannot set, clear or forge it. It gates convoy assignment: `ConvoyRepository.AssignVehicleAsync`
-puts the rule in the `UPDATE` itself (`WHERE InspectionStatus = Passed AND (ConvoyId IS NULL OR
-ConvoyId = @convoyId)`), so the database settles a race with a Mechanic changing the result, and a
+puts the rule in the `INSERT` itself (`WHERE InspectionStatus = Passed AND HandedOverAt IS NULL
+AND NOT EXISTS (… an un-withdrawn entry on a convoy that has not arrived)`), so the database
+settles a race with a Mechanic changing the result, and a
 vehicle already on one convoy is never silently moved to another.
 
 ### Box QR labels
@@ -471,6 +503,7 @@ See `docs/gotchas-and-open-questions.md` for:
 - **Domain concepts** — `docs/domain/key-concepts.md`
 - **Local authentication** — `docs/local-authentication.md`
 - **Architecture & design** — `docs/recommendations.md`
+- **Decision records** — `docs/adr/` (start with `0001-truck-list-as-a-table.md`)
 - **State diagram** — `docs/manifest-status.puml`
 - **System diagram** — `docs/c4/2-containers.puml`
 - **HMRC API specs** — `docs/schemas/hmrc/`

@@ -5,13 +5,17 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Data.Manifests;
 
 /// <summary>
-/// Dapper-backed <see cref="IManifestRepository"/> over <c>dbo.Manifest</c>,
-/// <c>dbo.ManifestDriverTeam</c> and <c>dbo.ManifestBox</c>.
+/// Dapper-backed <see cref="IManifestRepository"/> over <c>dbo.Manifest</c> and
+/// <c>dbo.ManifestBox</c>.
 /// </summary>
+/// <remarks>
+/// There is no driver-team table any more: crew is read from <c>dbo.ConvoyVehicleCrew</c> through
+/// the truck list, so this repository never writes a person.
+/// </remarks>
 public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) : IManifestRepository
 {
     private const string Columns =
-        "Id, Vin, ConvoyId, Status, DeliveryNotes, FerryBookingComplete, GmrSubmittedAt";
+        "Id, ConvoyId, Vin, Status, DeliveryNotes, FerryBookingComplete, GmrSubmittedAt";
 
     public async Task<ManifestReadModel?> GetByIdAsync(string id, CancellationToken cancellationToken)
     {
@@ -52,14 +56,26 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
         return count > 0;
     }
 
+    public async Task<ManifestReadModel?> GetForVehicleAsync(
+        int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<ManifestReadModel>(new CommandDefinition(
+            $"SELECT {Columns} FROM dbo.Manifest WHERE ConvoyId = @convoyId AND Vin = @vin",
+            new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+    }
+
     public async Task AddAsync(ManifestReadModel manifest, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO dbo.Manifest (Id, Vin, ConvoyId, Status, DeliveryNotes, FerryBookingComplete)
-            VALUES (@Id, @Vin, @ConvoyId, @Status, @DeliveryNotes, @FerryBookingComplete)
+            INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status, DeliveryNotes, FerryBookingComplete)
+            VALUES (CAST(@Id AS varchar(32)), @ConvoyId, CAST(@Vin AS varchar(32)),
+                    @Status, @DeliveryNotes, @FerryBookingComplete)
             """,
             manifest,
             cancellationToken: cancellationToken));
@@ -69,13 +85,13 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
     {
         await using var connection = connectionFactory.Create();
 
-        // Status and GmrSubmittedAt are absent on purpose. The lifecycle belongs to the
-        // transitions, and there is no way to reach it — or to un-freeze — through an edit.
+        // ConvoyId, Vin, Status and GmrSubmittedAt are all absent on purpose. The first two are
+        // the manifest's identity — the truck-list entry it is the paperwork for — and the
+        // lifecycle belongs to the transitions, so there is no way to re-point a manifest at
+        // another vehicle, or to un-freeze it, through an edit.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             """
             UPDATE dbo.Manifest SET
-                Vin = @Vin,
-                ConvoyId = @ConvoyId,
                 DeliveryNotes = @DeliveryNotes,
                 FerryBookingComplete = @FerryBookingComplete,
                 UpdatedAt = SYSUTCDATETIME()
@@ -91,7 +107,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
     {
         await using var connection = connectionFactory.Create();
 
-        // Teams and the cargo links cascade; the boxes themselves are untouched.
+        // The cargo links cascade; the boxes themselves are untouched.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM dbo.Manifest WHERE Id = @id",
             new { id = SqlKey.Of(id) },
@@ -139,53 +155,6 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             """,
             new { id = SqlKey.Of(id), from = (int)from, confirmed = (int)ManifestStatus.Confirmed },
             cancellationToken: cancellationToken));
-    }
-
-    public async Task<IReadOnlyList<ManifestDriverTeamReadModel>> ListTeamsAsync(
-        string id, CancellationToken cancellationToken)
-    {
-        await using var connection = connectionFactory.Create();
-
-        var rows = await connection.QueryAsync<ManifestDriverTeamReadModel>(new CommandDefinition(
-            """
-            SELECT Leg, PrimaryPersonId, SecondaryPersonId
-            FROM dbo.ManifestDriverTeam
-            WHERE ManifestId = @id
-            ORDER BY Leg
-            """,
-            new { id = SqlKey.Of(id) },
-            cancellationToken: cancellationToken));
-
-        return rows.ToList();
-    }
-
-    public async Task SetTeamAsync(
-        string id, ManifestDriverTeamReadModel team, CancellationToken cancellationToken)
-    {
-        await using var connection = connectionFactory.Create();
-
-        // Assigning a team to a leg replaces whoever was on it. The primary key is
-        // (ManifestId, Leg), so a manifest can never accumulate two crews for one leg.
-        var affected = await connection.ExecuteAsync(new CommandDefinition(
-            """
-            UPDATE dbo.ManifestDriverTeam SET
-                PrimaryPersonId = @PrimaryPersonId,
-                SecondaryPersonId = @SecondaryPersonId
-            WHERE ManifestId = @id AND Leg = @Leg
-            """,
-            new { id = SqlKey.Of(id), Leg = (int)team.Leg, team.PrimaryPersonId, team.SecondaryPersonId },
-            cancellationToken: cancellationToken));
-
-        if (affected == 0)
-        {
-            await connection.ExecuteAsync(new CommandDefinition(
-                """
-                INSERT INTO dbo.ManifestDriverTeam (ManifestId, Leg, PrimaryPersonId, SecondaryPersonId)
-                VALUES (@id, @Leg, @PrimaryPersonId, @SecondaryPersonId)
-                """,
-                new { id = SqlKey.Of(id), Leg = (int)team.Leg, team.PrimaryPersonId, team.SecondaryPersonId },
-                cancellationToken: cancellationToken));
-        }
     }
 
     public async Task<IReadOnlyList<ManifestBoxReadModel>> ListBoxesAsync(
@@ -250,8 +219,8 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
     {
         await using var connection = connectionFactory.Create();
 
-        // Zero when no vehicle is assigned yet: a manifest is Created before it is populated,
-        // and asking for its weight then should give a partial answer rather than fail.
+        // Zero only when there is no such manifest: every manifest names a vehicle now, so a
+        // partial answer here means the caller asked about something that does not exist.
         return await connection.ExecuteScalarAsync<int?>(new CommandDefinition(
             """
             SELECT v.WeightKg
@@ -263,13 +232,31 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             cancellationToken: cancellationToken)) ?? 0;
     }
 
+    public async Task<string?> GetVehiclePlateAsync(string id, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // The plate, not the VIN. Both the GMR submission and the printed document say
+        // "registration" and were being handed the chassis number, which is not what a border
+        // officer reads off the front of the vehicle.
+        return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            """
+            SELECT v.Plate
+            FROM dbo.Manifest AS m
+            INNER JOIN dbo.Vehicle AS v ON v.Vin = m.Vin
+            WHERE m.Id = @id
+            """,
+            new { id = SqlKey.Of(id) },
+            cancellationToken: cancellationToken));
+    }
+
     public async Task<VehicleCargoCapacityReadModel> GetVehicleCargoCapacityAsync(
         string id, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
-        // All-null when no vehicle is assigned yet, same reasoning as GetVehicleWeightKgAsync —
-        // this is a partial answer, not a failure.
+        // All-null when the vehicle's capacity has never been measured — nothing back-fills it,
+        // and a vehicle nobody has measured simply cannot be judged overloaded.
         return await connection.QuerySingleOrDefaultAsync<VehicleCargoCapacityReadModel>(new CommandDefinition(
             """
             SELECT v.MaxCargoWeightKg, v.CargoWidthCm, v.CargoDepthCm, v.CargoHeightCm

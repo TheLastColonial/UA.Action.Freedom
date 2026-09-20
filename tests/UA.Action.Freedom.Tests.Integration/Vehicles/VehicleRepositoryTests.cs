@@ -198,6 +198,10 @@ public class VehicleRepositoryTests
     {
         // Convoy membership belongs to /convoys/{id}/vehicles/{vin}, where the truck-list freeze,
         // the inspection gate and the crew clean-up live. A vehicle write must not route round them.
+        //
+        // It cannot, and no longer for want of a column in the UPDATE: dbo.Vehicle has no ConvoyId
+        // at all. VehicleReadModel.ConvoyId is derived from dbo.ConvoyVehicle on the way out, so a
+        // value sent in is read straight past.
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var vin = NewVin();
@@ -209,7 +213,9 @@ public class VehicleRepositoryTests
             await repository.AddAsync(AVehicle(vin) with { ConvoyId = convoyId }, cancellationToken);
             (await repository.GetByVinAsync(vin, cancellationToken))!.ConvoyId.Should().BeNull();
 
-            await ExecuteAsync("UPDATE dbo.Vehicle SET ConvoyId = @convoyId WHERE Vin = @vin", ("@convoyId", convoyId), ("@vin", vin));
+            await ExecuteAsync(
+                "INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin) VALUES (@convoyId, @vin)",
+                ("@convoyId", convoyId), ("@vin", vin));
             await repository.UpdateAsync(AVehicle(vin) with { ConvoyId = null, Plate = "IT99ZZZ" }, cancellationToken);
 
             var stored = await repository.GetByVinAsync(vin, cancellationToken);
@@ -219,7 +225,45 @@ public class VehicleRepositoryTests
         finally
         {
             await RemoveAsync(vin);
-            await ExecuteAsync("DELETE FROM dbo.Convoy WHERE Id = @id", ("@id", convoyId));
+            await ExecuteAsync(
+                "DELETE FROM dbo.ConvoyVehicle WHERE ConvoyId = @id; DELETE FROM dbo.Convoy WHERE Id = @id",
+                ("@id", convoyId));
+        }
+    }
+
+    [Fact]
+    public async Task An_arrived_convoy_keeps_its_truck_list_and_frees_the_vehicle()
+    {
+        // The hole the truck-list table closed. Arrival used to null dbo.Vehicle.ConvoyId to
+        // release a vehicle, which meant an arrived convoy lost the record of what had travelled
+        // on it. The entry now stays and the vehicle reads as free because the convoy has arrived.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var vin = NewVin();
+        var convoyId = await ScalarAsync(
+            """
+            INSERT INTO dbo.Convoy (Start, ExpectedEnd, TruckListPublishedAt, ArrivedAt)
+            VALUES ('2026-09-01', '2026-09-05', '2026-08-20', '2026-09-05');
+            SELECT CAST(SCOPE_IDENTITY() AS int);
+            """);
+
+        try
+        {
+            await repository.AddAsync(AVehicle(vin), cancellationToken);
+            await ExecuteAsync(
+                "INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin) VALUES (@convoyId, @vin)",
+                ("@convoyId", convoyId), ("@vin", vin));
+
+            (await repository.GetByVinAsync(vin, cancellationToken))!.ConvoyId.Should().BeNull();
+            (await ScalarAsync(
+                "SELECT COUNT(1) FROM dbo.ConvoyVehicle WHERE ConvoyId = @id", ("@id", convoyId))).Should().Be(1);
+        }
+        finally
+        {
+            await RemoveAsync(vin);
+            await ExecuteAsync(
+                "DELETE FROM dbo.ConvoyVehicle WHERE ConvoyId = @id; DELETE FROM dbo.Convoy WHERE Id = @id",
+                ("@id", convoyId));
         }
     }
 
@@ -227,15 +271,24 @@ public class VehicleRepositoryTests
     public async Task A_vehicle_a_manifest_names_is_kept_and_reported()
     {
         // The manifest is the record of what that vehicle carried; it outlives any tidy-up.
+        // The refusal now comes through the truck-list entry: deleting the vehicle would cascade
+        // that entry away, and FK_Manifest_ConvoyVehicle is NO ACTION.
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var vin = NewVin();
         var manifestId = "IT" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
+        var convoyId = await ScalarAsync(
+            "INSERT INTO dbo.Convoy (Start, ExpectedEnd) VALUES ('2026-09-01', '2026-09-05'); SELECT CAST(SCOPE_IDENTITY() AS int);");
 
         try
         {
             await repository.AddAsync(AVehicle(vin), cancellationToken);
-            await ExecuteAsync("INSERT INTO dbo.Manifest (Id, Vin) VALUES (@id, @vin)", ("@id", manifestId), ("@vin", vin));
+            await ExecuteAsync(
+                """
+                INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin) VALUES (@convoyId, @vin);
+                INSERT INTO dbo.Manifest (Id, ConvoyId, Vin) VALUES (@id, @convoyId, @vin);
+                """,
+                ("@id", manifestId), ("@convoyId", convoyId), ("@vin", vin));
 
             (await repository.DeleteAsync(vin, cancellationToken)).Should().Be(DeleteResult.StillReferenced);
             (await repository.ExistsAsync(vin, cancellationToken)).Should().BeTrue();
@@ -244,6 +297,9 @@ public class VehicleRepositoryTests
         {
             await ExecuteAsync("DELETE FROM dbo.Manifest WHERE Id = @id", ("@id", manifestId));
             await RemoveAsync(vin);
+            await ExecuteAsync(
+                "DELETE FROM dbo.ConvoyVehicle WHERE ConvoyId = @id; DELETE FROM dbo.Convoy WHERE Id = @id",
+                ("@id", convoyId));
         }
     }
 

@@ -5,9 +5,9 @@ import {
   manifestFormSchema,
   manifestFormToRequest,
   manifestFormToUpdateRequest,
-  teamFormSchema,
-  teamFormToRequest,
+  manifestToFormValues,
 } from './manifestModels';
+import { makeManifest } from '../../test/factories/manifest';
 
 describe('manifestFormToRequest', () => {
   it('trims the id and omits every empty optional', () => {
@@ -19,21 +19,23 @@ describe('manifestFormToRequest', () => {
     expect(request).toEqual({ id: 'UA-2026-07', ferryBookingComplete: true });
   });
 
-  it('coerces convoyId and keeps vin / notes when set', () => {
+  it('keeps the notes when set', () => {
     const request = manifestFormToRequest({
       id: 'M1',
-      vin: 'VIN123',
-      convoyId: '42',
       deliveryNotes: 'Fragile',
       ferryBookingComplete: false,
     });
-    expect(request).toEqual({
-      id: 'M1',
-      vin: 'VIN123',
-      convoyId: 42,
-      deliveryNotes: 'Fragile',
-      ferryBookingComplete: false,
-    });
+    expect(request).toEqual({ id: 'M1', deliveryNotes: 'Fragile', ferryBookingComplete: false });
+  });
+
+  it('carries no convoy or vehicle: the route does', () => {
+    // A manifest is opened at POST /convoys/{id}/vehicles/{vin}/manifest, against the truck-list
+    // entry it is the paperwork for. There is no field here to point one at a truck that is on a
+    // different convoy, or none.
+    const request = manifestFormToRequest({ ...emptyManifestForm(), id: 'M1' });
+
+    expect('vin' in request).toBe(false);
+    expect('convoyId' in request).toBe(false);
   });
 
   it('update request drops the id', () => {
@@ -44,36 +46,32 @@ describe('manifestFormToRequest', () => {
     });
     expect('id' in request).toBe(false);
   });
+
+  it('an edit cannot reach the convoy or the vehicle either', () => {
+    // They are the manifest's identity, and the UPDATE never names those columns.
+    const request = manifestFormToUpdateRequest({ ...emptyManifestForm(), id: 'M1' });
+
+    expect('vin' in request).toBe(false);
+    expect('convoyId' in request).toBe(false);
+  });
+});
+
+describe('manifestToFormValues', () => {
+  it('offers only what an edit may change', () => {
+    const values = manifestToFormValues(
+      makeManifest({ id: 'M1', convoyId: 7, vin: 'VIN-1', deliveryNotes: 'Fragile' }),
+    );
+
+    expect(values).toEqual({ id: 'M1', deliveryNotes: 'Fragile', ferryBookingComplete: false });
+  });
 });
 
 describe('manifestFormSchema', () => {
   it('requires a reference', () => {
     const result = manifestFormSchema.safeParse({ ...emptyManifestForm(), id: '' });
     expect(result.success).toBe(false);
-    expect(result.error?.issues.map((i) => i.message)).toContain(
+    expect(result.error?.issues.map((issue) => issue.message)).toContain(
       'A manifest reference is required',
     );
-  });
-});
-
-describe('driver team', () => {
-  it('omits an empty secondary driver', () => {
-    expect(teamFormToRequest({ primaryPersonId: 'p1', secondaryPersonId: '  ' })).toEqual({
-      primaryPersonId: 'p1',
-    });
-  });
-
-  it('needs a primary driver', () => {
-    const result = teamFormSchema.safeParse({ primaryPersonId: '', secondaryPersonId: '' });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((i) => i.message)).toContain(
-      'Name the volunteer leading this leg',
-    );
-  });
-
-  it('rejects the same volunteer on both seats', () => {
-    const result = teamFormSchema.safeParse({ primaryPersonId: 'p1', secondaryPersonId: 'p1' });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['secondaryPersonId']);
   });
 });

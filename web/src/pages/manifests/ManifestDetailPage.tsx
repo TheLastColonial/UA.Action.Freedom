@@ -11,15 +11,15 @@ import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
 import { ManifestBoxesPanel } from './ManifestBoxesPanel';
 import { ManifestStatePanel } from './ManifestStatePanel';
-import { ManifestTeamsPanel } from './ManifestTeamsPanel';
+import { ManifestCrewPanel } from './ManifestCrewPanel';
 import { ManifestWeightPanel } from './ManifestWeightPanel';
 
-type Tab = 'overview' | 'status' | 'teams' | 'cargo' | 'weight';
-const TABS: readonly Tab[] = ['overview', 'status', 'teams', 'cargo', 'weight'];
+type Tab = 'overview' | 'status' | 'crew' | 'cargo' | 'weight';
+const TABS: readonly Tab[] = ['overview', 'status', 'crew', 'cargo', 'weight'];
 const TAB_LABEL: Record<Tab, string> = {
   overview: 'Overview',
   status: 'Status',
-  teams: 'Teams',
+  crew: 'Crew',
   cargo: 'Cargo',
   weight: 'Weight',
 };
@@ -72,7 +72,7 @@ export function ManifestDetailPage(): JSX.Element {
         tabs={[
           { id: 'overview', label: TAB_LABEL.overview },
           { id: 'status', label: TAB_LABEL.status },
-          { id: 'teams', label: TAB_LABEL.teams },
+          { id: 'crew', label: TAB_LABEL.crew },
           { id: 'cargo', label: TAB_LABEL.cargo },
           { id: 'weight', label: TAB_LABEL.weight },
         ]}
@@ -85,9 +85,9 @@ export function ManifestDetailPage(): JSX.Element {
           <DetailCard title="Manifest details">
             <dl>
               <dt>Vehicle</dt>
-              <dd>{manifest.vin ?? '—'}</dd>
+              <dd>{manifest.vin}</dd>
               <dt>Convoy</dt>
-              <dd>{manifest.convoyId ?? 'Not linked'}</dd>
+              <dd>{manifest.convoyId}</dd>
               <dt>Ferry booking</dt>
               <dd>{manifest.ferryBookingComplete ? 'Complete' : 'Outstanding'}</dd>
               <dt>Delivery notes</dt>
@@ -132,9 +132,13 @@ export function ManifestDetailPage(): JSX.Element {
           <ManifestStatePanel manifest={manifest} />
         </TabPanel>
       ) : null}
-      {tab === 'teams' ? (
-        <TabPanel id="teams">
-          <ManifestTeamsPanel manifestId={manifest.id} frozen={manifest.frozen} />
+      {tab === 'crew' ? (
+        <TabPanel id="crew">
+          <ManifestCrewPanel
+            manifestId={manifest.id}
+            convoyId={manifest.convoyId}
+            vin={manifest.vin}
+          />
         </TabPanel>
       ) : null}
       {tab === 'cargo' ? (

@@ -1,12 +1,15 @@
 import { z } from 'zod';
 
-import { manifestLegSchema, manifestStatusSchema } from './common';
+import { manifestStatusSchema } from './common';
 
 // Response shapes — src/UA.Action.Freedom.Application/Manifests/ManifestReadModel.cs.
+// The document pack for one vehicle on one convoy. convoyId and vin are the truck-list entry it
+// is the paperwork for — its identity, not editable attributes — so PUT /manifests/{id} has no
+// field for either.
 export const manifestReadModelSchema = z.object({
   id: z.string(),
-  vin: z.string().nullable(),
-  convoyId: z.number().int().nullable(),
+  convoyId: z.number().int(),
+  vin: z.string(),
   status: manifestStatusSchema,
   deliveryNotes: z.string().nullable(),
   ferryBookingComplete: z.boolean(),
@@ -14,13 +17,6 @@ export const manifestReadModelSchema = z.object({
   frozen: z.boolean(),
 });
 export type ManifestReadModel = z.infer<typeof manifestReadModelSchema>;
-
-export const manifestDriverTeamReadModelSchema = z.object({
-  leg: manifestLegSchema,
-  primaryPersonId: z.string(),
-  secondaryPersonId: z.string().nullable(),
-});
-export type ManifestDriverTeamReadModel = z.infer<typeof manifestDriverTeamReadModelSchema>;
 
 export const manifestBoxReadModelSchema = z.object({
   boxId: z.number().int(),
@@ -49,22 +45,16 @@ export const manifestWeightReadModelSchema = z.object({
 export type ManifestWeightReadModel = z.infer<typeof manifestWeightReadModelSchema>;
 
 // Request shapes — src/UA.Action.Freedom.Api/Manifests/ManifestRequests.cs.
-export interface CreateManifestRequest {
+//
+// A manifest is opened on its truck-list entry, POST /convoys/{id}/vehicles/{vin}/manifest, so
+// the convoy and the vehicle come from the route rather than the body.
+export interface CreateConvoyVehicleManifestRequest {
   id: string;
-  vin?: string;
-  convoyId?: number;
   deliveryNotes?: string;
   ferryBookingComplete: boolean;
 }
 
 export interface UpdateManifestRequest {
-  vin?: string;
-  convoyId?: number;
   deliveryNotes?: string;
   ferryBookingComplete: boolean;
-}
-
-export interface SetManifestTeamRequest {
-  primaryPersonId: string;
-  secondaryPersonId?: string;
 }

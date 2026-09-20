@@ -15,13 +15,12 @@ interface ManifestStatePanelProps {
 export function ManifestStatePanel({ manifest }: ManifestStatePanelProps): JSX.Element {
   const auth = useAuth();
   const transition = useTransitionManifest(manifest.id);
-  const convoy = useConvoy(manifest.convoyId ?? 0, { enabled: manifest.convoyId !== null });
+  const convoy = useConvoy(manifest.convoyId);
 
   const options = availableTransitions({
     status: manifest.status,
     frozen: manifest.frozen,
     canApprove: auth.hasPolicy('manifests:approve'),
-    hasConvoy: manifest.convoyId !== null,
     convoyTruckListPublished: convoy.data?.truckListPublished ?? false,
   });
 

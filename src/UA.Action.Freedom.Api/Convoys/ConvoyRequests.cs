@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Convoys;
@@ -42,10 +43,27 @@ public sealed record ReplaceConvoyRouteRequest(IReadOnlyList<RouteStopRequest> S
 }
 
 /// <summary>
-/// Optional body of <c>PUT /convoys/{id}/vehicles/{vin}/drivers/{personId}</c>. Omitted, the
-/// person joins the crew as a driver.
+/// Body of <c>PUT /convoys/{id}/vehicles/{vin}/crew/{personId}</c>.
 /// </summary>
-public sealed record AssignCrewRequest(CrewRole Role = CrewRole.Driver);
+/// <remarks>
+/// The leg is required: a vehicle is crewed twice, once out of the UK and once into Ukraine, and
+/// guessing which half somebody is driving is exactly the ambiguity this consolidation removes.
+/// The role is optional and defaults to <see cref="CrewRole.Driver"/>, which is what most crewing
+/// is.
+/// </remarks>
+public sealed record AssignCrewRequest(JourneyLeg Leg, CrewRole? Role = null);
+
+/// <summary>
+/// Body of <c>POST /convoys/{id}/vehicles/{vin}/manifest</c>. The convoy and the vehicle come from
+/// the route — they are the truck-list entry the manifest is the paperwork for — so only the
+/// document reference and its contents are here.
+/// </summary>
+public sealed record CreateConvoyVehicleManifestRequest(
+    string Id, string? DeliveryNotes = null, bool FerryBookingComplete = false)
+{
+    public CreateManifestCommand ToCommand(int convoyId, string vin) =>
+        new(Id, convoyId, vin, DeliveryNotes, FerryBookingComplete);
+}
 
 /// <summary>
 /// Body of <c>PUT /convoys/{id}/vehicles/{vin}/insurance</c>. Who recorded it comes from the

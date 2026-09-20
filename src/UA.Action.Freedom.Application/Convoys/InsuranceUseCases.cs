@@ -49,13 +49,13 @@ public enum RecordInsuranceOutcome
 /// Record (or replace) a vehicle's insurance for a convoy. Recording again after a crew change is
 /// how a voided policy is renewed, so a replacement clears <c>VoidedAt</c>.
 /// </summary>
-public sealed class RecordInsuranceHandler(IConvoyRepository repository)
+public sealed class RecordInsuranceHandler(IConvoyRepository convoys, IConvoyVehicleRepository truckList)
     : ICommandHandler<RecordInsuranceCommand, RecordInsuranceOutcome>
 {
     public async Task<RecordInsuranceOutcome> HandleAsync(
         RecordInsuranceCommand command, CancellationToken cancellationToken)
     {
-        var convoy = await repository.GetByIdAsync(command.Insurance.ConvoyId, cancellationToken);
+        var convoy = await convoys.GetByIdAsync(command.Insurance.ConvoyId, cancellationToken);
 
         if (convoy is null)
         {
@@ -67,7 +67,7 @@ public sealed class RecordInsuranceHandler(IConvoyRepository repository)
             return RecordInsuranceOutcome.ConvoyArrived;
         }
 
-        return await repository.RecordInsuranceAsync(command.Insurance, cancellationToken)
+        return await truckList.RecordInsuranceAsync(command.Insurance, cancellationToken)
             ? RecordInsuranceOutcome.Recorded
             : RecordInsuranceOutcome.VehicleNotOnConvoy;
     }
@@ -75,11 +75,11 @@ public sealed class RecordInsuranceHandler(IConvoyRepository repository)
 
 public sealed record GetInsuranceQuery(int ConvoyId, string Vin);
 
-public sealed class GetInsuranceHandler(IConvoyRepository repository)
+public sealed class GetInsuranceHandler(IConvoyVehicleRepository truckList)
     : IQueryHandler<GetInsuranceQuery, VehicleInsuranceReadModel?>
 {
     public Task<VehicleInsuranceReadModel?> HandleAsync(GetInsuranceQuery query, CancellationToken cancellationToken) =>
-        repository.GetInsuranceAsync(query.ConvoyId, query.Vin, cancellationToken);
+        truckList.GetInsuranceAsync(query.ConvoyId, query.Vin, cancellationToken);
 }
 
 public sealed record RemoveInsuranceCommand(int ConvoyId, string Vin);
@@ -91,20 +91,20 @@ public enum RemoveInsuranceOutcome
     ConvoyArrived
 }
 
-public sealed class RemoveInsuranceHandler(IConvoyRepository repository)
+public sealed class RemoveInsuranceHandler(IConvoyRepository convoys, IConvoyVehicleRepository truckList)
     : ICommandHandler<RemoveInsuranceCommand, RemoveInsuranceOutcome>
 {
     public async Task<RemoveInsuranceOutcome> HandleAsync(
         RemoveInsuranceCommand command, CancellationToken cancellationToken)
     {
-        var convoy = await repository.GetByIdAsync(command.ConvoyId, cancellationToken);
+        var convoy = await convoys.GetByIdAsync(command.ConvoyId, cancellationToken);
 
         if (convoy?.Arrived ?? false)
         {
             return RemoveInsuranceOutcome.ConvoyArrived;
         }
 
-        return await repository.RemoveInsuranceAsync(command.ConvoyId, command.Vin, cancellationToken)
+        return await truckList.RemoveInsuranceAsync(command.ConvoyId, command.Vin, cancellationToken)
             ? RemoveInsuranceOutcome.Removed
             : RemoveInsuranceOutcome.NotFound;
     }

@@ -1,6 +1,11 @@
 Feature: Manifests API
-    The deployed Freedom service exposes manifests at /manifests — the central document of
-    the system, tying one vehicle on one convoy to its driver teams and its cargo.
+    The deployed Freedom service exposes manifests at /manifests — the document pack for one
+    vehicle on one convoy: its cargo, its border weight, its GMR and its ferry booking.
+
+    A manifest is opened against a truck-list entry, at
+    POST /convoys/{id}/vehicles/{vin}/manifest, because that pair is what it is the paperwork
+    for. It carries no crew of its own: who is driving is a fact about the vehicle on the
+    convoy, and /manifests/{id}/crew reads it.
 
     Every state change is its own POST, one per edge of docs/manifest-status.puml. Two rules
     the diagram cannot express are enforced here: a manifest may only be proposed against a
@@ -30,8 +35,9 @@ Scenario: A ground officer is refused manifests
 
 Scenario: A dispatcher opens a manifest in the Created state
     Given I am authenticated as "operator"
+    And a convoy exists whose truck list is not published
     And a manifest reference that is not yet used
-    When I POST a manifest with no convoy
+    When I POST a manifest on the remembered convoy
     Then the response status is 201
     When I GET the remembered manifest
     Then the response status is 200
@@ -39,11 +45,19 @@ Scenario: A dispatcher opens a manifest in the Created state
 
 Scenario: Reusing a manifest reference is a conflict
     Given I am authenticated as "operator"
+    And a convoy exists whose truck list is not published
     And a manifest reference that is not yet used
-    When I POST a manifest with no convoy
+    When I POST a manifest on the remembered convoy
     Then the response status is 201
-    When I POST a manifest with no convoy
+    When I POST a manifest on the remembered convoy
     Then the response status is 409
+
+Scenario: A manifest cannot be opened for a vehicle that is not on the convoy
+    Given I am authenticated as "operator"
+    And a convoy exists whose truck list is not published
+    And a manifest reference that is not yet used
+    When I POST a manifest for a vehicle that is not on the convoy
+    Then the response status is 404
 
 Scenario: A manifest cannot be proposed until its convoy has published a truck list
     Given I am authenticated as "operator"
@@ -158,8 +172,9 @@ Scenario: A rejected manifest can be proposed again
 
 Scenario: The border weight shows its fixed allowances
     Given I am authenticated as "operator"
+    And a convoy exists whose truck list is not published
     And a manifest reference that is not yet used
-    When I POST a manifest with no convoy
+    When I POST a manifest on the remembered convoy
     Then the response status is 201
     When I GET "/weight" on the remembered manifest
     Then the response status is 200

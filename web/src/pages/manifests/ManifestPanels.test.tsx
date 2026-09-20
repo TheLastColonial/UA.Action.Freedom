@@ -1,55 +1,59 @@
 import { expect, test } from 'vitest';
 
+import { makeVehicleCrew } from '../../test/factories/convoy';
 import { makeManifest, makeManifestBox } from '../../test/factories/manifest';
-import { makePerson } from '../../test/factories/person';
 import { manifestApi } from '../../test/msw/manifests';
-import { personApi } from '../../test/msw/people';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { ManifestBoxesPanel } from './ManifestBoxesPanel';
-import { ManifestTeamsPanel } from './ManifestTeamsPanel';
+import { ManifestCrewPanel } from './ManifestCrewPanel';
 import { ManifestWeightPanel } from './ManifestWeightPanel';
 
-test('teams panel assigns a lead driver for the UK leg', async () => {
-  const api = manifestApi([makeManifest({ id: 'T1' })], { knownDriverIds: ['d1'] });
-  worker.use(
-    ...api.handlers,
-    ...personApi([makePerson({ id: 'd1', firstName: 'Dana', lastName: 'Road', isDriver: true })])
-      .handlers,
+test('the crew panel reports who is travelling, split by leg', async () => {
+  const api = manifestApi([makeManifest({ id: 'T1', convoyId: 7, vin: 'VIN-1' })], {
+    crewByManifest: new Map([
+      [
+        'T1',
+        [
+          makeVehicleCrew({ personId: 'd1', firstName: 'Dana', lastName: 'Road', leg: 'Uk' }),
+          makeVehicleCrew({
+            personId: 'd2',
+            firstName: 'Taras',
+            lastName: 'Shevchuk',
+            leg: 'Border',
+          }),
+        ],
+      ],
+    ]),
+  });
+  worker.use(...api.handlers);
+
+  const screen = await renderWithProviders(
+    <ManifestCrewPanel manifestId="T1" convoyId={7} vin="VIN-1" />,
+    { roles: ['Dispatcher'] },
   );
 
-  const screen = await renderWithProviders(<ManifestTeamsPanel manifestId="T1" frozen={false} />, {
-    roles: ['Dispatcher'],
-  });
-
-  const legForm = screen.getByRole('group', { name: 'UK → Europe' });
-  await legForm.getByLabelText('Lead driver').selectOptions('d1');
-  await legForm.getByRole('button', { name: 'Save UK → Europe team' }).click();
-
-  await expect.poll(() => api.teams.get('T1')?.[0]?.primaryPersonId).toBe('d1');
+  await expect.element(screen.getByRole('cell', { name: 'Dana Road' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('cell', { name: 'Taras Shevchuk' })).toBeInTheDocument();
+  await expect.element(screen.getByText('UK to Europe leg')).toBeInTheDocument();
+  await expect.element(screen.getByText('Europe to Ukraine leg')).toBeInTheDocument();
 });
 
-test('teams panel rejects the same volunteer on both seats', async () => {
-  const api = manifestApi([makeManifest({ id: 'T2' })]);
-  worker.use(
-    ...api.handlers,
-    ...personApi([makePerson({ id: 'd1', firstName: 'Dana', lastName: 'Road', isDriver: true })])
-      .handlers,
+test('the crew panel offers no way to crew from here and points at the convoy', async () => {
+  // Crewing happens once, on the truck-list entry. A second crew record written here is what let
+  // a printed manifest name people the insurance had never heard of.
+  const api = manifestApi([makeManifest({ id: 'T2', convoyId: 7, vin: 'VIN-1' })]);
+  worker.use(...api.handlers);
+
+  const screen = await renderWithProviders(
+    <ManifestCrewPanel manifestId="T2" convoyId={7} vin="VIN-1" />,
+    { roles: ['Dispatcher'] },
   );
 
-  const screen = await renderWithProviders(<ManifestTeamsPanel manifestId="T2" frozen={false} />, {
-    roles: ['Dispatcher'],
-  });
-
-  const legForm = screen.getByRole('group', { name: 'UK → Europe' });
-  await legForm.getByLabelText('Lead driver').selectOptions('d1');
-  await legForm.getByLabelText('Second driver').selectOptions('d1');
-  await legForm.getByRole('button', { name: 'Save UK → Europe team' }).click();
-
+  await expect.element(screen.getByText('Nobody crewing this leg yet').first()).toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: /Save/ })).not.toBeInTheDocument();
   await expect
-    .element(
-      screen.getByText('A driver team is two people — the same volunteer cannot crew both halves.'),
-    )
+    .element(screen.getByRole('link', { name: /manage the crew of VIN-1 on its convoy/ }))
     .toBeInTheDocument();
 });
 

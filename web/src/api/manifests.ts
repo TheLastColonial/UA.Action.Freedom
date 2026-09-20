@@ -2,26 +2,23 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { z } from 'zod';
 
-import type { CreatedResource, ParentMissing } from './client';
-import { delete204, getCollection, getJson, postCreate, postTransition, put204 } from './http';
+import type { ParentMissing } from './client';
+import { delete204, getCollection, getJson, postTransition, put204 } from './http';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
-import type { ManifestLeg } from './schemas/common';
 import {
   manifestBoxReadModelSchema,
-  manifestDriverTeamReadModelSchema,
   manifestReadModelSchema,
   manifestWeightReadModelSchema,
 } from './schemas/manifests';
 import type {
-  CreateManifestRequest,
   ManifestBoxReadModel,
-  ManifestDriverTeamReadModel,
   ManifestReadModel,
   ManifestWeightReadModel,
-  SetManifestTeamRequest,
   UpdateManifestRequest,
 } from './schemas/manifests';
+import { vehicleCrewReadModelSchema } from './schemas/convoys';
+import type { VehicleCrewReadModel } from './schemas/convoys';
 import type { ManifestVerb } from '../pages/manifests/transitions';
 
 const BASE = '/manifests';
@@ -38,10 +35,6 @@ export function fetchManifest(id: string): Promise<ManifestReadModel> {
   return getJson(idPath(id), manifestReadModelSchema);
 }
 
-export function createManifest(body: CreateManifestRequest): Promise<CreatedResource> {
-  return postCreate(BASE, body);
-}
-
 export function updateManifest(id: string, body: UpdateManifestRequest): Promise<void> {
   return put204(idPath(id), body);
 }
@@ -50,18 +43,12 @@ export function deleteManifest(id: string): Promise<void> {
   return delete204(idPath(id));
 }
 
-export function fetchManifestTeams(
+// A read. Crewing happens on the truck-list entry, in the convoy slice — the manifest used to
+// own a second, unconnected crew record.
+export function fetchManifestCrew(
   id: string,
-): Promise<readonly ManifestDriverTeamReadModel[] | ParentMissing> {
-  return getCollection(`${idPath(id)}/teams`, manifestDriverTeamReadModelSchema);
-}
-
-export function setManifestTeam(
-  id: string,
-  leg: ManifestLeg,
-  body: SetManifestTeamRequest,
-): Promise<void> {
-  return put204(`${idPath(id)}/teams/${leg}`, body);
+): Promise<readonly VehicleCrewReadModel[] | ParentMissing> {
+  return getCollection(`${idPath(id)}/crew`, vehicleCrewReadModelSchema);
 }
 
 export function fetchManifestBoxes(
@@ -94,10 +81,10 @@ export function useManifest(id: string): UseQueryResult<ManifestReadModel> {
   return useQuery({ queryKey: qk.manifests.detail(id), queryFn: () => fetchManifest(id) });
 }
 
-export function useManifestTeams(
+export function useManifestCrew(
   id: string,
-): UseQueryResult<readonly ManifestDriverTeamReadModel[] | ParentMissing> {
-  return useQuery({ queryKey: qk.manifests.teams(id), queryFn: () => fetchManifestTeams(id) });
+): UseQueryResult<readonly VehicleCrewReadModel[] | ParentMissing> {
+  return useQuery({ queryKey: qk.manifests.crew(id), queryFn: () => fetchManifestCrew(id) });
 }
 
 export function useManifestBoxes(
@@ -108,18 +95,6 @@ export function useManifestBoxes(
 
 export function useManifestWeight(id: string): UseQueryResult<ManifestWeightReadModel> {
   return useQuery({ queryKey: qk.manifests.weight(id), queryFn: () => fetchManifestWeight(id) });
-}
-
-export function useCreateManifest(): UseMutationResult<
-  CreatedResource,
-  Error,
-  CreateManifestRequest
-> {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: createManifest,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.manifests.all }),
-  });
 }
 
 export function useUpdateManifest(
@@ -140,17 +115,6 @@ export function useDeleteManifest(): UseMutationResult<void, Error, string> {
   return useMutation({
     mutationFn: deleteManifest,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.manifests.all }),
-  });
-}
-
-export function useSetManifestTeam(
-  id: string,
-  leg: ManifestLeg,
-): UseMutationResult<void, Error, SetManifestTeamRequest> {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body: SetManifestTeamRequest) => setManifestTeam(id, leg, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.manifests.teams(id) }),
   });
 }
 

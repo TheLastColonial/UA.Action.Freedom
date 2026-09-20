@@ -46,14 +46,22 @@ async function addVolunteer(page: Page, first: string, last: string, drives: boo
   await expect(page.getByRole('heading', { name: `${first} ${last}` })).toBeVisible();
 }
 
-async function assignCrew(page: Page, role: 'Driver' | 'Passenger', name: string) {
+// A vehicle is crewed twice, with a handover at the European border, so every assignment names
+// the leg it is for.
+async function assignCrew(
+  page: Page,
+  role: 'Driver' | 'Passenger',
+  name: string,
+  leg: 'UK to Europe' | 'Europe to Ukraine' = 'UK to Europe',
+) {
+  await page.getByLabel('Leg for E2E 002').selectOption({ label: leg });
   await page.getByLabel('Role on E2E 002').selectOption(role);
   await page.getByLabel(`Add ${role.toLowerCase()} to E2E 002`).selectOption({ label: name });
   await page.getByRole('button', { name: 'Assign' }).click();
-  await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name, exact: true }).first()).toBeVisible();
 }
 
-test('@smoke a convoy is planned to readiness: passed vehicle, two drivers, a passenger, insurance', async ({
+test('@smoke a convoy is planned to readiness: passed vehicle, two drivers per leg, a passenger, insurance', async ({
   page,
 }) => {
   const stamp = String(Date.now());
@@ -101,9 +109,13 @@ test('@smoke a convoy is planned to readiness: passed vehicle, two drivers, a pa
   await expect(page.getByRole('cell', { name: vin })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Crew' }).click();
+  // Two drivers on each leg: a vehicle fully crewed out of the UK with nobody booked to take it
+  // into Ukraine is not ready, and readiness says which half is short.
   await assignCrew(page, 'Driver', first);
   await assignCrew(page, 'Driver', second);
   await assignCrew(page, 'Passenger', rider);
+  await assignCrew(page, 'Driver', first, 'Europe to Ukraine');
+  await assignCrew(page, 'Driver', second, 'Europe to Ukraine');
 
   const insurance = page.getByRole('form', { name: 'Insurance for E2E 002' });
   await insurance.getByLabel('Insurer').fill('Ukraine Aid Mutual');
@@ -118,7 +130,7 @@ test('@smoke a convoy is planned to readiness: passed vehicle, two drivers, a pa
 
   // The policy names the crew: standing the passenger down voids it, and readiness notices.
   await page.getByRole('tab', { name: 'Crew' }).click();
-  await page.getByRole('button', { name: `Remove ${rider}` }).click();
+  await page.getByRole('button', { name: `Remove ${rider} from the UK to Europe leg` }).click();
   await expect(page.getByText(/voided by a crew change/)).toBeVisible();
 
   await page.getByRole('tab', { name: 'Overview' }).click();

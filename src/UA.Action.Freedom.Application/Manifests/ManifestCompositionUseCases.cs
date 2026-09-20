@@ -1,83 +1,34 @@
 using UA.Action.Freedom.Application.Abstractions;
-using UA.Action.Freedom.Application.People;
+using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Manifests;
 
-/// <summary>Assign the driver team crewing one leg of the journey.</summary>
-public sealed record SetManifestTeamCommand(
-    string Id, ManifestLeg Leg, Guid PrimaryPersonId, Guid? SecondaryPersonId);
+/// <summary>
+/// The crew travelling with this manifest's vehicle, per leg. <c>null</c> if there is no such
+/// manifest.
+/// </summary>
+/// <remarks>
+/// A read, not a write. The manifest used to own its own driver teams, assigned through
+/// <c>PUT /manifests/{id}/teams/{leg}</c> and connected to the convoy's crew by nothing at all —
+/// so the printed document could name people who were not in the vehicle, while the insurance that
+/// actually gates departure covered somebody else. Crewing is now one act, on the truck-list entry
+/// (<c>PUT /convoys/{id}/vehicles/{vin}/crew/{personId}</c>), and the manifest reports it.
+/// </remarks>
+public sealed record ListManifestCrewQuery(string Id);
 
-public enum SetManifestTeamOutcome
+public sealed class ListManifestCrewHandler(IManifestRepository repository, IConvoyVehicleRepository truckList)
+    : IQueryHandler<ListManifestCrewQuery, IReadOnlyList<VehicleCrewReadModel>?>
 {
-    Set,
-    NotFound,
-    Frozen,
-    NoSuchDriver,
-    DriverIsNotADriver,
-    SameDriverTwice
-}
-
-public sealed class SetManifestTeamHandler(IManifestRepository repository, IPersonRepository people)
-    : ICommandHandler<SetManifestTeamCommand, SetManifestTeamOutcome>
-{
-    public async Task<SetManifestTeamOutcome> HandleAsync(
-        SetManifestTeamCommand command, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<VehicleCrewReadModel>?> HandleAsync(
+        ListManifestCrewQuery query, CancellationToken cancellationToken)
     {
-        var manifest = await repository.GetByIdAsync(command.Id, cancellationToken);
+        var manifest = await repository.GetByIdAsync(query.Id, cancellationToken);
 
-        if (manifest is null)
-        {
-            return SetManifestTeamOutcome.NotFound;
-        }
-
-        if (manifest.Frozen)
-        {
-            return SetManifestTeamOutcome.Frozen;
-        }
-
-        // A pair is two people. The same volunteer as primary and secondary would look crewed
-        // while leaving somebody driving a leg to Ukraine alone.
-        if (command.SecondaryPersonId == command.PrimaryPersonId)
-        {
-            return SetManifestTeamOutcome.SameDriverTwice;
-        }
-
-        foreach (var personId in new[] { command.PrimaryPersonId, command.SecondaryPersonId }.OfType<Guid>())
-        {
-            var person = await people.GetByIdAsync(personId, cancellationToken);
-
-            if (person is null)
-            {
-                return SetManifestTeamOutcome.NoSuchDriver;
-            }
-
-            // Being on the volunteer roster is not the same as having volunteered to drive.
-            if (!person.IsDriver)
-            {
-                return SetManifestTeamOutcome.DriverIsNotADriver;
-            }
-        }
-
-        await repository.SetTeamAsync(
-            command.Id,
-            new ManifestDriverTeamReadModel(command.Leg, command.PrimaryPersonId, command.SecondaryPersonId),
-            cancellationToken);
-
-        return SetManifestTeamOutcome.Set;
+        return manifest is null
+            ? null
+            : await truckList.ListCrewAsync(manifest.ConvoyId, manifest.Vin, leg: null, cancellationToken);
     }
-}
-
-/// <summary>The driver teams on a manifest, or <c>null</c> if there is no such manifest.</summary>
-public sealed record ListManifestTeamsQuery(string Id);
-
-public sealed class ListManifestTeamsHandler(IManifestRepository repository)
-    : IQueryHandler<ListManifestTeamsQuery, IReadOnlyList<ManifestDriverTeamReadModel>?>
-{
-    public async Task<IReadOnlyList<ManifestDriverTeamReadModel>?> HandleAsync(
-        ListManifestTeamsQuery query, CancellationToken cancellationToken)
-        => await repository.ExistsAsync(query.Id, cancellationToken)
-            ? await repository.ListTeamsAsync(query.Id, cancellationToken)
-            : null;
 }
 
 /// <summary>Put a box on the manifest.</summary>
@@ -162,12 +113,6 @@ public sealed record GetManifestWeightQuery(string Id);
 public sealed class GetManifestWeightHandler(IManifestRepository repository)
     : IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>
 {
-    /// <summary>Two drivers and their bags. A border-check estimate, deliberately fixed.</summary>
-    private const int CrewAndBagsKg = 100 * 2;
-
-    /// <summary>Fuel allowance. Also deliberately fixed.</summary>
-    private const int FuelKg = 45;
-
     public async Task<ManifestWeightReadModel?> HandleAsync(
         GetManifestWeightQuery query, CancellationToken cancellationToken)
     {
@@ -193,9 +138,9 @@ public sealed class GetManifestWeightHandler(IManifestRepository repository)
         return new ManifestWeightReadModel(
             vehicleKg,
             cargoKg,
-            CrewAndBagsKg,
-            FuelKg,
-            vehicleKg + cargoKg + CrewAndBagsKg + FuelKg,
+            ManifestWeight.CrewAndBagsKg,
+            ManifestWeight.FuelKg,
+            ManifestWeight.Total(vehicleKg, cargoKg),
             // Unvalidated boxes weigh zero until a Loader says otherwise, so a total that
             // includes any of them is provisional and has to say so.
             boxes.Count(box => !box.Validated),

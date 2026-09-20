@@ -2,6 +2,7 @@ using System.Security.Claims;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Convoys;
@@ -19,6 +20,9 @@ namespace UA.Action.Freedom.Api.Convoys;
 /// </remarks>
 public static class ConvoyEndpoints
 {
+    /// <summary>Mirrors <c>dbo.ConvoyVehicle.WithdrawnReason</c>.</summary>
+    private const int MaxWithdrawalReasonLength = 500;
+
     public static WebApplication MapFreedomConvoys(this WebApplication app)
     {
         var convoys = app.MapGroup("/convoys").WithTags("Convoys");
@@ -141,94 +145,156 @@ public static class ConvoyEndpoints
                 AssignVehicleOutcome.VehicleHandedOver => Results.Problem(
                     detail: $"Vehicle '{vin}' was handed over in Ukraine at the end of an earlier convoy.",
                     statusCode: StatusCodes.Status409Conflict),
+                AssignVehicleOutcome.ConvoyArrived => ConvoyArrived(),
                 _ => Results.Problem(
-                    detail: "The truck list for this convoy has been published, so its vehicles can no longer change.",
+                    detail: "The truck list for this convoy has been published, so no more vehicles can join it.",
                     statusCode: StatusCodes.Status409Conflict),
             };
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        // Before publication this takes the vehicle off the list; afterwards it records that the
+        // vehicle left the convoy — a breakdown, most often — keeping its crew, its insurance and
+        // its manifest, because the manifest still describes a load that is real.
         convoys.MapDelete("/{id:int}/vehicles/{vin}", async (
             int id,
             string vin,
+            // A query parameter, not a body: DELETE bodies are inferred by nothing and dropped by
+            // some proxies, and the reason is one short string.
+            string? reason,
             ICommandHandler<UnassignVehicleFromConvoyCommand, UnassignVehicleOutcome> handler,
             CancellationToken cancellationToken) =>
         {
-            var outcome = await handler.HandleAsync(new UnassignVehicleFromConvoyCommand(id, vin), cancellationToken);
+            if (reason is { Length: > MaxWithdrawalReasonLength })
+            {
+                return Results.Problem(
+                    detail: $"'reason' must be {MaxWithdrawalReasonLength} characters or fewer.",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var outcome = await handler.HandleAsync(
+                new UnassignVehicleFromConvoyCommand(id, vin, reason), cancellationToken);
 
             return outcome switch
             {
-                UnassignVehicleOutcome.Unassigned => Results.NoContent(),
-                UnassignVehicleOutcome.ConvoyNotFound or UnassignVehicleOutcome.NotOnThisConvoy => Results.NotFound(),
+                UnassignVehicleOutcome.Unassigned or UnassignVehicleOutcome.Withdrawn => Results.NoContent(),
+                UnassignVehicleOutcome.ConvoyNotFound => Results.NotFound(),
+                UnassignVehicleOutcome.NotOnThisConvoy => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+                UnassignVehicleOutcome.ConvoyArrived => ConvoyArrived(),
                 _ => Results.Problem(
-                    detail: "The truck list for this convoy has been published, so its vehicles can no longer change.",
+                    detail: $"Vehicle '{vin}' has already been withdrawn from this convoy.",
                     statusCode: StatusCodes.Status409Conflict),
             };
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
-        convoys.MapGet("/{id:int}/vehicles/{vin}/drivers", async (
+        // A manifest is opened against a truck-list entry, which is why it is created here rather
+        // than at POST /manifests: docs/process.puml orders the work Truck List Published, then
+        // Manifest Proposed, and the manifest's (ConvoyId, Vin) is a foreign key to this entry
+        // rather than two fields a caller can set to anything.
+        convoys.MapPost("/{id:int}/vehicles/{vin}/manifest", async (
             int id,
             string vin,
-            IQueryHandler<ListVehicleDriversQuery, IReadOnlyList<VehicleDriverReadModel>?> handler,
+            CreateConvoyVehicleManifestRequest request,
+            ICommandHandler<CreateManifestCommand, CreateManifestOutcome> handler,
             CancellationToken cancellationToken) =>
         {
-            var drivers = await handler.HandleAsync(new ListVehicleDriversQuery(id, vin), cancellationToken);
-            return drivers is null ? Results.NotFound() : Results.Ok(drivers);
-        })
-        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
-
-        convoys.MapPut("/{id:int}/vehicles/{vin}/drivers/{personId:guid}", async (
-            int id,
-            string vin,
-            Guid personId,
-            AssignCrewRequest? request,
-            ICommandHandler<AssignDriverToVehicleCommand, AssignDriverOutcome> handler,
-            CancellationToken cancellationToken) =>
-        {
-            // The body is optional: no body means a driver, which is what every earlier caller meant.
-            var role = request?.Role ?? CrewRole.Driver;
-            var outcome = await handler.HandleAsync(new AssignDriverToVehicleCommand(id, vin, personId, role), cancellationToken);
+            var outcome = await handler.HandleAsync(request.ToCommand(id, vin), cancellationToken);
 
             return outcome switch
             {
-                AssignDriverOutcome.Assigned => Results.NoContent(),
-                AssignDriverOutcome.ConvoyNotFound => Results.NotFound(),
-                AssignDriverOutcome.VehicleNotFound => Results.Problem(
+                CreateManifestOutcome.Created => Results.Created($"/manifests/{request.Id}", null),
+                CreateManifestOutcome.VehicleNotOnConvoy => Results.Problem(
                     detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
                     statusCode: StatusCodes.Status404NotFound),
-                AssignDriverOutcome.PersonNotFound => Results.Problem(
-                    detail: $"There is no volunteer with that ID.",
-                    statusCode: StatusCodes.Status404NotFound),
-                AssignDriverOutcome.PersonNotADriver => Results.Problem(
-                    detail: "That volunteer is not registered as a driver. They can ride as a passenger instead.",
-                    statusCode: StatusCodes.Status422UnprocessableEntity),
-                AssignDriverOutcome.ConvoyArrived => ConvoyArrived(),
-                AssignDriverOutcome.OnAnotherVehicle => Results.Problem(
-                    detail: "That volunteer is already crewing another vehicle on this convoy. A person takes one seat per convoy.",
+                CreateManifestOutcome.VehicleWithdrawn => Results.Problem(
+                    detail: $"Vehicle '{vin}' has been withdrawn from this convoy.",
+                    statusCode: StatusCodes.Status409Conflict),
+                CreateManifestOutcome.AlreadyHasManifest => Results.Problem(
+                    detail: $"Vehicle '{vin}' already has a manifest on this convoy.",
                     statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Problem(
-                    detail: "That driver is already assigned to this vehicle.",
+                    detail: $"A manifest with reference '{request.Id}' already exists.",
                     statusCode: StatusCodes.Status409Conflict),
             };
         })
-        .RequireAuthorization(AuthenticationExtensions.ConvoysAssignDrivers);
+        .AddEndpointFilter<ValidationFilter<CreateConvoyVehicleManifestRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
-        convoys.MapDelete("/{id:int}/vehicles/{vin}/drivers/{personId:guid}", async (
+        convoys.MapGet("/{id:int}/vehicles/{vin}/crew", async (
+            int id,
+            string vin,
+            JourneyLeg? leg,
+            IQueryHandler<ListVehicleCrewQuery, IReadOnlyList<VehicleCrewReadModel>?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var crew = await handler.HandleAsync(new ListVehicleCrewQuery(id, vin, leg), cancellationToken);
+            return crew is null ? Results.NotFound() : Results.Ok(crew);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+
+        convoys.MapPut("/{id:int}/vehicles/{vin}/crew/{personId:guid}", async (
             int id,
             string vin,
             Guid personId,
-            ICommandHandler<UnassignDriverFromVehicleCommand, UnassignDriverOutcome> handler,
+            AssignCrewRequest request,
+            ICommandHandler<AssignCrewToVehicleCommand, AssignCrewOutcome> handler,
             CancellationToken cancellationToken) =>
         {
-            var outcome = await handler.HandleAsync(new UnassignDriverFromVehicleCommand(id, vin, personId), cancellationToken);
+            // The leg is required — a vehicle is crewed twice, once out of the UK and once into
+            // Ukraine, and there is no sensible default for which half somebody is driving. The
+            // role is optional and means Driver, which is what most crewing is.
+            var outcome = await handler.HandleAsync(
+                new AssignCrewToVehicleCommand(id, vin, personId, request.Leg, request.Role ?? CrewRole.Driver),
+                cancellationToken);
 
             return outcome switch
             {
-                UnassignDriverOutcome.Unassigned => Results.NoContent(),
-                UnassignDriverOutcome.ConvoyNotFound => Results.NotFound(),
-                UnassignDriverOutcome.ConvoyArrived => ConvoyArrived(),
-                UnassignDriverOutcome.NotOnThisConvoy => Results.Problem(
+                AssignCrewOutcome.Assigned => Results.NoContent(),
+                AssignCrewOutcome.ConvoyNotFound => Results.NotFound(),
+                AssignCrewOutcome.VehicleNotFound => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+                AssignCrewOutcome.PersonNotFound => Results.Problem(
+                    detail: "There is no volunteer with that ID.",
+                    statusCode: StatusCodes.Status404NotFound),
+                AssignCrewOutcome.PersonNotADriver => Results.Problem(
+                    detail: "That volunteer is not registered as a driver. They can ride as a passenger instead.",
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+                AssignCrewOutcome.ConvoyArrived => ConvoyArrived(),
+                AssignCrewOutcome.VehicleWithdrawn => Results.Problem(
+                    detail: $"Vehicle '{vin}' has been withdrawn from this convoy, so its crew can no longer change.",
+                    statusCode: StatusCodes.Status409Conflict),
+                AssignCrewOutcome.OnAnotherVehicle => Results.Problem(
+                    detail: "That volunteer is already crewing another vehicle on this leg. A person takes one seat per leg.",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.Problem(
+                    detail: "That volunteer is already crewing this vehicle on this leg.",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .AddEndpointFilter<ValidationFilter<AssignCrewRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysAssignDrivers);
+
+        convoys.MapDelete("/{id:int}/vehicles/{vin}/crew/{personId:guid}", async (
+            int id,
+            string vin,
+            Guid personId,
+            JourneyLeg leg,
+            ICommandHandler<UnassignCrewFromVehicleCommand, UnassignCrewOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(
+                new UnassignCrewFromVehicleCommand(id, vin, personId, leg), cancellationToken);
+
+            return outcome switch
+            {
+                UnassignCrewOutcome.Unassigned => Results.NoContent(),
+                UnassignCrewOutcome.ConvoyNotFound => Results.NotFound(),
+                UnassignCrewOutcome.ConvoyArrived => ConvoyArrived(),
+                UnassignCrewOutcome.NotOnThisConvoy => Results.Problem(
                     detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
                     statusCode: StatusCodes.Status404NotFound),
                 _ => Results.NotFound(),

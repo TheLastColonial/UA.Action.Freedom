@@ -16,9 +16,13 @@ export interface DashboardCardEntry {
   readonly to: string;
   readonly policy: Policy;
   readonly icon: (props: { className?: string }) => JSX.Element;
-  readonly actionLabel: string;
-  readonly actionTo: string;
-  readonly actionPolicy: Policy;
+  /**
+   * The card's "create one" shortcut, when the thing can be created from nothing. Manifests
+   * cannot: one is opened against a vehicle on a convoy's truck list.
+   */
+  readonly actionLabel?: string;
+  readonly actionTo?: string;
+  readonly actionPolicy?: Policy;
 }
 
 export const DASHBOARD_CARD_ENTRIES: readonly DashboardCardEntry[] = [
@@ -59,13 +63,12 @@ export const DASHBOARD_CARD_ENTRIES: readonly DashboardCardEntry[] = [
     actionPolicy: 'boxes:write',
   },
   {
+    // No action: a manifest is opened against a truck-list entry, from its convoy, so there is
+    // nowhere to send somebody who has not picked a vehicle yet.
     label: 'Manifests',
     to: '/manifests',
     policy: 'manifests:read',
     icon: DocumentIcon,
-    actionLabel: 'New Manifest',
-    actionTo: '/manifests/new',
-    actionPolicy: 'manifests:write',
   },
   {
     label: 'Receivers',
