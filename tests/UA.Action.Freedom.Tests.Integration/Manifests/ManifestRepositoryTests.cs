@@ -17,21 +17,83 @@ namespace UA.Action.Freedom.Tests.Integration.Manifests;
 /// <c>ConfirmAndFreezeAsync</c> additionally has to confirm and freeze in one statement — a
 /// manifest that is Confirmed but not yet frozen is editable, and that window is what §5.2 rules
 /// out.
+///
+/// <para>
+/// Every manifest here is opened against a real truck-list entry, because <c>ConvoyId</c> and
+/// <c>Vin</c> are NOT NULL and are a composite foreign key to <c>dbo.ConvoyVehicle</c>. That is
+/// the change: a manifest naming a vehicle that is on no convoy, or on a different one, is no
+/// longer a state the database can be in.
+/// </para>
 /// </remarks>
 [Trait("Category", "Integration")]
 public class ManifestRepositoryTests
 {
     private static async Task<ManifestRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
-        await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Manifest; SELECT COUNT(1) FROM dbo.ManifestBox;", cancellationToken);
+        await SkipUnlessReachableAsync(
+            "SELECT COUNT(1) FROM dbo.Manifest; SELECT COUNT(1) FROM dbo.ManifestBox; SELECT COUNT(1) FROM dbo.ConvoyVehicle;",
+            cancellationToken);
         return new ManifestRepository(ConnectionFactory());
     }
 
     private static string NewId() => "IT" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
 
-    private static ManifestReadModel AManifest(string id) => new(
-        id, Vin: null, ConvoyId: null, ManifestStatus.Created,
+    private static string NewVin() => "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
+
+    /// <summary>One vehicle on one convoy — the truck-list entry a manifest belongs to.</summary>
+    private sealed record TruckListEntry(int ConvoyId, string Vin, string Plate);
+
+    private static ManifestReadModel AManifest(string id, TruckListEntry on) => new(
+        id, on.ConvoyId, on.Vin, ManifestStatus.Created,
         DeliveryNotes: "Integration test", FerryBookingComplete: false, GmrSubmittedAt: null);
+
+    /// <summary>
+    /// A convoy with one vehicle on its truck list. The capacity columns are optional — nothing
+    /// back-fills them, and a vehicle nobody has measured cannot be judged overloaded.
+    /// </summary>
+    private static async Task<TruckListEntry> ATruckListEntryAsync(
+        decimal? maxCargoWeightKg = null,
+        decimal? widthCm = null,
+        decimal? depthCm = null,
+        decimal? heightCm = null,
+        string plate = "IT12ABC")
+    {
+        var vin = NewVin();
+
+        await ExecuteAsync(
+            """
+            INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg, InspectionStatus, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm)
+            VALUES (@vin, @plate, 2016, 1800, 2, @maxCargoWeightKg, @widthCm, @depthCm, @heightCm);
+            """,
+            ("@vin", vin),
+            ("@plate", plate),
+            ("@maxCargoWeightKg", (object?)maxCargoWeightKg ?? DBNull.Value),
+            ("@widthCm", (object?)widthCm ?? DBNull.Value),
+            ("@depthCm", (object?)depthCm ?? DBNull.Value),
+            ("@heightCm", (object?)heightCm ?? DBNull.Value));
+
+        var convoyId = Convert.ToInt32(await ValueAsync(
+            """
+            INSERT INTO dbo.Convoy (Start, ExpectedEnd) VALUES ('2026-09-01T06:00:00', '2026-09-05T18:00:00');
+            SELECT CAST(SCOPE_IDENTITY() AS int);
+            """));
+
+        await ExecuteAsync(
+            "INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin) VALUES (@convoyId, @vin)",
+            ("@convoyId", convoyId), ("@vin", vin));
+
+        return new TruckListEntry(convoyId, vin, plate);
+    }
+
+    /// <summary>
+    /// Takes the scaffold down in foreign-key order: the vehicle cascades its truck-list row, and
+    /// the convoy goes last. Any manifest naming it must already be gone — that is NO ACTION.
+    /// </summary>
+    private static async Task RemoveTruckListEntryAsync(TruckListEntry entry)
+    {
+        await ExecuteAsync("DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", entry.Vin));
+        await ExecuteAsync("DELETE FROM dbo.Convoy WHERE Id = @id", ("@id", entry.ConvoyId));
+    }
 
     private static Task<Guid> AddVolunteerAsync(bool isDriver = true) =>
         SqlTestDatabase.AddVolunteerAsync("Integration", "Driver", isDriver);
@@ -58,21 +120,6 @@ public class ManifestRepositoryTests
         return (int)(await command.ExecuteScalarAsync())!;
     }
 
-    private static Task AddVehicleAsync(string vin, decimal? maxCargoWeightKg, decimal? widthCm, decimal? depthCm, decimal? heightCm) =>
-        ExecuteAsync(
-            """
-            INSERT INTO dbo.Vehicle (Vin, Plate, [Year], MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm)
-            VALUES (@vin, 'IT12ABC', 2016, @maxCargoWeightKg, @widthCm, @depthCm, @heightCm)
-            """,
-            ("@vin", vin),
-            ("@maxCargoWeightKg", (object?)maxCargoWeightKg ?? DBNull.Value),
-            ("@widthCm", (object?)widthCm ?? DBNull.Value),
-            ("@depthCm", (object?)depthCm ?? DBNull.Value),
-            ("@heightCm", (object?)heightCm ?? DBNull.Value));
-
-    private static Task RemoveVehicleAsync(string vin) =>
-        ExecuteAsync("DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
-
     private static Task RemoveManifestAsync(string id) =>
         ExecuteAsync("DELETE FROM dbo.Manifest WHERE Id = @id", ("@id", id));
 
@@ -87,20 +134,25 @@ public class ManifestRepositoryTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
+        var entry = await ATruckListEntryAsync();
         var id = NewId();
 
         try
         {
-            await repository.AddAsync(AManifest(id), cancellationToken);
+            await repository.AddAsync(AManifest(id, entry), cancellationToken);
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
 
-            stored.Should().Be(AManifest(id));
+            stored.Should().Be(AManifest(id, entry));
             stored!.Frozen.Should().BeFalse();
+
+            // The pair is also reachable from the truck-list side: one manifest per vehicle per convoy.
+            (await repository.GetForVehicleAsync(entry.ConvoyId, entry.Vin, cancellationToken))!.Id.Should().Be(id);
         }
         finally
         {
             await RemoveManifestAsync(id);
+            await RemoveTruckListEntryAsync(entry);
         }
     }
 
@@ -109,11 +161,12 @@ public class ManifestRepositoryTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
+        var entry = await ATruckListEntryAsync();
         var id = NewId();
 
         try
         {
-            await repository.AddAsync(AManifest(id), cancellationToken);
+            await repository.AddAsync(AManifest(id, entry), cancellationToken);
 
             (await repository.TransitionAsync(id, ManifestStatus.Created, ManifestStatus.Proposed, cancellationToken))
                 .Should().BeTrue();
@@ -128,6 +181,7 @@ public class ManifestRepositoryTests
         finally
         {
             await RemoveManifestAsync(id);
+            await RemoveTruckListEntryAsync(entry);
         }
     }
 
@@ -136,11 +190,12 @@ public class ManifestRepositoryTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
+        var entry = await ATruckListEntryAsync();
         var id = NewId();
 
         try
         {
-            await repository.AddAsync(AManifest(id) with { Status = ManifestStatus.Proposed }, cancellationToken);
+            await repository.AddAsync(AManifest(id, entry) with { Status = ManifestStatus.Proposed }, cancellationToken);
 
             var stamped = await repository.ConfirmAndFreezeAsync(id, ManifestStatus.Proposed, cancellationToken);
 
@@ -158,66 +213,47 @@ public class ManifestRepositoryTests
         finally
         {
             await RemoveManifestAsync(id);
+            await RemoveTruckListEntryAsync(entry);
         }
     }
 
     [Fact]
-    public async Task An_update_cannot_reach_the_status_or_the_freeze()
+    public async Task An_update_cannot_reach_the_status_the_freeze_or_the_vehicle()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
+        var entry = await ATruckListEntryAsync();
+        var elsewhere = await ATruckListEntryAsync();
         var id = NewId();
 
         try
         {
-            await repository.AddAsync(AManifest(id) with { Status = ManifestStatus.Proposed }, cancellationToken);
+            await repository.AddAsync(AManifest(id, entry) with { Status = ManifestStatus.Proposed }, cancellationToken);
             await repository.ConfirmAndFreezeAsync(id, ManifestStatus.Proposed, cancellationToken);
 
-            // Asked directly to unfreeze and rewind. The UPDATE has no columns for either.
+            // Asked directly to unfreeze, rewind, and re-point at a different vehicle on a
+            // different convoy. The UPDATE has no columns for any of it.
             await repository.UpdateAsync(
-                AManifest(id) with { Status = ManifestStatus.Created, GmrSubmittedAt = null, DeliveryNotes = "changed" },
+                AManifest(id, elsewhere) with
+                {
+                    Status = ManifestStatus.Created,
+                    GmrSubmittedAt = null,
+                    DeliveryNotes = "changed",
+                },
                 cancellationToken);
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
             stored!.Status.Should().Be(ManifestStatus.Confirmed);
             stored.Frozen.Should().BeTrue();
             stored.DeliveryNotes.Should().Be("changed");
+            stored.ConvoyId.Should().Be(entry.ConvoyId);
+            stored.Vin.Should().Be(entry.Vin);
         }
         finally
         {
             await RemoveManifestAsync(id);
-        }
-    }
-
-    [Fact]
-    public async Task Crewing_a_leg_twice_replaces_the_team()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var repository = await ConnectOrSkipAsync(cancellationToken);
-        var id = NewId();
-        var first = await AddVolunteerAsync();
-        var second = await AddVolunteerAsync();
-
-        try
-        {
-            await repository.AddAsync(AManifest(id), cancellationToken);
-
-            await repository.SetTeamAsync(
-                id, new ManifestDriverTeamReadModel(ManifestLeg.Uk, first, second), cancellationToken);
-            await repository.SetTeamAsync(
-                id, new ManifestDriverTeamReadModel(ManifestLeg.Uk, second, null), cancellationToken);
-
-            // The primary key is (ManifestId, Leg), so a leg can never accumulate two crews.
-            var teams = await repository.ListTeamsAsync(id, cancellationToken);
-            var team = teams.Should().ContainSingle().Subject;
-            team.PrimaryPersonId.Should().Be(second);
-            team.SecondaryPersonId.Should().BeNull();
-        }
-        finally
-        {
-            await RemoveManifestAsync(id);
-            await RemoveVolunteerAsync(first);
-            await RemoveVolunteerAsync(second);
+            await RemoveTruckListEntryAsync(entry);
+            await RemoveTruckListEntryAsync(elsewhere);
         }
     }
 
@@ -227,14 +263,16 @@ public class ManifestRepositoryTests
         // Counted twice at a border and arriving once is the failure this prevents.
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
+        var firstEntry = await ATruckListEntryAsync();
+        var secondEntry = await ATruckListEntryAsync();
         var first = NewId();
         var second = NewId();
         var boxId = await AddBoxAsync(30, validated: false, validatedBy: null);
 
         try
         {
-            await repository.AddAsync(AManifest(first), cancellationToken);
-            await repository.AddAsync(AManifest(second), cancellationToken);
+            await repository.AddAsync(AManifest(first, firstEntry), cancellationToken);
+            await repository.AddAsync(AManifest(second, secondEntry), cancellationToken);
 
             (await repository.AddBoxAsync(first, boxId, cancellationToken)).Should().BeTrue();
             (await repository.AddBoxAsync(second, boxId, cancellationToken)).Should().BeTrue();
@@ -249,6 +287,8 @@ public class ManifestRepositoryTests
             await RemoveManifestAsync(first);
             await RemoveManifestAsync(second);
             await RemoveBoxAsync(boxId);
+            await RemoveTruckListEntryAsync(firstEntry);
+            await RemoveTruckListEntryAsync(secondEntry);
         }
     }
 
@@ -257,6 +297,7 @@ public class ManifestRepositoryTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
+        var entry = await ATruckListEntryAsync();
         var id = NewId();
         var loader = await AddVolunteerAsync();
         var weighed = await AddBoxAsync(30, validated: true, validatedBy: loader, widthCm: 40m, depthCm: 30m, heightCm: 20m);
@@ -264,7 +305,7 @@ public class ManifestRepositoryTests
 
         try
         {
-            await repository.AddAsync(AManifest(id), cancellationToken);
+            await repository.AddAsync(AManifest(id, entry), cancellationToken);
             await repository.AddBoxAsync(id, weighed, cancellationToken);
             await repository.AddBoxAsync(id, unweighed, cancellationToken);
 
@@ -285,40 +326,50 @@ public class ManifestRepositoryTests
             await RemoveBoxAsync(weighed);
             await RemoveBoxAsync(unweighed);
             await RemoveVolunteerAsync(loader);
+            await RemoveTruckListEntryAsync(entry);
         }
     }
 
     [Fact]
-    public async Task Vehicle_cargo_capacity_comes_from_the_assigned_vehicle_or_all_null_when_none_is_assigned()
+    public async Task Vehicle_weight_capacity_and_plate_come_from_the_manifests_vehicle()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
+        var measured = await ATruckListEntryAsync(
+            maxCargoWeightKg: 900.50m, widthCm: 150.25m, depthCm: 300m, heightCm: 180.75m, plate: "IT99XYZ");
+        var unmeasured = await ATruckListEntryAsync();
         var id = NewId();
-        var unassigned = NewId();
-        var vin = "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
+        var other = NewId();
 
         try
         {
-            await AddVehicleAsync(vin, maxCargoWeightKg: 900.50m, widthCm: 150.25m, depthCm: 300m, heightCm: 180.75m);
-            await repository.AddAsync(AManifest(id) with { Vin = vin }, cancellationToken);
-            await repository.AddAsync(AManifest(unassigned), cancellationToken);
+            await repository.AddAsync(AManifest(id, measured), cancellationToken);
+            await repository.AddAsync(AManifest(other, unmeasured), cancellationToken);
 
             var capacity = await repository.GetVehicleCargoCapacityAsync(id, cancellationToken);
-            var noVehicle = await repository.GetVehicleCargoCapacityAsync(unassigned, cancellationToken);
-
             capacity.MaxCargoWeightKg.Should().Be(900.50m);
             capacity.CargoWidthCm.Should().Be(150.25m);
             capacity.CargoDepthCm.Should().Be(300m);
             capacity.CargoHeightCm.Should().Be(180.75m);
 
-            noVehicle.MaxCargoWeightKg.Should().BeNull();
-            noVehicle.CargoWidthCm.Should().BeNull();
+            (await repository.GetVehicleWeightKgAsync(id, cancellationToken)).Should().Be(1800);
+
+            // The plate, not the VIN — this is what the GMR submission and the printed document
+            // are documented to carry, and what was being fed the chassis number instead.
+            (await repository.GetVehiclePlateAsync(id, cancellationToken)).Should().Be("IT99XYZ");
+
+            // Nothing back-fills capacity, so a vehicle nobody has measured reports all-null
+            // rather than failing — it simply cannot be judged overloaded.
+            var unknown = await repository.GetVehicleCargoCapacityAsync(other, cancellationToken);
+            unknown.MaxCargoWeightKg.Should().BeNull();
+            unknown.CargoWidthCm.Should().BeNull();
         }
         finally
         {
             await RemoveManifestAsync(id);
-            await RemoveManifestAsync(unassigned);
-            await RemoveVehicleAsync(vin);
+            await RemoveManifestAsync(other);
+            await RemoveTruckListEntryAsync(measured);
+            await RemoveTruckListEntryAsync(unmeasured);
         }
     }
 
@@ -329,12 +380,13 @@ public class ManifestRepositoryTests
         // cargo that has already been packed and weighed.
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
+        var entry = await ATruckListEntryAsync();
         var id = NewId();
         var boxId = await AddBoxAsync(30, validated: false, validatedBy: null);
 
         try
         {
-            await repository.AddAsync(AManifest(id), cancellationToken);
+            await repository.AddAsync(AManifest(id, entry), cancellationToken);
             await repository.AddBoxAsync(id, boxId, cancellationToken);
 
             (await repository.DeleteAsync(id, cancellationToken)).Should().BeTrue();
@@ -344,6 +396,7 @@ public class ManifestRepositoryTests
         finally
         {
             await RemoveBoxAsync(boxId);
+            await RemoveTruckListEntryAsync(entry);
         }
     }
 }

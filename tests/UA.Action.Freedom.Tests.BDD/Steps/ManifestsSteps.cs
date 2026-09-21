@@ -52,7 +52,7 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
     [Given("a convoy exists with an insured vehicle on its published truck list")]
     public async Task GivenAConvoyExistsWithAnInsuredVehicleOnItsPublishedTruckList()
     {
-        await CreateConvoy();
+        await CreateConvoy(withVehicle: false);
         var convoyId = state.Pinned(ConvoyKey);
         var vin = "BDDM" + Guid.NewGuid().ToString("N")[..13].ToUpperInvariant();
         var operatorToken = await api.TokenForAsync("operator");
@@ -77,7 +77,7 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
         var driverId = volunteerPath.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
         state.CreatedResources.Add(("people", driverId));
         state.Pin(CrewKey, driverId);
-        (await api.SendAsync(HttpMethod.Put, $"/convoys/{convoyId}/vehicles/{vin}/drivers/{driverId}", operatorToken, null))
+        (await api.SendAsync(HttpMethod.Put, $"/convoys/{convoyId}/vehicles/{vin}/crew/{driverId}", operatorToken, """{ "leg": "Uk" }"""))
             .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
 
         var today = DateTime.UtcNow.Date;
@@ -92,10 +92,7 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
     }
 
     [When("I POST a manifest for the insured vehicle on the remembered convoy")]
-    public Task WhenIPostAManifestForTheInsuredVehicle() =>
-        PostManifest($$"""
-            { "id": "{{state.Pinned(ManifestKey)}}", "convoyId": {{state.Pinned(ConvoyKey)}}, "vin": "{{state.Pinned(VehicleKey)}}" }
-            """);
+    public Task WhenIPostAManifestForTheInsuredVehicle() => PostManifest();
 
     [When("I remove the insurance of the insured vehicle")]
     public async Task WhenIRemoveTheInsuranceOfTheInsuredVehicle()
@@ -151,7 +148,7 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
     {
         var response = await api.SendAsync(
             HttpMethod.Get,
-            $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{state.Pinned(VehicleKey)}/drivers",
+            $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{state.Pinned(VehicleKey)}/crew",
             state.CurrentToken,
             null);
 
@@ -165,15 +162,30 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
     [Given("a convoy exists whose truck list is not published")]
     public Task GivenAConvoyExistsWhoseTruckListIsNotPublished() => CreateConvoy();
 
-    [When("I POST a manifest with no convoy")]
-    public Task WhenIPostAManifestWithNoConvoy() =>
-        PostManifest($$"""{ "id": "{{state.Pinned(ManifestKey)}}" }""");
-
     [When("I POST a manifest on the remembered convoy")]
-    public Task WhenIPostAManifestOnTheRememberedConvoy() =>
-        PostManifest($$"""
-            { "id": "{{state.Pinned(ManifestKey)}}", "convoyId": {{state.Pinned(ConvoyKey)}} }
-            """);
+    public Task WhenIPostAManifestOnTheRememberedConvoy() => PostManifest();
+
+    /// <summary>
+    /// The invariant the composite foreign key exists for. A manifest names a truck-list entry,
+    /// so a vehicle that is on no convoy has nothing for one to hang off.
+    /// </summary>
+    [When("I POST a manifest for a vehicle that is not on the convoy")]
+    public async Task WhenIPostAManifestForAVehicleThatIsNotOnTheConvoy()
+    {
+        var operatorToken = await api.TokenForAsync("operator");
+        var vin = "BDD" + Guid.NewGuid().ToString("N")[..14].ToUpperInvariant();
+
+        (await api.SendAsync(HttpMethod.Post, "/vehicles", operatorToken, $$"""
+            { "vin": "{{vin}}", "plate": "UA20ACT", "year": 2015, "fuel": "Diesel", "transmission": "Manual", "weightKg": 2100 }
+            """)).StatusCode.Should().Be(HttpStatusCode.Created, "the body was: {0}", api.LastBody);
+        state.CreatedResources.Add(("vehicles", vin));
+
+        await api.SendAsync(
+            HttpMethod.Post,
+            $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{vin}/manifest",
+            state.CurrentToken,
+            $$"""{ "id": "{{state.Pinned(ManifestKey)}}" }""");
+    }
 
     [When("I GET the remembered manifest")]
     public Task WhenIGetTheRememberedManifest() =>
@@ -197,9 +209,18 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
 
     private string ManifestPath(string suffix = "") => $"/manifests/{state.Pinned(ManifestKey)}{suffix}";
 
-    private async Task PostManifest(string body)
+    /// <summary>
+    /// Opens a manifest against the remembered convoy's vehicle. There is no <c>POST /manifests</c>
+    /// any more: a manifest is the paperwork for one vehicle on one convoy, so it is created on
+    /// the truck-list entry and only the document reference is in the body.
+    /// </summary>
+    private async Task PostManifest()
     {
-        var response = await api.SendAsync(HttpMethod.Post, "/manifests", state.CurrentToken, body);
+        var response = await api.SendAsync(
+            HttpMethod.Post,
+            $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{state.Pinned(VehicleKey)}/manifest",
+            state.CurrentToken,
+            $$"""{ "id": "{{state.Pinned(ManifestKey)}}" }""");
 
         if (response.StatusCode == HttpStatusCode.Created)
         {
@@ -207,7 +228,16 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
         }
     }
 
-    private async Task CreateConvoy()
+    /// <summary>
+    /// A convoy with one inspected vehicle on its truck list, pinned as the manifest's vehicle.
+    /// The vehicle is part of the arrangement rather than an extra step, because a manifest is
+    /// opened against a truck-list entry and there is no longer any way to open one without.
+    /// </summary>
+    /// <param name="withVehicle">
+    /// False for arrangements that provision their own vehicle. A convoy carrying a second truck
+    /// nobody wrote a manifest for can never arrive, which is the point of the arrival rule.
+    /// </param>
+    private async Task CreateConvoy(bool withVehicle = true)
     {
         var response = await api.SendAsync(HttpMethod.Post, "/convoys", state.CurrentToken, ConvoyBody);
 
@@ -219,5 +249,25 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
 
         state.CreatedResources.Add(("convoys", convoyId));
         state.Pin(ConvoyKey, convoyId);
+
+        if (!withVehicle)
+        {
+            return;
+        }
+
+        var operatorToken = await api.TokenForAsync("operator");
+        var vin = "BDD" + Guid.NewGuid().ToString("N")[..14].ToUpperInvariant();
+
+        (await api.SendAsync(HttpMethod.Post, "/vehicles", operatorToken, $$"""
+            { "vin": "{{vin}}", "plate": "UA20ACT", "year": 2015, "fuel": "Diesel", "transmission": "Manual", "weightKg": 2100 }
+            """)).StatusCode.Should().Be(HttpStatusCode.Created, "the body was: {0}", api.LastBody);
+        state.CreatedResources.Add(("vehicles", vin));
+
+        (await api.SendAsync(HttpMethod.Put, $"/vehicles/{vin}/inspection", operatorToken, """{ "status": "Passed" }"""))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
+        (await api.SendAsync(HttpMethod.Put, $"/convoys/{convoyId}/vehicles/{vin}", operatorToken, null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
+
+        state.Pin(VehicleKey, vin);
     }
 }

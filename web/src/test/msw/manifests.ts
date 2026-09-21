@@ -2,12 +2,11 @@ import { HttpResponse, http } from 'msw';
 import type { RequestHandler } from 'msw';
 
 import type { ManifestStatus } from '../../api/schemas/common';
+import type { VehicleCrewReadModel } from '../../api/schemas/convoys';
 import type {
-  CreateManifestRequest,
+  CreateConvoyVehicleManifestRequest,
   ManifestBoxReadModel,
-  ManifestDriverTeamReadModel,
   ManifestReadModel,
-  SetManifestTeamRequest,
   UpdateManifestRequest,
 } from '../../api/schemas/manifests';
 import { problem } from './problem';
@@ -41,13 +40,15 @@ export interface ManifestApiOptions {
   publishedConvoyIds?: readonly number[];
   /** VINs whose insurance is recorded, not voided and in cover — the API refuses `depart` otherwise. */
   insuredVins?: readonly string[];
-  knownDriverIds?: readonly string[];
+  /** The crew each manifest reports, keyed by manifest id. */
+  crewByManifest?: ReadonlyMap<string, readonly VehicleCrewReadModel[]>;
   vehicleCargoCapacity?: VehicleCargoCapacity;
 }
 
 export interface ManifestApi {
   db: Map<string, ManifestReadModel>;
-  teams: Map<string, ManifestDriverTeamReadModel[]>;
+  /** The crew a manifest reports, keyed by manifest id. Written on the convoy, read here. */
+  crew: Map<string, VehicleCrewReadModel[]>;
   boxes: Map<string, ManifestBoxReadModel[]>;
   handlers: RequestHandler[];
 }
@@ -81,11 +82,14 @@ export function manifestApi(
   options: ManifestApiOptions = {},
 ): ManifestApi {
   const db = new Map<string, ManifestReadModel>(seed.map((m) => [m.id, m]));
-  const teams = new Map<string, ManifestDriverTeamReadModel[]>();
+  const seededCrew: ReadonlyMap<string, readonly VehicleCrewReadModel[]> =
+    options.crewByManifest ?? new Map<string, readonly VehicleCrewReadModel[]>();
+  const crew = new Map<string, VehicleCrewReadModel[]>(
+    [...seededCrew].map(([id, members]) => [id, [...members]]),
+  );
   const boxes = new Map<string, ManifestBoxReadModel[]>();
   const publishedConvoys = new Set(options.publishedConvoyIds ?? []);
   const insuredVins = new Set(options.insuredVins ?? []);
-  const drivers = new Set(options.knownDriverIds ?? []);
   const idFrom = (raw: string | readonly string[] | undefined) => decodeURIComponent(String(raw));
 
   const handlers: RequestHandler[] = [
@@ -96,15 +100,26 @@ export function manifestApi(
       return manifest ? HttpResponse.json(manifest) : new HttpResponse(null, { status: 404 });
     }),
 
-    http.post('/manifests', async ({ request }) => {
-      const body = (await request.json()) as CreateManifestRequest;
+    // There is no POST /manifests. A manifest is the paperwork for one vehicle on one convoy, so
+    // it is opened on that truck-list entry — which is why this handler lives on a convoy route.
+    http.post('/convoys/:convoyId/vehicles/:vin/manifest', async ({ params, request }) => {
+      const convoyId = Number(String(params['convoyId']));
+      const vin = decodeURIComponent(String(params['vin']));
+      const body = (await request.json()) as CreateConvoyVehicleManifestRequest;
+
       if (db.has(body.id)) {
         return problem(409, `A manifest with reference '${body.id}' already exists.`);
       }
+      // One manifest per vehicle per convoy: arrival asks each vehicle for its finished manifest
+      // and has to get one answer.
+      if ([...db.values()].some((m) => m.convoyId === convoyId && m.vin === vin)) {
+        return problem(409, `Vehicle '${vin}' already has a manifest on this convoy.`);
+      }
+
       db.set(body.id, {
         id: body.id,
-        vin: body.vin ?? null,
-        convoyId: body.convoyId ?? null,
+        convoyId,
+        vin,
         status: 'Created',
         deliveryNotes: body.deliveryNotes ?? null,
         ferryBookingComplete: body.ferryBookingComplete,
@@ -127,10 +142,10 @@ export function manifestApi(
         return problem(409, FREEZE_MESSAGE);
       }
       const body = (await request.json()) as UpdateManifestRequest;
+      // The convoy and the vehicle are the manifest's identity: the UPDATE never names those
+      // columns, so anything sent for them is read straight past.
       db.set(id, {
         ...manifest,
-        vin: body.vin ?? null,
-        convoyId: body.convoyId ?? null,
         deliveryNotes: body.deliveryNotes ?? null,
         ferryBookingComplete: body.ferryBookingComplete,
       });
@@ -150,42 +165,14 @@ export function manifestApi(
       return new HttpResponse(null, { status: 204 });
     }),
 
-    http.get('/manifests/:id/teams', ({ params }) => {
+    // A read. There is no PUT: crewing happens on the convoy's truck-list entry, and this
+    // reports what is recorded there.
+    http.get('/manifests/:id/crew', ({ params }) => {
       const id = idFrom(params['id']);
       if (!db.has(id)) {
         return new HttpResponse(null, { status: 404 });
       }
-      return HttpResponse.json(teams.get(id) ?? []);
-    }),
-
-    http.put('/manifests/:id/teams/:leg', async ({ params, request }) => {
-      const id = idFrom(params['id']);
-      const manifest = db.get(id);
-      if (!manifest) {
-        return new HttpResponse(null, { status: 404 });
-      }
-      if (manifest.frozen) {
-        return problem(409, FREEZE_MESSAGE);
-      }
-      const leg = String(params['leg']) === 'Border' ? 'Border' : 'Uk';
-      const body = (await request.json()) as SetManifestTeamRequest;
-      if (drivers.size > 0 && !drivers.has(body.primaryPersonId)) {
-        return problem(404, 'One of the volunteers named for this leg is not on file.');
-      }
-      if (body.secondaryPersonId && body.secondaryPersonId === body.primaryPersonId) {
-        return problem(
-          409,
-          'A driver team is two people; the same volunteer cannot crew both halves of it.',
-        );
-      }
-      const list = (teams.get(id) ?? []).filter((t) => t.leg !== leg);
-      list.push({
-        leg,
-        primaryPersonId: body.primaryPersonId,
-        secondaryPersonId: body.secondaryPersonId ?? null,
-      });
-      teams.set(id, list);
-      return new HttpResponse(null, { status: 204 });
+      return HttpResponse.json(crew.get(id) ?? []);
     }),
 
     http.get('/manifests/:id/boxes', ({ params }) => {
@@ -283,7 +270,7 @@ export function manifestApi(
           return problem(409, 'A manifest cannot move to that state from the one it is in.');
         }
         if (edge.verb === 'propose') {
-          const published = manifest.convoyId !== null && publishedConvoys.has(manifest.convoyId);
+          const published = publishedConvoys.has(manifest.convoyId);
           if (!published) {
             return problem(
               409,
@@ -291,7 +278,7 @@ export function manifestApi(
             );
           }
         }
-        if (edge.verb === 'depart' && (manifest.vin === null || !insuredVins.has(manifest.vin))) {
+        if (edge.verb === 'depart' && !insuredVins.has(manifest.vin)) {
           return problem(
             409,
             'This vehicle cannot depart: its insurance is not recorded, was voided by a crew change, or does not cover today. Record the insurance for its current crew first.',
@@ -309,5 +296,5 @@ export function manifestApi(
     ),
   ];
 
-  return { db, teams, boxes, handlers };
+  return { db, crew, boxes, handlers };
 }

@@ -19,11 +19,15 @@ export function DashboardCard({ entry }: DashboardCardProps): JSX.Element {
       <Link to={entry.to} className="dashboard-card__link">
         {entry.label}
       </Link>
-      <Gate policy={entry.actionPolicy}>
-        <div className="dashboard-card__action">
-          <LinkButton to={entry.actionTo}>{entry.actionLabel}</LinkButton>
-        </div>
-      </Gate>
+      {entry.actionPolicy !== undefined &&
+      entry.actionTo !== undefined &&
+      entry.actionLabel !== undefined ? (
+        <Gate policy={entry.actionPolicy}>
+          <div className="dashboard-card__action">
+            <LinkButton to={entry.actionTo}>{entry.actionLabel}</LinkButton>
+          </div>
+        </Gate>
+      ) : null}
     </div>
   );
 }

@@ -7,12 +7,14 @@ import { delete204, getCollection, getJson, postCreate, postTransition, put204 }
 import { ApiNotFound } from './problem';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
+import type { JourneyLeg } from './schemas/common';
+import type { CreateConvoyVehicleManifestRequest } from './schemas/manifests';
 import {
   convoyReadModelSchema,
   convoyReadinessReadModelSchema,
   convoyVehicleReadModelSchema,
   routeStopReadModelSchema,
-  vehicleDriverReadModelSchema,
+  vehicleCrewReadModelSchema,
   vehicleInsuranceReadModelSchema,
 } from './schemas/convoys';
 import type {
@@ -25,7 +27,7 @@ import type {
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
   UpdateConvoyRequest,
-  VehicleDriverReadModel,
+  VehicleCrewReadModel,
   VehicleInsuranceReadModel,
 } from './schemas/convoys';
 
@@ -76,32 +78,55 @@ export function assignVehicle(id: number, vin: string): Promise<void> {
   return put204(vinPath(id, vin));
 }
 
-export function unassignVehicle(id: number, vin: string): Promise<void> {
-  return delete204(vinPath(id, vin));
+// Before the truck list is published this takes the vehicle off it; afterwards it records that
+// the vehicle left the convoy, keeping the entry, its crew, its insurance and its manifest.
+export function unassignVehicle(id: number, vin: string, reason?: string): Promise<void> {
+  const query = reason === undefined ? '' : `?reason=${encodeURIComponent(reason)}`;
+  return delete204(`${vinPath(id, vin)}${query}`);
 }
 
-export function fetchVehicleDrivers(
+export function fetchVehicleCrew(
   id: number,
   vin: string,
-): Promise<readonly VehicleDriverReadModel[] | ParentMissing> {
-  return getCollection(`${vinPath(id, vin)}/drivers`, vehicleDriverReadModelSchema);
+): Promise<readonly VehicleCrewReadModel[] | ParentMissing> {
+  return getCollection(`${vinPath(id, vin)}/crew`, vehicleCrewReadModelSchema);
 }
 
 export interface CrewAssignment {
   personId: string;
+  leg: JourneyLeg;
   role: CrewRole;
 }
 
-export function assignDriver(
+export function assignCrew(
   id: number,
   vin: string,
-  { personId, role }: CrewAssignment,
+  { personId, leg, role }: CrewAssignment,
 ): Promise<void> {
-  return put204(`${vinPath(id, vin)}/drivers/${encodeURIComponent(personId)}`, { role });
+  return put204(`${vinPath(id, vin)}/crew/${encodeURIComponent(personId)}`, { leg, role });
 }
 
-export function unassignDriver(id: number, vin: string, personId: string): Promise<void> {
-  return delete204(`${vinPath(id, vin)}/drivers/${encodeURIComponent(personId)}`);
+export interface CrewRemoval {
+  personId: string;
+  leg: JourneyLeg;
+}
+
+export function unassignCrew(
+  id: number,
+  vin: string,
+  { personId, leg }: CrewRemoval,
+): Promise<void> {
+  return delete204(`${vinPath(id, vin)}/crew/${encodeURIComponent(personId)}?leg=${leg}`);
+}
+
+// A manifest is the paperwork for one vehicle on one convoy, so it is opened here rather than
+// at POST /manifests — which no longer exists.
+export function createManifestForVehicle(
+  id: number,
+  vin: string,
+  body: CreateConvoyVehicleManifestRequest,
+): Promise<CreatedResource> {
+  return postCreate(`${vinPath(id, vin)}/manifest`, body);
 }
 
 // A vehicle with no insurance recorded is a bare 404; that is an answer ("not recorded"), not
@@ -208,48 +233,77 @@ export function useAssignVehicle(id: number): UseMutationResult<void, Error, str
   });
 }
 
-export function useUnassignVehicle(id: number): UseMutationResult<void, Error, string> {
+/** A reason is only meaningful once the truck list is published, when a removal is a withdrawal. */
+export interface VehicleRemoval {
+  vin: string;
+  reason?: string;
+}
+
+export function useUnassignVehicle(id: number): UseMutationResult<void, Error, VehicleRemoval> {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vin: string) => unassignVehicle(id, vin),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) }),
+    mutationFn: ({ vin, reason }: VehicleRemoval) => unassignVehicle(id, vin, reason),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.readiness(id) });
+    },
   });
 }
 
-export function useVehicleDrivers(
+export function useVehicleCrew(
   id: number,
   vin: string,
-): UseQueryResult<readonly VehicleDriverReadModel[] | ParentMissing> {
+): UseQueryResult<readonly VehicleCrewReadModel[] | ParentMissing> {
   return useQuery({
-    queryKey: qk.convoys.vehicleDrivers(id, vin),
-    queryFn: () => fetchVehicleDrivers(id, vin),
+    queryKey: qk.convoys.vehicleCrew(id, vin),
+    queryFn: () => fetchVehicleCrew(id, vin),
   });
 }
 
-export function useAssignDriver(
+// The insurance names the crew, so any change to it voids the policy — which is why every crew
+// mutation invalidates the insurance as well as the crew.
+export function useAssignCrew(
   id: number,
   vin: string,
 ): UseMutationResult<void, Error, CrewAssignment> {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (assignment: CrewAssignment) => assignDriver(id, vin, assignment),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleDrivers(id, vin) });
-      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
-      await queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) });
-    },
+    mutationFn: (assignment: CrewAssignment) => assignCrew(id, vin, assignment),
+    onSuccess: () => invalidateCrew(queryClient, id, vin),
   });
 }
 
-export function useUnassignDriver(id: number, vin: string): UseMutationResult<void, Error, string> {
+export function useUnassignCrew(
+  id: number,
+  vin: string,
+): UseMutationResult<void, Error, CrewRemoval> {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (personId: string) => unassignDriver(id, vin, personId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleDrivers(id, vin) });
-      await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
-      await queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) });
-    },
+    mutationFn: (removal: CrewRemoval) => unassignCrew(id, vin, removal),
+    onSuccess: () => invalidateCrew(queryClient, id, vin),
+  });
+}
+
+async function invalidateCrew(
+  queryClient: ReturnType<typeof useQueryClient>,
+  id: number,
+  vin: string,
+): Promise<void> {
+  await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicleCrew(id, vin) });
+  await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
+  await queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) });
+  await queryClient.invalidateQueries({ queryKey: qk.convoys.readiness(id) });
+}
+
+export function useCreateManifestForVehicle(
+  id: number,
+  vin: string,
+): UseMutationResult<CreatedResource, Error, CreateConvoyVehicleManifestRequest> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateConvoyVehicleManifestRequest) =>
+      createManifestForVehicle(id, vin, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.manifests.all }),
   });
 }
 

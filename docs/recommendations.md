@@ -324,7 +324,7 @@ detail onto the manifest, but it needs a conversation with someone who has actua
 ## 5. Open questions and proposals
 
 **Built: erasure.** Volunteers are stored as a split identity — an anonymous `dbo.Person` key that
-crews, manifest teams and box records reference, and a `dbo.PersonDetail` row with the personal
+crews and box records reference, and a `dbo.PersonDetail` row with the personal
 data. Erasing a volunteer deletes the detail row outright; the key either goes too or, where past
 records name it, stays as an identifier nothing links to anyone (those records read "Former
 volunteer"). No volunteer name is written to any log or audit table, so the detail row is the only

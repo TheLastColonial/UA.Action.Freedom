@@ -87,28 +87,34 @@ public class ArrivalHandlerTests
     public async Task An_arrived_convoy_takes_no_crew_changes()
     {
         var repository = ARepository(ConvoyTestData.APublishedConvoy() with { ArrivedAt = Arrived });
+        var truckList = Substitute.For<IConvoyVehicleRepository>();
+        truckList.GetAsync(ConvoyTestData.Id, Vin, Arg.Any<CancellationToken>()).Returns(ConvoyTestData.AVehicle(Vin));
         var people = Substitute.For<IPersonRepository>();
         people.GetByIdAsync(PersonTestData.Id, Arg.Any<CancellationToken>()).Returns(PersonTestData.AReadModel(isDriver: true));
 
-        var assign = await new AssignDriverToVehicleHandler(repository, people).HandleAsync(
-            new AssignDriverToVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id), TestContext.Current.CancellationToken);
-        var unassign = await new UnassignDriverFromVehicleHandler(repository).HandleAsync(
-            new UnassignDriverFromVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id), TestContext.Current.CancellationToken);
+        var assign = await new AssignCrewToVehicleHandler(repository, truckList, people).HandleAsync(
+            new AssignCrewToVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id, JourneyLeg.Uk),
+            TestContext.Current.CancellationToken);
+        var unassign = await new UnassignCrewFromVehicleHandler(repository, truckList).HandleAsync(
+            new UnassignCrewFromVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id, JourneyLeg.Uk),
+            TestContext.Current.CancellationToken);
 
-        assign.Should().Be(AssignDriverOutcome.ConvoyArrived);
-        unassign.Should().Be(UnassignDriverOutcome.ConvoyArrived);
-        await repository.DidNotReceive().AssignDriverAsync(
-            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CrewRole>(), Arg.Any<CancellationToken>());
+        assign.Should().Be(AssignCrewOutcome.ConvoyArrived);
+        unassign.Should().Be(UnassignCrewOutcome.ConvoyArrived);
+        await truckList.DidNotReceive().AssignCrewAsync(
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<JourneyLeg>(), Arg.Any<CrewRole>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task An_arrived_convoy_takes_no_insurance_changes()
     {
         var repository = ARepository(ConvoyTestData.APublishedConvoy() with { ArrivedAt = Arrived });
+        var truckList = Substitute.For<IConvoyVehicleRepository>();
         var policy = new VehicleInsuranceRecord(
             ConvoyTestData.Id, Vin, "Ukraine Aid Mutual", "POL-1", Arrived.AddDays(-10), Arrived.AddDays(10), null, "sub");
 
-        var record = await new RecordInsuranceHandler(repository).HandleAsync(
+        var record = await new RecordInsuranceHandler(repository, truckList).HandleAsync(
             new RecordInsuranceCommand(policy), TestContext.Current.CancellationToken);
 
         record.Should().Be(RecordInsuranceOutcome.ConvoyArrived);
@@ -118,11 +124,29 @@ public class ArrivalHandlerTests
     public async Task A_handed_over_vehicle_is_refused_a_convoy()
     {
         var repository = ARepository(ConvoyTestData.AReadModel());
-        repository.AssignVehicleAsync(ConvoyTestData.Id, Vin, Arg.Any<CancellationToken>()).Returns(AssignVehicleResult.HandedOver);
+        var truckList = Substitute.For<IConvoyVehicleRepository>();
+        truckList.AddAsync(ConvoyTestData.Id, Vin, Arg.Any<CancellationToken>())
+            .Returns(AddToTruckListResult.HandedOver);
 
-        var outcome = await new AssignVehicleToConvoyHandler(repository).HandleAsync(
+        var outcome = await new AssignVehicleToConvoyHandler(repository, truckList).HandleAsync(
             new AssignVehicleToConvoyCommand(ConvoyTestData.Id, Vin), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(AssignVehicleOutcome.VehicleHandedOver);
+    }
+
+    [Fact]
+    public async Task A_vehicle_that_withdrew_is_not_waited_for()
+    {
+        // It broke down near Poznan. Holding the convoy open until it delivers something would
+        // mean the convoy could never arrive — the repository's still-travelling check skips it,
+        // and this pins that the handler reports what the write found rather than second-guessing.
+        var repository = ARepository(ConvoyTestData.APublishedConvoy());
+        repository.ArriveAsync(ConvoyTestData.Id, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(ArriveResult.Arrived);
+
+        var result = await ArriveAsync(repository);
+
+        result.Outcome.Should().Be(ArriveConvoyOutcome.Arrived);
+        result.StillTravelling.Should().BeEmpty();
     }
 }

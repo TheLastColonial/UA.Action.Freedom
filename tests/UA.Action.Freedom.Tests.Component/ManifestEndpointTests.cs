@@ -25,33 +25,34 @@ public class ManifestEndpointTests
 {
     private const string Id = "MAN-0001";
     private const int ConvoyId = 42;
+    private const string Vin = "WVWZZZ1JZXW000001";
 
     private static readonly Guid Primary = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
     private static readonly Guid Secondary = new("7c1d2e50-8e9b-4d42-a063-7b1c9e4f6d22");
     private static readonly DateTime Departs = new(2026, 9, 1, 6, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime Published = new(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc);
 
     private static ManifestReadModel AManifest(
-        ManifestStatus status = ManifestStatus.Created, bool frozen = false, int? convoyId = ConvoyId) => new(
-        Id, "WVWZZZ1JZXW000001", convoyId, status, null, FerryBookingComplete: false,
+        ManifestStatus status = ManifestStatus.Created, bool frozen = false) => new(
+        Id, ConvoyId, Vin, status, null, FerryBookingComplete: false,
         GmrSubmittedAt: frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
 
     /// <summary>
-    /// A convoy whose truck list is published and whose vehicles are insured and in cover today —
-    /// what departure needs — unless a test says otherwise.
+    /// A convoy whose truck list is published, carrying the manifest's vehicle, insured and in
+    /// cover today — what departure needs — unless a test says otherwise.
     /// </summary>
-    private static IConvoyRepository AConvoy(bool truckListPublished = true, bool insured = true)
+    private static InMemoryConvoyRepository AConvoy(bool truckListPublished = true, bool insured = true)
     {
-        var convoys = Substitute.For<IConvoyRepository>();
-        convoys.GetByIdAsync(ConvoyId, Arg.Any<CancellationToken>()).Returns(
-            new ConvoyReadModel(
-                ConvoyId, Departs, Departs.AddDays(4),
-                truckListPublished ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null));
-        convoys.GetInsuranceAsync(ConvoyId, Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(call => insured
-            ? new VehicleInsuranceReadModel(
-                ConvoyId, call.ArgAt<string>(1), "Ukraine Aid Mutual", "POL-1",
-                DateTime.UtcNow.Date.AddDays(-1), DateTime.UtcNow.Date.AddDays(30), null, "test-user", DateTime.UtcNow, null)
-            : null);
-        return convoys;
+        var convoys = new InMemoryConvoyRepository(
+                new ConvoyReadModel(ConvoyId, Departs, Departs.AddDays(4), truckListPublished ? Published : null))
+            .WithVehicle(Vin, onConvoy: ConvoyId);
+
+        return insured
+            ? convoys.WithInsurance(new VehicleInsuranceReadModel(
+                ConvoyId, Vin, "Ukraine Aid Mutual", "POL-1",
+                DateTime.UtcNow.Date.AddDays(-1), DateTime.UtcNow.Date.AddDays(30), null, "test-user",
+                DateTime.UtcNow, VoidedAt: null))
+            : convoys;
     }
 
     private static PersonReadModel APerson(Guid id, bool isDriver = true) => new(
@@ -90,35 +91,20 @@ public class ManifestEndpointTests
     }
 
     [Fact]
-    public async Task A_dispatcher_opens_a_manifest_in_the_created_state()
+    public async Task There_is_no_way_to_open_a_manifest_that_is_not_on_a_truck_list()
     {
-        var manifests = new InMemoryManifestRepository();
+        // POST /manifests is gone. A manifest is the paperwork for one vehicle on one convoy, so
+        // it is opened against that truck-list entry — which is what makes (ConvoyId, Vin) a
+        // foreign key rather than two fields a caller can set to anything.
         await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
+            new InMemoryManifestRepository(), AConvoy(), ARosterOfDrivers(),
+            new RecordingManifestWorkQueue(), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var response = await client.PostAsJsonAsync(
-            "/manifests",
-            new { id = Id, vin = "WVWZZZ1JZXW000001", convoyId = ConvoyId },
-            TestContext.Current.CancellationToken);
+            "/manifests", new { id = Id, vin = Vin, convoyId = ConvoyId }, TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
-        response.Headers.Location!.ToString().Should().EndWith($"/manifests/{Id}");
-        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Created);
-    }
-
-    [Fact]
-    public async Task Reusing_a_manifest_reference_is_a_conflict()
-    {
-        var manifests = new InMemoryManifestRepository(AManifest());
-        await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.PostAsJsonAsync(
-            "/manifests", new { id = Id }, TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        response.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
     }
 
     [Fact]
@@ -230,7 +216,11 @@ public class ManifestEndpointTests
 
         var submission = queue.Submissions.Should().ContainSingle().Subject;
         submission.ManifestId.Should().Be(Id);
-        submission.VehicleRegistration.Should().Be("WVWZZZ1JZXW000001");
+
+        // The plate, not the VIN. It is what a border officer reads off the front of the vehicle,
+        // and what HMRC matches the movement against.
+        submission.VehicleRegistration.Should().Be("AB12CDE");
+        submission.VehicleRegistration.Should().NotBe(Vin);
         submission.DepartsAt.Should().Be(Departs);
     }
 
@@ -313,7 +303,7 @@ public class ManifestEndpointTests
     }
 
     [Fact]
-    public async Task A_frozen_manifest_cannot_be_edited_recrewed_reloaded_or_deleted()
+    public async Task A_frozen_manifest_cannot_be_edited_reloaded_or_deleted()
     {
         var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Confirmed, frozen: true))
             .WithKnownBox(7);
@@ -323,12 +313,6 @@ public class ManifestEndpointTests
         var cancellationToken = TestContext.Current.CancellationToken;
 
         (await client.PutAsJsonAsync($"/manifests/{Id}", new { deliveryNotes = "changed" }, cancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Conflict);
-
-        (await client.PutAsJsonAsync(
-                $"/manifests/{Id}/teams/Uk",
-                new { primaryPersonId = Primary, secondaryPersonId = Secondary },
-                cancellationToken))
             .StatusCode.Should().Be(HttpStatusCode.Conflict);
 
         (await client.PutAsync($"/manifests/{Id}/boxes/7", content: null, cancellationToken))
@@ -341,83 +325,84 @@ public class ManifestEndpointTests
     }
 
     [Fact]
-    public async Task A_dispatcher_crews_both_legs()
+    public async Task A_frozen_manifest_cannot_be_re_pointed_at_a_different_vehicle()
     {
-        var manifests = new InMemoryManifestRepository(AManifest());
+        // Not because the edit is refused — because there is nowhere to put it. The convoy and
+        // the vehicle are the manifest's identity, so PUT /manifests/{id} has no field for them
+        // and the UPDATE never names those columns.
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Preparing))
+            .WithKnownBox(7);
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
         using var client = api.CreateClient();
 
-        foreach (var leg in new[] { "Uk", "Border" })
-        {
-            var response = await client.PutAsJsonAsync(
-                $"/manifests/{Id}/teams/{leg}",
-                new { primaryPersonId = Primary, secondaryPersonId = Secondary },
-                TestContext.Current.CancellationToken);
+        var response = await client.PutAsJsonAsync(
+            $"/manifests/{Id}",
+            new { deliveryNotes = "changed", vin = "WVWZZZ1JZXW999999", convoyId = 99 },
+            TestContext.Current.CancellationToken);
 
-            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-        }
-
-        var teams = await client.GetFromJsonAsync<JsonElement>(
-            $"/manifests/{Id}/teams", TestContext.Current.CancellationToken);
-
-        teams.EnumerateArray().Should().HaveCount(2);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        manifests.Manifest(Id)!.Vin.Should().Be(Vin);
+        manifests.Manifest(Id)!.ConvoyId.Should().Be(ConvoyId);
+        manifests.Manifest(Id)!.DeliveryNotes.Should().Be("changed");
     }
 
     [Fact]
-    public async Task Crewing_a_leg_twice_replaces_the_team_rather_than_adding_one()
+    public async Task The_manifest_reports_the_crew_travelling_with_its_vehicle()
     {
-        var manifests = new InMemoryManifestRepository(AManifest());
+        // One crew record. The manifest reads it; crewing happens on the truck-list entry.
+        var convoys = AConvoy()
+            .WithPerson(Primary, "Olena", "Kovalenko")
+            .WithPerson(Secondary, "Taras", "Shevchuk")
+            .WithCrew(Vin, Primary, JourneyLeg.Uk)
+            .WithCrew(Vin, Secondary, JourneyLeg.Border);
+
         await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
+            new InMemoryManifestRepository(AManifest()), convoys, ARosterOfDrivers(),
+            new RecordingManifestWorkQueue(), roles: "Dispatcher");
         using var client = api.CreateClient();
 
-        await client.PutAsJsonAsync(
+        var crew = await client.GetFromJsonAsync<JsonElement>(
+            $"/manifests/{Id}/crew", TestContext.Current.CancellationToken);
+
+        var members = crew.EnumerateArray().ToList();
+        members.Should().HaveCount(2);
+        members[0].GetProperty("leg").GetString().Should().Be("Uk");
+        members[0].GetProperty("lastName").GetString().Should().Be("Kovalenko");
+        members[1].GetProperty("leg").GetString().Should().Be("Border");
+        members[1].GetProperty("role").GetString().Should().Be("Driver");
+    }
+
+    [Fact]
+    public async Task There_is_no_way_to_crew_a_manifest_directly()
+    {
+        // PUT /manifests/{id}/teams/{leg} is gone. It wrote a second crew record that nothing
+        // reconciled with the convoy's, so a printed manifest could name people the insurance —
+        // which is what actually gates departure — had never heard of.
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
+            new RecordingManifestWorkQueue(), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
             $"/manifests/{Id}/teams/Uk",
             new { primaryPersonId = Primary, secondaryPersonId = Secondary },
             TestContext.Current.CancellationToken);
-        await client.PutAsJsonAsync(
-            $"/manifests/{Id}/teams/Uk",
-            new { primaryPersonId = Secondary, secondaryPersonId = (Guid?)null },
-            TestContext.Current.CancellationToken);
 
-        var team = manifests.Teams(Id).Should().ContainSingle().Subject;
-        team.PrimaryPersonId.Should().Be(Secondary);
-        team.SecondaryPersonId.Should().BeNull();
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task A_volunteer_who_does_not_drive_cannot_crew_a_leg()
+    public async Task There_is_no_crew_for_a_manifest_that_does_not_exist()
     {
-        var manifests = new InMemoryManifestRepository(AManifest());
-        var people = new InMemoryPersonRepository(APerson(Primary, isDriver: false));
         await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), people, new RecordingManifestWorkQueue(), roles: "Dispatcher");
+            new InMemoryManifestRepository(), AConvoy(), ARosterOfDrivers(),
+            new RecordingManifestWorkQueue(), roles: "Dispatcher");
         using var client = api.CreateClient();
 
-        var response = await client.PutAsJsonAsync(
-            $"/manifests/{Id}/teams/Uk",
-            new { primaryPersonId = Primary },
-            TestContext.Current.CancellationToken);
+        var response = await client.GetAsync("/manifests/MAN-NOPE/crew", TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        manifests.Teams(Id).Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task The_same_volunteer_cannot_crew_both_halves_of_a_pair()
-    {
-        var manifests = new InMemoryManifestRepository(AManifest());
-        await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.PutAsJsonAsync(
-            $"/manifests/{Id}/teams/Uk",
-            new { primaryPersonId = Primary, secondaryPersonId = Primary },
-            TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

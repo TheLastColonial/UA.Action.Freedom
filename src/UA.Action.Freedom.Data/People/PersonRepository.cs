@@ -118,23 +118,24 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        // Refused while the person is still needed: on the crew of a convoy that has not arrived,
-        // or on the team of a manifest whose load is not yet delivered, lost or returned. The
-        // UPDLOCK on their detail row stops an erasure racing another erasure of the same person.
+        // Refused while the person is still needed: crewing a vehicle on a convoy that has not
+        // arrived, or on one whose manifest is not yet delivered, lost or returned. Both used to
+        // be asked separately, of two unconnected crew tables; there is one crew record now, so
+        // the second clause narrows the first rather than duplicating it. The UPDLOCK on their
+        // detail row stops an erasure racing another erasure of the same person.
         var status = await connection.QuerySingleAsync<(bool Found, bool Active)>(new CommandDefinition(
             $"""
              SELECT
                  CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.PersonDetail WITH (UPDLOCK) WHERE PersonId = @id)
                       THEN 1 ELSE 0 END AS bit) AS Found,
                  CAST(CASE WHEN EXISTS (
-                          SELECT 1 FROM dbo.VehicleDriver AS vd
-                          JOIN dbo.Convoy AS c ON c.Id = vd.ConvoyId
-                          WHERE vd.PersonId = @id AND c.ArrivedAt IS NULL)
+                          SELECT 1 FROM dbo.ConvoyVehicleCrew AS crew
+                          JOIN dbo.Convoy AS c ON c.Id = crew.ConvoyId
+                          WHERE crew.PersonId = @id AND c.ArrivedAt IS NULL)
                       OR EXISTS (
-                          SELECT 1 FROM dbo.ManifestDriverTeam AS t
-                          JOIN dbo.Manifest AS m ON m.Id = t.ManifestId
-                          WHERE (t.PrimaryPersonId = @id OR t.SecondaryPersonId = @id)
-                            AND m.Status NOT IN {FinishedStatuses})
+                          SELECT 1 FROM dbo.ConvoyVehicleCrew AS crew
+                          JOIN dbo.Manifest AS m ON m.ConvoyId = crew.ConvoyId AND m.Vin = crew.Vin
+                          WHERE crew.PersonId = @id AND m.Status NOT IN {FinishedStatuses})
                       THEN 1 ELSE 0 END AS bit) AS Active
              """,
             new { id },

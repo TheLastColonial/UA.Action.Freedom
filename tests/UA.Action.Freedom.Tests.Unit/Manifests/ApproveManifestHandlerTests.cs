@@ -31,9 +31,14 @@ public class ApproveManifestHandlerTests
         return convoys;
     }
 
+    private const string Vin = "WVWZZZ1JZXW000001";
+
+    /// <summary>What is on the front of the vehicle — not the VIN, which is the chassis number.</summary>
+    private const string Plate = "AB12 CDE";
+
     private static ManifestReadModel AManifest(
         ManifestStatus status = ManifestStatus.Proposed, bool frozen = false) => new(
-        Id, "WVWZZZ1JZXW000001", 42, status, null, FerryBookingComplete: false,
+        Id, 42, Vin, status, null, FerryBookingComplete: false,
         GmrSubmittedAt: frozen ? Stamped : null);
 
     [Fact]
@@ -42,6 +47,7 @@ public class ApproveManifestHandlerTests
         var repository = Substitute.For<IManifestRepository>();
         repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest());
         repository.ConfirmAndFreezeAsync(Id, ManifestStatus.Proposed, Arg.Any<CancellationToken>()).Returns(Stamped);
+        repository.GetVehiclePlateAsync(Id, Arg.Any<CancellationToken>()).Returns(Plate);
         var queue = Substitute.For<IManifestWorkQueue>();
         var handler = new ApproveManifestHandler(repository, AConvoy(), queue);
 
@@ -51,8 +57,31 @@ public class ApproveManifestHandlerTests
         await queue.Received(1).EnqueueGmrSubmissionAsync(
             Arg.Is<GmrSubmissionRequest>(request =>
                 request.ManifestId == Id
-                && request.VehicleRegistration == "WVWZZZ1JZXW000001"
+                && request.VehicleRegistration == Plate
                 && request.DepartsAt == Departs),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Tells_HMRC_the_registration_plate_rather_than_the_VIN()
+    {
+        // GmrSubmissionRequest.VehicleRegistration says "the plate the border expects to see", and
+        // was being handed Manifest.Vin — the chassis number, which is not on the front of the
+        // vehicle and is not what a border officer matches against the movement.
+        var repository = Substitute.For<IManifestRepository>();
+        repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest());
+        repository.ConfirmAndFreezeAsync(Id, ManifestStatus.Proposed, Arg.Any<CancellationToken>()).Returns(Stamped);
+        repository.GetVehiclePlateAsync(Id, Arg.Any<CancellationToken>()).Returns(Plate);
+        var queue = Substitute.For<IManifestWorkQueue>();
+
+        await new ApproveManifestHandler(repository, AConvoy(), queue).HandleAsync(
+            new ApproveManifestCommand(Id), TestContext.Current.CancellationToken);
+
+        await queue.Received(1).EnqueueGmrSubmissionAsync(
+            Arg.Is<GmrSubmissionRequest>(request => request.VehicleRegistration != Vin),
+            Arg.Any<CancellationToken>());
+        await queue.Received(1).EnqueueDocumentAsync(
+            Arg.Is<ManifestDocumentRequest>(document => document.VehicleRegistration == Plate),
             Arg.Any<CancellationToken>());
     }
 

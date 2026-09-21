@@ -75,7 +75,7 @@ test('a frozen manifest offers no Edit link and the edit page explains why', asy
     .toBeInTheDocument();
 });
 
-test('the tabs open the Status, Teams, Cargo and Weight panels', async () => {
+test('the tabs open the Status, Crew, Cargo and Weight panels', async () => {
   worker.use(
     ...manifestApi([makeManifest({ id: 'D3', convoyId: 7 })], { publishedConvoyIds: [7] }).handlers,
     ...convoyApi([makeConvoy({ id: 7, truckListPublished: true })]).handlers,
@@ -91,8 +91,8 @@ test('the tabs open the Status, Teams, Cargo and Weight panels', async () => {
   await screen.getByRole('tab', { name: 'Status' }).click();
   await expect.element(screen.getByRole('heading', { name: /Status:/ })).toBeInTheDocument();
 
-  await screen.getByRole('tab', { name: 'Teams' }).click();
-  await expect.element(screen.getByRole('heading', { name: 'Driver teams' })).toBeInTheDocument();
+  await screen.getByRole('tab', { name: 'Crew' }).click();
+  await expect.element(screen.getByRole('heading', { name: 'Crew' })).toBeInTheDocument();
 
   await screen.getByRole('tab', { name: 'Cargo' }).click();
   await expect.element(screen.getByRole('heading', { name: 'Cargo' })).toBeInTheDocument();

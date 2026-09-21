@@ -47,7 +47,8 @@ export interface TransitionContext {
   status: ManifestStatus;
   frozen: boolean;
   canApprove: boolean;
-  hasConvoy: boolean;
+  // There is no `hasConvoy`: a manifest is opened against a truck-list entry, so it always names
+  // one. What is still worth asking is whether that list has been closed.
   convoyTruckListPublished: boolean;
 }
 
@@ -75,9 +76,6 @@ export function availableTransitions(ctx: TransitionContext): TransitionOption[]
 function proposeBlockReason(verb: ManifestVerb, ctx: TransitionContext): string | null {
   if (verb !== 'propose') {
     return null;
-  }
-  if (!ctx.hasConvoy) {
-    return 'Link this manifest to a convoy before proposing it.';
   }
   if (!ctx.convoyTruckListPublished) {
     return "The convoy's truck list has not been published yet.";

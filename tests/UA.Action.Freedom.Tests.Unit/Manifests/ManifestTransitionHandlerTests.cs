@@ -23,16 +23,24 @@ public class ManifestTransitionHandlerTests
     private static ManifestReadModel AManifest(
         ManifestStatus status = ManifestStatus.Created,
         bool frozen = false,
-        int? convoyId = ConvoyId) => new(
+        int convoyId = ConvoyId) => new(
         Id,
-        Vin: Vin,
         ConvoyId: convoyId,
+        Vin: Vin,
         Status: status,
         DeliveryNotes: null,
         FerryBookingComplete: false,
         GmrSubmittedAt: frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
 
     private const string Vin = "WVWZZZ1JZXW000001";
+
+    /// <summary>
+    /// The handler reads the convoy for its truck-list stamp and the truck-list entry for the
+    /// vehicle's insurance. One substitute stands in for both ports, because in these tests they
+    /// describe the same convoy and splitting them would only add ceremony.
+    /// </summary>
+    private static TransitionManifestHandler AHandler(IManifestRepository repository, IConvoyRepository convoys) =>
+        new(repository, convoys, (IConvoyVehicleRepository)convoys);
 
     private static VehicleInsuranceReadModel APolicy(
         DateTime? coverStart = null, DateTime? coverEnd = null, DateTime? voidedAt = null) => new(
@@ -49,8 +57,9 @@ public class ManifestTransitionHandlerTests
 
     private static IConvoyRepository AConvoyInsuredBy(VehicleInsuranceReadModel? policy, bool published = true)
     {
-        var convoys = Substitute.For<IConvoyRepository>();
-        convoys.GetInsuranceAsync(ConvoyId, Vin, Arg.Any<CancellationToken>()).Returns(policy);
+        // One substitute for both ports: the truck-list half answers for the insurance.
+        var convoys = Substitute.For<IConvoyRepository, IConvoyVehicleRepository>();
+        ((IConvoyVehicleRepository)convoys).GetInsuranceAsync(ConvoyId, Vin, Arg.Any<CancellationToken>()).Returns(policy);
         convoys.GetByIdAsync(ConvoyId, Arg.Any<CancellationToken>()).Returns(
             new ConvoyReadModel(
                 ConvoyId,
@@ -73,7 +82,7 @@ public class ManifestTransitionHandlerTests
     public async Task Proposes_a_manifest_whose_convoy_has_published_its_truck_list()
     {
         var repository = ARepositoryHolding(AManifest());
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList());
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.Proposed), CancellationToken.None);
@@ -89,7 +98,7 @@ public class ManifestTransitionHandlerTests
         // The manifest is proposed against a fixed set of vehicles. Propose before the list is
         // published and the truck it names could still leave the convoy.
         var repository = ARepositoryHolding(AManifest());
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList(published: false));
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList(published: false));
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.Proposed), CancellationToken.None);
@@ -100,13 +109,18 @@ public class ManifestTransitionHandlerTests
     }
 
     [Fact]
-    public async Task Refuses_to_propose_a_manifest_that_is_on_no_convoy_at_all()
+    public async Task Refuses_to_propose_against_a_convoy_that_does_not_exist()
     {
-        var repository = ARepositoryHolding(AManifest(convoyId: null));
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList());
+        // A manifest naming no convoy at all used to be expressible, and was refused here. It no
+        // longer is: ConvoyId and Vin are non-nullable and are a composite foreign key to the
+        // truck-list entry, so the case this once guarded cannot be constructed. What remains
+        // reachable is a convoy the read cannot find, and that is refused the same way.
+        var repository = ARepositoryHolding(AManifest());
+        var convoys = Substitute.For<IConvoyRepository, IConvoyVehicleRepository>();
+        convoys.GetByIdAsync(ConvoyId, Arg.Any<CancellationToken>()).Returns((ConvoyReadModel?)null);
 
-        var outcome = await handler.HandleAsync(
-            new TransitionManifestCommand(Id, ManifestStatus.Proposed), CancellationToken.None);
+        var outcome = await AHandler(repository, convoys).HandleAsync(
+            new TransitionManifestCommand(Id, ManifestStatus.Proposed), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(TransitionManifestOutcome.TruckListNotPublished);
     }
@@ -115,7 +129,7 @@ public class ManifestTransitionHandlerTests
     public async Task Refuses_an_edge_the_diagram_does_not_draw()
     {
         var repository = ARepositoryHolding(AManifest(ManifestStatus.Confirmed));
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList());
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.InTransit), CancellationToken.None);
@@ -127,7 +141,7 @@ public class ManifestTransitionHandlerTests
     public async Task Reports_not_found_for_a_manifest_that_does_not_exist()
     {
         var repository = ARepositoryHolding(null);
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList());
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.Proposed), CancellationToken.None);
@@ -141,7 +155,7 @@ public class ManifestTransitionHandlerTests
         // The conditional UPDATE found nothing, so somebody else transitioned it first. Two
         // dispatchers pressing the same button must resolve to one transition.
         var repository = ARepositoryHolding(AManifest(ManifestStatus.Preparing), transitions: false);
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList());
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.Ready), CancellationToken.None);
@@ -158,7 +172,7 @@ public class ManifestTransitionHandlerTests
     {
         // These say what the world did to the vehicle. None of them contradicts the GMR.
         var repository = ARepositoryHolding(AManifest(from, frozen: true));
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList());
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var result = await handler.HandleAsync(new TransitionManifestCommand(Id, to), CancellationToken.None);
 
@@ -174,7 +188,7 @@ public class ManifestTransitionHandlerTests
         // §5.2 forbids edits, not progress. Blocking these would strand every approved manifest
         // in Confirmed for ever — it could never be prepared, loaded or delivered.
         var repository = ARepositoryHolding(AManifest(from, frozen: true));
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList());
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(new TransitionManifestCommand(Id, to), CancellationToken.None);
 
@@ -190,7 +204,7 @@ public class ManifestTransitionHandlerTests
         // The diagram makes this unreachable from Confirmed today; the guard is for the day
         // somebody adds an edge.
         var repository = ARepositoryHolding(AManifest(ManifestStatus.Rejected, frozen: true));
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList());
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, target), CancellationToken.None);
@@ -205,7 +219,7 @@ public class ManifestTransitionHandlerTests
     {
         // The one backward edge the diagram draws: rejection is recoverable.
         var repository = ARepositoryHolding(AManifest(ManifestStatus.Rejected));
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList());
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.Proposed), CancellationToken.None);
@@ -218,7 +232,7 @@ public class ManifestTransitionHandlerTests
     {
         // Only proposal is gated on the truck list. Rejection must always be available.
         var repository = ARepositoryHolding(AManifest(ManifestStatus.Proposed));
-        var handler = new TransitionManifestHandler(repository, AConvoyWithPublishedTruckList(published: false));
+        var handler = AHandler(repository, AConvoyWithPublishedTruckList(published: false));
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.Rejected), CancellationToken.None);
@@ -230,7 +244,7 @@ public class ManifestTransitionHandlerTests
     public async Task A_vehicle_departs_when_its_insurance_is_recorded_and_in_cover()
     {
         var repository = ARepositoryHolding(AManifest(ManifestStatus.Ready, frozen: true));
-        var handler = new TransitionManifestHandler(repository, AConvoyInsuredBy(APolicy()));
+        var handler = AHandler(repository, AConvoyInsuredBy(APolicy()));
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.InTransit), TestContext.Current.CancellationToken);
@@ -251,7 +265,7 @@ public class ManifestTransitionHandlerTests
     public async Task A_vehicle_does_not_depart_without_insurance_in_cover(string why, VehicleInsuranceReadModel? policy)
     {
         var repository = ARepositoryHolding(AManifest(ManifestStatus.Ready, frozen: true));
-        var handler = new TransitionManifestHandler(repository, AConvoyInsuredBy(policy));
+        var handler = AHandler(repository, AConvoyInsuredBy(policy));
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.InTransit), TestContext.Current.CancellationToken);
@@ -265,7 +279,7 @@ public class ManifestTransitionHandlerTests
     public async Task Insurance_is_only_checked_on_departure()
     {
         var repository = ARepositoryHolding(AManifest(ManifestStatus.Preparing, frozen: true));
-        var handler = new TransitionManifestHandler(repository, AConvoyInsuredBy(policy: null));
+        var handler = AHandler(repository, AConvoyInsuredBy(policy: null));
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.Ready), TestContext.Current.CancellationToken);

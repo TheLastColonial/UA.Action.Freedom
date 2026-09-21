@@ -10,55 +10,59 @@ namespace UA.Action.Freedom.Tests.Unit.Domain;
 /// The fixed 200 kg (two drivers and their bags) and 45 kg (fuel) are a deliberate border-check
 /// estimate, not a bug — docs/domain/key-concepts.md says so explicitly. These tests exist so that
 /// anyone who reads the padding as an error and "corrects" it has to argue with a test first.
+///
+/// They are written against <see cref="ManifestWeight"/> rather than any one caller because the
+/// allowances used to exist in three copies — the entity, the weight query and the approval
+/// hand-off — and three copies of a constant is three chances to change one of them.
 /// </remarks>
 public class ManifestWeightTests
 {
     private const int DriversAndBagsKg = 200;
     private const int FuelKg = 45;
 
-    private static Vehicle AVehicle(int weightKg) => new()
-    {
-        VIN = "WVWZZZ1JZXW000001",
-        Plate = "AB12CDE",
-        WeightKg = weightKg,
-    };
-
-    private static Box ABox(int weightKg, int id) => new()
-    {
-        Id = new BoxId(id),
-        WeightKg = weightKg,
-    };
-
-    private static Manifest AManifest(Vehicle? vehicle, params Box[] boxes) => new()
-    {
-        Id = new ManifestId("MAN-0001"),
-        Vehicle = vehicle,
-        Boxes = boxes,
-    };
-
     [Fact]
     public void Adds_the_kerb_weight_the_cargo_and_the_fixed_allowances()
     {
-        var manifest = AManifest(AVehicle(1_400), ABox(30, 1), ABox(12, 2));
-
-        manifest.TotalWeightKg().Should().Be(1_400 + 42 + DriversAndBagsKg + FuelKg);
+        ManifestWeight.Total(vehicleKg: 1_400, cargoKg: 42)
+            .Should().Be(1_400 + 42 + DriversAndBagsKg + FuelKg);
     }
 
     [Fact]
     public void Still_reports_the_crew_and_fuel_allowance_for_an_empty_vehicle()
     {
-        var manifest = AManifest(AVehicle(1_400));
-
-        manifest.TotalWeightKg().Should().Be(1_400 + DriversAndBagsKg + FuelKg);
+        ManifestWeight.Total(vehicleKg: 1_400, cargoKg: 0)
+            .Should().Be(1_400 + DriversAndBagsKg + FuelKg);
     }
 
     [Fact]
     public void Reports_only_the_cargo_and_allowances_before_a_vehicle_is_assigned()
     {
         // A manifest is Created before it is fully populated, so the weight has to be readable
-        // while the vehicle is still null rather than throwing at the point someone opens it.
-        var manifest = AManifest(vehicle: null, ABox(30, 1));
+        // while the vehicle is still unknown rather than throwing at the point someone opens it.
+        ManifestWeight.Total(vehicleKg: 0, cargoKg: 30)
+            .Should().Be(30 + DriversAndBagsKg + FuelKg);
+    }
 
-        manifest.TotalWeightKg().Should().Be(30 + DriversAndBagsKg + FuelKg);
+    [Fact]
+    public void Publishes_the_allowances_so_a_breakdown_can_show_them_separately()
+    {
+        // GET /manifests/{id}/weight returns the parts, not just a total, so that the estimate is
+        // visible rather than looking like an arithmetic error.
+        ManifestWeight.CrewAndBagsKg.Should().Be(DriversAndBagsKg);
+        ManifestWeight.FuelKg.Should().Be(FuelKg);
+    }
+
+    [Fact]
+    public void The_entity_reports_the_same_total_as_the_shared_function()
+    {
+        var manifest = new Manifest
+        {
+            Id = new ManifestId("MAN-0001"),
+            ConvoyVehicle = new ConvoyVehicle { ConvoyId = new ConvoyId(1), Vin = "WVWZZZ1JZXW000001" },
+            Vehicle = new Vehicle { VIN = "WVWZZZ1JZXW000001", Plate = "AB12CDE", WeightKg = 1_400 },
+            Boxes = [new Box { Id = new BoxId(1), WeightKg = 30 }, new Box { Id = new BoxId(2), WeightKg = 12 }],
+        };
+
+        manifest.TotalWeightKg().Should().Be(ManifestWeight.Total(1_400, 42));
     }
 }

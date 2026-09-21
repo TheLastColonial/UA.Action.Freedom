@@ -11,22 +11,36 @@ namespace UA.Action.Freedom.Data.Vehicles;
 /// parameterised; the write methods return the affected-row count as a bool so the handlers
 /// can tell "no such VIN" from "done".
 ///
-/// <c>ConvoyId</c> and the inspection pair are read here but never written by an add or an edit:
-/// convoy membership changes only through <c>ConvoyRepository</c>, where the truck-list freeze,
-/// the inspection gate and the crew clean-up are, and the inspection only through
-/// <see cref="RecordInspectionAsync"/>.
+/// The inspection pair is read here but never written by an add or an edit — only
+/// <see cref="RecordInspectionAsync"/> writes it — and <c>ConvoyId</c> is not a column at all any
+/// more. Which convoy a vehicle is travelling with is the truck list, <c>dbo.ConvoyVehicle</c>,
+/// and it is derived below rather than stored, so it cannot drift from the list.
 /// </summary>
 public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : IVehicleRepository
 {
-    private const string Columns =
-        "Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, ConvoyId, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm, InspectionStatus, InspectionNotes, HandedOverAt";
+    /// <summary>
+    /// The convoy this vehicle is currently travelling with, or NULL. Derived, not stored: a
+    /// stored pointer had to be cleared at arrival, which is how an arrived convoy came to lose
+    /// its own truck list.
+    /// </summary>
+    private const string CurrentConvoy =
+        """
+        (SELECT TOP 1 cv.ConvoyId
+         FROM dbo.ConvoyVehicle AS cv
+         INNER JOIN dbo.Convoy AS c ON c.Id = cv.ConvoyId
+         WHERE cv.Vin = v.Vin AND cv.WithdrawnAt IS NULL AND c.ArrivedAt IS NULL
+         ORDER BY cv.AddedAt DESC) AS ConvoyId
+        """;
+
+    private static readonly string Columns =
+        $"v.Vin, v.Plate, v.Brand, v.Model, v.Colour, v.Transmission, v.Notes, v.Mileage, v.Servicing, v.[Year], v.Fuel, {CurrentConvoy}, v.PurchaserName, v.PurchaseDate, v.WeightKg, v.MaxCargoWeightKg, v.CargoWidthCm, v.CargoDepthCm, v.CargoHeightCm, v.InspectionStatus, v.InspectionNotes, v.HandedOverAt";
 
     public async Task<VehicleReadModel?> GetByVinAsync(string vin, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
         return await connection.QuerySingleOrDefaultAsync<VehicleReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Vehicle WHERE Vin = @vin",
+            $"SELECT {Columns} FROM dbo.Vehicle AS v WHERE v.Vin = @vin",
             new { vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
     }
@@ -36,7 +50,7 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
         await using var connection = connectionFactory.Create();
 
         var rows = await connection.QueryAsync<VehicleReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Vehicle ORDER BY Vin OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY",
+            $"SELECT {Columns} FROM dbo.Vehicle AS v ORDER BY v.Vin OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY",
             new { skip = (page - 1) * pageSize, take = pageSize },
             cancellationToken: cancellationToken));
 

@@ -96,10 +96,32 @@ Scenario: A dispatcher builds a truck list, publishes it, and can no longer chan
     Then the response status is 204
     When I POST "/convoys/{id}/publish-truck-list" on the remembered convoy
     Then the response status is 409
-    When I DELETE "/convoys/{id}/vehicles/WDB9066331S0BDC77" on the remembered convoy
-    Then the response status is 409
     When I GET "/convoys/{id}" on the remembered convoy
     Then the response body field "truckListPublished" is "True"
+
+Scenario: A vehicle that breaks down after publication is withdrawn, not erased
+    Given I am authenticated as "operator"
+    When I POST "/convoys" with body:
+        """
+        { "start": "2026-09-01T06:00:00Z", "expectedEnd": "2026-09-05T18:00:00Z" }
+        """
+    Then the response status is 201
+    Given I remember the convoy
+    And no vehicle exists with VIN "WDB9066331S0BDC22"
+    And a vehicle exists with VIN "WDB9066331S0BDC22"
+    And the vehicle "WDB9066331S0BDC22" has passed its inspection
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC22" on the remembered convoy
+    Then the response status is 204
+    When I POST "/convoys/{id}/publish-truck-list" on the remembered convoy
+    Then the response status is 204
+    When I DELETE "/convoys/{id}/vehicles/WDB9066331S0BDC22?reason=Gearbox%20failure" on the remembered convoy
+    Then the response status is 204
+    When I GET "/convoys/{id}/vehicles" on the remembered convoy
+    Then the response status is 200
+    And the response body lists a vehicle with VIN "WDB9066331S0BDC22"
+    And the vehicle "WDB9066331S0BDC22" is withdrawn from the truck list
+    When I DELETE "/convoys/{id}/vehicles/WDB9066331S0BDC22" on the remembered convoy
+    Then the response status is 409
 
 Scenario: A vehicle cannot join a truck list that has already been published
     Given I am authenticated as "operator"
@@ -148,17 +170,17 @@ Scenario: A dispatcher crews a vehicle on the truck list and stands the driver d
     And a driver exists
     When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC66" on the remembered convoy
     Then the response status is 204
-    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC66/drivers/{driver}" on the remembered convoy for the driver
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC66/crew/{driver}" on the remembered convoy for the driver
     Then the response status is 204
-    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC66/drivers/{driver}" on the remembered convoy for the driver
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC66/crew/{driver}" on the remembered convoy for the driver
     Then the response status is 409
-    When I GET "/convoys/{id}/vehicles/WDB9066331S0BDC66/drivers" on the remembered convoy
+    When I GET "/convoys/{id}/vehicles/WDB9066331S0BDC66/crew" on the remembered convoy
     Then the response status is 200
     And the response body lists the driver
-    When I DELETE "/convoys/{id}/vehicles/WDB9066331S0BDC66/drivers/{driver}" on the remembered convoy for the driver
+    When I DELETE "/convoys/{id}/vehicles/WDB9066331S0BDC66/crew/{driver}?leg=Uk" on the remembered convoy for the driver
     Then the response status is 204
 
-Scenario: A volunteer who does not drive rides as a passenger, and takes only one seat per convoy
+Scenario: A volunteer who does not drive rides as a passenger, and takes only one seat per leg
     Given I am authenticated as "operator"
     When I POST "/convoys" with body:
         """
@@ -175,18 +197,25 @@ Scenario: A volunteer who does not drive rides as a passenger, and takes only on
     And a volunteer who does not drive exists
     When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC44" on the remembered convoy
     And I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC33" on the remembered convoy
-    And I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC44/drivers/{passenger}" on the remembered convoy for the passenger with body:
+    And I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC44/crew/{passenger}" on the remembered convoy for the passenger with body:
         """
-        { "role": "Passenger" }
+        { "leg": "Uk", "role": "Passenger" }
         """
     Then the response status is 204
-    When I GET "/convoys/{id}/vehicles/WDB9066331S0BDC44/drivers" on the remembered convoy
+    When I GET "/convoys/{id}/vehicles/WDB9066331S0BDC44/crew" on the remembered convoy
     Then the crew lists the passenger as a "Passenger"
-    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC33/drivers/{passenger}" on the remembered convoy for the passenger with body:
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC33/crew/{passenger}" on the remembered convoy for the passenger with body:
         """
-        { "role": "Passenger" }
+        { "leg": "Uk", "role": "Passenger" }
         """
     Then the response status is 409
+    # The other half of the journey is a different seat: a handover at the European border is
+    # exactly what the leg exists to record.
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC33/crew/{passenger}" on the remembered convoy for the passenger with body:
+        """
+        { "leg": "Border", "role": "Passenger" }
+        """
+    Then the response status is 204
 
 Scenario: An administrator may not crew a vehicle
     Given I am authenticated as "admin"
@@ -202,7 +231,7 @@ Scenario: An administrator may not crew a vehicle
     And a driver exists
     When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC55" on the remembered convoy
     Then the response status is 204
-    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC55/drivers/{driver}" on the remembered convoy for the driver
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC55/crew/{driver}" on the remembered convoy for the driver
     Then the response status is 403
 
 Scenario: Putting an unknown vehicle on a truck list is a 404

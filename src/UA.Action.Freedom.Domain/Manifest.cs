@@ -1,12 +1,24 @@
 namespace UA.Action.Freedom.Domain;
 
 /// <summary>
-/// List of Boxes allocated to a <see cref="Vehicle"/> in a <see cref="Convoy"/>
+/// The document pack for one <see cref="Vehicle"/> on one <see cref="Convoy"/>: its cargo, its
+/// border weight, its Goods Movement Reference and its ferry booking.
 /// </summary>
+/// <remarks>
+/// A manifest is a child of the truck list — it is opened against a <see cref="ConvoyVehicle"/>,
+/// never against a loose vehicle and convoy that might have nothing to do with each other. The
+/// convoy is the unit that is planned; the manifest is the unit that is executed per vehicle.
+///
+/// <para>
+/// It does <strong>not</strong> carry a crew. Who is driving is a fact about the vehicle on the
+/// convoy, recorded once on the crew row and read from there — a manifest that kept its own driver
+/// teams could, and did, disagree with the crew the insurance was bought for.
+/// </para>
+/// </remarks>
 public class Manifest
 {
     /// <summary>
-    /// Unique reference
+    /// Unique reference — a document number read out at a border, not a surrogate key.
     /// </summary>
     public required ManifestId Id { get; init; }
 
@@ -16,19 +28,15 @@ public class Manifest
     public ManifestStatus Status { get; init; } = ManifestStatus.Created;
 
     /// <summary>
-    /// Vehicle allocated to transport the <see cref="Boxes"/>. Null until one is assigned.
+    /// The truck-list entry this manifest is the paperwork for.
+    /// </summary>
+    public required ConvoyVehicle ConvoyVehicle { get; init; }
+
+    /// <summary>
+    /// The vehicle named by <see cref="ConvoyVehicle"/>, once it has been loaded. Null when only
+    /// the reference is to hand — the weight then reads as cargo plus allowances.
     /// </summary>
     public Vehicle? Vehicle { get; init; }
-
-    /// <summary>
-    /// <see cref="Driver"/> allocated for UK to Europe Route. Null until the team is assigned.
-    /// </summary>
-    public DriverTeam? DriverUK { get; init; }
-
-    /// <summary>
-    /// <see cref="Driver"/> allocated for Europe to Ukraine Route. Null until the team is assigned.
-    /// </summary>
-    public DriverTeam? DriverBorder { get; init; }
 
     /// <summary>
     /// Cargo to be transported
@@ -60,14 +68,41 @@ public class Manifest
     /// </summary>
     /// <returns>Total Kilograms</returns>
     public int TotalWeightKg() =>
-        (this.Vehicle?.WeightKg ?? 0)
-        + this.Boxes.Sum(box => box.WeightKg) // Cargo
-        + 100 * 2 // 2x Driver + Bags
-        + 45; // Fuel
+        ManifestWeight.Total(this.Vehicle?.WeightKg ?? 0, this.Boxes.Sum(box => box.WeightKg));
 }
 
 /// <summary>
-/// Unique reference to a combined cargo, convoy and drivers
+/// The weight a border check is given, and the fixed allowances that go into it.
+/// </summary>
+/// <remarks>
+/// <strong>The padding is deliberate.</strong> 200 kg for two drivers and their bags and 45 kg for
+/// fuel are the border-check estimate Ukrainian Action uses — docs/domain/key-concepts.md § Manifest
+/// says so explicitly. Do not "correct" them without asking.
+///
+/// <para>
+/// They live here, in one place, because they previously existed in three: the entity, the weight
+/// query and the approval hand-off that composes the printed document. Three copies of an estimate
+/// is three chances for the printed manifest, the API and the border document to disagree about
+/// what the vehicle weighs.
+/// </para>
+/// </remarks>
+public static class ManifestWeight
+{
+    /// <summary>Two drivers and their bags.</summary>
+    public const int CrewAndBagsKg = 100 * 2;
+
+    /// <summary>Fuel allowance.</summary>
+    public const int FuelKg = 45;
+
+    /// <summary>
+    /// The vehicle's kerb weight plus its cargo plus the fixed allowances. A vehicle that is not
+    /// yet known weighs zero, so a part-built manifest still reports a readable total.
+    /// </summary>
+    public static int Total(int vehicleKg, int cargoKg) => vehicleKg + cargoKg + CrewAndBagsKg + FuelKg;
+}
+
+/// <summary>
+/// Unique reference to a manifest — the document number a border officer reads out.
 /// </summary>
 /// <param name="Value"></param>
 public record ManifestId(string Value);

@@ -83,6 +83,16 @@ public sealed class ConvoysSteps(FreedomApiClient api, ScenarioState state)
             state.CurrentToken,
             body);
 
+    /// <summary>
+    /// A withdrawn vehicle stays on the truck list — the list is the record of what set off, and
+    /// the manifest describing what it was carrying still has an entry to belong to.
+    /// </summary>
+    [Then("the vehicle \"(.*)\" is withdrawn from the truck list")]
+    public void ThenTheVehicleIsWithdrawnFromTheTruckList(string vin) =>
+        JsonDocument.Parse(api.LastBody).RootElement.EnumerateArray()
+            .Single(vehicle => vehicle.GetProperty("vin").GetString() == vin)
+            .GetProperty("withdrawn").GetBoolean().Should().BeTrue("the body was: {0}", api.LastBody);
+
     [Then("the crew lists the passenger as a {string}")]
     public void ThenTheCrewListsThePassengerAs(string role) =>
         JsonDocument.Parse(api.LastBody).RootElement.EnumerateArray()
@@ -107,13 +117,25 @@ public sealed class ConvoysSteps(FreedomApiClient api, ScenarioState state)
         state.Pin(key, personId);
     }
 
+    /// <summary>
+    /// Crews the driver on the UK leg. A leg is required by the endpoint — a vehicle is crewed
+    /// twice, with a handover at the European border — and every scenario that does not say which
+    /// half it means is about the first one.
+    /// </summary>
     [When("I PUT \"(.*)\" on the remembered convoy for the driver")]
     public Task WhenIPutOnTheRememberedConvoyForTheDriver(string template) =>
-        api.SendAsync(HttpMethod.Put, ForTheDriver(template), state.CurrentToken, null);
+        api.SendAsync(HttpMethod.Put, ForTheDriver(template), state.CurrentToken, UkLeg);
+
+    [When("I PUT \"(.*)\" on the remembered convoy for the driver with body:")]
+    public Task WhenIPutOnTheRememberedConvoyForTheDriverWithBody(string template, string body) =>
+        api.SendAsync(HttpMethod.Put, ForTheDriver(template), state.CurrentToken, body);
 
     [When("I DELETE \"(.*)\" on the remembered convoy for the driver")]
     public Task WhenIDeleteOnTheRememberedConvoyForTheDriver(string template) =>
         api.SendAsync(HttpMethod.Delete, ForTheDriver(template), state.CurrentToken, null);
+
+    /// <summary>The body every crewing step sends unless a scenario names a different leg.</summary>
+    private const string UkLeg = """{ "leg": "Uk" }""";
 
     [Then("the response body lists the driver")]
     public void ThenTheResponseBodyListsTheDriver() =>

@@ -67,14 +67,22 @@ internal static class FreedomApi
     /// named is a driver, so without it those routes would reach for a real database.
     /// </summary>
     internal static WebApplicationFactory<Program> WithConvoys(
-        IConvoyRepository repository,
+        InMemoryConvoyRepository repository,
         IPersonRepository? people = null,
+        IManifestRepository? manifests = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
         {
-            services.Replace(repository);
+            // One fake backs both ports: they share the truck list, and the split in production is
+            // two tables rather than two stores.
+            services.Replace<IConvoyRepository>(repository);
+            services.Replace<IConvoyVehicleRepository>(repository);
             services.Replace(people ?? new InMemoryPersonRepository());
+
+            // Opening a manifest is a convoy route now — POST /convoys/{id}/vehicles/{vin}/manifest
+            // — so the convoy tests need somewhere for it to land.
+            services.Replace(manifests ?? new InMemoryManifestRepository());
         });
 
     /// <summary>
@@ -130,7 +138,7 @@ internal static class FreedomApi
     /// </summary>
     internal static WebApplicationFactory<Program> WithManifests(
         IManifestRepository manifests,
-        IConvoyRepository convoys,
+        InMemoryConvoyRepository convoys,
         IPersonRepository people,
         IManifestWorkQueue queue,
         bool authenticated = true,
@@ -138,7 +146,8 @@ internal static class FreedomApi
         WithFakes(authenticated, roles, services =>
         {
             services.Replace(manifests);
-            services.Replace(convoys);
+            services.Replace<IConvoyRepository>(convoys);
+            services.Replace<IConvoyVehicleRepository>(convoys);
             services.Replace(people);
             services.Replace(queue);
         });

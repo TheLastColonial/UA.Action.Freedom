@@ -8,13 +8,14 @@ import type {
   CreateConvoyRequest,
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
-  VehicleDriverReadModel,
+  VehicleCrewReadModel,
   VehicleInsuranceReadModel,
 } from '../../api/schemas/convoys';
 import type { ManifestStatus } from '../../api/schemas/common';
 import type { PersonReadModel } from '../../api/schemas/people';
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
 import { crewRoleSchema } from '../../api/schemas/convoys';
+import { journeyLegSchema } from '../../api/schemas/common';
 import { problem, validationProblem } from './problem';
 
 const FINISHED: readonly ManifestStatus[] = ['Delivered', 'Lost', 'Returned'];
@@ -28,8 +29,9 @@ const insuranceBodySchema = z.object({
   costGbp: z.number().min(0).optional(),
 });
 
-// Mirrors AssignCrewRequest: an optional body, and no body means a driver.
-const crewBodySchema = z.object({ role: crewRoleSchema.optional() });
+// Mirrors AssignCrewRequest: the leg is required — a vehicle is crewed twice, with a handover at
+// the European border — and the role defaults to Driver.
+const crewBodySchema = z.object({ leg: journeyLegSchema, role: crewRoleSchema.optional() });
 
 /**
  * What the truck-list and crew routes look up, as the real API does. Pass the `db` of a
@@ -49,8 +51,8 @@ export interface ConvoyApi {
   db: Map<number, ConvoyReadModel>;
   routes: Map<number, RouteStopReadModel[]>;
   vehicles: Map<number, ConvoyVehicleReadModel[]>;
-  drivers: Map<string, VehicleDriverReadModel[]>;
-  /** Keyed `${convoyId}:${vin}`, like `drivers`. */
+  crew: Map<string, VehicleCrewReadModel[]>;
+  /** Keyed `${convoyId}:${vin}`, like `crew`. */
   insurance: Map<string, VehicleInsuranceReadModel>;
   handlers: RequestHandler[];
 }
@@ -64,32 +66,48 @@ export function convoyApi(
   const db = new Map<number, ConvoyReadModel>(seed.map((c) => [c.id, c]));
   const routes = new Map<number, RouteStopReadModel[]>();
   const vehicles = new Map<number, ConvoyVehicleReadModel[]>();
-  const drivers = new Map<string, VehicleDriverReadModel[]>();
+  const crew = new Map<string, VehicleCrewReadModel[]>();
   const insurance = new Map<string, VehicleInsuranceReadModel>();
 
   const idFrom = (raw: string | readonly string[] | undefined) => Number(String(raw));
-  const driverKey = (convoyId: number, vin: string) => `${String(convoyId)}:${vin}`;
-  const onConvoy = (convoyId: number, vin: string) =>
-    (vehicles.get(convoyId) ?? []).some((v) => v.vin === vin);
+  const crewKey = (convoyId: number, vin: string) => `${String(convoyId)}:${vin}`;
+  const entryFor = (convoyId: number, vin: string) =>
+    (vehicles.get(convoyId) ?? []).find((v) => v.vin === vin);
+  const onConvoy = (convoyId: number, vin: string) => entryFor(convoyId, vin) !== undefined;
+  // "On another convoy" means travelling with one that has not arrived: a withdrawn vehicle, or
+  // one whose convoy has arrived, is free for the next.
   const convoyOf = (vin: string) =>
-    [...vehicles.entries()].find(([, list]) => list.some((v) => v.vin === vin))?.[0];
+    [...vehicles.entries()].find(
+      ([convoyId, list]) =>
+        list.some((v) => v.vin === vin && !v.withdrawn) && db.get(convoyId)?.arrived !== true,
+    )?.[0];
   // The policy names the crew, so any crew change voids it — as ConvoyRepository does.
   const voidInsurance = (convoyId: number, vin: string) => {
-    const key = driverKey(convoyId, vin);
+    const key = crewKey(convoyId, vin);
     const policy = insurance.get(key);
     if (policy && !policy.voided) {
       insurance.set(key, { ...policy, voided: true, voidedAt: '2026-09-01T10:00:00' });
     }
   };
 
-  const setDriverCount = (convoyId: number, vin: string) => {
-    const crew = drivers.get(driverKey(convoyId, vin)) ?? [];
-    const driverCount = crew.filter((member) => member.role === 'Driver').length;
-    const passengerCount = crew.length - driverCount;
+  // Crew counts are per leg, as the SQL's conditional aggregates compute them.
+  const setCrewCounts = (convoyId: number, vin: string) => {
+    const members = crew.get(crewKey(convoyId, vin)) ?? [];
+    const count = (leg: string, role: string) =>
+      members.filter((member) => member.leg === leg && member.role === role).length;
+
     vehicles.set(
       convoyId,
       (vehicles.get(convoyId) ?? []).map((v) =>
-        v.vin === vin ? { ...v, driverCount, passengerCount } : v,
+        v.vin === vin
+          ? {
+              ...v,
+              ukDriverCount: count('Uk', 'Driver'),
+              ukPassengerCount: count('Uk', 'Passenger'),
+              borderDriverCount: count('Border', 'Driver'),
+              borderPassengerCount: count('Border', 'Passenger'),
+            }
+          : v,
       ),
     );
   };
@@ -213,37 +231,71 @@ export function convoyApi(
             vin,
             plate: vehicle.plate,
             weightKg: vehicle.weightKg,
-            driverCount: 0,
-            passengerCount: 0,
+            ukDriverCount: 0,
+            ukPassengerCount: 0,
+            borderDriverCount: 0,
+            borderPassengerCount: 0,
+            withdrawnAt: null,
+            withdrawnReason: null,
+            travelling: true,
+            withdrawn: false,
           },
         ]);
       }
       return new HttpResponse(null, { status: 204 });
     }),
 
-    http.delete('/convoys/:id/vehicles/:vin', ({ params }) => {
+    // Before publication the entry goes, with its crew and insurance. Afterwards the vehicle is
+    // withdrawn: the entry stays, because its manifest still describes a real load.
+    http.delete('/convoys/:id/vehicles/:vin', ({ params, request }) => {
       const id = idFrom(params['id']);
       const convoy = db.get(id);
       if (!convoy) {
         return new HttpResponse(null, { status: 404 });
       }
-      if (convoy.truckListPublished) {
-        return problem(409, 'The truck list for this convoy has been published.');
+      if (convoy.arrived) {
+        return problem(409, 'This convoy has already arrived.');
       }
       const vin = decodeURIComponent(String(params['vin']));
-      const list = vehicles.get(id) ?? [];
-      const next = list.filter((v) => v.vin !== vin);
-      if (next.length === list.length) {
-        return new HttpResponse(null, { status: 404 });
+      const entry = entryFor(id, vin);
+      if (!entry) {
+        return problem(404, `There is no vehicle with VIN '${vin}' on this convoy.`);
       }
-      vehicles.set(id, next);
-      drivers.delete(driverKey(id, vin));
-      insurance.delete(driverKey(id, vin));
+
+      if (!convoy.truckListPublished) {
+        vehicles.set(
+          id,
+          (vehicles.get(id) ?? []).filter((v) => v.vin !== vin),
+        );
+        crew.delete(crewKey(id, vin));
+        insurance.delete(crewKey(id, vin));
+        return new HttpResponse(null, { status: 204 });
+      }
+
+      if (entry.withdrawn) {
+        return problem(409, `Vehicle '${vin}' has already been withdrawn from this convoy.`);
+      }
+      const reason = new URL(request.url).searchParams.get('reason');
+      vehicles.set(
+        id,
+        (vehicles.get(id) ?? []).map((v) =>
+          v.vin === vin
+            ? {
+                ...v,
+                withdrawnAt: '2026-09-03T14:30:00',
+                withdrawnReason: reason,
+                travelling: false,
+                withdrawn: true,
+              }
+            : v,
+        ),
+      );
       return new HttpResponse(null, { status: 204 });
     }),
 
-    // The same rules as ConvoyReadiness.Assess: two drivers and insurance covering the departure
-    // date per vehicle; a route and at least one vehicle for the convoy.
+    // The same rules as ConvoyReadiness.Assess: two drivers *per leg* and insurance covering the
+    // departure date per vehicle; a route and at least one vehicle still travelling for the
+    // convoy. A withdrawn vehicle is skipped — it has no crew to find and no insurance to renew.
     http.get('/convoys/:id/readiness', ({ params }) => {
       const id = idFrom(params['id']);
       const convoy = db.get(id);
@@ -251,28 +303,37 @@ export function convoyApi(
         return new HttpResponse(null, { status: 404 });
       }
       const departs = convoy.start.slice(0, 10);
-      const assessed = (vehicles.get(id) ?? []).map((vehicle) => {
-        const policy = insurance.get(driverKey(id, vehicle.vin));
-        const insuranceProblem = !policy
-          ? 'Insurance not recorded'
-          : policy.voided
-            ? 'Insurance voided by a crew change'
-            : policy.coverStart.slice(0, 10) > departs || policy.coverEnd.slice(0, 10) < departs
-              ? 'Insurance does not cover the departure date'
-              : null;
-        const reasons = [
-          ...(vehicle.driverCount >= 2 ? [] : ['Fewer than two drivers']),
-          ...(insuranceProblem ? [insuranceProblem] : []),
-        ];
-        return {
-          vin: vehicle.vin,
-          plate: vehicle.plate,
-          drivers: vehicle.driverCount,
-          insured: insuranceProblem === null,
-          ready: reasons.length === 0,
-          reasons,
-        };
-      });
+      const legLabels = { Uk: 'UK to Europe', Border: 'Europe to Ukraine' } as const;
+      const assessed = (vehicles.get(id) ?? [])
+        .filter((vehicle) => !vehicle.withdrawn)
+        .map((vehicle) => {
+          const policy = insurance.get(crewKey(id, vehicle.vin));
+          const insuranceProblem = !policy
+            ? 'Insurance not recorded'
+            : policy.voided
+              ? 'Insurance voided by a crew change'
+              : policy.coverStart.slice(0, 10) > departs || policy.coverEnd.slice(0, 10) < departs
+                ? 'Insurance does not cover the departure date'
+                : null;
+          const legs = (['Uk', 'Border'] as const).map((leg) => {
+            const drivers = leg === 'Uk' ? vehicle.ukDriverCount : vehicle.borderDriverCount;
+            const legReasons =
+              drivers >= 2 ? [] : [`Fewer than two drivers on the ${legLabels[leg]} leg`];
+            return { leg, drivers, ready: legReasons.length === 0, reasons: legReasons };
+          });
+          const reasons = [
+            ...legs.flatMap((leg) => leg.reasons),
+            ...(insuranceProblem ? [insuranceProblem] : []),
+          ];
+          return {
+            vin: vehicle.vin,
+            plate: vehicle.plate,
+            insured: insuranceProblem === null,
+            ready: reasons.length === 0,
+            legs,
+            reasons,
+          };
+        });
       const routePlanned = (routes.get(id) ?? []).length > 0;
       const notReady = assessed.filter((vehicle) => !vehicle.ready).length;
       const reasons = [
@@ -349,16 +410,18 @@ export function convoyApi(
       return new HttpResponse(null, { status: 204 });
     }),
 
-    http.get('/convoys/:id/vehicles/:vin/drivers', ({ params }) => {
+    http.get('/convoys/:id/vehicles/:vin/crew', ({ params, request }) => {
       const convoyId = idFrom(params['id']);
       const vin = decodeURIComponent(String(params['vin']));
       if (!db.has(convoyId) || !onConvoy(convoyId, vin)) {
         return new HttpResponse(null, { status: 404 });
       }
-      return HttpResponse.json(drivers.get(driverKey(convoyId, vin)) ?? []);
+      const leg = new URL(request.url).searchParams.get('leg');
+      const members = crew.get(crewKey(convoyId, vin)) ?? [];
+      return HttpResponse.json(leg === null ? members : members.filter((m) => m.leg === leg));
     }),
 
-    http.put('/convoys/:id/vehicles/:vin/drivers/:personId', async ({ params, request }) => {
+    http.put('/convoys/:id/vehicles/:vin/crew/:personId', async ({ params, request }) => {
       const convoyId = idFrom(params['id']);
       if (!db.has(convoyId)) {
         return new HttpResponse(null, { status: 404 });
@@ -368,64 +431,81 @@ export function convoyApi(
       if (!person) {
         return problem(404, 'There is no volunteer with that ID.');
       }
-      const body = crewBodySchema.safeParse(await request.json().catch(() => ({})));
-      const role = body.success ? (body.data.role ?? 'Driver') : 'Driver';
+      const body = crewBodySchema.safeParse(await request.json().catch(() => null));
+      if (!body.success) {
+        return validationProblem({
+          Leg: ["'Leg' must be 'Uk' (UK to Europe) or 'Border' (Europe to Ukraine)."],
+        });
+      }
+      const { leg } = body.data;
+      const role = body.data.role ?? 'Driver';
       if (role === 'Driver' && !person.isDriver) {
         return problem(
           422,
           'That volunteer is not registered as a driver. They can ride as a passenger instead.',
         );
       }
-      if (!onConvoy(convoyId, vin)) {
+      const entry = entryFor(convoyId, vin);
+      if (!entry) {
         return problem(404, `There is no vehicle with VIN '${vin}' on this convoy.`);
       }
-      const key = driverKey(convoyId, vin);
-      const crew = drivers.get(key) ?? [];
-      if (crew.some((d) => d.personId === person.id)) {
-        return problem(409, 'That driver is already assigned to this vehicle.');
+      if (entry.withdrawn) {
+        return problem(
+          409,
+          `Vehicle '${vin}' has been withdrawn from this convoy, so its crew can no longer change.`,
+        );
       }
-      const seatedElsewhere = [...drivers.entries()].some(
-        ([otherKey, members]) =>
+      const key = crewKey(convoyId, vin);
+      const members = crew.get(key) ?? [];
+      if (members.some((m) => m.personId === person.id && m.leg === leg)) {
+        return problem(409, 'That volunteer is already crewing this vehicle on this leg.');
+      }
+      // One seat per person per leg: they may change vehicle at the border, not mid-leg.
+      const seatedElsewhere = [...crew.entries()].some(
+        ([otherKey, others]) =>
           otherKey.startsWith(`${String(convoyId)}:`) &&
           otherKey !== key &&
-          members.some((d) => d.personId === person.id),
+          others.some((m) => m.personId === person.id && m.leg === leg),
       );
       if (seatedElsewhere) {
         return problem(
           409,
-          'That volunteer is already crewing another vehicle on this convoy. A person takes one seat per convoy.',
+          'That volunteer is already crewing another vehicle on this leg. A person takes one seat per leg.',
         );
       }
-      drivers.set(key, [
-        ...crew,
-        { personId: person.id, firstName: person.firstName, lastName: person.lastName, role },
+      crew.set(key, [
+        ...members,
+        { personId: person.id, firstName: person.firstName, lastName: person.lastName, leg, role },
       ]);
-      setDriverCount(convoyId, vin);
+      setCrewCounts(convoyId, vin);
       voidInsurance(convoyId, vin);
       return new HttpResponse(null, { status: 204 });
     }),
 
-    http.delete('/convoys/:id/vehicles/:vin/drivers/:personId', ({ params }) => {
+    http.delete('/convoys/:id/vehicles/:vin/crew/:personId', ({ params, request }) => {
       const convoyId = idFrom(params['id']);
       const vin = decodeURIComponent(String(params['vin']));
       if (!db.has(convoyId) || !onConvoy(convoyId, vin)) {
         return new HttpResponse(null, { status: 404 });
       }
-      const key = driverKey(convoyId, vin);
-      const crew = drivers.get(key) ?? [];
-      const next = crew.filter((d) => d.personId !== String(params['personId']));
-      if (next.length === crew.length) {
+      const leg = new URL(request.url).searchParams.get('leg');
+      const key = crewKey(convoyId, vin);
+      const members = crew.get(key) ?? [];
+      const next = members.filter(
+        (m) => !(m.personId === String(params['personId']) && m.leg === leg),
+      );
+      if (next.length === members.length) {
         return new HttpResponse(null, { status: 404 });
       }
-      drivers.set(key, next);
-      setDriverCount(convoyId, vin);
+      crew.set(key, next);
+      setCrewCounts(convoyId, vin);
       voidInsurance(convoyId, vin);
       return new HttpResponse(null, { status: 204 });
     }),
 
     http.get('/convoys/:id/vehicles/:vin/insurance', ({ params }) => {
       const policy = insurance.get(
-        driverKey(idFrom(params['id']), decodeURIComponent(String(params['vin']))),
+        crewKey(idFrom(params['id']), decodeURIComponent(String(params['vin']))),
       );
       return policy ? HttpResponse.json(policy) : new HttpResponse(null, { status: 404 });
     }),
@@ -446,7 +526,7 @@ export function convoyApi(
       if (parsed.data.coverEnd < parsed.data.coverStart) {
         return validationProblem({ CoverEnd: ['Cover cannot end before it starts.'] });
       }
-      insurance.set(driverKey(convoyId, vin), {
+      insurance.set(crewKey(convoyId, vin), {
         convoyId,
         vin,
         insurer: parsed.data.insurer,
@@ -463,11 +543,11 @@ export function convoyApi(
     }),
 
     http.delete('/convoys/:id/vehicles/:vin/insurance', ({ params }) =>
-      insurance.delete(driverKey(idFrom(params['id']), decodeURIComponent(String(params['vin']))))
+      insurance.delete(crewKey(idFrom(params['id']), decodeURIComponent(String(params['vin']))))
         ? new HttpResponse(null, { status: 204 })
         : new HttpResponse(null, { status: 404 }),
     ),
   ];
 
-  return { db, routes, vehicles, drivers, insurance, handlers };
+  return { db, routes, vehicles, crew, insurance, handlers };
 }

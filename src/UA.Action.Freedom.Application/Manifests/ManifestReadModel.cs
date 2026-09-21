@@ -3,20 +3,33 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Application.Manifests;
 
 /// <summary>
-/// A manifest as this slice persists and returns it — the central document of the system, tying
-/// one vehicle on one convoy to its driver teams and its cargo.
+/// A manifest as this slice persists and returns it — the document pack for one vehicle on one
+/// convoy: its cargo, its border weight, its Goods Movement Reference and its ferry booking.
 /// </summary>
 /// <remarks>
+/// <see cref="ConvoyId"/> and <see cref="Vin"/> are not optional and are not independently
+/// editable: together they are the truck-list entry this manifest is the paperwork for, and the
+/// database holds them as a composite foreign key to it. They used to be two loose nullable
+/// columns, so nothing checked the vehicle was on that convoy and nothing stopped one vehicle
+/// carrying two manifests.
+///
+/// <para>
+/// There is no crew here. Who is driving is a fact about the vehicle on the convoy, read from the
+/// one crew record rather than kept a second time — see <c>VehicleCrewReadModel</c>.
+/// </para>
+///
+/// <para>
 /// <see cref="GmrSubmittedAt"/> is stamped at the moment the Goods Movement Reference is handed
 /// to the customs worker, which is the point of no return: <c>docs/recommendations.md</c> §5.2
 /// records the ruling that <em>once a GMR is created, no edits can be made to the manifest</em>.
 /// From then on the only things that may still happen to it are the ones that describe what the
 /// world did to the vehicle — delivered, lost, returned.
+/// </para>
 /// </remarks>
 public sealed record ManifestReadModel(
     string Id,
-    string? Vin,
-    int? ConvoyId,
+    int ConvoyId,
+    string Vin,
     ManifestStatus Status,
     string? DeliveryNotes,
     bool FerryBookingComplete,
@@ -25,25 +38,6 @@ public sealed record ManifestReadModel(
     /// <summary>Whether the manifest can still be edited at all.</summary>
     public bool Frozen => this.GmrSubmittedAt is not null;
 }
-
-/// <summary>Which leg of the journey a driver team is crewing.</summary>
-public enum ManifestLeg
-{
-    /// <summary>UK to Europe.</summary>
-    Uk = 0,
-
-    /// <summary>Europe to Ukraine.</summary>
-    Border = 1,
-}
-
-/// <summary>
-/// A driver team on one leg. A team may be half-crewed while it is being planned, so the
-/// secondary driver is optional.
-/// </summary>
-public sealed record ManifestDriverTeamReadModel(
-    ManifestLeg Leg,
-    Guid PrimaryPersonId,
-    Guid? SecondaryPersonId);
 
 /// <summary>A box on the manifest, with enough of its state to add up a border weight.</summary>
 /// <remarks>

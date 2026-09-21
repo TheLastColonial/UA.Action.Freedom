@@ -14,6 +14,12 @@
     HandedOverAt is stamped by POST /convoys/{id}/arrive for Delivered and Lost vehicles — they
     are part of the aid and stay in Ukraine — and such a vehicle is never offered for a convoy
     again. Write-once, absent from every UPDATE an ordinary edit issues.
+
+    There is no ConvoyId column. Which convoy a vehicle is travelling with is dbo.ConvoyVehicle —
+    the truck list — because a single mutable pointer could hold only the current convoy and was
+    nulled at arrival, losing the list of an arrived convoy while its crew and insurance rows went
+    on naming it. "Is this vehicle free?" is now: not handed over, and no ConvoyVehicle row that is
+    un-withdrawn on a convoy that has not arrived.
 */
 CREATE TABLE [dbo].[Vehicle] (
     [Vin]              varchar(32)    NOT NULL CONSTRAINT [PK_Vehicle] PRIMARY KEY,
@@ -27,7 +33,6 @@ CREATE TABLE [dbo].[Vehicle] (
     [Servicing]        bit            NOT NULL CONSTRAINT [DF_Vehicle_Servicing] DEFAULT 0,
     [Year]             int            NOT NULL,
     [Fuel]             int            NOT NULL CONSTRAINT [DF_Vehicle_Fuel] DEFAULT 0,
-    [ConvoyId]         int            NULL,
     [PurchaserName]    nvarchar(200)  NULL,
     [PurchaseDate]     datetime2(0)   NULL,
     [WeightKg]         int            NOT NULL CONSTRAINT [DF_Vehicle_WeightKg] DEFAULT 0,
@@ -46,13 +51,6 @@ CREATE TABLE [dbo].[Vehicle] (
     [CreatedAt]        datetime2(0)   NOT NULL CONSTRAINT [DF_Vehicle_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]        datetime2(0)   NOT NULL CONSTRAINT [DF_Vehicle_UpdatedAt] DEFAULT SYSUTCDATETIME(),
 
-    -- ON DELETE SET NULL: cancelling a convoy releases its vehicles rather than deleting
-    -- donated vehicles.
-    CONSTRAINT [FK_Vehicle_Convoy] FOREIGN KEY ([ConvoyId]) REFERENCES [dbo].[Convoy] ([Id]) ON DELETE SET NULL,
     CONSTRAINT [CK_Vehicle_InspectionStatus] CHECK ([InspectionStatus] >= 0 AND [InspectionStatus] <= 3)
 );
-GO
-
--- The truck list is read by convoy: "which vehicles are travelling together".
-CREATE INDEX [IX_Vehicle_ConvoyId] ON [dbo].[Vehicle] ([ConvoyId]);
 GO

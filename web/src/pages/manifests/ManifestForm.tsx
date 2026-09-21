@@ -54,14 +54,6 @@ export function ManifestForm({
           <TextField label="Reference" value={initialValues.id} readOnly disabled />
         )}
 
-        <TextField label="Vehicle VIN" error={errors.vin?.message} {...register('vin')} />
-        <TextField
-          label="Convoy id"
-          type="number"
-          inputMode="numeric"
-          error={errors.convoyId?.message}
-          {...register('convoyId')}
-        />
         <TextField
           label="Delivery notes"
           error={errors.deliveryNotes?.message}

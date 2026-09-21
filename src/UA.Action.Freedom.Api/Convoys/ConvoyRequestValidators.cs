@@ -61,6 +61,27 @@ internal static class ConvoyDates
     internal static readonly DateTime Earliest = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 }
 
+public sealed class AssignCrewRequestValidator : AbstractValidator<AssignCrewRequest>
+{
+    public AssignCrewRequestValidator()
+    {
+        RuleFor(r => r.Leg).IsInEnum()
+            .WithMessage("'Leg' must be 'Uk' (UK to Europe) or 'Border' (Europe to Ukraine).");
+        RuleFor(r => r.Role).IsInEnum().When(r => r.Role is not null);
+    }
+}
+
+/// <summary>Mirrors <c>dbo.Manifest</c>; the reference is a document number, so it is required.</summary>
+public sealed class CreateConvoyVehicleManifestRequestValidator
+    : AbstractValidator<CreateConvoyVehicleManifestRequest>
+{
+    public CreateConvoyVehicleManifestRequestValidator()
+    {
+        RuleFor(r => r.Id).NotEmpty().MaximumLength(32);
+        RuleFor(r => r.DeliveryNotes).MaximumLength(2000);
+    }
+}
+
 public sealed class RecordInsuranceRequestValidator : AbstractValidator<RecordInsuranceRequest>
 {
     public RecordInsuranceRequestValidator()

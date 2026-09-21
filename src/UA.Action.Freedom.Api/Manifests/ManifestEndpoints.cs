@@ -1,5 +1,6 @@
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
 
@@ -45,21 +46,9 @@ public static class ManifestEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
 
-        manifests.MapPost("/", async (
-            CreateManifestRequest request,
-            ICommandHandler<CreateManifestCommand, CreateManifestOutcome> handler,
-            CancellationToken cancellationToken) =>
-        {
-            var outcome = await handler.HandleAsync(request.ToCommand(), cancellationToken);
-
-            return outcome == CreateManifestOutcome.Conflict
-                ? Results.Problem(
-                    detail: $"A manifest with reference '{request.Id}' already exists.",
-                    statusCode: StatusCodes.Status409Conflict)
-                : Results.Created($"/manifests/{request.Id}", null);
-        })
-        .AddEndpointFilter<ValidationFilter<CreateManifestRequest>>()
-        .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
+        // There is no POST /manifests. A manifest is the paperwork for one vehicle on one convoy,
+        // so it is opened against that truck-list entry:
+        // POST /convoys/{id}/vehicles/{vin}/manifest.
 
         manifests.MapPut("/{id}", async (
             string id,
@@ -95,43 +84,20 @@ public static class ManifestEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
 
-        manifests.MapGet("/{id}/teams", async (
+        // A read. Crewing happens once, on the truck-list entry
+        // (PUT /convoys/{id}/vehicles/{vin}/crew/{personId}); this reports who is travelling with
+        // this manifest's vehicle. There used to be a PUT here writing a second, unconnected crew
+        // record, which is how a printed manifest could name people the insurance had never heard
+        // of.
+        manifests.MapGet("/{id}/crew", async (
             string id,
-            IQueryHandler<ListManifestTeamsQuery, IReadOnlyList<ManifestDriverTeamReadModel>?> handler,
+            IQueryHandler<ListManifestCrewQuery, IReadOnlyList<VehicleCrewReadModel>?> handler,
             CancellationToken cancellationToken) =>
         {
-            var teams = await handler.HandleAsync(new ListManifestTeamsQuery(id), cancellationToken);
-            return teams is null ? Results.NotFound() : Results.Ok(teams);
+            var crew = await handler.HandleAsync(new ListManifestCrewQuery(id), cancellationToken);
+            return crew is null ? Results.NotFound() : Results.Ok(crew);
         })
         .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
-
-        manifests.MapPut("/{id}/teams/{leg}", async (
-            string id,
-            ManifestLeg leg,
-            SetManifestTeamRequest request,
-            ICommandHandler<SetManifestTeamCommand, SetManifestTeamOutcome> handler,
-            CancellationToken cancellationToken) =>
-        {
-            var outcome = await handler.HandleAsync(request.ToCommand(id, leg), cancellationToken);
-
-            return outcome switch
-            {
-                SetManifestTeamOutcome.Set => Results.NoContent(),
-                SetManifestTeamOutcome.NotFound => Results.NotFound(),
-                SetManifestTeamOutcome.Frozen => Frozen(),
-                SetManifestTeamOutcome.NoSuchDriver => Results.Problem(
-                    detail: "One of the volunteers named for this leg is not on file.",
-                    statusCode: StatusCodes.Status404NotFound),
-                SetManifestTeamOutcome.DriverIsNotADriver => Results.Problem(
-                    detail: "One of the volunteers named for this leg has not volunteered to drive.",
-                    statusCode: StatusCodes.Status409Conflict),
-                _ => Results.Problem(
-                    detail: "A driver team is two people; the same volunteer cannot crew both halves of it.",
-                    statusCode: StatusCodes.Status409Conflict),
-            };
-        })
-        .AddEndpointFilter<ValidationFilter<SetManifestTeamRequest>>()
-        .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
 
         manifests.MapGet("/{id}/boxes", async (
             string id,

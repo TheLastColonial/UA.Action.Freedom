@@ -18,8 +18,8 @@ const columns: readonly Column<ManifestReadModel>[] = [
     cell: (m) => <Link to={`/manifests/${encodeURIComponent(m.id)}`}>{m.id}</Link>,
   },
   { header: 'Status', cell: (m) => m.status },
-  { header: 'Vehicle', cell: (m) => m.vin ?? '—' },
-  { header: 'Convoy', cell: (m) => m.convoyId ?? '—' },
+  { header: 'Vehicle', cell: (m) => m.vin },
+  { header: 'Convoy', cell: (m) => m.convoyId },
   { header: 'Frozen', cell: (m) => (m.frozen ? 'Yes' : 'No') },
 ];
 
@@ -39,8 +39,9 @@ export function ManifestsListPage(): JSX.Element {
     <section>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>Manifests</h1>
-        <Gate policy="manifests:write">
-          <LinkButton to="/manifests/new">New manifest</LinkButton>
+        {/* A manifest is opened on its convoy's truck list, against the vehicle it describes. */}
+        <Gate policy="convoys:read">
+          <LinkButton to="/convoys">Open one from a convoy</LinkButton>
         </Gate>
       </header>
 

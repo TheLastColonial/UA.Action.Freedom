@@ -8,7 +8,6 @@ const ctx = (over: Partial<Parameters<typeof availableTransitions>[0]> = {}) => 
   status: 'Created' as ManifestStatus,
   frozen: false,
   canApprove: true,
-  hasConvoy: true,
   convoyTruckListPublished: true,
   ...over,
 });
@@ -46,12 +45,6 @@ describe('extra rules', () => {
     expect(verbs('Rejected', { frozen: true })).toEqual([]);
     expect(verbs('Preparing', { frozen: true })).toEqual(['ready']);
     expect(verbs('InTransit', { frozen: true }).sort()).toEqual(['deliver', 'lose']);
-  });
-
-  it('disables propose with a reason when there is no convoy', () => {
-    const [propose] = availableTransitions(ctx({ status: 'Created', hasConvoy: false }));
-    expect(propose?.verb).toBe('propose');
-    expect(propose?.disabledReason).toBe('Link this manifest to a convoy before proposing it.');
   });
 
   it('disables propose with a reason when the truck list is not published', () => {

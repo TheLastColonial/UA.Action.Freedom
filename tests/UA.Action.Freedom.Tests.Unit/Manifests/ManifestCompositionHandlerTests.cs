@@ -1,38 +1,25 @@
 using AwesomeAssertions;
 using NSubstitute;
+using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Manifests;
-using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Unit.Manifests;
 
 /// <summary>
-/// Composing a manifest — its driver teams, its cargo, and the weight a border check is given.
+/// Composing a manifest — its cargo, the crew it reports, and the weight a border check is given.
 /// </summary>
 public class ManifestCompositionHandlerTests
 {
     private const string Id = "MAN-0001";
+    private const string Vin = "WVWZZZ1JZXW000001";
+    private const int ConvoyId = 42;
 
-    private static readonly Guid Primary = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
-    private static readonly Guid Secondary = new("7c1d2e50-8e9b-4d42-a063-7b1c9e4f6d22");
+    private static readonly Guid Driver = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
 
     private static ManifestReadModel AManifest(bool frozen = false) => new(
-        Id, "WVWZZZ1JZXW000001", 42, ManifestStatus.Preparing, null, false,
+        Id, ConvoyId, Vin, ManifestStatus.Preparing, null, false,
         frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
-
-    private static PersonReadModel APerson(Guid id, bool isDriver = true) => new(
-        id, "Sam", "Whitfield",
-        new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        null, isDriver, Committed: true);
-
-    private static IPersonRepository ARosterOfDrivers()
-    {
-        var people = Substitute.For<IPersonRepository>();
-        people.GetByIdAsync(Primary, Arg.Any<CancellationToken>()).Returns(APerson(Primary));
-        people.GetByIdAsync(Secondary, Arg.Any<CancellationToken>()).Returns(APerson(Secondary));
-        return people;
-    }
 
     private static readonly VehicleCargoCapacityReadModel NoCapacityData = new(null, null, null, null);
 
@@ -47,90 +34,39 @@ public class ManifestCompositionHandlerTests
     }
 
     [Fact]
-    public async Task Assigns_a_driver_team_to_a_leg()
+    public async Task Reports_the_crew_travelling_with_its_vehicle()
     {
+        // A read of the one crew record, looked up by the manifest's truck-list entry. The
+        // manifest used to keep its own driver teams, written through their own endpoint and
+        // connected to the convoy's crew by nothing — so the printed document could name people
+        // who were not in the vehicle while the insurance covered somebody else.
+        var crew = new[]
+        {
+            new VehicleCrewReadModel(Driver, "Olena", "Kovalenko", JourneyLeg.Uk, CrewRole.Driver),
+            new VehicleCrewReadModel(Driver, "Olena", "Kovalenko", JourneyLeg.Border, CrewRole.Driver),
+        };
         var repository = ARepositoryHolding(AManifest());
-        var handler = new SetManifestTeamHandler(repository, ARosterOfDrivers());
+        var truckList = Substitute.For<IConvoyVehicleRepository>();
+        truckList.ListCrewAsync(ConvoyId, Vin, null, Arg.Any<CancellationToken>()).Returns(crew);
 
-        var outcome = await handler.HandleAsync(
-            new SetManifestTeamCommand(Id, ManifestLeg.Border, Primary, Secondary), CancellationToken.None);
+        var members = await new ListManifestCrewHandler(repository, truckList).HandleAsync(
+            new ListManifestCrewQuery(Id), TestContext.Current.CancellationToken);
 
-        outcome.Should().Be(SetManifestTeamOutcome.Set);
-        await repository.Received(1).SetTeamAsync(
-            Id,
-            Arg.Is<ManifestDriverTeamReadModel>(team =>
-                team.Leg == ManifestLeg.Border
-                && team.PrimaryPersonId == Primary
-                && team.SecondaryPersonId == Secondary),
-            Arg.Any<CancellationToken>());
+        members.Should().BeEquivalentTo(crew);
     }
 
     [Fact]
-    public async Task A_half_crewed_team_is_allowed_while_the_convoy_is_planned()
+    public async Task There_is_no_crew_for_a_manifest_that_does_not_exist()
     {
-        var repository = ARepositoryHolding(AManifest());
-        var handler = new SetManifestTeamHandler(repository, ARosterOfDrivers());
+        var repository = ARepositoryHolding(manifest: null);
+        var truckList = Substitute.For<IConvoyVehicleRepository>();
 
-        var outcome = await handler.HandleAsync(
-            new SetManifestTeamCommand(Id, ManifestLeg.Uk, Primary, null), CancellationToken.None);
+        var members = await new ListManifestCrewHandler(repository, truckList).HandleAsync(
+            new ListManifestCrewQuery(Id), TestContext.Current.CancellationToken);
 
-        outcome.Should().Be(SetManifestTeamOutcome.Set);
-    }
-
-    [Fact]
-    public async Task Refuses_a_volunteer_who_never_volunteered_to_drive()
-    {
-        // Being on the roster is not the same as having agreed to drive a leg to Ukraine.
-        var repository = ARepositoryHolding(AManifest());
-        var people = Substitute.For<IPersonRepository>();
-        people.GetByIdAsync(Primary, Arg.Any<CancellationToken>()).Returns(APerson(Primary, isDriver: false));
-        var handler = new SetManifestTeamHandler(repository, people);
-
-        var outcome = await handler.HandleAsync(
-            new SetManifestTeamCommand(Id, ManifestLeg.Uk, Primary, null), CancellationToken.None);
-
-        outcome.Should().Be(SetManifestTeamOutcome.DriverIsNotADriver);
-        await repository.DidNotReceive().SetTeamAsync(
-            Arg.Any<string>(), Arg.Any<ManifestDriverTeamReadModel>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task Refuses_a_driver_who_is_not_on_the_roster_at_all()
-    {
-        var repository = ARepositoryHolding(AManifest());
-        var people = Substitute.For<IPersonRepository>();
-        people.GetByIdAsync(Primary, Arg.Any<CancellationToken>()).Returns((PersonReadModel?)null);
-        var handler = new SetManifestTeamHandler(repository, people);
-
-        var outcome = await handler.HandleAsync(
-            new SetManifestTeamCommand(Id, ManifestLeg.Uk, Primary, null), CancellationToken.None);
-
-        outcome.Should().Be(SetManifestTeamOutcome.NoSuchDriver);
-    }
-
-    [Fact]
-    public async Task Refuses_the_same_volunteer_as_both_halves_of_a_pair()
-    {
-        // It would look crewed while leaving somebody driving to Ukraine alone.
-        var repository = ARepositoryHolding(AManifest());
-        var handler = new SetManifestTeamHandler(repository, ARosterOfDrivers());
-
-        var outcome = await handler.HandleAsync(
-            new SetManifestTeamCommand(Id, ManifestLeg.Uk, Primary, Primary), CancellationToken.None);
-
-        outcome.Should().Be(SetManifestTeamOutcome.SameDriverTwice);
-    }
-
-    [Fact]
-    public async Task A_frozen_manifest_will_not_take_a_new_driver_team()
-    {
-        var repository = ARepositoryHolding(AManifest(frozen: true));
-        var handler = new SetManifestTeamHandler(repository, ARosterOfDrivers());
-
-        var outcome = await handler.HandleAsync(
-            new SetManifestTeamCommand(Id, ManifestLeg.Uk, Primary, Secondary), CancellationToken.None);
-
-        outcome.Should().Be(SetManifestTeamOutcome.Frozen);
+        members.Should().BeNull();
+        await truckList.DidNotReceive().ListCrewAsync(
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<JourneyLeg?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
