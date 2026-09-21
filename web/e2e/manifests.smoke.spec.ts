@@ -42,6 +42,9 @@ test('@smoke a manifest is opened on a truck list, proposed, then approved and f
   await page.getByRole('option', { name: new RegExp(vin) }).click();
   await expect(page.getByRole('cell', { name: vin })).toBeVisible();
 
+  // Publishing lives on the Overview tab, and each tab panel is only in the DOM while it is the
+  // active one — so the tab has to be switched back, not merely scrolled to.
+  await page.getByRole('tab', { name: 'Overview' }).click();
   await page.getByRole('button', { name: 'Publish truck list' }).click();
   await expect(page.getByText('Truck list published')).toBeVisible();
 
