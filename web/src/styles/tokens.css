@@ -1,13 +1,21 @@
 :root {
-  --color-bg: #f6f7f9;
+  /* Brand: the Ukrainian flag. Blue carries actions and links; yellow is a highlight only —
+     it is too light to be text on white, so it appears as a fill or a stripe. */
+  --color-brand-blue: #0057b7;
+  --color-brand-yellow: #ffdd00;
+  --color-on-brand: #ffffff;
+
+  --color-bg: #ffffff;
   --color-surface: #ffffff;
-  --color-surface-2: #eef0f3;
-  --color-border: #d6dae0;
-  --color-text: #1b1f24;
-  --color-text-muted: #5b6470;
-  --color-accent: #1f6feb;
-  --color-accent-strong: #144a9c;
-  --color-accent-soft: #e5efff;
+  --color-surface-2: #f2f6fb;
+  --color-border: #d5deea;
+  --color-text: #14213d;
+  --color-text-muted: #5b6678;
+  --color-accent: #0057b7;
+  --color-accent-strong: #003f86;
+  --color-accent-soft: #e6eef8;
+  --color-highlight: #ffdd00;
+  --color-highlight-soft: #fff8cc;
   --color-danger: #b42318;
   --color-danger-soft: #fdeceb;
   --color-warning: #9a6700;
@@ -31,15 +39,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #0f1216;
-    --color-surface: #171b21;
-    --color-surface-2: #21262d;
-    --color-border: #30363d;
-    --color-text: #e6edf3;
-    --color-text-muted: #9198a1;
-    --color-accent: #4c8dff;
-    --color-accent-strong: #7fb0ff;
-    --color-accent-soft: #16304f;
+    --color-bg: #0b1422;
+    --color-surface: #111d30;
+    --color-surface-2: #1a2a42;
+    --color-border: #2a3d5a;
+    --color-text: #e8eef7;
+    --color-text-muted: #9aa8bd;
+    --color-accent: #5b9cf0;
+    --color-accent-strong: #8dbbf5;
+    --color-accent-soft: #14325c;
+    --color-highlight: #ffdd00;
+    --color-highlight-soft: #3a3310;
     --color-danger: #ff7b72;
     --color-danger-soft: #3a1c1a;
     --color-warning: #d29922;

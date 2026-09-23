@@ -24,6 +24,7 @@ import { Gate } from '../../components/Gate';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { SelectField } from '../../components/form/fields';
 import { VehicleInsurancePanel } from './VehicleInsurancePanel';
+import { Spinner } from '../../components/Spinner';
 
 interface ConvoyDriversPanelProps {
   convoyId: number;
@@ -100,7 +101,7 @@ function VehicleCrew({ convoyId, vehicle, volunteers }: VehicleCrewProps): JSX.E
   const unassign = useUnassignCrew(convoyId, vehicle.vin);
 
   if (crewQuery.isPending) {
-    return <p>Loading drivers…</p>;
+    return <Spinner label="Loading drivers…" />;
   }
   if (crewQuery.isError) {
     return <p role="alert">The crew for {vehicle.plate} could not be loaded.</p>;

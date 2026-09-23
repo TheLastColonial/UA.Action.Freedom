@@ -61,44 +61,18 @@ test('does not display the signed-in identity GUID anywhere on the page', async 
     .not.toBeInTheDocument();
 });
 
-test('an administrator, who holds every write policy, sees every quick-action there is', async () => {
+test('cards are navigation only: creating something happens on its section page', async () => {
   const screen = await renderWithProviders(<Dashboard />, { roles: ['Administrator'] });
 
-  const expected: Record<string, string> = {
-    'New Vehicle': '/vehicles/new',
-    'New Volunteer': '/people/new',
-    'New Convoy': '/convoys/new',
-    'New Box': '/boxes/new',
-    'New Receiver': '/receivers/new',
-    'New Location': '/locations/new',
-  };
-
-  for (const [name, href] of Object.entries(expected)) {
-    await expect.element(screen.getByRole('link', { name })).toHaveAttribute('href', href);
-  }
-});
-
-test('a purchaser, who can read everything but only write vehicles, sees only one quick-action', async () => {
-  const screen = await renderWithProviders(<Dashboard />, { roles: ['Purchaser'] });
-
-  await expect.element(screen.getByRole('link', { name: 'New Vehicle' })).toBeInTheDocument();
-  await expect.element(screen.getByRole('link', { name: 'New Volunteer' })).not.toBeInTheDocument();
-  await expect.element(screen.getByRole('link', { name: 'New Convoy' })).not.toBeInTheDocument();
-  await expect.element(screen.getByRole('link', { name: 'New Box' })).not.toBeInTheDocument();
-  await expect.element(screen.getByRole('link', { name: 'New Manifest' })).not.toBeInTheDocument();
-  await expect.element(screen.getByRole('link', { name: 'New Receiver' })).not.toBeInTheDocument();
-  await expect.element(screen.getByRole('link', { name: 'New Location' })).not.toBeInTheDocument();
-
-  // still sees every read-only section card
   for (const name of [
-    'Vehicles',
-    'Volunteers',
-    'Convoys',
-    'Boxes',
-    'Manifests',
-    'Receivers',
-    'Locations',
+    'New Vehicle',
+    'New Volunteer',
+    'New Convoy',
+    'New Box',
+    'New Manifest',
+    'New Receiver',
+    'New Location',
   ]) {
-    await expect.element(screen.getByRole('link', { name })).toBeInTheDocument();
+    await expect.element(screen.getByRole('link', { name })).not.toBeInTheDocument();
   }
 });

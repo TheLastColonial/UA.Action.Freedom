@@ -57,6 +57,20 @@ public class StaticFrontendTests
     }
 
     [Fact]
+    public async Task The_app_root_without_a_trailing_slash_redirects_to_it_keeping_the_query()
+    {
+        using var webRoot = new TemporaryDirectory();
+        await webRoot.WriteAppIndexHtml(IndexHtml);
+        await using var api = FreedomApi.WithWebRoot(webRoot.Path);
+        using var client = api.CreateClient(new() { AllowAutoRedirect = false });
+
+        var bare = await client.GetAsync("/app?page=2", TestContext.Current.CancellationToken);
+
+        bare.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        bare.Headers.Location?.OriginalString.Should().Be("/app/?page=2");
+    }
+
+    [Fact]
     public async Task An_unmatched_client_route_falls_back_to_the_frontend_index()
     {
         using var webRoot = new TemporaryDirectory();

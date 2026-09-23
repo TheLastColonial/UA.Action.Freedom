@@ -197,6 +197,20 @@ if (hosting.UseHttpsRedirection)
 // A no-op when wwwroot is absent.
 if (hosting.ServeStaticFrontend)
 {
+    // "/app" without the slash is what people type or paste. Everything the SPA does is relative
+    // to "/app/" (its asset base, its router basename, its OIDC redirect), so send them there
+    // rather than serve the index at a path it was not built for. The query string rides along.
+    app.Use((context, next) =>
+    {
+        if (context.Request.Path.Equals("/app", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.Redirect($"{context.Request.PathBase}/app/{context.Request.QueryString}");
+            return Task.CompletedTask;
+        }
+
+        return next(context);
+    });
+
     app.UseStaticFiles();
 }
 

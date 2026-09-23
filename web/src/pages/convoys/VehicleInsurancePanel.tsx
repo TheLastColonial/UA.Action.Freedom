@@ -8,6 +8,7 @@ import type { RecordInsuranceRequest, VehicleInsuranceReadModel } from '../../ap
 import { Button } from '../../components/Button';
 import { Gate } from '../../components/Gate';
 import { TextField } from '../../components/form/fields';
+import { Spinner } from '../../components/Spinner';
 
 const insuranceFormSchema = z
   .object({
@@ -86,7 +87,7 @@ export function VehicleInsurancePanel({
   const query = useVehicleInsurance(convoyId, vin);
 
   if (query.isPending) {
-    return <p>Loading insurance…</p>;
+    return <Spinner label="Loading insurance…" />;
   }
   if (query.isError) {
     return <p role="alert">The insurance for {plate} could not be loaded.</p>;

@@ -7,8 +7,11 @@ export interface NavEntry {
   readonly policy?: Policy;
 }
 
-export const NAV: readonly NavEntry[] = [
-  { label: 'Dashboard', to: '/' },
+/** The top of the navigation tree. Always shown: every signed-in user has a dashboard. */
+export const NAV_HOME: NavEntry = { label: 'Dashboard', to: '/' };
+
+/** The sections, nested under the dashboard, each gated by its read policy. */
+export const NAV_SECTIONS: readonly NavEntry[] = [
   { label: 'Vehicles', to: '/vehicles', policy: 'vehicles:read' },
   { label: 'Volunteers', to: '/people', policy: 'people:read' },
   { label: 'Convoys', to: '/convoys', policy: 'convoys:read' },
@@ -17,3 +20,6 @@ export const NAV: readonly NavEntry[] = [
   { label: 'Receivers', to: '/receivers', policy: 'receivers:read' },
   { label: 'Locations', to: '/locations', policy: 'locations:read' },
 ];
+
+/** Every destination, flat — the home first. */
+export const NAV: readonly NavEntry[] = [NAV_HOME, ...NAV_SECTIONS];

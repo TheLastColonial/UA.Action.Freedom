@@ -13,10 +13,11 @@ import { BoxBayPanel } from './BoxBayPanel';
 import { BoxItemsPanel } from './BoxItemsPanel';
 import { BoxQrCodePanel } from './BoxQrCodePanel';
 import { BoxValidatePanel } from './BoxValidatePanel';
+import { Spinner } from '../../components/Spinner';
 
 function BoxLocationName({ locationId }: { locationId: number }): JSX.Element {
   const query = useLocation(locationId);
-  if (query.isPending) return <>Loading…</>;
+  if (query.isPending) return <Spinner size="sm" label="Loading location…" />;
   if (query.isError) return <>—</>;
   return <>{query.data.name}</>;
 }

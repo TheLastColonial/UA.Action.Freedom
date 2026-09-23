@@ -4,6 +4,7 @@ import { useId, useMemo, useState } from 'react';
 import { useVehicles } from '../../api/vehicles';
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
 import './VehicleSearchDropdown.css';
+import { Spinner } from '../Spinner';
 
 interface VehicleSearchDropdownProps {
   onSelect: (vin: string) => void;
@@ -133,7 +134,7 @@ export function VehicleSearchDropdown({
         >
           {query.isPending ? (
             <li className="vehicle-search-dropdown__item vehicle-search-dropdown__item--status">
-              Loading vehicles…
+              <Spinner size="sm" label="Loading vehicles…" />
             </li>
           ) : options.length === 0 ? (
             <li className="vehicle-search-dropdown__item vehicle-search-dropdown__item--status">
