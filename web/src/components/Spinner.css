@@ -1,0 +1,59 @@
+.spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.spinner__ring {
+  display: block;
+  border-radius: 50%;
+  border-style: solid;
+  border-color: var(--color-accent-soft);
+  border-top-color: var(--color-brand-blue);
+  border-right-color: var(--color-brand-yellow);
+  animation: spinner-rotate 0.8s linear infinite;
+}
+
+.spinner--sm .spinner__ring {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.spinner--md .spinner__ring {
+  width: 24px;
+  height: 24px;
+  border-width: 3px;
+}
+
+.spinner--lg .spinner__ring {
+  width: 40px;
+  height: 40px;
+  border-width: 4px;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Still turns, so it still says "working" — just gently. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner__ring {
+    animation-duration: 2.4s;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

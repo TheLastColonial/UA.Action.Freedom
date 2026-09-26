@@ -4,6 +4,7 @@ import { useManifestCrew } from '../../api/manifests';
 import { journeyLegLabels, journeyLegSchema } from '../../api/schemas/common';
 import type { VehicleCrewReadModel } from '../../api/schemas/convoys';
 import { DataTable } from '../../components/DataTable';
+import { Spinner } from '../../components/Spinner';
 
 interface ManifestCrewPanelProps {
   manifestId: string;
@@ -30,7 +31,7 @@ export function ManifestCrewPanel({
   const query = useManifestCrew(manifestId);
 
   if (query.isPending) {
-    return <p>Loading crew…</p>;
+    return <Spinner label="Loading crew…" />;
   }
   if (query.isError) {
     return <p role="alert">The crew could not be loaded.</p>;

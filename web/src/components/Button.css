@@ -16,12 +16,13 @@
 }
 
 .btn--primary {
-  background: var(--color-accent);
-  color: #ffffff;
+  background: var(--color-brand-blue);
+  color: var(--color-on-brand);
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--color-accent-strong);
+  background: var(--color-brand-yellow);
+  color: var(--color-accent-strong);
 }
 
 .btn--secondary {

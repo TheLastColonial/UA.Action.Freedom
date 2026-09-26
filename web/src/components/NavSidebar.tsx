@@ -3,28 +3,37 @@ import { NavLink } from 'react-router-dom';
 
 import { useAuth } from '../auth/useAuth';
 import './NavSidebar.css';
-import { NAV } from './navModel';
+import { NAV_HOME, NAV_SECTIONS } from './navModel';
 
+const linkClass = ({ isActive }: { isActive: boolean }) =>
+  isActive ? 'nav-sidebar__link nav-sidebar__link--active' : 'nav-sidebar__link';
+
+// Dashboard is the root of the tree; the sections a user may read hang off it one level down.
 export function NavSidebar(): JSX.Element {
   const auth = useAuth();
-  const entries = NAV.filter((entry) => entry.policy === undefined || auth.hasPolicy(entry.policy));
+  const sections = NAV_SECTIONS.filter(
+    (entry) => entry.policy === undefined || auth.hasPolicy(entry.policy),
+  );
 
   return (
     <nav aria-label="Sections" className="nav-sidebar">
       <ul className="nav-sidebar__list">
-        {entries.map((entry) => (
-          <li key={entry.to}>
-            <NavLink
-              to={entry.to}
-              end={entry.to === '/'}
-              className={({ isActive }) =>
-                isActive ? 'nav-sidebar__link nav-sidebar__link--active' : 'nav-sidebar__link'
-              }
-            >
-              {entry.label}
-            </NavLink>
-          </li>
-        ))}
+        <li>
+          <NavLink to={NAV_HOME.to} end className={linkClass}>
+            {NAV_HOME.label}
+          </NavLink>
+          {sections.length > 0 ? (
+            <ul className="nav-sidebar__list nav-sidebar__list--nested">
+              {sections.map((entry) => (
+                <li key={entry.to}>
+                  <NavLink to={entry.to} className={linkClass}>
+                    {entry.label}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </li>
       </ul>
     </nav>
   );

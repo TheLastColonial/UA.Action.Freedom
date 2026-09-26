@@ -9,14 +9,19 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3) var(--space-5);
-  border-block-end: 1px solid var(--color-border);
-  background: var(--color-surface);
+  border-block-end: 4px solid var(--color-brand-yellow);
+  background: var(--color-brand-blue);
+  color: var(--color-on-brand);
 }
 
 .app-shell__brand {
   font-weight: 700;
   text-decoration: none;
-  color: var(--color-text);
+  color: var(--color-on-brand);
+}
+
+.app-shell__header :focus-visible {
+  outline-color: var(--color-brand-yellow);
 }
 
 .app-shell__identity {
@@ -26,7 +31,8 @@
 }
 
 .app-shell__roles {
-  color: var(--color-text-muted);
+  color: var(--color-on-brand);
+  opacity: 0.85;
   font-size: 0.85rem;
   font-family: var(--font-mono);
 }

@@ -11,6 +11,7 @@ import { Gate } from '../../components/Gate';
 import { SelectField } from '../../components/form/fields';
 import { assignBayFormSchema, assignBayFormToRequest, emptyAssignBayForm } from './boxModels';
 import type { AssignBayFormValues } from './boxModels';
+import { Spinner } from '../../components/Spinner';
 
 interface BoxBayPanelProps {
   boxId: number;
@@ -61,7 +62,7 @@ export function BoxBayPanel({ boxId, locationId }: BoxBayPanelProps): JSX.Elemen
     <div>
       <h2>Bay</h2>
 
-      {current.isPending ? <p>Loading…</p> : null}
+      {current.isPending ? <Spinner label="Loading bay…" /> : null}
       {current.isSuccess ? (
         current.data ? (
           <p>
