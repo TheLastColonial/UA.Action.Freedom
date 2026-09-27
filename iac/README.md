@@ -254,6 +254,37 @@ which is most of the time.
 
 ## Known issues
 
+### WireMock response templates cannot contain escaped double quotes
+
+**Found while adding the ELO stubs, but it also silently broke two committed GVMS mappings
+(`gvms-get-gmr.json`, `gvms-list-gmrs.json`) — both 500'd on every real request.**
+
+WireMock's `response-template` transformer re-serialises a `jsonBody` value to text before
+running Handlebars over it, then parses the templated result back into JSON. A mapping-file
+string like `"{{now format=\"yyyy-MM-dd'T'HH:mm:ss'Z'\"}}"` parses fine as JSON (Jackson reads
+the `\"` as an ordinary embedded `"` character) but that same character round-trips straight
+back into a literal `\"` when WireMock re-serialises the value for the templating pass — and
+Handlebars parses raw template *source*, so it sees a stray backslash and throws
+`HandlebarsException: found: '\'`, not a JSON error. This applies uniformly: nesting *any*
+double-quoted Handlebars helper argument (`format="..."`, `offset="..."`) inside a `jsonBody`
+string breaks it, exactly like the `messageContentType`/backslash-escaped-JSON trap already
+documented for `ppns-notifications-pending.json` above.
+
+Single-quoted helper arguments don't have this problem — a literal `'` needs no JSON escaping,
+so it survives the round-trip unchanged. And `{{now}}` needs no `format=` at all: WireMock's
+default already renders full ISO-8601 with seconds precision, which is what every mapping in
+this repo actually wants. So the fix everywhere it appears is: drop `format="..."` entirely
+and change any `offset=\"...\"` to `offset='...'`.
+
+Verify a mapping actually works after editing it — the mapping file itself is valid JSON and
+loads without complaint either way, and the class of error above only appears when a request
+actually hits the stub:
+
+```
+curl -X POST http://localhost:8082/__admin/mappings/reset
+curl -i http://localhost:8082/<path-that-uses-now>
+```
+
 ### The Customs Worker cannot read HMRC notifications
 
 **The outcome-collection half of the worker does not work, and the cause is a bug in the

@@ -710,7 +710,7 @@ address field to leak.
 | Item | Where it is written down |
 | --- | --- |
 | **Receiver detail retention sweep.** `sensitive.ReceiverDetail.DeleteAfter` exists and is populated; nothing deletes expired rows. Wants a timer-triggered job. | §4.4.5 |
-| **ELO generation.** The answer to §5.2 Q3 is that Freedom should generate it, but the API has not been identified — candidates are ENS, and France's NCTS/DELTA. Nothing is built. | §5.2 |
+| **ELO generation.** The answer to §5.2 Q3 is that Freedom should generate it. The API is now identified (French customs ELO — *Enveloppe Logistique Obligatoire*; spec at `docs/schemas/edi/API_BREXIT_ELO-1.2.0.yaml`) and a typed client SDK exists (`src/EDI.ELO`, same generated-client-plus-DI-wrapper shape as the HMRC SDKs). Nothing consumes it yet: no worker submits an ELO envelope, no stub exists in `iac/local`, and there is no mapping from Freedom's own manifest/declaration data to the ELO request shape. | §5.2 |
 | **Short-lived user-delegation SAS for documents.** Documents are written to blob storage; nothing serves them yet. Never put a document URL in an email — link to an authenticated page that mints the SAS. | §4.3 |
 | **Notification worker.** Driver allocation and manifest approval emails, via Mailpit locally and ACS in Azure. Not started. | plan increment 8 |
 | **Blob versioning and soft delete.** Assumed by `BlobManifestDocumentStore`'s overwrite-on-save comment; not provisioned in `iac/`. | §4.3 |

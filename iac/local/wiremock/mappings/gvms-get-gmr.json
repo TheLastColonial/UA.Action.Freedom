@@ -20,12 +20,12 @@
         "state": "OPEN",
         "gmrStatusVersion": 1,
         "inspectionRequired": false,
-        "createdDateTime": "{{now format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}",
-        "updatedDateTime": "{{now format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}"
+        "createdDateTime": "{{now}}",
+        "updatedDateTime": "{{now}}"
       },
       "plannedCrossing": {
         "routeId": "20000",
-        "localDateTimeOfDeparture": "{{now offset=\"2 days\" format=\"yyyy-MM-dd'T'HH:mm\"}}"
+        "localDateTimeOfDeparture": "{{now offset='2 days'}}"
       }
     }
   },
@@ -34,7 +34,13 @@
       "Echoes back whatever GMR id was asked for and reports it OPEN — the happy path.",
       "To rehearse a rejection, copy this file, set metadata.state to NOT_FINALISABLE",
       "and add a ruleFailures array, then give it a higher priority and a request",
-      "matcher narrow enough to pick out the id you want to fail."
+      "matcher narrow enough to pick out the id you want to fail.",
+      "",
+      "The `now` helper takes no explicit format= here on purpose — see 'WireMock",
+      "response templates cannot contain escaped double quotes' in iac/README.md",
+      "Known issues. This mapping 500'd on every real request until that was found;",
+      "bare `{{now}}`/`{{now offset='...'}}` already renders full ISO-8601 with",
+      "seconds precision, which is what was being reconstructed by hand before."
     ]
   }
 }

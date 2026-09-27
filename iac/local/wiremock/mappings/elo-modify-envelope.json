@@ -1,0 +1,76 @@
+{
+  "name": "ELO — modify an envelope",
+  "priority": 5,
+  "request": {
+    "method": "POST",
+    "urlPath": "/enveloppe/modifier",
+    "headers": {
+      "messageCode": { "equalTo": "ENV_MOD01" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "transformers": ["response-template"],
+    "jsonBody": {
+      "enveloppe": {
+        "jeton": "EI202609271130001234A",
+        "numeroDossier": "{{jsonPath request.body '$.numeroDossier'}}",
+        "statut": "FERMEE",
+        "modeCreation": "EDI",
+        "informationsAppairage": {
+          "sensTraversee": "EXPORT",
+          "typeCamion": "PLEIN",
+          "estTIRATA": false,
+          "possedeContratTransport": true,
+          "estPostal": false,
+          "estEmballageVide": false,
+          "estSPS": false,
+          "estProduitPeche": false
+        },
+        "declarations": [
+          {
+            "identifiant": "26GB1234567890AB12",
+            "typeDeclaration": "EXPORT_SDS",
+            "sousTypeDeclaration": "DEPART",
+            "informationsValidation": {
+              "etat": "A_VALIDER",
+              "code": "",
+              "message": ""
+            }
+          },
+          {
+            "identifiant": "26GB9876543210CD34",
+            "typeDeclaration": "EXPORT_SDS",
+            "sousTypeDeclaration": "DEPART",
+            "informationsValidation": {
+              "etat": "A_VALIDER",
+              "code": "",
+              "message": ""
+            }
+          }
+        ],
+        "nombreDeclaration": 2,
+        "dateCreation": "{{now offset='-10 minutes'}}",
+        "dateModification": "{{now}}",
+        "dateValidation": "",
+        "procedureSecoursIcs2": false
+      }
+    }
+  },
+  "metadata": {
+    "comment": [
+      "Modification is only legal against a FERMEE envelope that is not yet paired",
+      "(see the spec's own description of ENV_MOD01), so the response keeps statut",
+      "FERMEE. The stub echoes back whatever numeroDossier the caller sent —",
+      "modifierENV identifies the envelope that way, unlike creerENV, which mints",
+      "one — and shows a second declaration added, since ENV_MOD01's",
+      "identifiantsDeclarationAAjouter/ASupprimer arrays are the whole point of",
+      "this operation.",
+      "numeroDossier is echoed as a bare scalar via the jsonPath helper; nested",
+      "objects are deliberately NOT echoed the same way (see ppns-notifications-",
+      "pending.json's comment on Handlebars and escaped quotes) — only scalars are",
+      "safe to template here."
+    ]
+  }
+}

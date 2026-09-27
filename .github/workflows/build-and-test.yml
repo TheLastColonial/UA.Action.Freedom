@@ -385,7 +385,7 @@ jobs:
         working-directory: iac/local
         run: docker compose down -v
 
-  # The two HMRC SDKs are standalone reusable libraries — the only projects in the solution
+  # The three standalone SDKs are reusable libraries — the only projects in the solution
   # that make sense as NuGet packages. Behaviour is unchanged from the old `publish` job:
   # -beta.<run> packages on (non-fork) PRs, full versions on merge to main.
   nuget:
@@ -402,9 +402,10 @@ jobs:
 
     env:
       PACKAGE_VERSION: ${{ needs.build-and-test.outputs.packageVersion }}
-      HMRC_PROJECTS: >-
+      SDK_PROJECTS: >-
         src/HMRC.GVMS/HMRC.GVMS.csproj
         src/HMRC.PushPullNotifications/HMRC.PushPullNotifications.csproj
+        src/EDI.ELO/EDI.ELO.csproj
 
     steps:
       - name: Checkout
@@ -415,9 +416,9 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Pack HMRC SDKs
+      - name: Pack SDKs
         run: |
-          for proj in ${{ env.HMRC_PROJECTS }}; do
+          for proj in ${{ env.SDK_PROJECTS }}; do
             dotnet pack "$proj" \
               --configuration ${{ env.CONFIGURATION }} \
               -p:PackageVersion=${PACKAGE_VERSION} \

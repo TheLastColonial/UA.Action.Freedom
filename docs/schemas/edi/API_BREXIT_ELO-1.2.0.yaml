@@ -1,0 +1,435 @@
+openapi: 3.0.3
+info:
+  title: Swagger JMS Opérateur - OpenAPI 3.0.3
+  description: Operator exchanges with the ELO API in EDI mode via the French customs ESB 'GUN2'
+  version: 1.2.0
+paths:
+  /enveloppe:
+    post:
+      summary: CreateELO
+      description: ELO creation
+      operationId: creerENV
+      parameters:
+        - in: header
+          name: "Authorization"
+          description: "Bearer value of the access token transmitted by the customs authentication server"
+          required: true
+          schema:
+            type: "string"
+        - in: header
+          name: "messageCode"
+          description: "Code message"
+          required: true
+          schema:
+            type: "string"
+            default: "ENV_CRE01"
+        - in: header
+          name: "functionalId"
+          description: "A functional identifier to track the lifecycle across all our applications. For creation, can be the same as the correlationid. For other uses, it must be valued with the envelope number."
+          required: true
+          schema:
+            type: "string"
+        - in: header
+          name: "messageId"
+          description: "Unique Message Technical ID"
+          required: true
+          schema:
+            type: "string"
+        - in: header
+          name: "correlationId"
+          description: "Technical-functional identifier to link the operator request message with the response provided by our systems. It is an identifier in the operator's hand that will allow him to correlate the response to the request."
+          required: true
+          schema:
+            type: "string"
+      requestBody:
+        description: Échange entrant au format JSON
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ENV_CRE01'
+      responses:
+        200:
+          description: Réponse OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ENV_CRE02'
+        400:  
+          description: Réponse KO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ENV_CRE03'
+  /enveloppe/modifier:
+    post:
+      summary: ModifyELO
+      description: ELO modification d'une enveloppe au status "fermée" et pas encore appairée
+      operationId: modifierENV
+      parameters:
+        - in: header
+          name: "Authorization"
+          description: "Bearer value of the access token transmitted by the customs authentication server"
+          required: true
+          schema:
+            type: "string"
+        - in: header
+          name: "messageCode"
+          description: "Code message"
+          required: true
+          schema:
+            type: "string"
+            default: "ENV_MOD01"
+        - in: header
+          name: "functionalId"
+          description: "it must be valued with the envelope number."
+          required: true
+          schema:
+            type: "string"
+        - in: header
+          name: "messageId"
+          description: "Unique Message Technical ID"
+          required: true
+          schema:
+            type: "string"
+        - in: header
+          name: "correlationId"
+          description: "Technical-functional identifier to link the operator request message with the response provided by our systems. It is an identifier in the operator's hand that will allow him to correlate the response to the request."
+          required: true
+          schema:
+            type: "string"
+      requestBody:
+        description: Échange entrant au format JSON
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ENV_MOD01'
+      responses:
+        200:
+          description: Réponse OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ENV_MOD02'
+        400:
+          description: Réponse KO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ENV_MOD03'
+  /enveloppe/recuperer:
+    post:
+      summary: RetrieveELO
+      description: Récupérer ou consulter une ELO
+      operationId: recupererENV
+      parameters:
+        - in: header
+          name: "Authorization"
+          description: "Bearer value of the access token transmitted by the customs authentication server"
+          required: true
+          schema:
+            type: "string"
+        - in: header
+          name: "messageCode"
+          description: "Code message"
+          required: true
+          schema:
+            type: "string"
+            default: "ENV_REC01"
+        - in: header
+          name: "functionalId"
+          description: "it must be valued with the envelope number."
+          required: true
+          schema:
+            type: "string"
+        - in: header
+          name: "messageId"
+          description: "Unique Message Technical ID"
+          required: true
+          schema:
+            type: "string"
+        - in: header
+          name: "correlationId"
+          description: "Technical-functional identifier to link the operator request message with the response provided by our systems. It is an identifier in the operator's hand that will allow him to correlate the response to the request."
+          required: true
+          schema:
+            type: "string"
+      requestBody:
+        description: Échange entrant au format JSON
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ENV_REC01'
+      responses:
+        200:
+          description: Réponse OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ENV_REC02'
+        400:
+          description: Réponse KO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ENV_REC03'
+components:
+  schemas:
+    ENV_CRE01:
+      $ref: '#/components/schemas/RequeteCreerEnveloppe'
+    ENV_CRE02:
+      type: object
+      properties:
+        enveloppe:
+          $ref: '#/components/schemas/Enveloppe'
+    ENV_CRE03:
+      type: object
+      properties:
+        informationsErreur:
+          $ref: '#/components/schemas/ReponseMessageEnveloppeErreur'
+    ENV_MOD01:
+      type: object
+      properties:
+        numeroDossier:
+          type: string
+          pattern: '^B([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])(2[0-3]|[01][0-9])([0-5][0-9])([0-5][0-9])([0-9]{4})[A-Z0-9]$'
+        informationsAppairage :
+          $ref: '#/components/schemas/InformationsAppairage'
+        identifiantsDeclarationAAjouter:
+          type: array
+          default: [ ]
+          items:
+            type: string
+        identifiantsDeclarationASupprimer:
+          type: array
+          default: [ ]
+          items:
+            type: string
+    ENV_MOD02:
+      type: object
+      properties:
+        enveloppe:
+          $ref: '#/components/schemas/Enveloppe'
+    ENV_MOD03:
+      type: object
+      properties:
+        informationsErreur:
+          $ref: '#/components/schemas/ReponseMessageEnveloppeErreur'
+    ENV_REC01:
+      type: object
+      properties:
+        numeroDossier:
+          type: string
+          pattern: '^B([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])(2[0-3]|[01][0-9])([0-5][0-9])([0-5][0-9])([0-9]{4})[A-Z0-9]$'
+    ENV_REC02:
+      type: object
+      properties:
+        enveloppe:
+          $ref: '#/components/schemas/EnveloppeREC02'
+    ENV_REC03:
+      type: object
+      properties:
+        informationsErreur:
+          $ref: '#/components/schemas/ReponseMessageEnveloppeErreurREC03'
+    ENV_NOT01:
+      type: object
+      properties:
+        evenement:
+          $ref: '#/components/schemas/EvenementUniteTransport'
+        enveloppe:
+          $ref: '#/components/schemas/EnveloppeNotifpassage'
+    ReponseMessageEnveloppeErreur:
+      type: object
+      properties:
+        statut:
+          type: string
+          pattern: '^[A-Z0-9-]{12}$'
+          example: "FONC-ERR-001"
+        libelleErreur:
+          type: string
+          pattern: '^.{,200}$'
+    ReponseMessageEnveloppeErreurREC03:
+      type: object
+      properties:
+        numeroDossier:
+          type: string
+          pattern: '^B([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])(2[0-3]|[01][0-9])([0-5][0-9])([0-5][0-9])([0-9]{4})[A-Z0-9]$'
+        statut:
+          type: string
+          pattern: '^[A-Z0-9-]{12}$'
+          example: "FONC-ERR-001"
+        libelleErreur:
+          type: string
+          pattern: '^.{,200}$'
+    EvenementUniteTransport:
+      type: string
+      enum: [ APPAIRAGE, EMBARQUEMENT, DEBARQUEMENT ]
+    RequeteCreerEnveloppe:
+      type: object
+      properties:
+        informationsAppairage:
+          $ref: '#/components/schemas/InformationsAppairage'
+        identifiantsDeclaration:
+          type: array
+          default: [ ]
+          items:
+            type: string
+    Enveloppe:
+      type: object
+      properties:
+        jeton:
+          type: string
+          pattern: '^E(I|E)([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])(2[0-3]|[01][0-9])([0-5][0-9])([0-5][0-9])([0-9]{4})[A-Z0-9]$'
+        numeroDossier:
+          type: string
+          pattern: '^B([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])(2[0-3]|[01][0-9])([0-5][0-9])([0-5][0-9])([0-9]{4})[A-Z0-9]$'
+        statut:
+          $ref: '#/components/schemas/StatutEnveloppe'
+        modeCreation:
+          $ref: '#/components/schemas/ModeCreation'
+        informationsAppairage:
+          $ref: '#/components/schemas/InformationsAppairage'
+        declarations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Declaration'
+        nombreDeclaration:
+          type: integer
+        dateCreation:
+          type: string
+        dateModification:
+          type: string
+        dateValidation:
+          type: string
+        procedureSecoursIcs2:
+          type: boolean
+        pdf:
+          type: string
+          enum: [ formatbytebase64 ]          
+    EnveloppeNotifpassage:
+      type: object
+      properties:
+        jeton:
+          type: string
+          pattern: '^E(I|E)([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])(2[0-3]|[01][0-9])([0-5][0-9])([0-5][0-9])([0-9]{4})[A-Z0-9]$'
+        numeroDossier:
+          type: string
+          pattern: '^B([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])(2[0-3]|[01][0-9])([0-5][0-9])([0-5][0-9])([0-9]{4})[A-Z0-9]$'
+        statut:
+          $ref: '#/components/schemas/StatutEnveloppe'
+        modeCreation:
+          $ref: '#/components/schemas/ModeCreation'
+        informationsAppairage:
+          $ref: '#/components/schemas/InformationsAppairage'
+        declarations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Declaration'
+        nombreDeclaration:
+          type: integer
+        dateCreation:
+          type: string
+        dateModification:
+          type: string
+        dateValidation:
+          type: string
+        dateAppairage:
+          type: string
+        dateEmbarquement:
+          type: string
+        dateDebarquement:
+          type: string
+    EnveloppeREC02:
+      type: object
+      properties:
+        jeton:
+          type: string
+          pattern: '^E(I|E)([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])(2[0-3]|[01][0-9])([0-5][0-9])([0-5][0-9])([0-9]{4})[A-Z0-9]$'
+        numeroDossier:
+          type: string
+          pattern: '^B([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])(2[0-3]|[01][0-9])([0-5][0-9])([0-5][0-9])([0-9]{4})[A-Z0-9]$'
+        statut:
+          $ref: '#/components/schemas/StatutEnveloppe'
+        modeCreation:
+          $ref: '#/components/schemas/ModeCreation'
+        informationsAppairage:
+          $ref: '#/components/schemas/InformationsAppairage'
+        declarations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Declaration'
+        nombreDeclaration:
+          type: integer
+        dateCreation:
+          type: string
+        dateModification:
+          type: string
+        dateValidation:
+          type: string
+        aUneELOValide:
+          type: boolean
+        procedureSecoursIcs2:
+          type: boolean
+        pdf:
+          type: string
+          enum: [ formatbytebase64 ]
+    InformationsAppairage:
+      type: object
+      properties:
+        sensTraversee:
+          $ref: '#/components/schemas/SensTraversee'
+        typeCamion:
+          $ref: '#/components/schemas/TypeCamion'
+        estTIRATA:
+          type: boolean
+        possedeContratTransport:
+          type: boolean
+        estPostal:
+          type: boolean
+        estEmballageVide:
+          type: boolean          
+        estSPS:
+          type: boolean
+        estProduitPeche:
+          type: boolean
+    Declaration:
+      type: object
+      properties:
+        identifiant:
+          type: string
+        typeDeclaration:
+          $ref: '#/components/schemas/TypeDeclaration'
+        sousTypeDeclaration:
+          $ref: '#/components/schemas/SousTypeDeclaration'
+        informationsValidation:
+          $ref: '#/components/schemas/InformationsValidation'
+    InformationsValidation:
+      type: object
+      properties:
+        etat:
+          $ref: '#/components/schemas/EtatValidation'
+        code:
+          type: string
+        message:
+          type: string
+    EtatValidation:
+      type: string
+      enum: [ CONFORME, NON_CONFORME, A_VALIDER, EN_ATTENTE_VALIDATION, CONFORME_DETOURNEMENT, DOUBLON ]
+    TypeCamion:
+      type: string
+      enum: [ VIDE, PLEIN ]
+    SensTraversee:
+      type: string
+      enum: [ IMPORT, EXPORT ]
+    TypeDeclaration:
+      type: string
+      enum: [ IMPORT, EXPORT_SDS, DETOURNEMENT_SDS, SDS_INDETERMINE, EXPORT_ECS, DETOURNEMENT_ECS, ECS_INDETERMINE, TRANSIT, INCONNU, NON_CONFORME, DOUBLON, ENS ]
+    SousTypeDeclaration:
+      type: string
+      enum: [ DEPART, DELTA_IE, PASSAGE ]
+    StatutEnveloppe:
+      type: string
+      enum: [ FERMEE, APPAIREE, NON_APPAIREE, EMBARQUEE, DEBARQUEE ]
+    ModeCreation:
+      type: string
+      enum: [ EDI, DTI ]
+

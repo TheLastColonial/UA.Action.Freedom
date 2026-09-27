@@ -17,8 +17,8 @@
         "inspectionRequired": false,
         "vehicleRegNum": "AB12CDE",
         "state": "OPEN",
-        "createdDateTime": "{{now offset=\"-1 hours\" format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}",
-        "updatedDateTime": "{{now format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}"
+        "createdDateTime": "{{now offset='-1 hours'}}",
+        "updatedDateTime": "{{now}}"
       },
       {
         "gmrId": "GMRLOCAL0002",
@@ -27,8 +27,8 @@
         "inspectionRequired": true,
         "vehicleRegNum": "XY98ZAB",
         "state": "CHECKED_IN",
-        "createdDateTime": "{{now offset=\"-3 days\" format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}",
-        "updatedDateTime": "{{now offset=\"-2 hours\" format=\"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'\"}}"
+        "createdDateTime": "{{now offset='-3 days'}}",
+        "updatedDateTime": "{{now offset='-2 hours'}}"
       }
     ]
   },
@@ -36,7 +36,11 @@
     "comment": [
       "Lower priority than gvms-get-gmr so the more specific path wins. One record",
       "needs an inspection and one does not, because 'inspection required' is the",
-      "outcome that changes what a dispatcher has to do next."
+      "outcome that changes what a dispatcher has to do next.",
+      "",
+      "No format= on `now` — see 'WireMock response templates cannot contain",
+      "escaped double quotes' in iac/README.md Known issues; this mapping 500'd on",
+      "every real request until that was found."
     ]
   }
 }
