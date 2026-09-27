@@ -1,0 +1,66 @@
+{
+  "name": "ELO — create an envelope",
+  "priority": 5,
+  "request": {
+    "method": "POST",
+    "urlPath": "/enveloppe",
+    "headers": {
+      "messageCode": { "equalTo": "ENV_CRE01" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "transformers": ["response-template"],
+    "jsonBody": {
+      "enveloppe": {
+        "jeton": "EI202609271130001234A",
+        "numeroDossier": "B202609271130005678B",
+        "statut": "FERMEE",
+        "modeCreation": "EDI",
+        "informationsAppairage": {
+          "sensTraversee": "EXPORT",
+          "typeCamion": "PLEIN",
+          "estTIRATA": false,
+          "possedeContratTransport": true,
+          "estPostal": false,
+          "estEmballageVide": false,
+          "estSPS": false,
+          "estProduitPeche": false
+        },
+        "declarations": [
+          {
+            "identifiant": "26GB1234567890AB12",
+            "typeDeclaration": "EXPORT_SDS",
+            "sousTypeDeclaration": "DEPART",
+            "informationsValidation": {
+              "etat": "A_VALIDER",
+              "code": "",
+              "message": ""
+            }
+          }
+        ],
+        "nombreDeclaration": 1,
+        "dateCreation": "{{now}}",
+        "dateModification": "{{now}}",
+        "dateValidation": "",
+        "procedureSecoursIcs2": false
+      }
+    }
+  },
+  "metadata": {
+    "comment": [
+      "A newly created envelope is FERMEE (closed) and not yet paired to a physical",
+      "crossing — pairing/EMBARQUEMENT/DEBARQUEMENT happen later, out of band, and",
+      "arrive as an ENV_NOT01 passage notification the ELO API pushes rather than",
+      "returns here (this stub set has nothing that produces one; nothing in the",
+      "solution consumes ENV_NOT01 yet either — see src/EDI.ELO/README.md).",
+      "The jeton/numeroDossier values are fixed, regex-valid samples (see the",
+      "patterns on Enveloppe.Jeton/NumeroDossier in the spec) rather than echoes of",
+      "the request, since the real API mints both server-side.",
+      "To rehearse the 400 path, copy this file, change response.status to 400 and",
+      "the jsonBody to the ENV_CRE03 shape ({ informationsErreur: { statut, ",
+      "libelleErreur } }), then give it a higher priority and a narrower matcher."
+    ]
+  }
+}

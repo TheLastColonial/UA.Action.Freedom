@@ -1,0 +1,66 @@
+{
+  "name": "ELO — retrieve an envelope",
+  "priority": 5,
+  "request": {
+    "method": "POST",
+    "urlPath": "/enveloppe/recuperer",
+    "headers": {
+      "messageCode": { "equalTo": "ENV_REC01" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "transformers": ["response-template"],
+    "jsonBody": {
+      "enveloppe": {
+        "jeton": "EI202609271130001234A",
+        "numeroDossier": "{{jsonPath request.body '$.numeroDossier'}}",
+        "statut": "APPAIREE",
+        "modeCreation": "EDI",
+        "informationsAppairage": {
+          "sensTraversee": "EXPORT",
+          "typeCamion": "PLEIN",
+          "estTIRATA": false,
+          "possedeContratTransport": true,
+          "estPostal": false,
+          "estEmballageVide": false,
+          "estSPS": false,
+          "estProduitPeche": false
+        },
+        "declarations": [
+          {
+            "identifiant": "26GB1234567890AB12",
+            "typeDeclaration": "EXPORT_SDS",
+            "sousTypeDeclaration": "DEPART",
+            "informationsValidation": {
+              "etat": "CONFORME",
+              "code": "",
+              "message": ""
+            }
+          }
+        ],
+        "nombreDeclaration": 1,
+        "dateCreation": "{{now offset='-1 hours'}}",
+        "dateModification": "{{now offset='-30 minutes'}}",
+        "dateValidation": "{{now offset='-15 minutes'}}",
+        "aUneELOValide": true,
+        "procedureSecoursIcs2": false
+      }
+    }
+  },
+  "metadata": {
+    "comment": [
+      "recupererENV returns the EnveloppeREC02 shape, which adds aUneELOValide (and",
+      "optionally a base64 pdf) on top of the plain Enveloppe fields — this stub",
+      "shows an envelope further along the lifecycle than the create/modify stubs:",
+      "APPAIREE (paired to a physical crossing) with its declaration CONFORME, to",
+      "demonstrate the full field set a caller can expect once customs has cleared",
+      "it. numeroDossier is echoed back from the request (ENV_REC01 identifies the",
+      "envelope that way); jeton/dates are fixed illustrative samples.",
+      "To rehearse the 400 path, copy this file, change response.status to 400 and",
+      "the jsonBody to the ENV_REC03 shape ({ numeroDossier, statut,",
+      "libelleErreur }), then give it a higher priority and a narrower matcher."
+    ]
+  }
+}

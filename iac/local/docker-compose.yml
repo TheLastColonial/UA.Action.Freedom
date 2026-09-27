@@ -349,9 +349,10 @@ services:
       retries: 30
       start_period: 20s
 
-  # --- HMRC ------------------------------------------------------------------
-  # Stands in for both HMRC APIs. Stubs are plain JSON under wiremock/mappings and
-  # load at boot, so adding a scenario needs no provisioning step and no script.
+  # --- HMRC / French customs ELO -----------------------------------------------
+  # Stands in for both HMRC APIs and the French customs ELO (EDI) API. Stubs are
+  # plain JSON under wiremock/mappings and load at boot, so adding a scenario
+  # needs no provisioning step and no script.
   wiremock:
     image: wiremock/wiremock:3.9.2
     container_name: freedom-wiremock
