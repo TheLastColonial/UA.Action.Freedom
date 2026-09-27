@@ -140,11 +140,11 @@ public sealed class ManifestDocumentProcessorTelemetryTests : IDisposable
     [Fact]
     public async Task Rendering_is_traced_as_a_consumer_span_linked_to_the_approval_that_queued_it()
     {
-        Receives(new ManifestDocumentWorkItem("m-link", "r", Body(traceparent: Traceparent)));
+        Receives(new ManifestDocumentWorkItem("m-link-manifest", "r", Body(traceparent: Traceparent)));
 
         await Processor().ProcessNextAsync(CancellationToken.None);
 
-        var consumer = _activities.WithTag("messaging.message.id", "m-link").Should().ContainSingle().Subject;
+        var consumer = _activities.WithTag("messaging.message.id", "m-link-manifest").Should().ContainSingle().Subject;
         consumer.Kind.Should().Be(ActivityKind.Consumer);
         consumer.GetTagItem("messaging.destination.name").Should().Be("manifest-documents");
         consumer.Links.Should().ContainSingle()

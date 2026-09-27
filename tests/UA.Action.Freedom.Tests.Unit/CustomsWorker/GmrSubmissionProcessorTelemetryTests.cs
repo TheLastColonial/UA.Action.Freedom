@@ -152,11 +152,11 @@ public sealed class GmrSubmissionProcessorTelemetryTests : IDisposable
     [Fact]
     public async Task The_submission_is_traced_as_a_consumer_span_linked_to_the_approval_that_queued_it()
     {
-        Receives(new CustomsWorkItem("m-link", "r", Body(traceparent: Traceparent)));
+        Receives(new CustomsWorkItem("m-link-customs", "r", Body(traceparent: Traceparent)));
 
         await Processor().ProcessNextAsync(CancellationToken.None);
 
-        var consumer = _activities.WithTag("messaging.message.id", "m-link").Should().ContainSingle().Subject;
+        var consumer = _activities.WithTag("messaging.message.id", "m-link-customs").Should().ContainSingle().Subject;
         consumer.Kind.Should().Be(ActivityKind.Consumer);
         consumer.Links.Should().ContainSingle()
             .Which.Context.TraceId.ToString().Should().Be("0af7651916cd43dd8448eb211c80319c");
