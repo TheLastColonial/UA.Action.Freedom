@@ -31,7 +31,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('goods-vehicle-movements', 'push-pull-notifications')]
+    [ValidateSet('goods-vehicle-movements', 'push-pull-notifications', 'elo')]
     [string] $Api = 'goods-vehicle-movements',
     [switch] $Raw,
     [ValidateSet('SystemTextJson', 'NewtonsoftJson')]
@@ -43,12 +43,36 @@ $ErrorActionPreference = 'Stop'
 $projectByApi = @{
     'goods-vehicle-movements' = 'HMRC.GVMS'
     'push-pull-notifications' = 'HMRC.PushPullNotifications'
+    'elo'                     = 'EDI.ELO'
 }
 $project = $projectByApi[$Api]
 
+# ELO's spec lives outside docs/schemas/hmrc/ and doesn't follow the "<api>-1.0.yaml"
+# naming convention (it's a third-party filename: API_BREXIT_ELO-1.2.0.yaml). Override per
+# API where the convention doesn't fit; everything not listed here still resolves below.
+$specPathByApi = @{
+    'elo' = 'docs/schemas/edi/API_BREXIT_ELO-1.2.0.yaml'
+}
+
+# PreprocessSpec.cs pass 2 unconditionally drops any header parameter literally named
+# Authorization/Accept/Content-Type, on the assumption it's an HttpClient-pipeline concern.
+# For ELO, Authorization (and its sibling correlation headers) is a real per-call parameter
+# the caller must supply — preprocessing would silently delete it. Refuse to run the
+# preprocessing pipeline against this spec; -Raw is the only supported mode.
+if ($Api -eq 'elo' -and -not $Raw) {
+    throw "Api 'elo' must be regenerated with -Raw. The normal preprocessing pipeline " +
+          "(PreprocessSpec.cs pass 2) unconditionally strips the 'Authorization' header " +
+          "parameter, which for ELO is a real caller-supplied credential, not a transport " +
+          "concern. Re-run as: regenerate.ps1 -Api elo -Raw"
+}
+
 $repo = (Resolve-Path "$PSScriptRoot/../..").Path
 $scratch = Join-Path $repo 'build/nswag/generated'
-$rawSpec = Join-Path $repo "docs/schemas/hmrc/$Api-1.0.yaml"
+$rawSpec = if ($specPathByApi.ContainsKey($Api)) {
+    Join-Path $repo $specPathByApi[$Api]
+} else {
+    Join-Path $repo "docs/schemas/hmrc/$Api-1.0.yaml"
+}
 $config = Join-Path $repo "build/nswag/$Api.preprocess.json"
 $preSpec = Join-Path $scratch "$Api.preprocessed.json"
 $monolith = Join-Path $scratch "$Api.monolith.cs"

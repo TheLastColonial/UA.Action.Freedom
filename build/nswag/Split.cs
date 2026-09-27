@@ -1,4 +1,5 @@
 #:package Microsoft.CodeAnalysis.CSharp@4.14.0
+#:property ManagePackageVersionsCentrally=false
 //
 // Splits the single NSwag-generated C# file into one file per top-level type.
 //

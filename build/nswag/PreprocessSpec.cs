@@ -1,4 +1,5 @@
 #:package YamlDotNet@16.2.1
+#:property ManagePackageVersionsCentrally=false
 //
 // Preprocesses a published HMRC OpenAPI document before NSwag runs.
 //

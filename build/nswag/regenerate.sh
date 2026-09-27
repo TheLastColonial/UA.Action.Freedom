@@ -23,13 +23,25 @@ done
 case "$api" in
     goods-vehicle-movements) project="HMRC.GVMS" ;;
     push-pull-notifications) project="HMRC.PushPullNotifications" ;;
+    elo) project="EDI.ELO" ;;
     *) echo "unknown --api: $api" >&2; exit 2 ;;
 esac
+
+if [[ "$api" == "elo" && $raw -eq 0 ]]; then
+    echo "error: --api elo must be run with --raw." >&2
+    echo "PreprocessSpec.cs pass 2 unconditionally strips the 'Authorization' header" >&2
+    echo "parameter, which for ELO is a real caller-supplied credential, not a transport" >&2
+    echo "concern. Re-run as: regenerate.sh --api elo --raw" >&2
+    exit 2
+fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$script_dir/../.." && pwd)"
 scratch="$repo/build/nswag/generated"
-raw_spec="$repo/docs/schemas/hmrc/$api-1.0.yaml"
+case "$api" in
+    elo) raw_spec="$repo/docs/schemas/edi/API_BREXIT_ELO-1.2.0.yaml" ;;
+    *) raw_spec="$repo/docs/schemas/hmrc/$api-1.0.yaml" ;;
+esac
 config="$repo/build/nswag/$api.preprocess.json"
 pre_spec="$scratch/$api.preprocessed.json"
 monolith="$scratch/$api.monolith.cs"

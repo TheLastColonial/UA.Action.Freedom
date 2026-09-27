@@ -39,7 +39,8 @@ src/
 ├── UA.Action.Freedom.ManifestWorker/   # Manifest document rendering
 ├── UA.Action.Freedom.Telemetry/         # Shared OpenTelemetry wiring, span redaction, queue & worker metrics
 ├── HMRC.GVMS/                          # HMRC Goods Vehicle Movements SDK
-└── HMRC.PushPullNotifications/         # HMRC Push Pull Notifications SDK
+├── HMRC.PushPullNotifications/         # HMRC Push Pull Notifications SDK
+└── EDI.ELO/                            # French customs ELO (EDI) SDK
 
 database/
 ├── UA.Action.Freedom.Database/         # SQL project → dacpac: tables, schemas, roles, grants
@@ -53,7 +54,8 @@ tests/
 ├── UA.Action.Freedom.Tests.Integration/ # Real database tests
 ├── UA.Action.Freedom.Tests.BDD/        # Reqnroll feature scenarios
 ├── HMRC.GVMS.Tests.Unit/
-└── HMRC.PushPullNotifications.Tests.Unit/
+├── HMRC.PushPullNotifications.Tests.Unit/
+└── EDI.ELO.Tests.Unit/
 
 web/                                    # React + Vite operator UI (TypeScript, strict)
 ├── src/                                # App shell, api client, auth, pages per slice
@@ -495,7 +497,7 @@ See `docs/gotchas-and-open-questions.md` for:
 2. Write failing tests first (TDD)
 3. Implement the minimum to pass tests
 4. Run all tests to ensure no regressions
-5. Open a pull request — CI will build, test (Unit/Component), run the `web/` frontend job (typecheck/lint/format/test/build), and acceptance-test (Integration/BDD + Playwright smokes against the full stack), building the three service container images and running the suite against them. A change under `database/` also runs the `Database` workflow (dacpac build, fresh publish, no-op re-publish). Merging to `main` pushes those images (and the dacpac, from its own workflow) to `ghcr.io/thelastcolonial/*`, publishes the two HMRC SDK NuGet packages to GitHub Packages, and cuts a GitHub Release annotated with the image digests.
+5. Open a pull request — CI will build, test (Unit/Component), run the `web/` frontend job (typecheck/lint/format/test/build), and acceptance-test (Integration/BDD + Playwright smokes against the full stack), building the three service container images and running the suite against them. A change under `database/` also runs the `Database` workflow (dacpac build, fresh publish, no-op re-publish). Merging to `main` pushes those images (and the dacpac, from its own workflow) to `ghcr.io/thelastcolonial/*`, publishes the three SDK NuGet packages (`HMRC.GVMS`, `HMRC.PushPullNotifications`, `EDI.ELO`) to GitHub Packages, and cuts a GitHub Release annotated with the image digests.
 6. Wait for approval and status checks to pass
 
 ## Resources
@@ -507,6 +509,7 @@ See `docs/gotchas-and-open-questions.md` for:
 - **State diagram** — `docs/manifest-status.puml`
 - **System diagram** — `docs/c4/2-containers.puml`
 - **HMRC API specs** — `docs/schemas/hmrc/`
+- **French customs ELO (EDI) spec** — `docs/schemas/edi/`
 
 ## Support
 

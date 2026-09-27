@@ -12,10 +12,12 @@
     <Project Path="src/UA.Action.Freedom.Telemetry/UA.Action.Freedom.Telemetry.csproj" />
     <Project Path="src/HMRC.GVMS/HMRC.GVMS.csproj" />
     <Project Path="src/HMRC.PushPullNotifications/HMRC.PushPullNotifications.csproj" />
+    <Project Path="src/EDI.ELO/EDI.ELO.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/HMRC.GVMS.Tests.Unit/HMRC.GVMS.Tests.Unit.csproj" />
     <Project Path="tests/HMRC.PushPullNotifications.Tests.Unit/HMRC.PushPullNotifications.Tests.Unit.csproj" />
+    <Project Path="tests/EDI.ELO.Tests.Unit/EDI.ELO.Tests.Unit.csproj" />
     <Project Path="tests/UA.Action.Freedom.Tests.BDD/UA.Action.Freedom.Tests.BDD.csproj" />
     <Project Path="tests/UA.Action.Freedom.Tests.Component/UA.Action.Freedom.Tests.Component.csproj" />
     <Project Path="tests/UA.Action.Freedom.Tests.Integration/UA.Action.Freedom.Tests.Integration.csproj" />
