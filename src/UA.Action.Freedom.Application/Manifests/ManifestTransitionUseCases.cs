@@ -137,8 +137,9 @@ public sealed class TransitionManifestHandler(
 }
 
 /// <summary>
-/// Approve a manifest: confirm it, freeze it, and hand its Goods Movement Reference to the
-/// customs worker.
+/// Approve a manifest: confirm it, freeze it, and hand its border paperwork off — the UK Goods
+/// Movement Reference, the document that travels with the vehicle, and the French logistics
+/// envelope.
 /// </summary>
 /// <remarks>
 /// This is the fork in <c>docs/process.puml</c> — approval is what releases the paperwork — and
@@ -221,6 +222,15 @@ public sealed class ApproveManifestHandler(
         await HandOff("document", command.Id, async () =>
             await queue.EnqueueDocumentAsync(
                 await ComposeDocument(command.Id, plate, cancellationToken), cancellationToken));
+
+        // The third prong: France requires a logistics envelope per transport unit at the Smart
+        // Border, and approval is what releases it (docs/process.puml). The envelope says nothing
+        // about the load — only which way the lorry is crossing and under what regime — so there is
+        // nothing here to compose and nothing to withhold.
+        await HandOff("elo", command.Id, async () =>
+            await queue.EnqueueEloEnvelopeAsync(
+                new EloEnvelopeRequest(command.Id, EloCrossingProfile.HumanitarianAidToUkraine),
+                cancellationToken));
 
         return TransitionManifestOutcome.Transitioned;
     }

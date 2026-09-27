@@ -27,12 +27,14 @@ case "$api" in
     *) echo "unknown --api: $api" >&2; exit 2 ;;
 esac
 
-if [[ "$api" == "elo" && $raw -eq 0 ]]; then
-    echo "error: --api elo must be run with --raw." >&2
-    echo "PreprocessSpec.cs pass 2 unconditionally strips the 'Authorization' header" >&2
-    echo "parameter, which for ELO is a real caller-supplied credential, not a transport" >&2
-    echo "concern. Re-run as: regenerate.sh --api elo --raw" >&2
-    exit 2
+# ELO used to require --raw, because PreprocessSpec.cs pass 2 dropped the 'Authorization' header
+# parameter that for this API is a real caller-supplied credential. That pass now takes an
+# exemption list (elo.preprocess.json -> preserveHeaderParameters), so ELO runs the normal
+# pipeline — and must, because the same sidecar is what corrects the unusable 'pdf' schema.
+if [[ "$api" == "elo" && $raw -eq 1 ]]; then
+    echo "warning: regenerating ELO with --raw skips elo.preprocess.json, which is what makes" >&2
+    echo "the barcode 'pdf' field readable and keeps the ENV_NOT01 DTO. Use this only to diff" >&2
+    echo "against the preprocessed output; do not commit the result." >&2
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

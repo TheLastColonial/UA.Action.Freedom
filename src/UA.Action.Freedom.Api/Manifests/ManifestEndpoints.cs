@@ -16,8 +16,9 @@ namespace UA.Action.Freedom.Api.Manifests;
 /// have nothing to do with the pair of states involved. A status field would make all of that
 /// look like data validation instead of a process.
 ///
-/// <c>approve</c> is the one with consequences: it confirms the manifest, freezes it, and hands
-/// the Goods Movement Reference to the customs worker. Administrator only.
+/// <c>approve</c> is the one with consequences: it confirms the manifest, freezes it, and hands the
+/// border paperwork off — the UK Goods Movement Reference, the document that travels with the
+/// vehicle, and the French logistics envelope. Administrator only.
 /// </remarks>
 public static class ManifestEndpoints
 {
@@ -132,6 +133,36 @@ public static class ManifestEndpoints
         {
             var weight = await handler.HandleAsync(new GetManifestWeightQuery(id), cancellationToken);
             return weight is null ? Results.NotFound() : Results.Ok(weight);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
+
+        // The French logistics envelope, as the Customs Worker obtained it. Read-only: there is no
+        // POST here, because an envelope is requested by approving the manifest, the same way a GMR
+        // is. A 404 means the worker has not got to it yet — or, if it stays a 404, that the
+        // hand-off failed after the freeze and needs an operator (see ApproveManifestHandler).
+        manifests.MapGet("/{id}/elo", async (
+            string id,
+            IQueryHandler<GetManifestEloQuery, EloEnvelopeReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var envelope = await handler.HandleAsync(new GetManifestEloQuery(id), cancellationToken);
+            return envelope is null ? Results.NotFound() : Results.Ok(envelope);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
+
+        // The barcode itself, streamed through this authenticated endpoint rather than handed out as
+        // a blob URL (docs/recommendations.md §4.3). It is the artifact a driver presents at the
+        // Smart Border, and it is an ordinary manifest read: the document says nothing about the load
+        // beyond what the customs declarations already do.
+        manifests.MapGet("/{id}/elo/document", async (
+            string id,
+            IQueryHandler<GetManifestEloDocumentQuery, byte[]?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var barcode = await handler.HandleAsync(new GetManifestEloDocumentQuery(id), cancellationToken);
+            return barcode is null
+                ? Results.NotFound()
+                : Results.Bytes(barcode, "application/pdf", $"elo-{id}.pdf");
         })
         .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
 

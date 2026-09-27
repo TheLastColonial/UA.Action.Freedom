@@ -5,8 +5,9 @@ using HMRC.GVMS;
 namespace UA.Action.Freedom.CustomsWorker.Telemetry;
 
 /// <summary>
-/// What the Customs Worker's dealings with HMRC look like from outside: how long a submission
-/// took and how it ended, why messages were poisoned, and what state HMRC reports for a GMR.
+/// What the Customs Worker's dealings with HMRC and French customs look like from outside: how long
+/// a submission took and how it ended, why messages were poisoned, and what state HMRC reports for a
+/// GMR.
 /// </summary>
 /// <remarks>
 /// Every tag is a bounded set — a fixed outcome label, a fixed reason, an HTTP status, the
@@ -27,6 +28,7 @@ public sealed class CustomsMetrics
     private static readonly double[] SubmissionBucketsSeconds = [0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120];
 
     private readonly Histogram<double> _submissionDuration;
+    private readonly Histogram<double> _eloSubmissionDuration;
     private readonly Counter<long> _deadLetters;
     private readonly Counter<long> _notifications;
 
@@ -34,6 +36,10 @@ public sealed class CustomsMetrics
     {
         _submissionDuration = meter.CreateHistogram(
             "freedom.gmr.submission.duration", "s", "How long submitting a goods movement record to HMRC took, by how it ended.",
+            tags: null,
+            advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = SubmissionBucketsSeconds });
+        _eloSubmissionDuration = meter.CreateHistogram(
+            "freedom.elo.submission.duration", "s", "How long creating a French logistics envelope took, by how it ended.",
             tags: null,
             advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = SubmissionBucketsSeconds });
         _deadLetters = meter.CreateCounter<long>(
@@ -51,8 +57,20 @@ public sealed class CustomsMetrics
     public void SubmissionCompleted(string outcome, TimeSpan elapsed) =>
         _submissionDuration.Record(elapsed.TotalSeconds, new KeyValuePair<string, object?>("outcome", outcome));
 
-    /// <param name="reason"><c>unreadable</c>, <c>no_manifest_ref</c> or <c>hmrc_rejected</c>.</param>
-    /// <param name="httpStatus">HMRC's status, for <c>hmrc_rejected</c> only — it separates a bad
+    /// <param name="outcome"><c>accepted</c>, <c>rejected</c> (a 4xx) or <c>error</c> (anything else).</param>
+    /// <remarks>
+    /// Its own series rather than a <c>border</c> tag on
+    /// <see cref="SubmissionCompleted"/>: the two calls go to different authorities with different
+    /// latencies, and a shared histogram would blur one into the other on every dashboard.
+    /// </remarks>
+    public void EloSubmissionCompleted(string outcome, TimeSpan elapsed) =>
+        _eloSubmissionDuration.Record(elapsed.TotalSeconds, new KeyValuePair<string, object?>("outcome", outcome));
+
+    /// <param name="reason">
+    /// <c>unreadable</c>, <c>no_manifest_ref</c>, <c>hmrc_rejected</c>, <c>no_declaration</c> or
+    /// <c>elo_rejected</c>.
+    /// </param>
+    /// <param name="httpStatus">The authority's status, for a rejection only — it separates a bad
     /// submission (400, 422) from a credential problem (401, 403) or a throttle (429).</param>
     public void DeadLettered(string reason, int? httpStatus)
     {

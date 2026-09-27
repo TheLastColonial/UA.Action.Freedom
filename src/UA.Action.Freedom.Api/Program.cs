@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using Azure.Storage.Blobs;
 using Azure.Storage.Queues;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
@@ -8,6 +9,7 @@ using Scalar.AspNetCore;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Api.Boxes;
 using UA.Action.Freedom.Api.Convoys;
+using UA.Action.Freedom.Api.Documents;
 using UA.Action.Freedom.Api.Health;
 using UA.Action.Freedom.Api.Locations;
 using UA.Action.Freedom.Api.Manifests;
@@ -29,6 +31,7 @@ builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptio
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection(OidcOptions.SectionName));
 builder.Services.Configure<CustomsOptions>(builder.Configuration.GetSection(CustomsOptions.SectionName));
+builder.Services.Configure<EloOptions>(builder.Configuration.GetSection(EloOptions.SectionName));
 
 var hosting = builder.Configuration.GetSection(HostingOptions.SectionName).Get<HostingOptions>()
               ?? new HostingOptions();
@@ -68,7 +71,14 @@ builder.Services.AddScoped<IManifestWorkQueue>(provider => new AzureManifestWork
     provider.GetService<QueueServiceClient>(),
     provider.GetRequiredService<IOptions<StorageOptions>>(),
     provider.GetRequiredService<IOptions<CustomsOptions>>(),
+    provider.GetRequiredService<IOptions<EloOptions>>(),
     provider.GetRequiredService<QueueFlowMetrics>()));
+
+// The read side of that hand-off. The Customs Worker has no database, so what it learns from French
+// customs comes back through blob storage rather than a table.
+builder.Services.AddScoped<IEloEnvelopeStore>(provider => new BlobEloEnvelopeStore(
+    provider.GetService<BlobServiceClient>(),
+    provider.GetRequiredService<IOptions<StorageOptions>>()));
 
 static string ExtractJsonErrorMessage(string errorMessage)
 {

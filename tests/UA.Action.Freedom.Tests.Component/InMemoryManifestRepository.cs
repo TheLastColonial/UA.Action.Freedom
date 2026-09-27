@@ -181,14 +181,16 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
 }
 
 /// <summary>
-/// Captures what would have gone on the customs work queue, so the endpoint tests can assert
-/// that approving a manifest hands off exactly one submission — and that nothing else does.
+/// Captures what would have gone on the work queues, so the endpoint tests can assert that
+/// approving a manifest hands off exactly one of each — and that nothing else does.
 /// </summary>
 internal sealed class RecordingManifestWorkQueue : IManifestWorkQueue
 {
     public List<GmrSubmissionRequest> Submissions { get; } = [];
 
     public List<ManifestDocumentRequest> Documents { get; } = [];
+
+    public List<EloEnvelopeRequest> Envelopes { get; } = [];
 
     public Task EnqueueGmrSubmissionAsync(GmrSubmissionRequest submission, CancellationToken cancellationToken)
     {
@@ -199,6 +201,12 @@ internal sealed class RecordingManifestWorkQueue : IManifestWorkQueue
     public Task EnqueueDocumentAsync(ManifestDocumentRequest document, CancellationToken cancellationToken)
     {
         Documents.Add(document);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueEloEnvelopeAsync(EloEnvelopeRequest envelope, CancellationToken cancellationToken)
+    {
+        Envelopes.Add(envelope);
         return Task.CompletedTask;
     }
 }

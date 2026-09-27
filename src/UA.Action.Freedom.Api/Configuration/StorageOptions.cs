@@ -37,6 +37,15 @@ public sealed class StorageOptions
     /// <summary>Queue the Manifest Worker takes approved manifests from to render their documents.</summary>
     public string DocumentQueue { get; set; } = "manifest-documents";
 
+    /// <summary>Queue the application hands French customs logistics envelopes to the worker on.</summary>
+    public string EloQueue { get; set; } = "elo-envelopes";
+
+    /// <summary>
+    /// Container the Customs Worker writes issued envelopes and their barcode documents to, and the
+    /// API reads them back from.
+    /// </summary>
+    public string EloContainer { get; set; } = "elo";
+
     /// <summary>Whether enough is configured to reach a storage account at all.</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ConnectionString);
 }

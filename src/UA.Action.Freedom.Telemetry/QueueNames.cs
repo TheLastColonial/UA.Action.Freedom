@@ -10,4 +10,11 @@ public static class QueueNames
     public const string CustomsWork = "customs-work";
 
     public const string ManifestDocuments = "manifest-documents";
+
+    /// <summary>
+    /// French customs logistics envelopes. Its own queue rather than a message type on
+    /// <see cref="CustomsWork"/>: a different border, a different authority and a different failure
+    /// mode, so it deserves its own depth, age and dead-letter series.
+    /// </summary>
+    public const string EloEnvelopes = "elo-envelopes";
 }

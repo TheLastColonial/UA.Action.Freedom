@@ -26,7 +26,9 @@ locals {
   # One account with prefixes, not an account per document type (recommendations 1):
   #   manifests/       manifest documents that travel with a vehicle
   #   gmr/             Goods Movement Reference documents, written by the Customs Worker
-  #   elo/             Export Load Objects
+  #   elo/             French logistics envelopes and their barcode documents, written by the
+  #                    Customs Worker and read back by the API — the worker has no database,
+  #                    so this container is how what it learns from French customs gets home
   #   dataprotection/  the ASP.NET Core key ring (3.2) — not a document, but it lives
   #                    outside the container filesystem for the same reason
   blob_containers = ["manifests", "gmr", "elo", "dataprotection"]
@@ -34,9 +36,13 @@ locals {
   # The durable hand-offs to the workers, each with somewhere for messages that will never
   # succeed to go and be noticed:
   #   customs-work        GMR submissions for the Customs Worker
+  #   elo-envelopes       French logistics envelope requests, also for the Customs Worker —
+  #                       its own queue rather than a message type on customs-work, so a
+  #                       refusal from French customs cannot stall a UK submission behind it
   #   manifest-documents  approved manifests for the Manifest Worker to render
   queues = [
     "customs-work", "customs-work-poison",
+    "elo-envelopes", "elo-envelopes-poison",
     "manifest-documents", "manifest-documents-poison",
   ]
 

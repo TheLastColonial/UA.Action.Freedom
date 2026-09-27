@@ -141,6 +141,7 @@ internal static class FreedomApi
         InMemoryConvoyRepository convoys,
         IPersonRepository people,
         IManifestWorkQueue queue,
+        IEloEnvelopeStore? envelopes = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
@@ -150,6 +151,10 @@ internal static class FreedomApi
             services.Replace<IConvoyVehicleRepository>(convoys);
             services.Replace(people);
             services.Replace(queue);
+
+            // The read side of the envelope hand-off. Empty unless a test says otherwise, which is
+            // what a manifest looks like before the Customs Worker has got to it.
+            services.Replace(envelopes ?? new InMemoryEloEnvelopeStore());
         });
 
     /// <summary>

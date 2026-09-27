@@ -51,7 +51,7 @@ be, rather than by a pile of init scripts that teach you nothing.
 | Telemetry (Application Insights) | Grafana OTEL-LGTM | Apache-2.0 / AGPL |
 | Email / SMS (Communication Services) | Mailpit | MIT |
 | Public Website (Static Web Apps) | nginx + a placeholder page | BSD-2 |
-| HMRC GVMS + Push Pull Notifications | WireMock | Apache-2.0 |
+| HMRC GVMS + Push Pull Notifications, French customs ELO | WireMock | Apache-2.0 |
 | Secret Store (Key Vault) | *not simulated* — `.env` | — |
 
 Everything is open source except SQL Server, which is a deliberate exception: it is the same
@@ -105,16 +105,18 @@ tofu apply
 | API reference (Scalar) | <http://localhost:8080/scalar/v1> |
 | Public website | <http://localhost:8080/site> |
 | Identity (Keycloak) | <http://localhost:8081> — admin `admin` / `admin` |
-| HMRC stubs (WireMock admin) | <http://localhost:8082/__admin/mappings> |
+| Customs stubs — HMRC and French (WireMock admin) | <http://localhost:8082/__admin/mappings> |
 | Telemetry (Grafana) | <http://localhost:3000> — dashboards in the *Freedom* folder, e.g. <http://localhost:3000/d/freedom-manifest-pipeline> |
 | Email inbox (Mailpit) | <http://localhost:8025> |
 | Edge dashboard (Traefik) | <http://localhost:8090/dashboard/> |
 | Azurite | blob `:10000`, queue `:10001`, table `:10002` |
 
-Two workers run alongside the app, both queue-driven and neither listening on a port:
-`freedom-customs-worker` drains `customs-work` and talks to HMRC (WireMock), and
-`freedom-manifest-worker` drains `manifest-documents` and writes the document that travels with a
-vehicle into the `manifests` container. To see one for yourself, approve a manifest and then read
+Two workers run alongside the app, both queue-driven and neither listening on a port.
+`freedom-customs-worker` serves both border authorities: it drains `customs-work` and submits to
+HMRC, drains `elo-envelopes` and creates French logistics envelopes (writing each one and its
+barcode PDF into the `elo` container), and polls HMRC for GMR outcomes. `freedom-manifest-worker`
+drains `manifest-documents` and writes the document that travels with a vehicle into the
+`manifests` container. To see one for yourself, approve a manifest and then read
 the blob it produced:
 
 ```
@@ -199,10 +201,29 @@ docker logs -f freedom-customs-worker
 curl -s "http://localhost:8082/__admin/requests?limit=5"   # what HMRC was asked
 ```
 
-### Changing an HMRC stub
+The French envelope queue works the same way. This one goes all the way through to a stored barcode:
 
-Stubs are plain JSON in `local/wiremock/mappings/`, loaded at boot — there is no
-provisioning step for them. Add a file, then:
+```bash
+az storage message put --queue-name elo-envelopes --content '{
+  "manifestId": "MAN-0001",
+  "crossingDirection": "Import",
+  "lorryType": "Loaded",
+  "tirAta": true,
+  "declarationIdentifiers": ["25FR17551780961AT5"]
+}'
+
+az storage blob list --container-name elo -o table    # MAN-0001.json and MAN-0001.pdf
+```
+
+Drop `declarationIdentifiers` to watch the worker refuse it before calling customs at all
+(ENV_CTR_RG08 — a loaded lorry must name at least one formality) and move it to
+`elo-envelopes-poison`.
+
+### Changing a customs stub
+
+Stubs are plain JSON in `local/wiremock/mappings/` — HMRC's and French customs' alike — loaded at
+boot, so there is no provisioning step for them, and an edited file does nothing until the
+container is restarted. Add a file, then:
 
 ```bash
 docker compose restart wiremock
@@ -309,6 +330,36 @@ Until then the worker logs a stack trace every `Worker__OutcomePollSeconds`. Rai
 value in `docker-compose.yml` if the noise gets in the way.
 
 The submission half is unaffected and works end to end: queue → worker → HMRC → 202.
+
+### WireMock loads its mappings at boot
+
+Editing a file under `iac/local/wiremock/mappings/` changes nothing until the container is
+restarted:
+
+```
+docker compose restart wiremock
+```
+
+This cost a debugging session on the ELO integration: the end-to-end journey passed every step
+except the barcode, because the container had been up for a day serving the previous stub, which
+had no `pdf` field. Nothing in the logs says "stale mapping" — the stub simply answers the old
+way. `POST /__admin/mappings/reset` re-reads them too, if you would rather not restart.
+
+### The ELO stubs accept a declaration real French customs would refuse
+
+`Elo__PlaceholderDeclarationIdentifier` carries a stand-in until Freedom can obtain a real ENS from
+ICS2. `elo-create-envelope.json` accepts it and returns a `FERMEE` envelope with a real base64 PDF;
+real French customs would answer `FONC-ERR-004` ("Format de déclaration incorrect").
+
+That is deliberate — it makes the durable path testable without a certified EDI account — but it
+means **a green local run is not evidence that a real submission would succeed**. See
+`docs/schemas/edi/onboarding.md`.
+
+To rehearse the refusal instead, set `ELO_PLACEHOLDER_DECLARATION_ID=REFUSE-ME` on the `app`
+container. `elo-create-envelope-rejected.json` matches that identifier at a higher priority and
+answers 400 with the real `informationsErreur` body from the service contract; the message should
+land in `elo-envelopes-poison`, and the worker's log should name the status and `FONC-ERR-004` and
+nothing from `libelleErreur`.
 
 ### `NU1903` on `System.Security.Cryptography.Xml`
 

@@ -116,12 +116,19 @@ services:
       Storage__DataProtectionContainer: dataprotection
       Storage__CustomsQueue: customs-work
       Storage__DocumentQueue: manifest-documents
+      Storage__EloQueue: elo-envelopes
+      Storage__EloContainer: elo
 
       # What HMRC needs to identify a movement that the manifest itself does not carry. Both are
       # charity- or route-level facts; WireMock accepts anything, so these exist so the message
       # the Customs Worker picks up is the shape it would be in production.
       Customs__HaulierEori: ${CUSTOMS_HAULIER_EORI:-GB123456789000}
       Customs__RouteId: ${CUSTOMS_ROUTE_ID:-20000}
+
+      # The declaration identifier that goes on every ELO envelope. A placeholder until Freedom
+      # obtains a real ENS from ICS2 — the local stub accepts it, real French customs would not
+      # (FONC-ERR-004). See docs/gotchas-and-open-questions.md 8.
+      Elo__PlaceholderDeclarationIdentifier: ${ELO_PLACEHOLDER_DECLARATION_ID:-25FR17551780961AT5}
 
       # Split-horizon OIDC. The browser reaches Keycloak on localhost, the container
       # reaches it on the compose network — the same server, two URLs. The issuer in
@@ -174,12 +181,28 @@ services:
       Storage__CustomsQueue: customs-work
       Storage__PoisonQueue: customs-work-poison
       Storage__GmrContainer: gmr
+      Storage__EloQueue: elo-envelopes
+      Storage__EloPoisonQueue: elo-envelopes-poison
+      Storage__EloContainer: elo
 
       Hmrc__Gvms__BaseUrl: http://wiremock:8080/
       Hmrc__Ppns__BaseUrl: http://wiremock:8080/
       Hmrc__Ppns__BoxId: ${HMRC_PPNS_BOX_ID}
       Hmrc__ClientId: ${HMRC_CLIENT_ID}
       Hmrc__ClientSecret: ${HMRC_CLIENT_SECRET}
+
+      # French customs, on the same WireMock as HMRC. No BaseUrl default exists to fall back on:
+      # the published ELO spec declares no servers: entry, so the worker refuses to start without
+      # one. ELO_TOKEN_ENDPOINT is empty locally, which makes the worker send Elo__StaticToken
+      # rather than authenticate — WireMock checks neither.
+      Elo__BaseUrl: http://wiremock:8080/
+      Elo__TokenEndpoint: ${ELO_TOKEN_ENDPOINT:-}
+      Elo__ClientId: ${ELO_CLIENT_ID:-local-elo-client-id}
+      Elo__ClientSecret: ${ELO_CLIENT_SECRET:-local-elo-client-secret}
+      Elo__Username: ${ELO_USERNAME:-local-elo-operator}
+      Elo__Password: ${ELO_PASSWORD:-local-elo-password}
+      Elo__StaticToken: ${ELO_STATIC_TOKEN:-local-development-token}
+
       Worker__QueuePollSeconds: "5"
       Worker__OutcomePollSeconds: "15"
     depends_on:

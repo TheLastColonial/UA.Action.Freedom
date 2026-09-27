@@ -101,6 +101,8 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RemoveManifestBoxCommand, ManifestBoxOutcome>, RemoveManifestBoxHandler>();
         services.AddScoped<IQueryHandler<ListManifestBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListManifestBoxesHandler>();
         services.AddScoped<IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>, GetManifestWeightHandler>();
+        services.AddScoped<IQueryHandler<GetManifestEloQuery, EloEnvelopeReadModel?>, GetManifestEloHandler>();
+        services.AddScoped<IQueryHandler<GetManifestEloDocumentQuery, byte[]?>, GetManifestEloDocumentHandler>();
 
         return services.AddInstrumentedCommandHandlers();
     }

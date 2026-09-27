@@ -1,5 +1,8 @@
 using AwesomeAssertions;
+using MELT;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
@@ -155,6 +158,80 @@ public class ApproveManifestHandlerTests
         outcome.Should().Be(TransitionManifestOutcome.IllegalTransition);
         await queue.DidNotReceive().EnqueueGmrSubmissionAsync(
             Arg.Any<GmrSubmissionRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The other prong of the fork in docs/process.puml: Generate GMR and Generate ELO run in
+    /// parallel off approval. France requires a logistics envelope per transport unit at the Smart
+    /// Border, so a convoy without one does not sail.
+    /// </summary>
+    [Fact]
+    public async Task Queues_the_french_logistics_envelope_alongside_the_goods_movement_record()
+    {
+        var repository = Substitute.For<IManifestRepository>();
+        repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest());
+        repository.ConfirmAndFreezeAsync(Id, ManifestStatus.Proposed, Arg.Any<CancellationToken>()).Returns(Stamped);
+        var queue = Substitute.For<IManifestWorkQueue>();
+        var handler = new ApproveManifestHandler(repository, AConvoy(), queue);
+
+        await handler.HandleAsync(new ApproveManifestCommand(Id), TestContext.Current.CancellationToken);
+
+        await queue.Received(1).EnqueueEloEnvelopeAsync(
+            Arg.Is<EloEnvelopeRequest>(request =>
+                request.ManifestId == Id
+                && request.Profile == EloCrossingProfile.HumanitarianAidToUkraine),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// An envelope describes a crossing, not a load. There is nowhere on the request to put a
+    /// receiver, an address or a box, and this pins that rather than trusting it: the request is
+    /// serialised onto a durable queue, and a field added here would travel.
+    /// </summary>
+    [Fact]
+    public void The_envelope_request_has_nowhere_to_put_a_delivery_detail()
+    {
+        typeof(EloEnvelopeRequest).GetProperties().Select(property => property.Name)
+            .Should().BeEquivalentTo("ManifestId", "Profile");
+    }
+
+    [Fact]
+    public async Task Queues_no_envelope_for_a_manifest_it_refuses_to_approve()
+    {
+        var repository = Substitute.For<IManifestRepository>();
+        repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest(ManifestStatus.Created));
+        var queue = Substitute.For<IManifestWorkQueue>();
+        var handler = new ApproveManifestHandler(repository, AConvoy(), queue);
+
+        await handler.HandleAsync(new ApproveManifestCommand(Id), TestContext.Current.CancellationToken);
+
+        await queue.DidNotReceive().EnqueueEloEnvelopeAsync(
+            Arg.Any<EloEnvelopeRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// A failed envelope hand-off leaves the manifest frozen with paperwork that will never be
+    /// produced. That has to be noticed, so it is counted and logged under its own stage before it
+    /// propagates — the GMR and the document already work this way.
+    /// </summary>
+    [Fact]
+    public async Task Reports_its_own_stage_when_the_envelope_cannot_be_handed_off()
+    {
+        var repository = Substitute.For<IManifestRepository>();
+        repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest());
+        repository.ConfirmAndFreezeAsync(Id, ManifestStatus.Proposed, Arg.Any<CancellationToken>()).Returns(Stamped);
+        var queue = Substitute.For<IManifestWorkQueue>();
+        queue.EnqueueEloEnvelopeAsync(Arg.Any<EloEnvelopeRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("the queue is unavailable"));
+        var logs = TestLoggerFactory.Create();
+        var handler = new ApproveManifestHandler(
+            repository, AConvoy(), queue, metrics: null, logger: logs.CreateLogger<ApproveManifestHandler>());
+
+        var act = () => handler.HandleAsync(new ApproveManifestCommand(Id), TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        var written = string.Join(" ", logs.Sink.LogEntries.Select(entry => entry.Message));
+        written.Should().Contain("elo").And.Contain(Id);
     }
 
     [Fact]

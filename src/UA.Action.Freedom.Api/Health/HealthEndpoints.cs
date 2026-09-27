@@ -28,6 +28,7 @@ public static class HealthEndpoints
             .AddCheck<DatabaseHealthCheck>(DatabaseHealthCheck.Name, tags: [ReadyTag], timeout: CheckTimeout)
             .AddCheck<DocumentStoreHealthCheck>(DocumentStoreHealthCheck.Name, tags: [ReadyTag], timeout: CheckTimeout)
             .AddCheck<CustomsQueueHealthCheck>(CustomsQueueHealthCheck.Name, tags: [ReadyTag], timeout: CheckTimeout)
+            .AddCheck<EloQueueHealthCheck>(EloQueueHealthCheck.Name, tags: [ReadyTag], timeout: CheckTimeout)
             .AddCheck<IdentityProviderHealthCheck>(IdentityProviderHealthCheck.Name, tags: [ReadyTag], timeout: CheckTimeout);
 
         return services;

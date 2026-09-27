@@ -5,13 +5,19 @@
     "method": "POST",
     "urlPath": "/enveloppe",
     "headers": {
-      "messageCode": { "equalTo": "ENV_CRE01" }
+      "messageCode": {
+        "equalTo": "ENV_CRE01"
+      }
     }
   },
   "response": {
     "status": 200,
-    "headers": { "Content-Type": "application/json" },
-    "transformers": ["response-template"],
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "transformers": [
+      "response-template"
+    ],
     "jsonBody": {
       "enveloppe": {
         "jeton": "EI202609271130001234A",
@@ -19,10 +25,10 @@
         "statut": "FERMEE",
         "modeCreation": "EDI",
         "informationsAppairage": {
-          "sensTraversee": "EXPORT",
+          "sensTraversee": "IMPORT",
           "typeCamion": "PLEIN",
-          "estTIRATA": false,
-          "possedeContratTransport": true,
+          "estTIRATA": true,
+          "possedeContratTransport": false,
           "estPostal": false,
           "estEmballageVide": false,
           "estSPS": false,
@@ -30,12 +36,11 @@
         },
         "declarations": [
           {
-            "identifiant": "26GB1234567890AB12",
-            "typeDeclaration": "EXPORT_SDS",
-            "sousTypeDeclaration": "DEPART",
+            "identifiant": "25FR17551780961AT5",
+            "typeDeclaration": "ENS",
             "informationsValidation": {
-              "etat": "A_VALIDER",
-              "code": "",
+              "etat": "CONFORME",
+              "code": "RETOUR-OK",
               "message": ""
             }
           }
@@ -43,8 +48,9 @@
         "nombreDeclaration": 1,
         "dateCreation": "{{now}}",
         "dateModification": "{{now}}",
-        "dateValidation": "",
-        "procedureSecoursIcs2": false
+        "dateValidation": "{{now}}",
+        "procedureSecoursIcs2": false,
+        "pdf": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAzMDAgMTUwXSAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiA+PiA+PiAvQ29udGVudHMgNSAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iago1IDAgb2JqCjw8IC9MZW5ndGggODkgPj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiAyMCAxMDAgVGQgKEVMTyBCMjAyNjA5MjcxMTMwMDA1Njc4QikgVGogMCAtMjAgVGQgKExPQ0FMIFdJUkVNT0NLIFNUVUIpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDAzMTEgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo0NTAKJSVFT0YK"
       }
     }
   },
@@ -55,12 +61,23 @@
       "arrive as an ENV_NOT01 passage notification the ELO API pushes rather than",
       "returns here (this stub set has nothing that produces one; nothing in the",
       "solution consumes ENV_NOT01 yet either — see src/EDI.ELO/README.md).",
-      "The jeton/numeroDossier values are fixed, regex-valid samples (see the",
-      "patterns on Enveloppe.Jeton/NumeroDossier in the spec) rather than echoes of",
-      "the request, since the real API mints both server-side.",
-      "To rehearse the 400 path, copy this file, change response.status to 400 and",
-      "the jsonBody to the ENV_CRE03 shape ({ informationsErreur: { statut, ",
-      "libelleErreur } }), then give it a higher priority and a narrower matcher."
+      "",
+      "sensTraversee is IMPORT, not EXPORT: UK to France is an arrival into the EU, and",
+      "the crossing direction is named from the French border's side. estTIRATA is true",
+      "with possedeContratTransport false, which is French Customs' own guidance for",
+      "emergency humanitarian aid destined for Ukraine (issue #24) and is what reduces",
+      "the envelope's requirement under ENV_CTR_RG08 to a single ENS. The declaration is",
+      "therefore an ENS rather than an export declaration.",
+      "",
+      "pdf carries a real base64 PDF, because that is what the field actually holds — the",
+      "spec types it as enum: [formatbytebase64], which is wrong and was generating an",
+      "unusable C# enum until build/nswag/elo.preprocess.json corrected it. A stub that",
+      "sent the literal string 'formatbytebase64' would have hidden that bug rather than",
+      "exercised the fix. It sits inside enveloppe here; the spec's own examples put it",
+      "beside enveloppe instead, and the worker reads whichever arrived.",
+      "",
+      "The 400 path is rehearsed by elo-create-envelope-rejected.json, which matches a",
+      "declaration identifier of REFUSE-ME at a higher priority."
     ]
   }
 }

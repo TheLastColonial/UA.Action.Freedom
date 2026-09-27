@@ -9,14 +9,17 @@ using UA.Action.Freedom.Telemetry;
 namespace UA.Action.Freedom.Api.Messaging;
 
 /// <summary>
-/// Puts Goods Movement Reference submissions on the customs work queue for the Customs Worker
-/// to pick up.
+/// Puts an approved manifest's border paperwork on its queues: the Goods Movement Reference and the
+/// French logistics envelope for the Customs Worker, the travelling document for the Manifest
+/// Worker.
 /// </summary>
 /// <remarks>
-/// Pull, not push: the worker drains this queue and polls HMRC for outcomes, and Freedom exposes
+/// Pull, not push: the workers drain these queues and poll for outcomes, and Freedom exposes
 /// no inbound callback endpoint (docs/recommendations.md §4.1).
 ///
-/// The wire shape must match <c>UA.Action.Freedom.CustomsWorker.Customs.GmrSubmission</c>. The
+/// The wire shapes must match <c>UA.Action.Freedom.CustomsWorker.Customs.GmrSubmission</c>,
+/// <c>UA.Action.Freedom.CustomsWorker.Elo.EloEnvelopeSubmission</c> and
+/// <c>UA.Action.Freedom.ManifestWorker.Documents.ManifestDocumentRequest</c>. The
 /// two projects deliberately do not share a type — the worker is a separate deployable and in
 /// the target design an Azure Function — so this is a contract between processes. It is written
 /// with <see cref="JsonSerializerOptions.Web"/> because that is what the worker reads with, and
@@ -32,10 +35,12 @@ public sealed class AzureManifestWorkQueue(
     QueueServiceClient? queues,
     IOptions<StorageOptions> storage,
     IOptions<CustomsOptions> customs,
+    IOptions<EloOptions> elo,
     QueueFlowMetrics? metrics = null) : IManifestWorkQueue
 {
     private readonly StorageOptions _storage = storage.Value;
     private readonly CustomsOptions _customs = customs.Value;
+    private readonly EloOptions _elo = elo.Value;
 
     public Task EnqueueGmrSubmissionAsync(
         GmrSubmissionRequest submission, CancellationToken cancellationToken) =>
@@ -69,6 +74,50 @@ public sealed class AzureManifestWorkQueue(
             + "to the Manifest Worker.",
             document,
             cancellationToken);
+
+    public Task EnqueueEloEnvelopeAsync(
+        EloEnvelopeRequest envelope, CancellationToken cancellationToken)
+    {
+        // Which declarations go on the envelope comes from configuration, the way the haulier EORI
+        // and route do for a GMR — today it is an environment fact rather than a per-manifest one.
+        // It stops being one as soon as Freedom obtains a real ENS from ICS2.
+        var declarations = string.IsNullOrWhiteSpace(_elo.PlaceholderDeclarationIdentifier)
+            ? Array.Empty<string>()
+            : [_elo.PlaceholderDeclarationIdentifier];
+
+        // ENV_CTR_RG08: a loaded transport unit must name at least one declaration. Refusing here
+        // rather than paying a round trip to be told the same thing, and saying which setting is
+        // missing — the manifest is already frozen by this point, so the message has to be useful.
+        if (envelope.Profile.RequiresADeclaration && declarations.Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"{EloOptions.SectionName}:{nameof(EloOptions.PlaceholderDeclarationIdentifier)} is not "
+                + "configured, and French customs refuses an envelope for a loaded lorry that names no "
+                + "declaration (ENV_CTR_RG08). Set it, or integrate ICS2 so a real ENS is available.");
+        }
+
+        return Enqueue(
+            QueueNames.EloEnvelopes,
+            _storage.EloQueue,
+            "Storage:ConnectionString is not configured, so the French customs logistics envelope for this "
+            + "manifest cannot be handed to the Customs Worker. France requires one per transport unit at "
+            + "the Smart Border, so this fails here rather than confirming a manifest whose vehicle cannot "
+            + "cross.",
+            new
+            {
+                manifestId = envelope.ManifestId,
+                crossingDirection = envelope.Profile.Direction.ToString(),
+                lorryType = envelope.Profile.LorryType.ToString(),
+                tirAta = envelope.Profile.TirAta,
+                hasTransportContract = envelope.Profile.HasTransportContract,
+                postal = envelope.Profile.Postal,
+                emptyPackaging = envelope.Profile.EmptyPackaging,
+                sanitaryOrPhytosanitary = envelope.Profile.SanitaryOrPhytosanitary,
+                fisheryProducts = envelope.Profile.FisheryProducts,
+                declarationIdentifiers = declarations,
+            },
+            cancellationToken);
+    }
 
     /// <summary>
     /// Sends one message inside a producer span, with that span's <c>traceparent</c> beside the

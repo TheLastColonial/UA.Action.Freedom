@@ -117,6 +117,16 @@ public interface IManifestWorkQueue
     /// type has nowhere to carry one.
     /// </remarks>
     Task EnqueueDocumentAsync(ManifestDocumentRequest document, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Asks for a French customs logistics envelope (ELO) for the vehicle this manifest covers.
+    /// </summary>
+    /// <remarks>
+    /// The other prong of the fork in <c>docs/process.puml</c>. France requires an envelope per
+    /// transport unit at the Smart Border, and it is what pairs the lorry's customs formalities with
+    /// its physical crossing — no envelope, no sailing.
+    /// </remarks>
+    Task EnqueueEloEnvelopeAsync(EloEnvelopeRequest envelope, CancellationToken cancellationToken);
 }
 
 /// <summary>One box on the document that travels with the vehicle.</summary>
@@ -151,3 +161,25 @@ public sealed record ManifestDocumentRequest(
 /// knows it — the manifest only knows which convoy it is on.
 /// </param>
 public sealed record GmrSubmissionRequest(string ManifestId, string VehicleRegistration, DateTime? DepartsAt);
+
+/// <param name="ManifestId">Which manifest's vehicle is crossing.</param>
+/// <param name="Profile">
+/// What the envelope declares about the crossing, which is what French customs uses to decide which
+/// formalities the envelope must contain.
+/// </param>
+/// <remarks>
+/// Two fields, and that is the whole of it. An ELO carries no goods description, no weights, no
+/// consignor or consignee, not even a registration — those belong to the customs declarations the
+/// envelope references. So unlike <see cref="ManifestDocumentRequest"/>, which had to be kept
+/// narrow on purpose, this one has nothing sensitive to withhold: the API itself has nowhere to
+/// put it.
+///
+/// <para>
+/// The declaration identifiers are added by the adapter rather than named here, following
+/// <see cref="GmrSubmissionRequest"/>, where the haulier EORI and route come from configuration for
+/// the same reason: today they are an environment fact, not a per-manifest one. That changes when
+/// Freedom obtains a real ENS from ICS2, at which point they become data on the manifest and move
+/// into this record. See <c>docs/gotchas-and-open-questions.md</c> §8.
+/// </para>
+/// </remarks>
+public sealed record EloEnvelopeRequest(string ManifestId, EloCrossingProfile Profile);

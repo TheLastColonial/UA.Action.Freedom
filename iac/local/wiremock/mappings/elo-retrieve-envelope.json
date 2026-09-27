@@ -5,13 +5,19 @@
     "method": "POST",
     "urlPath": "/enveloppe/recuperer",
     "headers": {
-      "messageCode": { "equalTo": "ENV_REC01" }
+      "messageCode": {
+        "equalTo": "ENV_REC01"
+      }
     }
   },
   "response": {
     "status": 200,
-    "headers": { "Content-Type": "application/json" },
-    "transformers": ["response-template"],
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "transformers": [
+      "response-template"
+    ],
     "jsonBody": {
       "enveloppe": {
         "jeton": "EI202609271130001234A",
@@ -19,10 +25,10 @@
         "statut": "APPAIREE",
         "modeCreation": "EDI",
         "informationsAppairage": {
-          "sensTraversee": "EXPORT",
+          "sensTraversee": "IMPORT",
           "typeCamion": "PLEIN",
-          "estTIRATA": false,
-          "possedeContratTransport": true,
+          "estTIRATA": true,
+          "possedeContratTransport": false,
           "estPostal": false,
           "estEmballageVide": false,
           "estSPS": false,
@@ -30,12 +36,11 @@
         },
         "declarations": [
           {
-            "identifiant": "26GB1234567890AB12",
-            "typeDeclaration": "EXPORT_SDS",
-            "sousTypeDeclaration": "DEPART",
+            "identifiant": "25FR17551780961AT5",
+            "typeDeclaration": "ENS",
             "informationsValidation": {
               "etat": "CONFORME",
-              "code": "",
+              "code": "RETOUR-OK",
               "message": ""
             }
           }
@@ -45,7 +50,8 @@
         "dateModification": "{{now offset='-30 minutes'}}",
         "dateValidation": "{{now offset='-15 minutes'}}",
         "aUneELOValide": true,
-        "procedureSecoursIcs2": false
+        "procedureSecoursIcs2": false,
+        "pdf": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAzMDAgMTUwXSAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiA+PiA+PiAvQ29udGVudHMgNSAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iago1IDAgb2JqCjw8IC9MZW5ndGggODkgPj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiAyMCAxMDAgVGQgKEVMTyBCMjAyNjA5MjcxMTMwMDA1Njc4QikgVGogMCAtMjAgVGQgKExPQ0FMIFdJUkVNT0NLIFNUVUIpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDAzMTEgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo0NTAKJSVFT0YK"
       }
     }
   },
@@ -60,7 +66,12 @@
       "envelope that way); jeton/dates are fixed illustrative samples.",
       "To rehearse the 400 path, copy this file, change response.status to 400 and",
       "the jsonBody to the ENV_REC03 shape ({ numeroDossier, statut,",
-      "libelleErreur }), then give it a higher priority and a narrower matcher."
+      "libelleErreur }), then give it a higher priority and a narrower matcher.",
+      "",
+      "sensTraversee is IMPORT and estTIRATA true: UK to France is an arrival into the EU,",
+      "and French Customs' guidance for emergency humanitarian aid to Ukraine is TIR/ATA",
+      "without a transport contract (issue #24). The declaration is an ENS accordingly.",
+      "These three stubs describe the same traffic, so they agree with each other."
     ]
   }
 }

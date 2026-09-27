@@ -27,10 +27,18 @@ public class ManifestEndpointTests
     private const int ConvoyId = 42;
     private const string Vin = "WVWZZZ1JZXW000001";
 
+    /// <summary>Fixed, regex-valid samples of the two references French customs mints.</summary>
+    private const string Jeton = "EI202512091201178668Z";
+    private const string NumeroDossier = "B2025120912003386654";
+
     private static readonly Guid Primary = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
     private static readonly Guid Secondary = new("7c1d2e50-8e9b-4d42-a063-7b1c9e4f6d22");
     private static readonly DateTime Departs = new(2026, 9, 1, 6, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime Published = new(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTimeOffset Submitted = new(2026, 8, 25, 10, 0, 0, TimeSpan.Zero);
+
+    private static readonly byte[] Barcode =
+        System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 barcode for one lorry");
 
     private static ManifestReadModel AManifest(
         ManifestStatus status = ManifestStatus.Created, bool frozen = false) => new(
@@ -476,4 +484,184 @@ public class ManifestEndpointTests
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    // ---- The French logistics envelope -------------------------------------------------------
+    //
+    // Requested by approving the manifest, the same way a GMR is, and obtained by the Customs
+    // Worker — so over HTTP it is read-only, and its absence is as meaningful as its presence.
+
+    [Fact]
+    public async Task Approving_a_manifest_asks_for_a_french_logistics_envelope()
+    {
+        var queue = new RecordingManifestWorkQueue();
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest(ManifestStatus.Proposed)), AConvoy(), ARosterOfDrivers(), queue,
+            roles: "Administrator");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsync(
+            $"/manifests/{Id}/approve", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var envelope = queue.Envelopes.Should().ContainSingle().Subject;
+        envelope.ManifestId.Should().Be(Id);
+        envelope.Profile.Should().Be(EloCrossingProfile.HumanitarianAidToUkraine);
+    }
+
+    /// <summary>
+    /// A manifest that has been approved but whose envelope has not come back yet. Not an error —
+    /// the worker drains its queue on a poll loop — but distinguishable from an envelope that exists,
+    /// because a dispatcher needs to know before the convoy leaves.
+    /// </summary>
+    [Fact]
+    public async Task A_manifest_with_no_envelope_yet_reports_that_it_has_none()
+    {
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
+            roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.GetAsync($"/manifests/{Id}/elo", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task An_issued_envelope_reports_its_references_and_its_status()
+    {
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
+            AnEnvelopeFor(Id), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.GetAsync($"/manifests/{Id}/elo", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var envelope = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        envelope.GetProperty("jeton").GetString().Should().Be(Jeton);
+        envelope.GetProperty("numeroDossier").GetString().Should().Be(NumeroDossier);
+        envelope.GetProperty("statut").GetString().Should().Be("FERMEE");
+        envelope.GetProperty("declarationCount").GetInt32().Should().Be(1);
+        envelope.GetProperty("hasBarcodeDocument").GetBoolean().Should().BeTrue();
+    }
+
+    /// <summary>
+    /// An envelope says nothing about the load, and the JSON is where that has to hold: this is the
+    /// shape a browser and any future integration will read.
+    /// </summary>
+    [Fact]
+    public async Task The_envelope_says_nothing_about_where_the_load_is_going()
+    {
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
+            AnEnvelopeFor(Id), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var envelope = await (await client.GetAsync(
+                $"/manifests/{Id}/elo", TestContext.Current.CancellationToken))
+            .Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+
+        envelope.EnumerateObject().Select(property => property.Name).Should().BeEquivalentTo(
+            "manifestId", "jeton", "numeroDossier", "statut", "declarationCount", "submittedAt",
+            "hasBarcodeDocument");
+    }
+
+    [Fact]
+    public async Task The_barcode_is_served_as_a_pdf_the_driver_can_print()
+    {
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
+            AnEnvelopeFor(Id), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.GetAsync(
+            $"/manifests/{Id}/elo/document", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.MediaType.Should().Be("application/pdf");
+        (await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken))
+            .Should().Equal(Barcode);
+    }
+
+    /// <summary>
+    /// The envelope exists at French customs but its barcode did not arrive in a form that could be
+    /// stored. The reference is still served — losing it would strand the envelope — and the document
+    /// is simply absent.
+    /// </summary>
+    [Fact]
+    public async Task An_envelope_without_a_barcode_still_reports_itself_and_serves_no_document()
+    {
+        var envelopes = new InMemoryEloEnvelopeStore().With(
+            new EloEnvelopeReadModel(Id, Jeton, NumeroDossier, "FERMEE", 1, Submitted, false));
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
+            envelopes, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var envelope = await client.GetAsync($"/manifests/{Id}/elo", TestContext.Current.CancellationToken);
+        var document = await client.GetAsync(
+            $"/manifests/{Id}/elo/document", TestContext.Current.CancellationToken);
+
+        envelope.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await envelope.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
+            .GetProperty("hasBarcodeDocument").GetBoolean().Should().BeFalse();
+        document.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Reading_an_envelope_without_a_token_is_unauthorized()
+    {
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
+            AnEnvelopeFor(Id), authenticated: false);
+        using var client = api.CreateClient();
+
+        var response = await client.GetAsync($"/manifests/{Id}/elo", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    /// <summary>
+    /// The Ground Officer is excluded from every manifest policy, and the isolation runs both ways —
+    /// a border document is not their business any more than a delivery address is a dispatcher's.
+    /// </summary>
+    [Fact]
+    public async Task A_ground_officer_is_refused_an_envelope_and_its_document()
+    {
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
+            AnEnvelopeFor(Id), roles: "GroundOfficer");
+        using var client = api.CreateClient();
+
+        var envelope = await client.GetAsync($"/manifests/{Id}/elo", TestContext.Current.CancellationToken);
+        var document = await client.GetAsync(
+            $"/manifests/{Id}/elo/document", TestContext.Current.CancellationToken);
+
+        envelope.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        document.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// Requesting an envelope is a consequence of approval, which is Administrator-only. There is
+    /// deliberately no route that submits one on its own.
+    /// </summary>
+    [Fact]
+    public async Task There_is_no_way_to_request_an_envelope_directly()
+    {
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
+            roles: "Administrator");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsync(
+            $"/manifests/{Id}/elo", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
+    }
+
+    private static InMemoryEloEnvelopeStore AnEnvelopeFor(string manifestId) =>
+        new InMemoryEloEnvelopeStore().With(
+            new EloEnvelopeReadModel(manifestId, Jeton, NumeroDossier, "FERMEE", 1, Submitted, true),
+            Barcode);
 }

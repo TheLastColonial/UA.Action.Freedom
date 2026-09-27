@@ -59,16 +59,42 @@ a non-2xx/non-declared status.
 See [`build/nswag/README.md`](../../build/nswag/README.md):
 
 ```
-pwsh build/nswag/regenerate.ps1 -Api elo -Raw
+pwsh build/nswag/regenerate.ps1 -Api elo
 ```
 
-**`-Raw` is not optional for this API.** The normal preprocessing pipeline unconditionally
-strips any header parameter literally named `Authorization` (a `HttpClient`-pipeline
-concern for the HMRC specs); for ELO that header is a real per-call caller-supplied
-parameter, so preprocessing would silently delete it from every generated method.
-`regenerate.ps1`/`.sh` refuse to run `-Api elo` without `-Raw`.
+`build/nswag/elo.preprocess.json` carries three corrections this API needs — the
+`Authorization` header parameter is preserved rather than dropped as a transport concern,
+the unusable `pdf` schema is rewritten (below), and `ENV_NOT01` is kept from being pruned.
+`-Raw` skips all three and now warns; use it only to diff.
 
 Do not hand-edit `Generated/`.
+
+## The barcode document
+
+`Enveloppe.Pdf` / `EnveloppeREC02.Pdf` and `ENV_CRE02.Pdf` / `ENV_MOD02.Pdf` /
+`ENV_REC02.Pdf` are `string?` holding **base64**, which the caller decodes:
+
+```csharp
+var base64 = created.Enveloppe?.Pdf ?? created.Pdf;
+```
+
+Both placements exist because the spec contradicts itself: the schema puts `pdf` inside
+`enveloppe`, its worked examples put it beside it. Read whichever is non-null.
+
+Decode explicitly and treat failure as a permanent error — an envelope whose document is
+unreadable will not become readable on retry:
+
+```csharp
+if (!Convert.TryFromBase64String(base64, buffer, out var written)) { /* dead-letter */ }
+```
+
+> **Previously a blocking bug.** The spec declares `pdf` as
+> `type: string, enum: [formatbytebase64]` — a single-value enum naming an encoding rather
+> than carrying content — so NSwag generated a one-member C# enum with a
+> `JsonStringEnumConverter`. That converter throws on any value but the member name, and the
+> real API sends base64, so **every successful create and retrieve failed to deserialise**.
+> An earlier version of this file described it as harmless; it was not. Fixed in
+> `build/nswag/elo.preprocess.json` rather than by hand-editing the committed spec.
 
 ## Known generator quirks (harmless)
 
@@ -76,14 +102,10 @@ Do not hand-edit `Generated/`.
   `dateEmbarquement` / `dateDebarquement` are declared in the spec as plain `type: string`
   (no `format: date-time`), so NSwag generates them as `string?`, not `DateTimeOffset?`.
   Callers must parse/format these themselves. Left as-is rather than hand-editing the
-  committed third-party spec.
-- `pdf` is declared as `type: string, enum: [formatbytebase64]` — a single-value enum used
-  by the French customs API to *label* the encoding of a (currently absent) payload rather
-  than carry real content. NSwag generates this as a genuine one-member C# enum. Harmless,
-  but odd if you go looking for the actual PDF bytes.
+  committed third-party spec — unlike `pdf`, a string date is inconvenient, not unreadable.
 - `ENV_NOT01` (the inbound passage/pairing notification: APPAIRAGE/EMBARQUEMENT/
   DEBARQUEMENT) is not referenced by any path in the spec, so it does not appear on
-  `IEloClient` — it is generated purely as a DTO (`ENV_NOT01`, kept as-is by the generator
-  since it's already a valid C# identifier) for callers who need to deserialise it from
-  wherever ELO delivers passage notifications (out of scope for this library, which only
-  wraps the three documented HTTP operations).
+  `IEloClient` — it is generated purely as a DTO for callers who need to deserialise one
+  from wherever ELO delivers passage notifications (out of scope for this library, which
+  only wraps the three documented HTTP operations). It survives the pruning pass only
+  because `elo.preprocess.json` lists it in `keepComponents`.

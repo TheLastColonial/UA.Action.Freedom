@@ -1,0 +1,35 @@
+{
+  "//": [
+    "French customs ELO (API_BREXIT_ELO). Three deviations from the published spec, each",
+    "documented in build/nswag/README.md and src/EDI.ELO/README.md.",
+    "",
+    "preserveHeaderParameters: Authorization is a real per-call parameter here, not a transport",
+    "  concern. The ELO spec declares no security scheme at all, so the caller supplies the bearer",
+    "  token as a method argument alongside messageCode/functionalId/messageId/correlationId.",
+    "",
+    "overrideProperties: the spec declares 'pdf' as { type: string, enum: [formatbytebase64] } — a",
+    "  single-value enum naming an encoding rather than carrying content. Its own worked examples",
+    "  send real base64 in that field, so a generated string-enum converter throws on every",
+    "  response that has a barcode, which is every successful create and retrieve. Plain string,",
+    "  not format:byte: NJsonSchema would emit byte[] and decode inside the deserialiser, turning a",
+    "  malformed value into a crash instead of something a worker can dead-letter.",
+    "  The examples also put 'pdf' beside 'enveloppe' rather than inside it, disagreeing with the",
+    "  schema, so both placements are bound and a caller reads whichever arrived.",
+    "",
+    "keepComponents: ENV_NOT01 is the passage notification (APPAIRAGE/EMBARQUEMENT/DEBARQUEMENT)",
+    "  French customs pushes to an operator's callback URL. No path returns it, so pruning would",
+    "  drop it, but it is exactly the DTO a future caller needs in order to deserialise one."
+  ],
+
+  "preserveHeaderParameters": ["Authorization"],
+
+  "keepComponents": ["ENV_NOT01"],
+
+  "overrideProperties": {
+    "Enveloppe": { "pdf": { "type": "string" } },
+    "EnveloppeREC02": { "pdf": { "type": "string" } },
+    "ENV_CRE02": { "pdf": { "type": "string" } },
+    "ENV_MOD02": { "pdf": { "type": "string" } },
+    "ENV_REC02": { "pdf": { "type": "string" } }
+  }
+}
