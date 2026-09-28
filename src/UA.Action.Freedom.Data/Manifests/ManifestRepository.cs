@@ -294,4 +294,42 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
 
         return rows.ToList();
     }
+
+    public async Task<IReadOnlyList<EnsGoodsLineReadModel>> GetEnsGoodsLinesAsync(
+        string id, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // A row per item, because an ENS declares goods items while Freedom packs boxes. The box's
+        // weight repeats across its items; the caller de-duplicates on BoxId before adding anything
+        // up, which is also how it counts packages.
+        //
+        // dbo.Receiver only, as in GetDocumentLinesAsync — and ReceiverRef is included here because
+        // the sheet groups by consignee and tells the filer which receiver to look the address up
+        // against. The address itself is in the sensitive schema this connection is DENY'd on (§4.4).
+        //
+        // ORDER BY is not cosmetic: the goods item number is non-amendable in ICS2, so it has to come
+        // from a stable order rather than whatever the database felt like returning.
+        var rows = await connection.QueryAsync<EnsGoodsLineReadModel>(new CommandDefinition(
+            """
+            SELECT b.Id             AS BoxId,
+                   b.WeightKg,
+                   CAST(CASE WHEN b.ValidatedAt IS NULL THEN 0 ELSE 1 END AS bit) AS Validated,
+                   b.ReceiverRef,
+                   r.Organisation   AS ReceiverOrganisation,
+                   r.Region         AS ReceiverRegion,
+                   i.Description    AS ItemDescription,
+                   i.CommodityCode
+            FROM dbo.ManifestBox AS mb
+            INNER JOIN dbo.Box AS b ON b.Id = mb.BoxId
+            INNER JOIN dbo.BoxItem AS i ON i.BoxId = b.Id
+            LEFT JOIN dbo.Receiver AS r ON r.ReceiverRef = b.ReceiverRef
+            WHERE mb.ManifestId = @id
+            ORDER BY b.Id, i.Description, i.Id
+            """,
+            new { id = SqlKey.Of(id) },
+            cancellationToken: cancellationToken));
+
+        return rows.ToList();
+    }
 }

@@ -10,6 +10,7 @@ import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
 import { ManifestBoxesPanel } from './ManifestBoxesPanel';
+import { ManifestEnsPanel } from './ManifestEnsPanel';
 import { ManifestStatePanel } from './ManifestStatePanel';
 import { ManifestCrewPanel } from './ManifestCrewPanel';
 import { ManifestWeightPanel } from './ManifestWeightPanel';
@@ -129,6 +130,7 @@ export function ManifestDetailPage(): JSX.Element {
 
       {tab === 'status' ? (
         <TabPanel id="status">
+          <ManifestEnsPanel manifestId={manifest.id} />
           <ManifestStatePanel manifest={manifest} />
         </TabPanel>
       ) : null}

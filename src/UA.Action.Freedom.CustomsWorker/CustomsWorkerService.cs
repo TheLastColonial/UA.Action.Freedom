@@ -1,3 +1,4 @@
+using EDI.ELO;
 using HMRC.GVMS;
 using HMRC.PushPullNotifications;
 using Microsoft.Extensions.Hosting;
@@ -5,21 +6,26 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using UA.Action.Freedom.CustomsWorker.Configuration;
 using UA.Action.Freedom.CustomsWorker.Customs;
+using UA.Action.Freedom.CustomsWorker.Elo;
 using UA.Action.Freedom.CustomsWorker.Telemetry;
 using UA.Action.Freedom.Telemetry;
 
 namespace UA.Action.Freedom.CustomsWorker;
 
 /// <summary>
-/// Drives both halves of the Customs Worker.
+/// Drives all three parts of the Customs Worker.
 /// </summary>
 /// <remarks>
 /// Azure Functions supplies the triggers in the target design — a queue trigger for
-/// submissions and a timer trigger for outcomes. Here a single hosted service does the
-/// waking, which keeps the local environment on open tooling and, more usefully, keeps the
-/// interesting logic (<see cref="GmrSubmissionProcessor"/> and
-/// <see cref="GmrOutcomeCollector"/>) independent of whatever calls it. Moving to Functions
-/// later replaces this file and nothing else.
+/// submissions, another for envelopes and a timer trigger for outcomes. Here a single hosted
+/// service does the waking, which keeps the local environment on open tooling and, more
+/// usefully, keeps the interesting logic (<see cref="GmrSubmissionProcessor"/>,
+/// <see cref="EloEnvelopeProcessor"/> and <see cref="GmrOutcomeCollector"/>) independent of
+/// whatever calls it. Moving to Functions later replaces this file and nothing else.
+/// <para>
+/// The two queue loops are separate rather than one loop alternating between them, so a French
+/// customs outage cannot stall UK submissions behind it, and each reports its own heartbeat.
+/// </para>
 /// <para>
 /// Each pass of each loop reports a heartbeat, so a loop that has stopped is visible as a stale
 /// timestamp rather than looking exactly like a worker with nothing to do.
@@ -27,12 +33,14 @@ namespace UA.Action.Freedom.CustomsWorker;
 /// </remarks>
 public sealed class CustomsWorkerService(
     GmrSubmissionProcessor submissions,
+    EloEnvelopeProcessor envelopes,
     GmrOutcomeCollector outcomes,
     IOptions<WorkerOptions> options,
     ILogger<CustomsWorkerService> logger,
     WorkerLoopMetrics? loopMetrics = null) : BackgroundService
 {
     private const string DrainLoop = "drain";
+    private const string EnvelopeLoop = "elo";
     private const string OutcomesLoop = "outcomes";
 
     private readonly WorkerOptions _worker = options.Value;
@@ -41,16 +49,36 @@ public sealed class CustomsWorkerService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation(
-            "Customs Worker started. Queue every {QueueSeconds}s, outcomes every {OutcomeSeconds}s.",
+            "Customs Worker started. Queues every {QueueSeconds}s, outcomes every {OutcomeSeconds}s.",
             _worker.QueuePollSeconds,
             _worker.OutcomePollSeconds);
 
         await Task.WhenAll(
             DrainQueue(stoppingToken),
+            DrainEnvelopes(stoppingToken),
             PollOutcomes(stoppingToken));
     }
 
-    private async Task DrainQueue(CancellationToken stoppingToken)
+    private Task DrainQueue(CancellationToken stoppingToken) => Drain(
+        DrainLoop,
+        submissions.ProcessNextAsync,
+        "Unhandled error draining the customs work queue.",
+        stoppingToken);
+
+    private Task DrainEnvelopes(CancellationToken stoppingToken) => Drain(
+        EnvelopeLoop,
+        envelopes.ProcessNextAsync,
+        "Unhandled error draining the French logistics envelope queue.",
+        stoppingToken);
+
+    /// <summary>
+    /// Polls one queue, draining it greedily whenever there is work.
+    /// </summary>
+    private async Task Drain(
+        string loop,
+        Func<CancellationToken, Task<bool>> processNext,
+        string unhandled,
+        CancellationToken stoppingToken)
     {
         using var idle = new PeriodicTimer(TimeSpan.FromSeconds(_worker.QueuePollSeconds));
 
@@ -61,11 +89,11 @@ public sealed class CustomsWorkerService(
                 // Keep going while there is work: a convoy's worth of manifests arrives at
                 // once, and waiting a poll interval between each would turn a burst into a
                 // queue that drains all afternoon.
-                while (await submissions.ProcessNextAsync(stoppingToken))
+                while (await processNext(stoppingToken))
                 {
                 }
 
-                _loops.Succeeded(DrainLoop);
+                _loops.Succeeded(loop);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -73,10 +101,11 @@ public sealed class CustomsWorkerService(
             }
             catch (Exception exception)
             {
-                // The loop must survive anything the queue or HMRC does to it. A worker that
-                // dies on an unexpected error stops submitting for every other manifest too.
-                _loops.Failed(DrainLoop);
-                LogUnhandled(exception, "Unhandled error draining the customs work queue.");
+                // The loop must survive anything the queue or a customs authority does to it. A
+                // worker that dies on an unexpected error stops submitting for every other
+                // manifest too.
+                _loops.Failed(loop);
+                LogUnhandled(exception, unhandled);
             }
 
             if (!await SafeWait(idle, stoppingToken))
@@ -116,9 +145,9 @@ public sealed class CustomsWorkerService(
     }
 
     /// <summary>
-    /// Logs an error that escaped a loop. HMRC's API exceptions carry up to 512 characters of the
-    /// response body in their message, which can echo a plate or an EORI, so for those only the
-    /// type and status are logged.
+    /// Logs an error that escaped a loop. The API exceptions of HMRC and French customs alike carry
+    /// the response body in their message, which can echo a plate, an EORI or a declaration, so for
+    /// those only the type and status are logged.
     /// </summary>
     private void LogUnhandled(Exception exception, string message)
     {
@@ -126,12 +155,15 @@ public sealed class CustomsWorkerService(
         {
             GvmsApiException api => api.StatusCode,
             PushPullNotificationsApiException ppns => ppns.StatusCode,
+            EloApiException elo => elo.StatusCode,
             _ => (int?)null,
         };
 
         if (status is { } code)
         {
-            logger.LogError("{Message} HMRC answered {StatusCode} ({ExceptionType}).", message, code, exception.GetType().Name);
+            logger.LogError(
+                "{Message} The authority answered {StatusCode} ({ExceptionType}).",
+                message, code, exception.GetType().Name);
             return;
         }
 

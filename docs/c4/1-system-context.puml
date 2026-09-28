@@ -22,6 +22,10 @@ Enterprise_Boundary(hmrc, "HMRC") {
     hmrc_goods_api --> hmrc_notifications : Completes Goods Movement Requests
 }
 
+Enterprise_Boundary(dgddi, "French Customs (DGDDI)") {
+    System_Ext(elo_api, "ELO API (Brexit IS)", "API_BREXIT_ELO — issues the Enveloppe Logistique Obligatoire a lorry must present at the French Smart Border", $link="https://www.douane.gouv.fr/fiche/echange-de-donnees-informatise-edi-api")
+}
+
 Enterprise_Boundary(ua_action, "UA Action") {
     
     Person(administrator, "Administrator", "A person who manages access and roles")
@@ -59,5 +63,6 @@ guard -> driver : Verifies convoy information
 
 freedom --> hmrc_goods_api : Sends Goods Movement Requests
 hmrc_notifications --> freedom : Updates status of Goods Movement Requests
+freedom --> elo_api : Creates logistics envelopes for the France crossing
 
 @enduml

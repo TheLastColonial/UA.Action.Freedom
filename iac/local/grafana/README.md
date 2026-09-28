@@ -32,7 +32,7 @@ Folder **`Freedom`**, at `http://localhost:3000/d/<uid>`.
 | --- | --- |
 | `freedom-dotnet` | HTTP server RED, outbound calls, .NET runtime, Kestrel, logs and traces. A `Service` variable scopes it to any of the three services. Health probes excluded. |
 | `freedom-api` | Requests by route, 4xx/5xx mix, slowest routes, authentication and authorization, command outcomes per handler, SQL errors, storage/Keycloak dependency latency, error logs and traces. |
-| `freedom-customs-worker` | Queue depth and oldest age, message dispositions, dead-letter reasons by HMRC status, submission duration, outcome notifications by GMR state, loop heartbeats. |
+| `freedom-customs-worker` | Both border authorities. HMRC: queue depth and oldest age, message dispositions, dead-letter reasons by HMRC status, submission duration, outcome notifications by GMR state. French customs: the `elo-envelopes` queue, envelope outcomes, latency and refusals. Loop heartbeats for all three loops. |
 | `freedom-manifest-worker` | Queue depth and age, dispositions, render and store duration, document size, blob latency, loop heartbeat. |
 | `freedom-manifest-pipeline` | An approval end to end: transitions, partial failures, both queues, poison depth, GMR states, cross-service traces. |
 | `freedom-convoy-operations` | Convoy, box, bay, vehicle and volunteer command outcomes. |
@@ -50,7 +50,7 @@ OpenTelemetry names become Prometheus names by replacing dots with underscores, 
 | `freedom_handler_invocations_total` | counter | `handler`, `outcome`, `result` (`ok` \| `rejected` \| `error` \| `cancelled`) | app — every command handler |
 | `freedom_handler_duration_seconds` | histogram | `handler`, `result` | app |
 | `freedom_manifest_transitions_total` | counter | `from`, `to`, `outcome` | app |
-| `freedom_manifest_approve_partial_failures_total` | counter | `stage` (`gmr` \| `document`) | app — froze a manifest, then could not hand its paperwork on |
+| `freedom_manifest_approve_partial_failures_total` | counter | `stage` (`gmr` \| `document` \| `elo`) | app — froze a manifest, then could not hand its paperwork on |
 | `freedom_receiver_detail_resolves_total` | counter | `result` (`found` \| `not_found`) | app — aggregate only |
 | `freedom_db_errors_total` | counter | `sql_error` (`deadlock` \| `timeout` \| `unavailable` \| `foreign_key` \| `unique` \| `other`) | app — unhandled SQL errors only |
 | `freedom_queue_enqueue_total` | counter | `queue`, `result` (`ok` \| `failed`) | app |
@@ -62,13 +62,15 @@ OpenTelemetry names become Prometheus names by replacing dots with underscores, 
 | `freedom_worker_loop_last_success_seconds` | gauge (unix time) | `loop` | workers — `time() - x` is staleness |
 | `freedom_worker_loop_errors_total` | counter | `loop` | workers |
 | `freedom_gmr_submission_duration_seconds` | histogram | `outcome` (`accepted` \| `rejected` \| `error`) | customs worker |
-| `freedom_gmr_dead_letters_total` | counter | `reason`, `http_response_status_code` (for `hmrc_rejected`) | customs worker |
+| `freedom_gmr_dead_letters_total` | counter | `reason` (`unreadable` \| `no_manifest_ref` \| `hmrc_rejected` \| `no_declaration` \| `elo_rejected`), `http_response_status_code` (for a rejection) | customs worker — both authorities share this counter, told apart by `reason` |
 | `freedom_gmr_outcome_notifications_total` | counter | `result`, `state` (GMR state, or `none` / `unknown`) | customs worker |
+| `freedom_elo_submission_duration_seconds` | histogram | `outcome` (`accepted` \| `rejected` \| `error`) | customs worker — its own series, not a label on the GMR one: different authority, different latency |
 | `freedom_manifest_document_render_duration_seconds` | histogram | — | manifest worker |
 | `freedom_manifest_document_store_duration_seconds` | histogram | `result` (`ok` \| `error`) | manifest worker |
 | `freedom_manifest_document_lines` | histogram | — | manifest worker — boxes per document |
 
-`queue` is the *logical* name (`customs-work`, `manifest-documents`), not the storage queue name.
+`queue` is the *logical* name (`customs-work`, `elo-envelopes`, `manifest-documents`), not the storage
+queue name.
 Also available from the runtime: `http_server_request_duration_seconds_*` (health probes excluded),
 `http_client_request_duration_seconds_*` (by `server_address`), `aspnetcore_authentication_*`,
 `aspnetcore_authorization_attempts_total`, `dotnet_*`, `kestrel_*`.

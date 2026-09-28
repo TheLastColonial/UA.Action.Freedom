@@ -92,6 +92,19 @@ public interface IManifestRepository
     /// </remarks>
     Task<IReadOnlyList<ManifestDocumentLineReadModel>> GetDocumentLinesAsync(
         string id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// One row per packed item, for the ICS2 filing sheet: what it is, what it is classified as, which
+    /// box it came out of and which receiver it is for.
+    /// </summary>
+    /// <remarks>
+    /// Per item rather than per box, because an ENS declares goods items while Freedom packs boxes.
+    /// Reads <c>dbo.Receiver</c> only — reference, organisation and region. The delivery address lives
+    /// in the <c>sensitive</c> schema, which this connection is <c>DENY</c>'d on, so a query here that
+    /// reached for one would fail at the database rather than quietly succeed (§4.4).
+    /// </remarks>
+    Task<IReadOnlyList<EnsGoodsLineReadModel>> GetEnsGoodsLinesAsync(
+        string id, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -117,6 +130,16 @@ public interface IManifestWorkQueue
     /// type has nowhere to carry one.
     /// </remarks>
     Task EnqueueDocumentAsync(ManifestDocumentRequest document, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Asks for a French customs logistics envelope (ELO) for the vehicle this manifest covers.
+    /// </summary>
+    /// <remarks>
+    /// The other prong of the fork in <c>docs/process.puml</c>. France requires an envelope per
+    /// transport unit at the Smart Border, and it is what pairs the lorry's customs formalities with
+    /// its physical crossing — no envelope, no sailing.
+    /// </remarks>
+    Task EnqueueEloEnvelopeAsync(EloEnvelopeRequest envelope, CancellationToken cancellationToken);
 }
 
 /// <summary>One box on the document that travels with the vehicle.</summary>
@@ -150,4 +173,44 @@ public sealed record ManifestDocumentRequest(
 /// Planned departure, taken from the convoy. HMRC needs a crossing time, and the convoy is what
 /// knows it — the manifest only knows which convoy it is on.
 /// </param>
-public sealed record GmrSubmissionRequest(string ManifestId, string VehicleRegistration, DateTime? DepartsAt);
+/// <remarks>
+/// The ICS2 ENS MRN is deliberately <strong>not</strong> here, and that is a finding rather than an
+/// omission. GVMS does have a field for it — <c>sAndSMasterRefNum</c>, "the Movement Reference Number
+/// for a Safety &amp; Security declaration … applies to both ENS and EXS" — but it hangs off a
+/// declaration container, and every container requires a primary identifier Freedom does not hold:
+/// <c>customsDeclarations[].customsDeclarationId</c> is a CDS DUCR for an outbound movement,
+/// <c>tirDeclarations[].tirCarnetId</c> a TIR carnet number, <c>ataDeclarations[].ataCarnetId</c> an
+/// ATA one. Putting the ENS MRN in <c>customsDeclarationId</c> would file an ICS2 reference as a CDS
+/// one. The spec also scopes ICS2 MRNs to the <c>GB_TO_NI</c> direction, and these movements are
+/// <c>UK_OUTBOUND</c>. See <c>docs/gotchas-and-open-questions.md</c> §5b.
+/// </remarks>
+public sealed record GmrSubmissionRequest(
+    string ManifestId, string VehicleRegistration, DateTime? DepartsAt);
+
+/// <param name="ManifestId">Which manifest's vehicle is crossing.</param>
+/// <param name="Profile">
+/// What the envelope declares about the crossing, which is what French customs uses to decide which
+/// formalities the envelope must contain.
+/// </param>
+/// <param name="DeclarationIdentifiers">
+/// The formalities this crossing is being paired to. Under
+/// <see cref="EloCrossingProfile.HumanitarianAidToUkraine"/> that is exactly one ICS2 ENS MRN, and
+/// <c>ApproveManifestHandler</c> refuses to approve a manifest that has none — a loaded lorry naming
+/// no formality is refused by French customs under ENV_CTR_RG08, and by then the manifest is frozen.
+/// </param>
+/// <remarks>
+/// An ELO carries no goods description, no weights, no consignor or consignee, not even a
+/// registration — those belong to the customs declarations the envelope references. So unlike
+/// <see cref="ManifestDocumentRequest"/>, which had to be kept narrow on purpose, this one has
+/// nothing sensitive to withhold: the API itself has nowhere to put it. An MRN is a reference to a
+/// declaration another authority holds, not a description of one.
+///
+/// <para>
+/// The identifiers are per-manifest data, which is what this record's own remarks predicted would
+/// happen "when Freedom obtains a real ENS from ICS2". They used to be supplied by the adapter from
+/// <c>Elo:PlaceholderDeclarationIdentifier</c>, a stand-in the local stub accepted and real French
+/// customs refuses with FONC-ERR-004. That setting is gone.
+/// </para>
+/// </remarks>
+public sealed record EloEnvelopeRequest(
+    string ManifestId, EloCrossingProfile Profile, IReadOnlyList<string> DeclarationIdentifiers);

@@ -35,7 +35,7 @@ src/
 ├── UA.Action.Freedom.Application/      # Use cases, CQRS handlers, orchestration
 ├── UA.Action.Freedom.Data/             # Dapper repositories, SQL persistence
 ├── UA.Action.Freedom.Api/              # ASP.NET Core minimal API host
-├── UA.Action.Freedom.CustomsWorker/    # HMRC GMR submission & outcome collection
+├── UA.Action.Freedom.CustomsWorker/    # HMRC GMR submission & outcomes, French ELO envelopes
 ├── UA.Action.Freedom.ManifestWorker/   # Manifest document rendering
 ├── UA.Action.Freedom.Telemetry/         # Shared OpenTelemetry wiring, span redaction, queue & worker metrics
 ├── HMRC.GVMS/                          # HMRC Goods Vehicle Movements SDK
@@ -71,6 +71,8 @@ docs/
 ├── local-authentication.md             # Token & role setup guide
 ├── gotchas-and-open-questions.md       # Debugging & known traps
 ├── recommendations.md                  # Azure architecture & design decisions
+├── adr/                                # Architecture decision records
+├── schemas/edi/onboarding.md           # Becoming an ELO EDI operator with French Customs
 └── c4/                                 # C4 system & container diagrams
 ```
 
@@ -139,7 +141,8 @@ npm run verify         # typecheck + lint + format + test + build (what CI runs)
 
 ### Local Development Environment
 
-Run the full local infrastructure (SQL, Blob/Queue Storage, Keycloak auth, HMRC mocks):
+Run the full local infrastructure (SQL, Blob/Queue Storage, Keycloak auth, and WireMock standing
+in for both the HMRC APIs and the French customs ELO API):
 
 ```bash
 # Start Docker containers (db-deploy publishes the database schema and exits)
@@ -170,6 +173,22 @@ through the browser.
 - `admin` — Administrator role
 - `operator` — Dispatcher, Loader, Mechanic, Purchaser roles
 - `groundofficer` — GroundOfficer role (segregated access to delivery addresses)
+
+**After changing code**, rebuild the images before running the BDD or Playwright suites, which drive
+the *deployed containers* rather than an in-process host:
+
+```bash
+cd iac/local
+docker compose build app customs-worker manifest-worker
+docker compose up -d --wait app edge customs-worker manifest-worker
+```
+
+**After editing a WireMock mapping** (`iac/local/wiremock/mappings/`), restart that container —
+mappings are loaded at boot, so an edited stub does nothing until then:
+
+```bash
+docker compose restart wiremock
+```
 
 ### Container images
 
@@ -235,7 +254,11 @@ Core resource endpoints:
   - `PUT /manifests/{id}` — Notes and ferry booking only. The convoy and the vehicle are the manifest's identity, so there is no field for either
   - `GET /manifests/{id}/crew` — Who is travelling with its vehicle, per leg. A **read**: crewing happens once, on the truck-list entry
   - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo assignment
-  - `POST /manifests/{id}/{transition}` — State transitions: `propose`, `approve`, `reject`, `prepare`, `ready`, `depart`, `deliver`, `lose`, `return`
+  - `GET /manifests/{id}/elo` — The French logistics envelope for this vehicle: its `jeton`, `numeroDossier` and `statut`. **Read-only** — an envelope is requested by approving the manifest, never by a `POST` here — and `404` until the Customs Worker has obtained one (`manifests:read`)
+  - `GET /manifests/{id}/elo/document` — The barcode PDF a driver presents at the French Smart Border, streamed through the authenticated API rather than as a blob URL (`manifests:read`)
+  - `GET /manifests/{id}/ens/filing-sheet` — Everything an **ICS2 Entry Summary Declaration** asks for that Freedom can know, plus a `missing` list of what it cannot. Deliberately carries **no delivery address**: the filer is a Ground Officer and holds it already (`manifests:read`)
+  - `GET|PUT|DELETE /manifests/{id}/ens` — The ENS MRN this crossing was accepted under. **Recorded, not submitted** — Freedom does not talk to ICS2 — and **write-once**: `DELETE` withdraws it (keeping it) so a refiled declaration can be recorded. `PUT`/`DELETE` are `manifests:declare`, Administrator and Dispatcher
+  - `POST /manifests/{id}/{transition}` — State transitions: `propose`, `approve`, `reject`, `prepare`, `ready`, `depart`, `deliver`, `lose`, `return`. **`approve` is Administrator-only and hands off three things at once**: the UK Goods Movement Reference, the document that travels with the vehicle, and the French logistics envelope. It is **refused with 409 unless an ENS MRN has been recorded**, and refused *before* anything is frozen
 - `GET|POST /locations` — Distribution hubs (garages/warehouses); writes are **Administrator only**
   - `PUT|DELETE /locations/{id}` — Rename or remove a location
   - `GET|POST /locations/{id}/bays` — Bays within a location (code unique per location, not globally)
@@ -247,12 +270,15 @@ See `docs/local-authentication.md` for the full role/policy matrix.
 
 The **operator UI (`web/`) covers every endpoint above** — all seven slices, every sub-resource
 (convoy route/truck list/crew/insurance, box items/validate/bay, box QR label issue/print/revoke,
-location bays, manifest crew/boxes/weight), all nine manifest transitions, and the reason-gated
-receiver-detail flow —
-with nav and actions gated by the same policy matrix (the API stays the enforcement point). The
-box detail page's **QR label** panel issues a label, shows it inline and prints it (a print
-stylesheet reveals the label alone); `/boxes/scan/{token}` is consumed by whatever scans the
-printed label, not the operator UI.
+location bays, manifest crew/boxes/weight, the ICS2 declaration a manifest's approval now requires),
+all nine manifest transitions, and the reason-gated receiver-detail flow — with nav and actions
+gated by the same policy matrix (the API stays the enforcement point). The manifest's **Status**
+tab records and withdraws the ENS MRN (`manifests:declare`, Administrator and Dispatcher) before
+offering Approve, which is refused without one (`docs/adr/0003`); the two ELO reads and the ENS
+filing sheet remain without UI, read via `GET /manifests/{id}/elo`, `GET /manifests/{id}/elo/document`
+and `GET /manifests/{id}/ens/filing-sheet` by hand. The box detail page's **QR label** panel issues
+a label, shows it inline and prints it (a print stylesheet reveals the label alone);
+`/boxes/scan/{token}` is consumed by whatever scans the printed label, not the operator UI.
 
 ## Architecture
 
@@ -266,7 +292,7 @@ printed label, not the operator UI.
 - Sign-in is **Authorization Code + PKCE** against the public Keycloak client `freedom-spa`
   (`iac/tofu/keycloak.tf`); the resulting JWT is sent as `Authorization: Bearer`. The API is
   unchanged — still a pure JWT resource server.
-- Nav and actions are gated by the same 20-policy matrix the API enforces
+- Nav and actions are gated by the same 21-policy matrix the API enforces
   (`docs/local-authentication.md`); the API remains the enforcement point. Receiver street
   addresses are never rendered on any print/verification view.
 
@@ -306,6 +332,80 @@ Manifests follow a 10-state model (see `docs/manifest-status.puml`):
 - Proposed → Confirmed (admin approval freezes it)
 - Once confirmed, only progress states run: Preparing → Ready → InTransit → Delivered
 - A confirmed manifest cannot be edited (backward transitions blocked)
+
+### Border paperwork, and how it is obtained
+
+Approving a manifest is the fork in `docs/process.puml`. It freezes the manifest and then hands off
+three things, each onto a durable queue rather than by calling out inside the HTTP request:
+
+| What | Queue | Obtained by | Stored in |
+| --- | --- | --- | --- |
+| **GMR** — the UK Goods Movement Reference | `customs-work` | Customs Worker → HMRC GVMS | `gmr` container |
+| **Manifest document** — travels with the vehicle | `manifest-documents` | Manifest Worker | `manifests` container |
+| **ELO** — the French logistics envelope | `elo-envelopes` | Customs Worker → French customs | `elo` container |
+
+The freeze happens **before** the hand-offs, deliberately: a failed hand-off leaves a frozen manifest
+with paperwork that was never requested, which is visible and retryable, where the reverse would
+leave an editable manifest whose GMR was already on its way.
+
+An **ELO** (*Enveloppe Logistique Obligatoire*) is required per transport unit at the French Smart
+Border. It is not a goods declaration — it carries no cargo, weights, consignor, consignee or even a
+registration. It is an index: crossing flags plus a list of declaration identifiers issued by other
+customs systems. Freedom reads it back at `GET /manifests/{id}/elo`, and its barcode at
+`/elo/document`.
+
+The declaration identifier the envelope names is the **ENS MRN**, recorded against the manifest — which
+is what closed the one gap the ELO integration shipped with. See
+[`docs/schemas/edi/onboarding.md`](docs/schemas/edi/onboarding.md) for the DGDDI authorisation, user
+agreement and certification run that no amount of code replaces.
+
+### The ICS2 Entry Summary Declaration: recorded, not submitted
+
+An **ENS** is the EU's pre-arrival safety-and-security declaration, lodged in ICS2, mandatory for road
+carriers since September 2025. **The ELO cannot be created without its MRN**, so the order is
+ENS → MRN → ELO → barcode → check-in, with no catching up at the border. For an accompanied movement
+only one party may file, and it is the carrier — Ukrainian Action's own volunteers drive, so the charity
+is the filer.
+
+**Freedom records the MRN; it does not submit the declaration.** ICS2's Shared Trader Interface speaks
+EU eDelivery **AS4** — SOAP over ebMS3, with an eIDAS sealing certificate registered in UUM&DS and a
+mandatory conformance run — so the NSwag-generated-client pattern behind `EDI.ELO` and the two HMRC SDKs
+does not transfer, and AS4 needs the permanently reachable *inbound* endpoint this design refuses
+(`docs/recommendations.md` §4.1). There is therefore **no `src/ICS2.*` project and no queue**: a Ground
+Officer files in the EU Customs Trader Portal and a Dispatcher records the MRN. `IEnsDeclarationStore`
+is the seam an IT Service Provider's adapter drops into later, which is a procurement decision rather
+than a coding one.
+
+Three things fall out of that and are worth knowing before touching this slice:
+
+- **`GET /manifests/{id}/ens/filing-sheet` is deliberately incomplete.** It composes the declarant and
+  carrier EORI, consignor, office of first entry, mode of transport, active and passive means of
+  transport, countries of routing, goods items with commodity codes, package counts and gross mass — and
+  the consignee at **organisation and region only**. The delivery address lives in the `sensitive`
+  schema, the sheet is composed on a connection that is `DENY SELECT`'d there, and a sheet listing
+  Ukrainian addresses would be a targeting document. It sets `consigneeAddressWithheld` and names
+  `GET /receivers/{ref}/detail` instead, so a filer cannot conclude there is none. The sheet also
+  reports its own gaps in `missing` — an unclassified item by description, a route stop with no ISO
+  code, a ferry with no vessel IMO, boxes nobody has validated — because a gap found here costs a phone
+  call and one found at the border costs a convoy.
+- **Approval refuses *before* it freezes**, the one exception to freeze-then-enqueue. A manifest frozen
+  with no declaration is frozen for ever against an envelope French customs will never issue.
+- **A recorded MRN is write-once, enforced by blob storage.** `SaveAsync` creates with
+  `IfNoneMatch = ETag.All`, which is the blob equivalent of the conditional `UPDATE` behind
+  `Manifest.GmrSubmittedAt`, and the withdrawal path copies before it deletes — several ENS fields are
+  non-amendable, so invalidate-and-refile is the normal correction and the withdrawn MRN is what a
+  customs query months later is about.
+
+`dbo.Convoy` gained `CrossingMode` and `VesselImo` for this: mode of transport describes the **crossing**,
+not the vehicle — a ferry sailing is maritime (1), a LeShuttle crossing is road (3), and rail is not
+accepted at the Brexit Smart Border.
+
+> **One prerequisite is not ours to solve.** An ENS declarant's EORI must be issued by an EU member
+> state, and a GB EORI is not accepted. Ukrainian Action is UK-established, and the Commission's FAQ does
+> not say what a non-EU carrier must do. Until that is settled with DGDDI or a customs agent, no
+> declaration can be filed by anyone. See
+> [`docs/schemas/ics2/onboarding.md`](docs/schemas/ics2/onboarding.md) and
+> [`docs/adr/0003-ens-declaration-recorded-not-submitted.md`](docs/adr/0003-ens-declaration-recorded-not-submitted.md).
 
 ### Database
 
@@ -450,6 +550,32 @@ To add a new domain concept (e.g., a new `Donation` slice):
    `api/<slice>.ts` hooks, pages + routes, MSW handlers + factory, a Vitest Browser test per
    page, one `@smoke` Playwright spec). `src/pages/vehicles/` is the reference.
 
+### Adding a durable hand-off to an external authority
+
+Three exist — the GMR, the manifest document and the ELO envelope — and they are the same shape.
+`src/UA.Action.Freedom.CustomsWorker/Elo/` is the most recent, and the one to copy:
+
+1. A method on `IManifestWorkQueue` and a request record, in the Application. Keep the record
+   narrow: a queue message is durable and widely readable, so anything it cannot carry is
+   something that cannot leak.
+2. A `HandOff(stage, …)` in the handler that causes it. Freeze or commit **first**, enqueue
+   second.
+3. A queue name in `QueueNames`, a storage queue and its poison queue in
+   `iac/tofu/storage.tf` (append to `local.queues` — keep the single sequenced resource, because
+   parallel `for_each` breaks Azurite), and the env vars on both containers in
+   `docker-compose.yml`.
+4. Worker side: a three-method port (`Receive` / `Complete` / `DeadLetter`), an Azure adapter that
+   **copies to poison before deleting the original**, a wire record duplicated rather than shared,
+   and a processor whose `ProcessNextAsync` returns `false` only on an empty queue.
+5. Decide the three-way disposition deliberately and write the reasoning down: dead-letter what a
+   retry cannot fix, complete what succeeded, and leave everything else for the visibility timeout.
+   **If the call has a side effect at the far end, nothing after it may dead-letter** — see the ELO
+   processor and `docs/adr/0002-elo-envelope-on-manifest-approval.md`.
+6. Tests: a `*ProcessorTests` covering the six dispositions with the wire contract as a **JSON
+   literal**, a `*TelemetryTests` with its own `Meter`, a producer-side wire-contract test in the
+   Component project, and a health check so a missing queue fails readiness rather than silently
+   swallowing work.
+
 ## Observability
 
 All three services — `freedom-app`, `freedom-customs-worker`, `freedom-manifest-worker` — share one
@@ -464,21 +590,25 @@ Unset, nothing is exported. Sampling is the SDK's own (`OTEL_TRACES_SAMPLER`, 10
   retried message is processed minutes later. In Tempo, follow the link from the worker's
   `process customs-work` / `process manifest-documents` span.
 - **Metrics.** The `freedom.*` business metrics — command outcomes, manifest transitions, queue
-  depth/age/dispositions, GMR submission and dead-letter reasons, document rendering, worker-loop
-  heartbeats — plus the ASP.NET Core, HttpClient and runtime built-ins. The full catalogue is in
+  depth/age/dispositions, GMR and ELO submission and dead-letter reasons, document rendering,
+  worker-loop heartbeats — plus the ASP.NET Core, HttpClient and runtime built-ins. The full catalogue is in
   `iac/local/grafana/README.md`. Every tag is a bounded set; a person, receiver, plate, VIN or
   manifest reference is never a label.
 - **Nothing sensitive in telemetry, by construction.** A span processor
   (`RedactingActivityProcessor`) records the *route* not the path, drops query strings, reduces
   client URLs to the peer, and blanks SQL statements on the `sensitive` schema. HMRC error bodies
-  are never logged (status and type only). `docs/gotchas-and-open-questions.md` § Observability.
+  are never logged (status and type only), and nor are French customs' — only the bounded
+  `FONC-ERR-00x` code, never the `libelleErreur` that quotes the declaration it objected to.
+  `docs/gotchas-and-open-questions.md` § Observability.
 - **Dashboards** (Grafana → folder *Freedom*, provisioned from `iac/local/grafana/dashboards/`):
   `.NET Runtime & HTTP`, `Freedom Application (API)`, `Customs Worker`, `Manifest Worker`, `Manifest Approval Pipeline`,
   `Convoy Operations`, `Access & Sensitive Data`.
 - **Failures carry a `traceId`.** A 500 or 400 from the API returns the id of the trace that
   recorded it, so an operator can quote it back and find the request in Tempo.
-- **Health checks** on `/health/live` and `/health/ready` (SQL, Blob, Queue, OIDC). Probes are not
-  traced or counted in the HTTP metrics.
+- **Health checks** on `/health/live` and `/health/ready` (SQL, Blob, both work queues, the ICS2
+  declaration store, OIDC). The declaration store has its own check because it is the one container
+  the API *writes*: without it no ENS can be recorded and no manifest can be approved.
+  Probes are not traced or counted in the HTTP metrics.
 
 ## Known Issues & Gotchas
 
@@ -486,6 +616,11 @@ See `docs/gotchas-and-open-questions.md` for:
 - MTP test runner CLI differences
 - Integration test deadlock (assembly parallelization disabled)
 - HMRC PPNS enum deserialization bug (codegen issue, affects real HMRC)
+- The ELO integration (§5a): why UK → France is `IMPORT`, why TIR/ATA halves the paperwork, why
+  nothing is dead-lettered once French customs has accepted an envelope, and why WireMock needs a
+  restart after a mapping is edited
+- The ELO declaration identifier is still a placeholder — the path works end to end against the
+  local stub, but a real submission is refused until ICS2 supplies an ENS
 - Database project rules: no migration code, principals excluded from publish, CHECK constraints
   in SQL Server's normalised form
 - MSW mocks must mirror the API contract — a mock that accepts fields the API ignores hid the

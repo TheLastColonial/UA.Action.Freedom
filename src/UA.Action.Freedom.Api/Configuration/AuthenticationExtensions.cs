@@ -126,6 +126,26 @@ public static class AuthenticationExtensions
     public const string ManifestsApprove = "manifests:approve";
 
     /// <summary>
+    /// Record or withdraw the ICS2 Entry Summary Declaration a manifest's crossing was accepted
+    /// under — Administrator and Dispatcher.
+    /// </summary>
+    /// <remarks>
+    /// Its own policy rather than part of <see cref="ManifestsWrite"/>, because it is not an edit to
+    /// the manifest: it is the one fact approval will not proceed without, and withdrawing it strands
+    /// a convoy as surely as deleting a vehicle would.
+    ///
+    /// <para>
+    /// Deliberately <strong>not</strong> GroundOfficer, even though a Ground Officer is who files the
+    /// declaration — filing it needs the Ukrainian consignee address, which only that role may read.
+    /// GroundOfficer is excluded from every other policy and the isolation runs both ways
+    /// (<c>docs/local-authentication.md</c>), and that is worth more than saving a hand-off. So the
+    /// filer obtains the MRN in the EU Customs Trader Portal and a Dispatcher records it here, the
+    /// same two-person shape as a Dispatcher building a manifest an Administrator signs off.
+    /// </para>
+    /// </remarks>
+    public const string ManifestsDeclare = "manifests:declare";
+
+    /// <summary>
     /// Assign or unassign a driver to/from a vehicle on a convoy — Dispatcher only.
     /// </summary>
     /// <remarks>
@@ -236,7 +256,9 @@ public static class AuthenticationExtensions
             .AddPolicy(ManifestsWrite, policy =>
                 policy.RequireRole(Administrator, Dispatcher))
             .AddPolicy(ManifestsApprove, policy =>
-                policy.RequireRole(Administrator));
+                policy.RequireRole(Administrator))
+            .AddPolicy(ManifestsDeclare, policy =>
+                policy.RequireRole(Administrator, Dispatcher));
 
         return services;
     }

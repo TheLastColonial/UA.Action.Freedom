@@ -37,6 +37,26 @@ public sealed class StorageOptions
     /// <summary>Queue the Manifest Worker takes approved manifests from to render their documents.</summary>
     public string DocumentQueue { get; set; } = "manifest-documents";
 
+    /// <summary>Queue the application hands French customs logistics envelopes to the worker on.</summary>
+    public string EloQueue { get; set; } = "elo-envelopes";
+
+    /// <summary>
+    /// Container the Customs Worker writes issued envelopes and their barcode documents to, and the
+    /// API reads them back from.
+    /// </summary>
+    public string EloContainer { get; set; } = "elo";
+
+    /// <summary>
+    /// Container holding the ICS2 Entry Summary Declaration recorded for each manifest, and the
+    /// declarations superseded when one was invalidated and refiled.
+    /// </summary>
+    /// <remarks>
+    /// The only container the API writes as well as reads. Nothing submits an ENS — ICS2's Shared
+    /// Trader Interface speaks eDelivery AS4, which needs the always-on inbound access point §4.1
+    /// declines — so there is no worker in this path and no queue (<c>docs/adr/0003</c>).
+    /// </remarks>
+    public string EnsContainer { get; set; } = "ens";
+
     /// <summary>Whether enough is configured to reach a storage account at all.</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ConnectionString);
 }

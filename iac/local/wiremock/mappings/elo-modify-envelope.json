@@ -5,13 +5,19 @@
     "method": "POST",
     "urlPath": "/enveloppe/modifier",
     "headers": {
-      "messageCode": { "equalTo": "ENV_MOD01" }
+      "messageCode": {
+        "equalTo": "ENV_MOD01"
+      }
     }
   },
   "response": {
     "status": 200,
-    "headers": { "Content-Type": "application/json" },
-    "transformers": ["response-template"],
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "transformers": [
+      "response-template"
+    ],
     "jsonBody": {
       "enveloppe": {
         "jeton": "EI202609271130001234A",
@@ -19,10 +25,10 @@
         "statut": "FERMEE",
         "modeCreation": "EDI",
         "informationsAppairage": {
-          "sensTraversee": "EXPORT",
+          "sensTraversee": "IMPORT",
           "typeCamion": "PLEIN",
-          "estTIRATA": false,
-          "possedeContratTransport": true,
+          "estTIRATA": true,
+          "possedeContratTransport": false,
           "estPostal": false,
           "estEmballageVide": false,
           "estSPS": false,
@@ -30,22 +36,11 @@
         },
         "declarations": [
           {
-            "identifiant": "26GB1234567890AB12",
-            "typeDeclaration": "EXPORT_SDS",
-            "sousTypeDeclaration": "DEPART",
+            "identifiant": "25FR17551780961AT5",
+            "typeDeclaration": "ENS",
             "informationsValidation": {
-              "etat": "A_VALIDER",
-              "code": "",
-              "message": ""
-            }
-          },
-          {
-            "identifiant": "26GB9876543210CD34",
-            "typeDeclaration": "EXPORT_SDS",
-            "sousTypeDeclaration": "DEPART",
-            "informationsValidation": {
-              "etat": "A_VALIDER",
-              "code": "",
+              "etat": "CONFORME",
+              "code": "RETOUR-OK",
               "message": ""
             }
           }
@@ -70,7 +65,12 @@
       "numeroDossier is echoed as a bare scalar via the jsonPath helper; nested",
       "objects are deliberately NOT echoed the same way (see ppns-notifications-",
       "pending.json's comment on Handlebars and escaped quotes) — only scalars are",
-      "safe to template here."
+      "safe to template here.",
+      "",
+      "sensTraversee is IMPORT and estTIRATA true: UK to France is an arrival into the EU,",
+      "and French Customs' guidance for emergency humanitarian aid to Ukraine is TIR/ATA",
+      "without a transport contract (issue #24). The declaration is an ENS accordingly.",
+      "These three stubs describe the same traffic, so they agree with each other."
     ]
   }
 }

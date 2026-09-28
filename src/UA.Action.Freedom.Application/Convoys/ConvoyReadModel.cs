@@ -15,7 +15,9 @@ public sealed record ConvoyReadModel(
     DateTime Start,
     DateTime ExpectedEnd,
     DateTime? TruckListPublishedAt,
-    DateTime? ArrivedAt = null)
+    DateTime? ArrivedAt = null,
+    ChannelCrossing CrossingMode = ChannelCrossing.Ferry,
+    string? VesselImo = null)
 {
     /// <summary>
     /// Whether the convoy has arrived. After that nothing about it changes — its vehicles are
@@ -35,13 +37,20 @@ public sealed record ConvoyReadModel(
 /// One stop on a convoy's route. <see cref="Sequence"/> is 1-based and dense — the order is the
 /// journey, from UK departure to Ukrainian delivery.
 /// </summary>
+/// <param name="CountryCode">
+/// The ISO 3166-1 alpha-2 code for <paramref name="Country"/>, which is free text written by a
+/// dispatcher planning a journey. An ENS declares its countries of routing as codes, and missing one
+/// stops EU customs completing its pre-arrival risk assessment, so the code is stored beside the name
+/// rather than guessed from it at filing time.
+/// </param>
 public sealed record RouteStopReadModel(
     int Sequence,
     string? House,
     string? Street,
     string? City,
     string? Country,
-    string Postcode);
+    string Postcode,
+    string? CountryCode = null);
 
 /// <summary>
 /// A vehicle as it appears on a convoy's truck list — enough to recognise it, to add up a

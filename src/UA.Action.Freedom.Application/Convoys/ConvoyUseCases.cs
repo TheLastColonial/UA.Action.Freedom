@@ -1,9 +1,20 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Convoys;
 
-/// <summary>Plan a convoy: when it leaves and when it is expected to arrive.</summary>
-public sealed record CreateConvoyCommand(DateTime Start, DateTime ExpectedEnd);
+/// <summary>Plan a convoy: when it leaves, when it is expected to arrive, and how it crosses.</summary>
+/// <remarks>
+/// <paramref name="CrossingMode"/> is not cosmetic. It decides the ENS mode-of-transport code — a ferry
+/// crossing is maritime and a shuttle crossing is road, whatever the vehicle is — and whether a vessel
+/// IMO has to be declared. Both are non-amendable in ICS2, so they are worth getting right while the
+/// convoy is still being planned.
+/// </remarks>
+public sealed record CreateConvoyCommand(
+    DateTime Start,
+    DateTime ExpectedEnd,
+    ChannelCrossing CrossingMode = ChannelCrossing.Ferry,
+    string? VesselImo = null);
 
 /// <summary>
 /// Creating a convoy cannot conflict, so this handler returns the identifier the database
@@ -13,11 +24,17 @@ public sealed class CreateConvoyHandler(IConvoyRepository repository)
     : ICommandHandler<CreateConvoyCommand, int>
 {
     public Task<int> HandleAsync(CreateConvoyCommand command, CancellationToken cancellationToken)
-        => repository.AddAsync(command.Start, command.ExpectedEnd, cancellationToken);
+        => repository.AddAsync(
+            command.Start, command.ExpectedEnd, cancellationToken, command.CrossingMode, command.VesselImo);
 }
 
-/// <summary>Change a convoy's departure or expected arrival.</summary>
-public sealed record UpdateConvoyCommand(int Id, DateTime Start, DateTime ExpectedEnd);
+/// <summary>Change a convoy's departure, expected arrival or crossing.</summary>
+public sealed record UpdateConvoyCommand(
+    int Id,
+    DateTime Start,
+    DateTime ExpectedEnd,
+    ChannelCrossing CrossingMode = ChannelCrossing.Ferry,
+    string? VesselImo = null);
 
 public enum UpdateConvoyOutcome
 {
@@ -33,7 +50,9 @@ public sealed class UpdateConvoyHandler(IConvoyRepository repository)
         // TruckListPublishedAt is not settable here: publishing is its own transition, and an
         // update that could quietly stamp or clear it would route around that rule.
         var updated = await repository.UpdateAsync(
-            new ConvoyReadModel(command.Id, command.Start, command.ExpectedEnd, TruckListPublishedAt: null),
+            new ConvoyReadModel(
+                command.Id, command.Start, command.ExpectedEnd, TruckListPublishedAt: null,
+                ArrivedAt: null, CrossingMode: command.CrossingMode, VesselImo: command.VesselImo),
             cancellationToken);
 
         return updated ? UpdateConvoyOutcome.Updated : UpdateConvoyOutcome.NotFound;

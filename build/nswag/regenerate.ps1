@@ -54,16 +54,15 @@ $specPathByApi = @{
     'elo' = 'docs/schemas/edi/API_BREXIT_ELO-1.2.0.yaml'
 }
 
-# PreprocessSpec.cs pass 2 unconditionally drops any header parameter literally named
-# Authorization/Accept/Content-Type, on the assumption it's an HttpClient-pipeline concern.
-# For ELO, Authorization (and its sibling correlation headers) is a real per-call parameter
-# the caller must supply — preprocessing would silently delete it. Refuse to run the
-# preprocessing pipeline against this spec; -Raw is the only supported mode.
-if ($Api -eq 'elo' -and -not $Raw) {
-    throw "Api 'elo' must be regenerated with -Raw. The normal preprocessing pipeline " +
-          "(PreprocessSpec.cs pass 2) unconditionally strips the 'Authorization' header " +
-          "parameter, which for ELO is a real caller-supplied credential, not a transport " +
-          "concern. Re-run as: regenerate.ps1 -Api elo -Raw"
+# ELO used to require -Raw, because PreprocessSpec.cs pass 2 dropped the 'Authorization' header
+# parameter that for this API is a real caller-supplied credential. That pass now takes an
+# exemption list (elo.preprocess.json -> preserveHeaderParameters), so ELO runs the normal
+# pipeline — and must, because the same sidecar is what corrects the unusable 'pdf' schema.
+# -Raw remains available for diffing, but produces a client whose barcode field cannot be read.
+if ($Api -eq 'elo' -and $Raw) {
+    Write-Warning ("Regenerating ELO with -Raw skips elo.preprocess.json, which is what makes " +
+                   "the barcode 'pdf' field readable and keeps the ENV_NOT01 DTO. Use this only " +
+                   "to diff against the preprocessed output; do not commit the result.")
 }
 
 $repo = (Resolve-Path "$PSScriptRoot/../..").Path

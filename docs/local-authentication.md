@@ -192,6 +192,7 @@ token lacking the role is **403**.
 | `manifests:read` | ✓ | ✓ | ✓ | ✓ | | |
 | `manifests:write` | ✓ | ✓ | | | | |
 | `manifests:approve` | ✓ | | | | | |
+| `manifests:declare` | ✓ | ✓ | | | | |
 | `receivers:read` | ✓ | ✓ | ✓ | ✓ | | ✓ |
 | `receivers:write` | ✓ | | | | | ✓ |
 | `receivers:detail` | | | | | | ✓ |
@@ -212,6 +213,16 @@ A few rows are worth understanding rather than memorising:
 - **`manifests:approve` is Administrator-only** and separate from `manifests:write`, because
   approval is not another edit — it releases the Goods Movement Reference to HMRC and freezes the
   manifest permanently. The person who builds a manifest is not the person who signs it off.
+- **`manifests:declare` records the ICS2 Entry Summary Declaration** a crossing was accepted under,
+  and approval will not proceed without one. It is Administrator and Dispatcher, and deliberately
+  **not GroundOfficer** — even though a Ground Officer is the person who actually *files* the
+  declaration, because filing needs the Ukrainian consignee address that only they may read.
+  GroundOfficer is excluded from every other policy and the isolation runs both ways, so widening it
+  here would put the narrowest role in the system inside the manifest slice. Instead the Ground
+  Officer takes `GET /manifests/{id}/ens/filing-sheet`, fetches the address under `receivers:detail`,
+  files in the EU Customs Trader Portal, and passes the MRN back for a Dispatcher to record — the
+  same two-person shape as a Dispatcher building a manifest an Administrator signs off. See
+  [`adr/0003-ens-declaration-recorded-not-submitted.md`](adr/0003-ens-declaration-recorded-not-submitted.md).
 - **`boxes:validate` is separate from `boxes:write`** for the same kind of reason: packing a box
   and vouching for what is in it are different acts, and the Loader is the one who opens it.
 - **`boxes:allocate-bay` is Loader alone** — narrower even than `boxes:validate`, since Administrator

@@ -15,20 +15,33 @@
 //   2. Drop the explicit Accept / Authorization / Content-Type header parameters.
 //   3. Strip `not` / `not.anyOf` blocks (NSwag cannot express them; it drops them silently).
 //   4. Collapse `oneOf`-of-single-value-enum schemas into a single `type: string` + `enum`.
-//   5. Rename / unwrap the conversion-artifact component keys to clean type names.
-//   6. De-duplicate: hoist every distinct object/enum schema into components/schemas (seeded
+//   5. Override named component properties the published spec gets wrong.
+//   6. Rename / unwrap the conversion-artifact component keys to clean type names.
+//   7. De-duplicate: hoist every distinct object/enum schema into components/schemas (seeded
 //      from the spec's existing named component schemas) and replace occurrences with $ref.
-//   7. Prune component schemas that nothing references.
+//   8. Prune component schemas that nothing references.
 //
-// Passes 1 and 5 are spec-specific and driven by the optional <config.json> sidecar:
+// Passes 1, 5 and 6 are spec-specific, and passes 2 and 8 take spec-specific exemptions. All of it
+// is driven by the optional <config.json> sidecar:
 //
 //   {
-//     "operationIds":         { "<raw operationId>": "<PascalCase name>", ... },
-//     "unwrapArrayComponents":{ "<array component key>": "<element component name>", ... },
-//     "componentRenames":     { "<old component key>": "<new component key>", ... }
+//     "operationIds":              { "<raw operationId>": "<PascalCase name>", ... },
+//     "unwrapArrayComponents":     { "<array component key>": "<element component name>", ... },
+//     "componentRenames":          { "<old component key>": "<new component key>", ... },
+//     "preserveHeaderParameters":  [ "<header name pass 2 must not drop>", ... ],
+//     "overrideProperties":        { "<component key>": { "<property>": <schema>, ... }, ... },
+//     "keepComponents":            [ "<component key pass 8 must not prune>", ... ]
 //   }
 //
-// With no sidecar (or empty maps) only the generic passes 2-4, 6, 7 run.
+// `preserveHeaderParameters` exists because pass 2's assumption — that a header literally named
+// Authorization is an HttpClient-pipeline concern — is true of the HMRC specs and false of the
+// French customs ELO API, where it is a real per-call parameter the caller supplies.
+//
+// `overrideProperties` replaces (or adds) a property on a named component schema, for the case
+// where the published spec describes a field in a way no client can use. `keepComponents` keeps a
+// schema that no path references, for a DTO callers need even though no operation returns it.
+//
+// With no sidecar (or empty maps) only the generic passes 2-4, 7, 8 run.
 //
 // Output is JSON (NSwag reads OpenAPI JSON natively) written to <outSpec.json>.
 //
@@ -66,12 +79,13 @@ var root = YamlToJson(inPath) as JsonObject
            ?? throw new InvalidOperationException("spec root is not a mapping");
 
 PinOperationIds(root, config);
-DropTransportHeaderParameters(root);
+DropTransportHeaderParameters(root, config);
 StripNot(root);
 CollapseOneOfEnums(root);
+OverrideComponentProperties(root, config);
 NormaliseArtifactComponents(root, config);
 DeduplicateIntoComponents(root);
-PruneOrphanComponents(root);
+PruneOrphanComponents(root, config);
 
 Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
 File.WriteAllText(
@@ -105,10 +119,16 @@ static void PinOperationIds(JsonObject root, PreprocessConfig config)
 
 // ---------------------------------------------------------------------------------------------
 // Pass 2: drop transport header parameters
+//
+// A spec that declares Accept/Authorization/Content-Type as operation parameters is describing
+// what the HTTP pipeline does, not what the caller decides — except where it isn't, so
+// config.preserveHeaderParameters carves one back out. Getting this wrong deletes a credential
+// from every generated method signature, silently.
 // ---------------------------------------------------------------------------------------------
-static void DropTransportHeaderParameters(JsonObject root)
+static void DropTransportHeaderParameters(JsonObject root, PreprocessConfig config)
 {
     var drop = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Accept", "Authorization", "Content-Type" };
+    drop.ExceptWith(config.PreserveHeaderParameters);
 
     foreach (var op in Operations(root))
     {
@@ -188,7 +208,33 @@ static void CollapseOneOfEnums(JsonNode? node)
 }
 
 // ---------------------------------------------------------------------------------------------
-// Pass 5: de-duplicate inline schemas into components/schemas via $ref
+// Pass 5: override properties the published spec describes in a way no client can use.
+//
+// Runs before de-duplication so the structural index is built from the corrected shape, and a
+// property added here can make two previously identical components stay identical (or stop being).
+// ---------------------------------------------------------------------------------------------
+static void OverrideComponentProperties(JsonObject root, PreprocessConfig config)
+{
+    if (config.OverrideProperties.Count == 0) return;
+    if (root["components"]?["schemas"] is not JsonObject schemas) return;
+
+    foreach (var (component, overrides) in config.OverrideProperties)
+    {
+        if (schemas[component] is not JsonObject schema)
+            throw new InvalidOperationException(
+                $"overrideProperties names component '{component}', which the spec does not define. "
+                + "A renamed or removed schema would otherwise be corrected silently into nothing.");
+
+        var properties = schema["properties"] as JsonObject
+                         ?? (JsonObject)(schema["properties"] = new JsonObject());
+
+        foreach (var (property, replacement) in overrides)
+            properties[property] = replacement.DeepClone();
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pass 7: de-duplicate inline schemas into components/schemas via $ref
 // ---------------------------------------------------------------------------------------------
 static void DeduplicateIntoComponents(JsonObject root)
 {
@@ -305,7 +351,7 @@ static bool IsNameable(JsonObject obj)
 static JsonObject Ref(string name) => new() { ["$ref"] = $"#/components/schemas/{name}" };
 
 // ---------------------------------------------------------------------------------------------
-// Pass 5a: give the RAML conversion-artifact component schemas clean names, and unwrap the
+// Pass 6: give the RAML conversion-artifact component schemas clean names, and unwrap the
 // array-typed `definitions` schema down to its element object. Runs before de-duplication so
 // the structural index is seeded under these names and inline payloads $ref straight to them.
 // ---------------------------------------------------------------------------------------------
@@ -334,18 +380,26 @@ static void NormaliseArtifactComponents(JsonObject root, PreprocessConfig config
 }
 
 // ---------------------------------------------------------------------------------------------
-// Pass 7: drop component schemas that nothing references (to a fixed point). The spec ships 55
+// Pass 8: drop component schemas that nothing references (to a fixed point). The spec ships 55
 // named schemas that no operation used; after de-duplication the survivors are the ones the
 // operations actually reference, so anything still unreferenced is dead weight NSwag would
 // otherwise emit as a class.
+//
+// config.keepComponents exempts a schema that callers genuinely want as a DTO even though no path
+// returns it — an inbound notification the API pushes rather than answers with, for instance.
 // ---------------------------------------------------------------------------------------------
-static void PruneOrphanComponents(JsonObject root)
+static void PruneOrphanComponents(JsonObject root, PreprocessConfig config)
 {
     var schemas = (JsonObject)root["components"]!["schemas"]!;
 
+    foreach (var kept in config.KeepComponents)
+        if (!schemas.ContainsKey(kept))
+            throw new InvalidOperationException(
+                $"keepComponents names component '{kept}', which the spec does not define.");
+
     while (true)
     {
-        var referenced = new HashSet<string>(StringComparer.Ordinal);
+        var referenced = new HashSet<string>(config.KeepComponents, StringComparer.Ordinal);
         CollectRefs(root, referenced);
 
         var orphans = schemas.Select(kv => kv.Key).Where(k => !referenced.Contains(k)).ToArray();
@@ -562,15 +616,19 @@ static JsonNode? YamlToJson(string path)
 }
 
 // ---------------------------------------------------------------------------------------------
-// spec-specific configuration, loaded from the optional <config.json> sidecar. Passes 1 and 5
-// (operationId pinning, component rename / unwrap) are the only per-spec knobs; everything else
-// in the pipeline is structural and runs unconditionally.
+// spec-specific configuration, loaded from the optional <config.json> sidecar. See the header
+// comment for what each knob does; everything not listed there is structural and runs
+// unconditionally.
 // ---------------------------------------------------------------------------------------------
 sealed class PreprocessConfig
 {
     public Dictionary<string, string> OperationIds { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> UnwrapArrayComponents { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> ComponentRenames { get; } = new(StringComparer.Ordinal);
+    public HashSet<string> PreserveHeaderParameters { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> KeepComponents { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, Dictionary<string, JsonNode>> OverrideProperties { get; } =
+        new(StringComparer.Ordinal);
 
     public static PreprocessConfig Load(string? path)
     {
@@ -583,6 +641,20 @@ sealed class PreprocessConfig
         Fill(config.OperationIds, root["operationIds"]);
         Fill(config.UnwrapArrayComponents, root["unwrapArrayComponents"]);
         Fill(config.ComponentRenames, root["componentRenames"]);
+        FillNames(config.PreserveHeaderParameters, root["preserveHeaderParameters"]);
+        FillNames(config.KeepComponents, root["keepComponents"]);
+
+        if (root["overrideProperties"] is JsonObject overrides)
+            foreach (var (component, properties) in overrides)
+            {
+                if (properties is not JsonObject props) continue;
+                var target = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
+                foreach (var (property, schema) in props)
+                    if (schema is not null)
+                        target[property] = schema.DeepClone();
+                config.OverrideProperties[component] = target;
+            }
+
         return config;
 
         static void Fill(Dictionary<string, string> target, JsonNode? node)
@@ -591,6 +663,14 @@ sealed class PreprocessConfig
             foreach (var (key, value) in obj)
                 if (value is JsonValue v && v.TryGetValue(out string? s) && s is not null)
                     target[key] = s;
+        }
+
+        static void FillNames(HashSet<string> target, JsonNode? node)
+        {
+            if (node is not JsonArray arr) return;
+            foreach (var item in arr)
+                if (item is JsonValue v && v.TryGetValue(out string? s) && s is not null)
+                    target.Add(s);
         }
     }
 }

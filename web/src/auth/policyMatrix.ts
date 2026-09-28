@@ -24,6 +24,7 @@ export const POLICY_MATRIX = {
   'manifests:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
   'manifests:write': ['Administrator', 'Dispatcher'],
   'manifests:approve': ['Administrator'],
+  'manifests:declare': ['Administrator', 'Dispatcher'],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Policy = keyof typeof POLICY_MATRIX;

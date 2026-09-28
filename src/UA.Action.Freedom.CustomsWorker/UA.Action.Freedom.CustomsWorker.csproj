@@ -14,6 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../EDI.ELO/EDI.ELO.csproj" />
     <ProjectReference Include="../HMRC.GVMS/HMRC.GVMS.csproj" />
     <ProjectReference Include="../HMRC.PushPullNotifications/HMRC.PushPullNotifications.csproj" />
     <ProjectReference Include="../UA.Action.Freedom.Telemetry/UA.Action.Freedom.Telemetry.csproj" />

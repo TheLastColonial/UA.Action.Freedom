@@ -19,7 +19,13 @@ public enum TransitionManifestOutcome
     IllegalTransition,
     Frozen,
     TruckListNotPublished,
-    NotInsured
+    NotInsured,
+
+    /// <summary>
+    /// Approval only: no ICS2 Entry Summary Declaration has been recorded for this manifest, so the
+    /// French logistics envelope it would ask for has no formality to name (ENV_CTR_RG08).
+    /// </summary>
+    EnsNotFiled
 }
 
 /// <summary>
@@ -137,12 +143,20 @@ public sealed class TransitionManifestHandler(
 }
 
 /// <summary>
-/// Approve a manifest: confirm it, freeze it, and hand its Goods Movement Reference to the
-/// customs worker.
+/// Approve a manifest: confirm it, freeze it, and hand its border paperwork off — the UK Goods
+/// Movement Reference, the document that travels with the vehicle, and the French logistics
+/// envelope.
 /// </summary>
 /// <remarks>
 /// This is the fork in <c>docs/process.puml</c> — approval is what releases the paperwork — and
 /// it is the moment a manifest stops being editable.
+///
+/// <para>
+/// It is also the one gate that will not open without an ICS2 Entry Summary Declaration. That check
+/// happens <em>before</em> the freeze, unlike everything else here, because the alternative is a
+/// manifest frozen for ever against an envelope French customs will never issue — which is what the
+/// placeholder declaration identifier used to produce (<c>docs/adr/0003</c>).
+/// </para>
 /// </remarks>
 public sealed record ApproveManifestCommand(string Id);
 
@@ -150,6 +164,7 @@ public sealed class ApproveManifestHandler(
     IManifestRepository repository,
     IConvoyRepository convoys,
     IManifestWorkQueue queue,
+    IEnsDeclarationStore declarations,
     FreedomMetrics? metrics = null,
     ILogger<ApproveManifestHandler>? logger = null)
     : ICommandHandler<ApproveManifestCommand, TransitionManifestOutcome>
@@ -185,6 +200,18 @@ public sealed class ApproveManifestHandler(
             return TransitionManifestOutcome.IllegalTransition;
         }
 
+        // Read the declaration before anything is written. Under ENV_CTR_RG08 a loaded TIR/ATA lorry's
+        // envelope must name exactly one formality, and the ENS is it — so approving without one
+        // would freeze the manifest against an envelope French customs refuses with FONC-ERR-004.
+        // Refusing here leaves the manifest exactly as it was, approvable again once the MRN arrives.
+        var profile = EloCrossingProfile.HumanitarianAidToUkraine;
+        var declaration = await declarations.GetAsync(command.Id, cancellationToken);
+
+        if (profile.RequiresADeclaration && declaration is null)
+        {
+            return TransitionManifestOutcome.EnsNotFiled;
+        }
+
         // Freeze first, enqueue second, and deliberately in that order. If the enqueue fails the
         // manifest is frozen with no GMR — visible, and an operator can retry the submission.
         // The other order risks an unfrozen manifest whose GMR is already on its way, which is
@@ -209,7 +236,8 @@ public sealed class ApproveManifestHandler(
 
             // The message carries the reference, the plate and the departure. No receiver, no
             // address: the worker talks to HMRC, and where in Ukraine the load is going is none of
-            // its business — and a queue message is durable and widely readable (§4.4).
+            // its business — and a queue message is durable and widely readable (§4.4). The ENS MRN
+            // is not here either, for a reason GmrSubmissionRequest states.
             await queue.EnqueueGmrSubmissionAsync(
                 new GmrSubmissionRequest(command.Id, plate, convoy?.Start),
                 cancellationToken);
@@ -221,6 +249,20 @@ public sealed class ApproveManifestHandler(
         await HandOff("document", command.Id, async () =>
             await queue.EnqueueDocumentAsync(
                 await ComposeDocument(command.Id, plate, cancellationToken), cancellationToken));
+
+        // The third prong: France requires a logistics envelope per transport unit at the Smart
+        // Border, and approval is what releases it (docs/process.puml). The envelope says nothing
+        // about the load — only which way the lorry is crossing, under what regime, and which
+        // formalities it is being paired to — so there is nothing here to compose and nothing to
+        // withhold. The identifiers are a list because the envelope's field is; under TIR/ATA it
+        // holds exactly the one ENS, and the guard above is what guarantees there is one.
+        await HandOff("elo", command.Id, async () =>
+            await queue.EnqueueEloEnvelopeAsync(
+                new EloEnvelopeRequest(
+                    command.Id,
+                    profile,
+                    declaration is null ? [] : [declaration.Mrn]),
+                cancellationToken));
 
         return TransitionManifestOutcome.Transitioned;
     }

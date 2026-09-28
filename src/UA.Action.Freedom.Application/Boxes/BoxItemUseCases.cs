@@ -22,8 +22,17 @@ public sealed class ListBoxItemsHandler(IBoxRepository repository)
 }
 
 /// <summary>Pack a donated item into a box.</summary>
+/// <remarks>
+/// <paramref name="CommodityCode"/> is optional here but not at a border: ICS2 requires at least six
+/// digits per goods item, and <c>GET /manifests/{id}/ens/filing-sheet</c> reports any item without one
+/// as missing. Optional because a packer working through a donation should not be blocked on
+/// classification — the gap is reported later, by name, while there is still time to close it.
+/// </remarks>
 public sealed record AddBoxItemCommand(
-    int BoxId, string Description, IReadOnlyDictionary<string, string> Properties);
+    int BoxId,
+    string Description,
+    IReadOnlyDictionary<string, string> Properties,
+    string? CommodityCode = null);
 
 public enum AddBoxItemOutcome
 {
@@ -59,7 +68,8 @@ public sealed class AddBoxItemHandler(IBoxRepository repository)
 
         await repository.AddItemAsync(
             command.BoxId,
-            new BoxItemReadModel(Guid.NewGuid(), command.Description, command.Properties),
+            new BoxItemReadModel(
+                Guid.NewGuid(), command.Description, command.Properties, command.CommodityCode),
             cancellationToken);
 
         return AddBoxItemOutcome.Added;

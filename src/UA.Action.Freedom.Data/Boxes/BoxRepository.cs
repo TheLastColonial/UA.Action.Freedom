@@ -23,12 +23,14 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
     /// seam: Dapper fills it from the columns, and <see cref="ToItem"/> turns it into the shape
     /// the application works with.
     /// </summary>
-    private sealed record BoxItemRow(Guid Id, string Description, string PropertiesJson);
+    private sealed record BoxItemRow(
+        Guid Id, string Description, string PropertiesJson, string? CommodityCode);
 
     private static BoxItemReadModel ToItem(BoxItemRow row) => new(
         row.Id,
         row.Description,
-        JsonSerializer.Deserialize<Dictionary<string, string>>(row.PropertiesJson) ?? []);
+        JsonSerializer.Deserialize<Dictionary<string, string>>(row.PropertiesJson) ?? [],
+        row.CommodityCode);
 
     public async Task<BoxReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
@@ -149,7 +151,8 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
         await using var connection = connectionFactory.Create();
 
         var rows = await connection.QueryAsync<BoxItemRow>(new CommandDefinition(
-            "SELECT Id, Description, PropertiesJson FROM dbo.BoxItem WHERE BoxId = @boxId ORDER BY Description, Id",
+            "SELECT Id, Description, PropertiesJson, CommodityCode FROM dbo.BoxItem "
+            + "WHERE BoxId = @boxId ORDER BY Description, Id",
             new { boxId },
             cancellationToken: cancellationToken));
 
@@ -162,8 +165,8 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO dbo.BoxItem (Id, BoxId, Description, PropertiesJson)
-            VALUES (@id, @boxId, @description, @propertiesJson)
+            INSERT INTO dbo.BoxItem (Id, BoxId, Description, PropertiesJson, CommodityCode)
+            VALUES (@id, @boxId, @description, @propertiesJson, @commodityCode)
             """,
             new
             {
@@ -171,6 +174,7 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
                 boxId,
                 description = item.Description,
                 propertiesJson = JsonSerializer.Serialize(item.Properties),
+                commodityCode = item.CommodityCode,
             },
             cancellationToken: cancellationToken));
     }

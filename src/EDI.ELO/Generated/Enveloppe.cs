@@ -68,8 +68,7 @@ namespace EDI.ELO
         public bool? ProcedureSecoursIcs2 { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("pdf")]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<EnveloppePdf>))]
-        public EnveloppePdf? Pdf { get; set; } = default!;
+        public string? Pdf { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 

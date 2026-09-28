@@ -19,13 +19,13 @@ spec or the generator config changes; it is deliberately not wired into `dotnet 
 ```pwsh
 pwsh build/nswag/regenerate.ps1 -Api goods-vehicle-movements     # default
 pwsh build/nswag/regenerate.ps1 -Api push-pull-notifications
-pwsh build/nswag/regenerate.ps1 -Api elo -Raw                    # -Raw is mandatory, see below
+pwsh build/nswag/regenerate.ps1 -Api elo                         # -Raw skips its corrections, see below
 ```
 
 ```bash
 ./build/nswag/regenerate.sh --api goods-vehicle-movements        # default
 ./build/nswag/regenerate.sh --api push-pull-notifications
-./build/nswag/regenerate.sh --api elo --raw                      # --raw is mandatory, see below
+./build/nswag/regenerate.sh --api elo                            # --raw skips its corrections, see below
 ```
 
 Then review the diff under the project's `Generated/` folder and commit it together with any
@@ -37,14 +37,14 @@ Options:
 | Flag | Effect |
 | --- | --- |
 | `-Api` / `--api` | Which client to regenerate (see table above). Defaults to `goods-vehicle-movements`. |
-| `-Raw` / `--raw` | Skip preprocessing; feed the untouched spec to NSwag. For comparison only. |
+| `-Raw` / `--raw` | Skip preprocessing; feed the untouched spec to NSwag. For comparison only — for ELO it also skips three corrections the client needs, and warns. |
 | `-JsonLibrary` / `--json-library` | `SystemTextJson` (default) or `NewtonsoftJson`. |
 
 Everything else is derived from `-Api` by convention:
 
 ```
 docs/schemas/hmrc/<api>-1.0.yaml        raw spec (per-API override for elo, see below)
-build/nswag/<api>.preprocess.json       spec-specific preprocessing config (pass 1 + 5)
+build/nswag/<api>.preprocess.json       spec-specific preprocessing config (passes 1, 2, 5, 6, 8)
 build/nswag/<api>.nswag                 NSwag code-generator config
 src/<project>/Generated/                committed output
 ```
@@ -67,15 +67,17 @@ src/<project>/Generated/                committed output
 ## Why preprocessing is needed
 
 Both published HMRC specs are RAML → OpenAPI conversions. `PreprocessSpec.cs` normalises them
-into a conventional `$ref`-based document. Its structural passes run for every spec that opts
-in (i.e. every spec except ELO — see below); passes 1 and 5 are spec-specific and driven by
-the `build/nswag/<api>.preprocess.json` sidecar:
+into a conventional `$ref`-based document. Its structural passes run for every spec; the
+spec-specific behaviour is driven by the `build/nswag/<api>.preprocess.json` sidecar:
 
 ```json
 {
-  "operationIds":          { "<raw operationId>": "<PascalCase name>" },
-  "unwrapArrayComponents": { "<array component key>": "<element component name>" },
-  "componentRenames":      { "<old component key>": "<new component key>" }
+  "operationIds":             { "<raw operationId>": "<PascalCase name>" },
+  "unwrapArrayComponents":    { "<array component key>": "<element component name>" },
+  "componentRenames":         { "<old component key>": "<new component key>" },
+  "preserveHeaderParameters": [ "<header name pass 2 must not drop>" ],
+  "overrideProperties":       { "<component key>": { "<property>": { "type": "string" } } },
+  "keepComponents":           [ "<component key pass 8 must not prune>" ]
 }
 ```
 
@@ -83,21 +85,30 @@ Passes, in order:
 
 1. **Pin operationIds** (`operationIds`) — we own the generated method names (NSwag appends
    `Async`).
-2. **Drop transport header params** — the explicit `Accept` / `Authorization` /
-   `Content-Type` header parameters are removed; they are `HttpClient` concerns.
+2. **Drop transport header params** (`preserveHeaderParameters`) — the explicit `Accept` /
+   `Authorization` / `Content-Type` header parameters are removed; they are `HttpClient`
+   concerns. Except where they are not: a spec with no security scheme declares its bearer token
+   as an ordinary header parameter, and dropping it deletes a credential from every generated
+   signature. Name such a header in `preserveHeaderParameters` and this pass leaves it alone.
 3. **Strip `not` / `not.anyOf`** — NSwag cannot express `not` and drops it silently; removing
    it keeps the spec honest.
 4. **Collapse `oneOf` enums** — `oneOf` of single-value `enum` subschemas becomes a single
    `type: string` + `enum: [...]`.
-5. **Rename / unwrap artifact components** (`componentRenames`, `unwrapArrayComponents`) —
+5. **Override component properties** (`overrideProperties`) — replace (or add) a property on a
+   named component schema, for a field the published spec describes in a way no client can use.
+   Runs before de-duplication so the structural index is built from the corrected shape. Naming
+   a component the spec does not define is an error rather than a silent no-op.
+6. **Rename / unwrap artifact components** (`componentRenames`, `unwrapArrayComponents`) —
    give the RAML conversion-artifact component schemas clean names, and unwrap an array-typed
    component down to its element object. Runs before de-duplication so the structural index is
    seeded under these names.
-6. **De-duplicate into `components/schemas`** — every distinct object/enum shape is hoisted
+7. **De-duplicate into `components/schemas`** — every distinct object/enum shape is hoisted
    into `components/schemas` (keyed by a structural hash that ignores `description` /
    `example` / `title` / `default`) and each occurrence is replaced with a `$ref`.
-7. **Prune orphans** — component schemas nothing references (to a fixed point) are removed so
-   NSwag does not emit classes for them.
+8. **Prune orphans** (`keepComponents`) — component schemas nothing references (to a fixed
+   point) are removed so NSwag does not emit classes for them. `keepComponents` exempts one that
+   callers genuinely want as a DTO even though no operation returns it — an inbound notification
+   the API pushes, for instance — along with everything it transitively references.
 
 ### Goods Vehicle Movements
 
@@ -130,33 +141,49 @@ the matching component. Result: 5 model types, 2 operations.
 ### French customs ELO (EDI)
 
 Unlike the two HMRC specs, `API_BREXIT_ELO-1.2.0.yaml` is a clean, hand-written OpenAPI 3.0.3
-document with proper `$ref` reuse throughout — no RAML-conversion duplication to clean up. It
-is fed to NSwag unmodified, via `-Raw`/`--raw`; `regenerate.ps1`/`.sh` refuse to run `-Api elo`
-any other way, and there is no `elo.preprocess.json` (it would never be read).
+document with proper `$ref` reuse throughout — no RAML-conversion duplication to clean up. The
+structural passes are therefore near no-ops for it, and `elo.preprocess.json` exists for three
+corrections rather than for tidying:
 
-**Why `-Raw` is mandatory here, not just faster:** `PreprocessSpec.cs` pass 2
-(`DropTransportHeaderParameters`) unconditionally removes any header parameter literally
-named `Authorization`, `Accept` or `Content-Type` — correct for the two HMRC specs, where
-those are `HttpClient`-pipeline concerns, but wrong for ELO, where `Authorization` (and its
-sibling `messageCode`/`functionalId`/`messageId`/`correlationId` headers) are real per-call
-parameters the caller must supply on every request, declared as plain header parameters
-because the spec has no security scheme at all.
+1. **`preserveHeaderParameters: ["Authorization"]`.** The ELO spec declares no security scheme at
+   all, so the bearer token is an ordinary header *parameter* — as are its siblings
+   `messageCode`/`functionalId`/`messageId`/`correlationId`. Pass 2's default assumption would
+   delete `Authorization` from every generated signature. This is why `-Api elo` used to demand
+   `-Raw`; the exemption replaces that rule.
+2. **`overrideProperties` on `pdf`.** See below.
+3. **`keepComponents: ["ENV_NOT01"]`.** The passage notification
+   (APPAIRAGE/EMBARQUEMENT/DEBARQUEMENT) is referenced by no path, so pass 8 would prune it and
+   everything under it. It is kept deliberately: it is exactly the DTO a caller needs in order to
+   deserialise a notification, even though no operation returns one.
+
+`-Raw`/`--raw` still works for diffing but now warns, because it skips all three.
 
 Its spec also has no `servers:` entry, so `EloClientOptions.BaseUrl` has no default (unlike
 `GvmsClientOptions`/`PushPullNotificationsClientOptions`) — see `src/EDI.ELO/README.md`.
 
-Known generator quirks, also documented in [`src/EDI.ELO/README.md`](../../src/EDI.ELO/README.md):
+**The `pdf` correction, which was a real bug.** The spec declares
+`pdf: { type: string, enum: [formatbytebase64] }` — a single-value enum naming an encoding rather
+than carrying content — while its own worked examples send real base64 in that field. NSwag
+faithfully generated a one-member C# enum with a `JsonStringEnumConverter`, which **throws on
+every response that carries a barcode**, i.e. every successful create and retrieve. That is the
+same defect class as the `HMRC.PushPullNotifications` `messageContentType` bug, except blocking
+rather than cosmetic. `overrideProperties` rewrites it to plain `type: string`.
 
-- `ENV_NOT01` (an inbound passage-notification schema — APPAIRAGE/EMBARQUEMENT/DEBARQUEMENT)
-  is not referenced by any path in the spec, so it never appears on `IEloClient`. NSwag still
-  emits it as a plain DTO, since it walks every schema in `components/schemas`, not just the
-  ones reachable from an operation (this is also why pass 7 of `PreprocessSpec.cs` exists for
-  the HMRC specs — to *stop* that from happening for schemas nothing needs).
+Two details worth keeping:
+
+- **Plain `string`, not `format: byte`.** NJsonSchema would emit `byte[]` and base64-decode inside
+  the deserialiser, which turns a malformed value into a crash. As a string the caller decodes
+  explicitly, so a bad value becomes something a worker can dead-letter.
+- **Both placements are bound.** The schema puts `pdf` inside `enveloppe`; the examples put it
+  beside it. `overrideProperties` adds it to `ENV_CRE02`/`ENV_MOD02`/`ENV_REC02` as well as to
+  `Enveloppe`/`EnveloppeREC02`, and a caller reads whichever arrived.
+
+Remaining generator quirk, also documented in
+[`src/EDI.ELO/README.md`](../../src/EDI.ELO/README.md):
+
 - `dateCreation`/`dateModification`/etc. are `type: string` with no `format: date-time` in the
-  spec, so they come out as `string?`, not `DateTimeOffset?`. Left as-is — the committed spec
-  is third-party source of truth and is not hand-edited.
-- `pdf` is `type: string, enum: [formatbytebase64]` — a single-value enum labelling an
-  encoding, not real content. NSwag generates a genuine one-member enum for it. Harmless.
+  spec, so they come out as `string?`, not `DateTimeOffset?`. Left as-is — unlike `pdf`, a string
+  date is inconvenient rather than unreadable.
 
 ## Pinned versions
 

@@ -116,12 +116,28 @@ services:
       Storage__DataProtectionContainer: dataprotection
       Storage__CustomsQueue: customs-work
       Storage__DocumentQueue: manifest-documents
+      Storage__EloQueue: elo-envelopes
+      Storage__EloContainer: elo
+      # The only container the API writes. Nothing submits an ENS — ICS2's Shared Trader Interface
+      # speaks eDelivery AS4, and an always-on inbound access point is what recommendations 4.1
+      # declines — so a Ground Officer files in the EU Customs Trader Portal and the MRN is recorded
+      # here. There is no queue and no worker in this path. See docs/adr/0003.
+      Storage__EnsContainer: ens
 
       # What HMRC needs to identify a movement that the manifest itself does not carry. Both are
       # charity- or route-level facts; WireMock accepts anything, so these exist so the message
       # the Customs Worker picks up is the shape it would be in production.
       Customs__HaulierEori: ${CUSTOMS_HAULIER_EORI:-GB123456789000}
       Customs__RouteId: ${CUSTOMS_ROUTE_ID:-20000}
+
+      # What an ICS2 declaration needs that neither the manifest nor the convoy knows. Read only by
+      # GET /manifests/{id}/ens/filing-sheet, which a Ground Officer transcribes into the portal —
+      # nothing here is sent anywhere. The declarant EORI is Customs__HaulierEori above, not
+      # repeated, because the same charity is declarant, carrier and consignor on these movements.
+      # FR620001 is Calais. Like Customs__RouteId this is really a property of the crossing
+      # (gotchas 9), and it is non-amendable in ICS2 once filed.
+      Ens__ConsignorName: ${ENS_CONSIGNOR_NAME:-Ukrainian Action}
+      Ens__OfficeOfFirstEntry: ${ENS_OFFICE_OF_FIRST_ENTRY:-FR620001}
 
       # Split-horizon OIDC. The browser reaches Keycloak on localhost, the container
       # reaches it on the compose network — the same server, two URLs. The issuer in
@@ -174,12 +190,28 @@ services:
       Storage__CustomsQueue: customs-work
       Storage__PoisonQueue: customs-work-poison
       Storage__GmrContainer: gmr
+      Storage__EloQueue: elo-envelopes
+      Storage__EloPoisonQueue: elo-envelopes-poison
+      Storage__EloContainer: elo
 
       Hmrc__Gvms__BaseUrl: http://wiremock:8080/
       Hmrc__Ppns__BaseUrl: http://wiremock:8080/
       Hmrc__Ppns__BoxId: ${HMRC_PPNS_BOX_ID}
       Hmrc__ClientId: ${HMRC_CLIENT_ID}
       Hmrc__ClientSecret: ${HMRC_CLIENT_SECRET}
+
+      # French customs, on the same WireMock as HMRC. No BaseUrl default exists to fall back on:
+      # the published ELO spec declares no servers: entry, so the worker refuses to start without
+      # one. ELO_TOKEN_ENDPOINT is empty locally, which makes the worker send Elo__StaticToken
+      # rather than authenticate — WireMock checks neither.
+      Elo__BaseUrl: http://wiremock:8080/
+      Elo__TokenEndpoint: ${ELO_TOKEN_ENDPOINT:-}
+      Elo__ClientId: ${ELO_CLIENT_ID:-local-elo-client-id}
+      Elo__ClientSecret: ${ELO_CLIENT_SECRET:-local-elo-client-secret}
+      Elo__Username: ${ELO_USERNAME:-local-elo-operator}
+      Elo__Password: ${ELO_PASSWORD:-local-elo-password}
+      Elo__StaticToken: ${ELO_STATIC_TOKEN:-local-development-token}
+
       Worker__QueuePollSeconds: "5"
       Worker__OutcomePollSeconds: "15"
     depends_on:

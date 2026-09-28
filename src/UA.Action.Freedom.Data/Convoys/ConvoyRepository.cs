@@ -17,13 +17,15 @@ namespace UA.Action.Freedom.Data.Convoys;
 /// </remarks>
 public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : IConvoyRepository
 {
-    private const string Columns = "Id, Start, ExpectedEnd, TruckListPublishedAt, ArrivedAt";
+    private const string Columns =
+        "Id, Start, ExpectedEnd, TruckListPublishedAt, ArrivedAt, CrossingMode, VesselImo";
 
     /// <summary>A manifest in one of these says what became of its vehicle; the journey is over for it.</summary>
     private static readonly string FinishedStatuses =
         $"({(int)ManifestStatus.Delivered}, {(int)ManifestStatus.Lost}, {(int)ManifestStatus.Returned})";
 
-    private const string StopColumns = "Sequence, House, Street, City, Country, Postcode";
+    private const string StopColumns =
+        "Sequence, House, Street, City, Country, Postcode, CountryCode";
 
     public async Task<ConvoyReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
@@ -65,7 +67,12 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         return count > 0;
     }
 
-    public async Task<int> AddAsync(DateTime start, DateTime expectedEnd, CancellationToken cancellationToken)
+    public async Task<int> AddAsync(
+        DateTime start,
+        DateTime expectedEnd,
+        CancellationToken cancellationToken,
+        ChannelCrossing crossingMode = ChannelCrossing.Ferry,
+        string? vesselImo = null)
     {
         await using var connection = connectionFactory.Create();
 
@@ -73,10 +80,11 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         // a trigger on this table instead of the row just inserted.
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """
-            INSERT INTO dbo.Convoy (Start, ExpectedEnd) VALUES (@start, @expectedEnd);
+            INSERT INTO dbo.Convoy (Start, ExpectedEnd, CrossingMode, VesselImo)
+            VALUES (@start, @expectedEnd, @crossingMode, @vesselImo);
             SELECT CAST(SCOPE_IDENTITY() AS int);
             """,
-            new { start, expectedEnd },
+            new { start, expectedEnd, crossingMode = (int)crossingMode, vesselImo },
             cancellationToken: cancellationToken));
     }
 
@@ -91,10 +99,19 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             UPDATE dbo.Convoy SET
                 Start = @Start,
                 ExpectedEnd = @ExpectedEnd,
+                CrossingMode = @CrossingMode,
+                VesselImo = @VesselImo,
                 UpdatedAt = SYSUTCDATETIME()
             WHERE Id = @Id
             """,
-            convoy,
+            new
+            {
+                convoy.Id,
+                convoy.Start,
+                convoy.ExpectedEnd,
+                CrossingMode = (int)convoy.CrossingMode,
+                convoy.VesselImo,
+            },
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -173,7 +190,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             await connection.ExecuteAsync(new CommandDefinition(
                 $"""
                  INSERT INTO dbo.ConvoyRouteStop (ConvoyId, {StopColumns})
-                 VALUES (@ConvoyId, @Sequence, @House, @Street, @City, @Country, @Postcode)
+                 VALUES (@ConvoyId, @Sequence, @House, @Street, @City, @Country, @Postcode, @CountryCode)
                  """,
                 stops.Select(stop => new
                 {
@@ -183,6 +200,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
                     stop.Street,
                     stop.City,
                     stop.Country,
+                    stop.CountryCode,
                     stop.Postcode,
                 }).ToList(),
                 transaction,

@@ -33,6 +33,9 @@ namespace EDI.ELO
         [System.Text.Json.Serialization.JsonPropertyName("enveloppe")]
         public EnveloppeREC02? Enveloppe { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("pdf")]
+        public string? Pdf { get; set; } = default!;
+
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]

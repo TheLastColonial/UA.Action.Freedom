@@ -56,6 +56,19 @@ public sealed class ManifestTelemetryTests : IDisposable
         IManifestRepository repository, IConvoyRepository convoys, FreedomMetrics metrics) =>
         new(repository, convoys, (IConvoyVehicleRepository)convoys, metrics);
 
+    /// <summary>
+    /// A recorded ENS, because approval refuses without one — every approval counted here is meant
+    /// to get past that gate and reach the hand-offs.
+    /// </summary>
+    private static IEnsDeclarationStore AnEnsDeclaration()
+    {
+        var declarations = Substitute.For<IEnsDeclarationStore>();
+        declarations.GetAsync(Id, Arg.Any<CancellationToken>()).Returns(
+            new EnsDeclarationReadModel(
+                Id, "25FR17551780961AT5", new DateTimeOffset(Stamped, TimeSpan.Zero), "groundofficer", null));
+        return declarations;
+    }
+
     private static IManifestRepository AProposedManifest()
     {
         var repository = Substitute.For<IManifestRepository>();
@@ -113,7 +126,7 @@ public sealed class ManifestTelemetryTests : IDisposable
     public async Task An_approval_is_counted_as_the_edge_into_confirmed()
     {
         var handler = new ApproveManifestHandler(
-            AProposedManifest(), AConvoy(), Substitute.For<IManifestWorkQueue>(), _metrics);
+            AProposedManifest(), AConvoy(), Substitute.For<IManifestWorkQueue>(), AnEnsDeclaration(), _metrics);
 
         await handler.HandleAsync(new ApproveManifestCommand(Id), CancellationToken.None);
 
@@ -131,7 +144,8 @@ public sealed class ManifestTelemetryTests : IDisposable
         queue.EnqueueGmrSubmissionAsync(Arg.Any<GmrSubmissionRequest>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Storage:ConnectionString is not configured"));
         var handler = new ApproveManifestHandler(
-            AProposedManifest(), AConvoy(), queue, _metrics, logs.CreateLogger<ApproveManifestHandler>());
+            AProposedManifest(), AConvoy(), queue, AnEnsDeclaration(), _metrics,
+            logs.CreateLogger<ApproveManifestHandler>());
 
         var approve = () => handler.HandleAsync(new ApproveManifestCommand(Id), CancellationToken.None);
 
@@ -149,7 +163,7 @@ public sealed class ManifestTelemetryTests : IDisposable
             .ThrowsAsync(new InvalidOperationException("no storage"));
         var repository = AProposedManifest();
         repository.GetDocumentLinesAsync(Id, Arg.Any<CancellationToken>()).Returns([]);
-        var handler = new ApproveManifestHandler(repository, AConvoy(), queue, _metrics);
+        var handler = new ApproveManifestHandler(repository, AConvoy(), queue, AnEnsDeclaration(), _metrics);
 
         var approve = () => handler.HandleAsync(new ApproveManifestCommand(Id), CancellationToken.None);
 
@@ -162,7 +176,8 @@ public sealed class ManifestTelemetryTests : IDisposable
     {
         var repository = AProposedManifest();
         repository.GetDocumentLinesAsync(Id, Arg.Any<CancellationToken>()).Returns([]);
-        var handler = new ApproveManifestHandler(repository, AConvoy(), Substitute.For<IManifestWorkQueue>(), _metrics);
+        var handler = new ApproveManifestHandler(
+            repository, AConvoy(), Substitute.For<IManifestWorkQueue>(), AnEnsDeclaration(), _metrics);
 
         await handler.HandleAsync(new ApproveManifestCommand(Id), CancellationToken.None);
 

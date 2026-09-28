@@ -10,6 +10,7 @@ WORKDIR /source
 
 COPY global.json Directory.Packages.props ./
 COPY src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.CustomsWorker.csproj src/UA.Action.Freedom.CustomsWorker/
+COPY src/EDI.ELO/EDI.ELO.csproj                                                src/EDI.ELO/
 COPY src/HMRC.GVMS/HMRC.GVMS.csproj                                            src/HMRC.GVMS/
 COPY src/HMRC.PushPullNotifications/HMRC.PushPullNotifications.csproj          src/HMRC.PushPullNotifications/
 COPY src/UA.Action.Freedom.Telemetry/UA.Action.Freedom.Telemetry.csproj              src/UA.Action.Freedom.Telemetry/
@@ -25,8 +26,9 @@ RUN dotnet publish src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.Customs
 
 # ---- runtime --------------------------------------------------------------
 # The runtime image, not aspnet: the worker binds no port. Per recommendations 4.1 it
-# reaches out to HMRC and never accepts an inbound connection, so there is nothing to
-# listen on and nothing to attack.
+# reaches out to HMRC and to French customs and never accepts an inbound connection, so there
+# is nothing to listen on and nothing to attack. That is also why ELO passage notifications
+# are not consumed — they would require exactly such an endpoint.
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
 WORKDIR /app
 
