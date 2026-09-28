@@ -67,6 +67,15 @@ test('approve is hidden from a Dispatcher and shown to an Administrator', async 
 test('approving shows the GMR-submitted confirmation and freezes the manifest', async () => {
   const manifest = makeManifest({ id: 'M4', status: 'Proposed', convoyId: 7 });
   const mApi = manifestApi([manifest], { publishedConvoyIds: [7] });
+  // Approval is refused without an ICS2 declaration (docs/adr/0003) — recorded here as the panel
+  // under test has nothing to do with filing it.
+  mApi.ens.set('M4', {
+    manifestId: 'M4',
+    mrn: '26FR17551780961AT5',
+    acceptedAt: '2026-08-24T09:30:00+00:00',
+    filedBy: 'groundofficer',
+    filingReference: null,
+  });
   worker.use(
     ...mApi.handlers,
     ...convoyApi([makeConvoy({ id: 7, truckListPublished: true })]).handlers,

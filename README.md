@@ -270,14 +270,15 @@ See `docs/local-authentication.md` for the full role/policy matrix.
 
 The **operator UI (`web/`) covers every endpoint above** — all seven slices, every sub-resource
 (convoy route/truck list/crew/insurance, box items/validate/bay, box QR label issue/print/revoke,
-location bays, manifest crew/boxes/weight), all nine manifest transitions, and the reason-gated
-receiver-detail flow — except the two ELO reads and the four ICS2 declaration routes, which have no
-UI yet — with nav and actions gated by the same policy matrix (the API stays the enforcement point).
-Recording an ENS MRN is the one gap that costs an operator something, because approval now refuses
-without it: until there is a screen, it is a `PUT /manifests/{id}/ens` by hand. The
-box detail page's **QR label** panel issues a label, shows it inline and prints it (a print
-stylesheet reveals the label alone); `/boxes/scan/{token}` is consumed by whatever scans the
-printed label, not the operator UI.
+location bays, manifest crew/boxes/weight, the ICS2 declaration a manifest's approval now requires),
+all nine manifest transitions, and the reason-gated receiver-detail flow — with nav and actions
+gated by the same policy matrix (the API stays the enforcement point). The manifest's **Status**
+tab records and withdraws the ENS MRN (`manifests:declare`, Administrator and Dispatcher) before
+offering Approve, which is refused without one (`docs/adr/0003`); the two ELO reads and the ENS
+filing sheet remain without UI, read via `GET /manifests/{id}/elo`, `GET /manifests/{id}/elo/document`
+and `GET /manifests/{id}/ens/filing-sheet` by hand. The box detail page's **QR label** panel issues
+a label, shows it inline and prints it (a print stylesheet reveals the label alone);
+`/boxes/scan/{token}` is consumed by whatever scans the printed label, not the operator UI.
 
 ## Architecture
 
@@ -291,7 +292,7 @@ printed label, not the operator UI.
 - Sign-in is **Authorization Code + PKCE** against the public Keycloak client `freedom-spa`
   (`iac/tofu/keycloak.tf`); the resulting JWT is sent as `Authorization: Bearer`. The API is
   unchanged — still a pure JWT resource server.
-- Nav and actions are gated by the same 20-policy matrix the API enforces
+- Nav and actions are gated by the same 21-policy matrix the API enforces
   (`docs/local-authentication.md`); the API remains the enforcement point. Receiver street
   addresses are never rendered on any print/verification view.
 

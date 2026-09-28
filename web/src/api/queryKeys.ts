@@ -60,5 +60,6 @@ export const qk = {
     crew: (id: string) => ['manifests', id, 'crew'] as const,
     boxes: (id: string) => ['manifests', id, 'boxes'] as const,
     weight: (id: string) => ['manifests', id, 'weight'] as const,
+    ens: (id: string) => ['manifests', id, 'ens'] as const,
   },
 } as const;

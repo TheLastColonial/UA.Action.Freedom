@@ -5,11 +5,18 @@ import type { ManifestStatus } from '../../api/schemas/common';
 import type { VehicleCrewReadModel } from '../../api/schemas/convoys';
 import type {
   CreateConvoyVehicleManifestRequest,
+  EnsDeclarationReadModel,
   ManifestBoxReadModel,
   ManifestReadModel,
+  RecordEnsRequest,
   UpdateManifestRequest,
 } from '../../api/schemas/manifests';
 import { problem } from './problem';
+
+const ENS_NOT_FILED_MESSAGE =
+  'No ICS2 Entry Summary Declaration has been recorded for this manifest. France pairs the ' +
+  'crossing against it at the Smart Border and will not issue a logistics envelope without one ' +
+  '(ENV_CTR_RG08), so file the ENS and record its MRN with PUT /manifests/{id}/ens before approving.';
 
 interface EdgeRule {
   verb: string;
@@ -50,6 +57,8 @@ export interface ManifestApi {
   /** The crew a manifest reports, keyed by manifest id. Written on the convoy, read here. */
   crew: Map<string, VehicleCrewReadModel[]>;
   boxes: Map<string, ManifestBoxReadModel[]>;
+  /** The recorded ICS2 declaration, keyed by manifest id — approval is refused without one. */
+  ens: Map<string, EnsDeclarationReadModel>;
   handlers: RequestHandler[];
 }
 
@@ -88,6 +97,7 @@ export function manifestApi(
     [...seededCrew].map(([id, members]) => [id, [...members]]),
   );
   const boxes = new Map<string, ManifestBoxReadModel[]>();
+  const ens = new Map<string, EnsDeclarationReadModel>();
   const publishedConvoys = new Set(options.publishedConvoyIds ?? []);
   const insuredVins = new Set(options.insuredVins ?? []);
   const idFrom = (raw: string | readonly string[] | undefined) => decodeURIComponent(String(raw));
@@ -256,6 +266,54 @@ export function manifestApi(
       });
     }),
 
+    http.get('/manifests/:id/ens', ({ params }) => {
+      const id = idFrom(params['id']);
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const declaration = ens.get(id);
+      return declaration ? HttpResponse.json(declaration) : new HttpResponse(null, { status: 404 });
+    }),
+
+    http.put('/manifests/:id/ens', async ({ params, request }) => {
+      const id = idFrom(params['id']);
+      const manifest = db.get(id);
+      if (!manifest) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      if (ens.has(id)) {
+        return problem(
+          409,
+          'This manifest already has an ICS2 declaration recorded. A declaration is write-once, ' +
+            'because the logistics envelope names it: withdraw it with DELETE /manifests/{id}/ens ' +
+            'first, which keeps it, and then record the refiled one.',
+        );
+      }
+      const body = (await request.json()) as RecordEnsRequest;
+      ens.set(id, {
+        manifestId: id,
+        mrn: body.mrn,
+        acceptedAt: body.acceptedAt,
+        filedBy: body.filedBy,
+        filingReference: body.filingReference ?? null,
+      });
+      return new HttpResponse(null, {
+        status: 201,
+        headers: { Location: `/manifests/${encodeURIComponent(id)}/ens` },
+      });
+    }),
+
+    http.delete('/manifests/:id/ens', ({ params }) => {
+      const id = idFrom(params['id']);
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      if (!ens.delete(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      return new HttpResponse(null, { status: 204 });
+    }),
+
     ...EDGES.map((edge) =>
       http.post(`/manifests/:id/${edge.verb}`, ({ params }) => {
         const id = idFrom(params['id']);
@@ -278,6 +336,9 @@ export function manifestApi(
             );
           }
         }
+        if (edge.verb === 'approve' && !ens.has(id)) {
+          return problem(409, ENS_NOT_FILED_MESSAGE);
+        }
         if (edge.verb === 'depart' && !insuredVins.has(manifest.vin)) {
           return problem(
             409,
@@ -296,5 +357,5 @@ export function manifestApi(
     ),
   ];
 
-  return { db, crew, boxes, handlers };
+  return { db, crew, boxes, ens, handlers };
 }

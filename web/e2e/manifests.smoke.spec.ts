@@ -60,6 +60,16 @@ test('@smoke a manifest is opened on a truck list, proposed, then approved and f
   await page.getByRole('button', { name: 'Propose' }).click();
   await expect(page.getByRole('heading', { name: 'Status: Proposed' })).toBeVisible();
 
+  // Approval is refused without an ICS2 Entry Summary Declaration recorded against the manifest
+  // (docs/adr/0003) — France pairs the crossing against its MRN at the Smart Border. Freedom does
+  // not file it; this stands in for a Ground Officer having already filed in the EU Customs Trader
+  // Portal and handed the MRN back.
+  await page.getByLabel('MRN').fill('26FR17551780961AT5');
+  await page.getByLabel('Accepted at').fill('2026-06-30T09:30');
+  await page.getByLabel('Filed by').fill('groundofficer');
+  await page.getByRole('button', { name: 'Record declaration' }).click();
+  await expect(page.getByText(/Declared under MRN 26FR17551780961AT5/)).toBeVisible();
+
   await page.getByRole('button', { name: 'Approve' }).click();
   await expect(page.getByText('GMR submitted — the manifest is now frozen.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Status: Confirmed' })).toBeVisible();
