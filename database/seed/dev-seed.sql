@@ -50,14 +50,23 @@ SELECT Id, FirstName, LastName, '1985-01-01', '2024-01-01', N'07700 900000', IsD
 
 -- A convoy still being planned: truck list not published, so vehicles can join and leave.
 DECLARE @convoy int;
-INSERT INTO dbo.Convoy (Start, ExpectedEnd)
-VALUES (DATEADD(DAY, 30, CAST(SYSUTCDATETIME() AS date)), DATEADD(DAY, 37, CAST(SYSUTCDATETIME() AS date)));
+-- CrossingMode 0 is Ferry, 1 is Shuttle. A ferry crossing is declared maritime on an ICS2 ENS and
+-- names the vessel as its active means of transport, so it needs an IMO -- which is why this one
+-- carries a real one from the Dover-Calais route rather than leaving the filing sheet incomplete.
+INSERT INTO dbo.Convoy (Start, ExpectedEnd, CrossingMode, VesselImo)
+VALUES (DATEADD(DAY, 30, CAST(SYSUTCDATETIME() AS date)), DATEADD(DAY, 37, CAST(SYSUTCDATETIME() AS date)),
+        0, '9245779');
 SET @convoy = SCOPE_IDENTITY();
 
-INSERT INTO dbo.ConvoyRouteStop (ConvoyId, Sequence, City, Country, Postcode)
-VALUES (@convoy, 1, N'Coventry', N'United Kingdom', N'CV1 0AA'),
-       (@convoy, 2, N'Dover',    N'United Kingdom', N'CT16 0AA'),
-       (@convoy, 3, N'Lviv',     N'Ukraine',        N'');
+-- CountryCode is the ISO alpha-2 an ENS declares its countries of routing as. Country stays free
+-- text, because a dispatcher writes it; missing a transit country stops EU customs completing its
+-- pre-arrival risk assessment, so the seeded route names every one it passes through.
+INSERT INTO dbo.ConvoyRouteStop (ConvoyId, Sequence, City, Country, Postcode, CountryCode)
+VALUES (@convoy, 1, N'Coventry', N'United Kingdom', N'CV1 0AA',  'GB'),
+       (@convoy, 2, N'Dover',    N'United Kingdom', N'CT16 0AA', 'GB'),
+       (@convoy, 3, N'Calais',   N'France',         N'',         'FR'),
+       (@convoy, 4, N'Poznan',   N'Poland',         N'',         'PL'),
+       (@convoy, 5, N'Lviv',     N'Ukraine',        N'',         'UA');
 
 -- Vehicles. Transmission: 1 Manual, 2 Automatic. Fuel: 2 Diesel. InspectionStatus: 0 Pending,
 -- 2 Passed — only a Passed vehicle may join a convoy.
@@ -82,11 +91,15 @@ CROSS JOIN (VALUES (0), (1)) AS l (Leg);
 -- Boxes waiting at the Coventry depot, not yet validated.
 INSERT INTO dbo.Box (WeightKg, LocationId) VALUES (12, @coventry), (8, @coventry), (15, @london);
 
-INSERT INTO dbo.BoxItem (Id, BoxId, Description, PropertiesJson)
-SELECT NEWID(), b.Id, i.Description, i.PropertiesJson
+-- CommodityCode 99190000 is goods for humanitarian relief (issue #24), which is what an ICS2 ENS
+-- declares this cargo under. Seeded so a filing sheet from local data reports nothing missing --
+-- an unclassified item is reported by description, and it is worth seeing that path deliberately
+-- rather than on every box.
+INSERT INTO dbo.BoxItem (Id, BoxId, Description, PropertiesJson, CommodityCode)
+SELECT NEWID(), b.Id, i.Description, i.PropertiesJson, i.CommodityCode
 FROM dbo.Box AS b
-CROSS APPLY (VALUES (N'First aid kits', N'{"quantity":10}'),
-                    (N'Thermal blankets', N'{"quantity":20}')) AS i (Description, PropertiesJson);
+CROSS APPLY (VALUES (N'First aid kits',   N'{"quantity":10}', '99190000'),
+                    (N'Thermal blankets', N'{"quantity":20}', '99190000')) AS i (Description, PropertiesJson, CommodityCode);
 
 COMMIT;
 

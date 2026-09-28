@@ -46,6 +46,17 @@ public sealed class StorageOptions
     /// </summary>
     public string EloContainer { get; set; } = "elo";
 
+    /// <summary>
+    /// Container holding the ICS2 Entry Summary Declaration recorded for each manifest, and the
+    /// declarations superseded when one was invalidated and refiled.
+    /// </summary>
+    /// <remarks>
+    /// The only container the API writes as well as reads. Nothing submits an ENS — ICS2's Shared
+    /// Trader Interface speaks eDelivery AS4, which needs the always-on inbound access point §4.1
+    /// declines — so there is no worker in this path and no queue (<c>docs/adr/0003</c>).
+    /// </remarks>
+    public string EnsContainer { get; set; } = "ens";
+
     /// <summary>Whether enough is configured to reach a storage account at all.</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ConnectionString);
 }

@@ -34,10 +34,18 @@ public sealed record BoxReadModel(
 /// <summary>
 /// A single donated thing inside a box. Tracked as contents, never individually in transit.
 /// </summary>
+/// <param name="CommodityCode">
+/// The commodity code this item is declared under on an ICS2 Entry Summary Declaration, at least six
+/// digits — <c>EnsCommodity.HumanitarianAid</c> covers aid. A field of its own rather than a key in
+/// <paramref name="Properties"/>: the properties are open-ended precisely because nothing depends on
+/// them, and a border refusal turns on this. <see langword="null"/> until somebody classifies the
+/// item, which the filing sheet reports as missing rather than guessing.
+/// </param>
 public sealed record BoxItemReadModel(
     Guid Id,
     string Description,
-    IReadOnlyDictionary<string, string> Properties);
+    IReadOnlyDictionary<string, string> Properties,
+    string? CommodityCode = null);
 
 /// <summary>
 /// A QR label issued for a box: an opaque, non-enumerable token a scanner resolves back to the

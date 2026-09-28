@@ -31,7 +31,7 @@ builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptio
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection(OidcOptions.SectionName));
 builder.Services.Configure<CustomsOptions>(builder.Configuration.GetSection(CustomsOptions.SectionName));
-builder.Services.Configure<EloOptions>(builder.Configuration.GetSection(EloOptions.SectionName));
+builder.Services.Configure<EnsOptions>(builder.Configuration.GetSection(EnsOptions.SectionName));
 
 var hosting = builder.Configuration.GetSection(HostingOptions.SectionName).Get<HostingOptions>()
               ?? new HostingOptions();
@@ -71,7 +71,6 @@ builder.Services.AddScoped<IManifestWorkQueue>(provider => new AzureManifestWork
     provider.GetService<QueueServiceClient>(),
     provider.GetRequiredService<IOptions<StorageOptions>>(),
     provider.GetRequiredService<IOptions<CustomsOptions>>(),
-    provider.GetRequiredService<IOptions<EloOptions>>(),
     provider.GetRequiredService<QueueFlowMetrics>()));
 
 // The read side of that hand-off. The Customs Worker has no database, so what it learns from French
@@ -79,6 +78,26 @@ builder.Services.AddScoped<IManifestWorkQueue>(provider => new AzureManifestWork
 builder.Services.AddScoped<IEloEnvelopeStore>(provider => new BlobEloEnvelopeStore(
     provider.GetService<BlobServiceClient>(),
     provider.GetRequiredService<IOptions<StorageOptions>>()));
+
+// The ICS2 Entry Summary Declaration a manifest's crossing was accepted under. Blob rather than a
+// column, beside the envelope that names it: this is border paperwork about a manifest rather than
+// part of what a manifest is (docs/adr/0003).
+builder.Services.AddScoped<IEnsDeclarationStore>(provider => new BlobEnsDeclarationStore(
+    provider.GetService<BlobServiceClient>(),
+    provider.GetRequiredService<IOptions<StorageOptions>>()));
+
+// The environment facts an ICS2 declaration needs that no manifest knows. Supplied as a value so the
+// Application composes what the manifest knows and this adapter supplies the rest — the same boundary
+// GmrSubmissionRequest draws for the haulier EORI and the route. Nothing is validated here: a
+// misconfigured deployment must produce a filing sheet that says what is missing, not a 500, because
+// the whole point of the sheet is to be read while there is still time to fix it.
+builder.Services.AddScoped(provider =>
+{
+    var customs = provider.GetRequiredService<IOptions<CustomsOptions>>().Value;
+    var ens = provider.GetRequiredService<IOptions<EnsOptions>>().Value;
+
+    return new EnsFilingEnvironment(customs.HaulierEori, ens.ConsignorName, ens.OfficeOfFirstEntry);
+});
 
 static string ExtractJsonErrorMessage(string errorMessage)
 {

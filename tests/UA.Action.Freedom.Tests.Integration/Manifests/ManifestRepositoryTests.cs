@@ -399,4 +399,75 @@ public class ManifestRepositoryTests
             await RemoveTruckListEntryAsync(entry);
         }
     }
+
+    private static Task AddItemAsync(int boxId, string description, string? commodityCode) =>
+        ExecuteAsync(
+            """
+            INSERT INTO dbo.BoxItem (Id, BoxId, Description, CommodityCode)
+            VALUES (NEWID(), @boxId, @description, @commodityCode)
+            """,
+            ("@boxId", boxId),
+            ("@description", description),
+            ("@commodityCode", (object?)commodityCode ?? DBNull.Value));
+
+    /// <summary>
+    /// The ICS2 filing sheet's source query, against real SQL.
+    /// </summary>
+    /// <remarks>
+    /// Worth an integration test rather than trusting the fake for two reasons the in-memory
+    /// repository cannot show. The row shape is per <em>item</em> while the weight is per
+    /// <em>box</em>, so the caller has to de-duplicate on <c>BoxId</c> before adding anything up — a
+    /// fake with one item per box would pass either way. And the goods item number is non-amendable
+    /// in ICS2, so it comes from the query's <c>ORDER BY</c>; a test that did not put two items in one
+    /// box could not tell a stable order from an accidental one.
+    /// </remarks>
+    [Fact]
+    public async Task Reads_one_goods_line_per_item_with_the_boxs_weight_repeated()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var entry = await ATruckListEntryAsync();
+        var id = NewId();
+        var validatedBy = await AddVolunteerAsync();
+        var packed = await AddBoxAsync(30, validated: true, validatedBy);
+        var unpacked = await AddBoxAsync(0, validated: false, validatedBy: null);
+
+        try
+        {
+            await repository.AddAsync(AManifest(id, entry), cancellationToken);
+            await repository.AddBoxAsync(id, packed, cancellationToken);
+            await repository.AddBoxAsync(id, unpacked, cancellationToken);
+            await AddItemAsync(packed, "Blankets", "99190000");
+            await AddItemAsync(packed, "Sleeping bags", "99190000");
+            await AddItemAsync(unpacked, "Assorted donations", commodityCode: null);
+
+            var lines = await repository.GetEnsGoodsLinesAsync(id, cancellationToken);
+
+            lines.Should().HaveCount(3);
+
+            // The box's weight repeats across its items. Summing rows would say 60 kg for a 30 kg box.
+            lines.Where(line => line.BoxId == packed).Should().HaveCount(2)
+                .And.OnlyContain(line => line.WeightKg == 30);
+            lines.DistinctBy(line => line.BoxId).Sum(line => line.WeightKg).Should().Be(30);
+
+            // Stable order, because the goods item number is derived from it and cannot be amended.
+            lines.Where(line => line.BoxId == packed).Select(line => line.ItemDescription)
+                .Should().Equal("Blankets", "Sleeping bags");
+
+            // Validation and the missing commodity code both come through, because the filing sheet
+            // reports a provisional gross mass and an unclassified item by name.
+            lines.Should().ContainSingle(line => line.ItemDescription == "Assorted donations")
+                .Which.Should().Match<EnsGoodsLineReadModel>(line =>
+                    !line.Validated && line.CommodityCode == null);
+            lines.Should().Contain(line => line.CommodityCode == "99190000");
+        }
+        finally
+        {
+            await RemoveManifestAsync(id);
+            await RemoveBoxAsync(packed);
+            await RemoveBoxAsync(unpacked);
+            await RemoveVolunteerAsync(validatedBy);
+            await RemoveTruckListEntryAsync(entry);
+        }
+    }
 }

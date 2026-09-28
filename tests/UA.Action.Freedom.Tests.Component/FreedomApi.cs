@@ -142,6 +142,7 @@ internal static class FreedomApi
         IPersonRepository people,
         IManifestWorkQueue queue,
         IEloEnvelopeStore? envelopes = null,
+        IEnsDeclarationStore? declarations = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
@@ -155,6 +156,10 @@ internal static class FreedomApi
             // The read side of the envelope hand-off. Empty unless a test says otherwise, which is
             // what a manifest looks like before the Customs Worker has got to it.
             services.Replace(envelopes ?? new InMemoryEloEnvelopeStore());
+
+            // The ICS2 declaration. Empty unless a test says otherwise, which is the state in which
+            // approving a manifest is refused — so a test that approves has to seed one.
+            services.Replace(declarations ?? new InMemoryEnsDeclarationStore());
         });
 
     /// <summary>

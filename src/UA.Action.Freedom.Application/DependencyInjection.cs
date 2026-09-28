@@ -103,6 +103,10 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>, GetManifestWeightHandler>();
         services.AddScoped<IQueryHandler<GetManifestEloQuery, EloEnvelopeReadModel?>, GetManifestEloHandler>();
         services.AddScoped<IQueryHandler<GetManifestEloDocumentQuery, byte[]?>, GetManifestEloDocumentHandler>();
+        services.AddScoped<ICommandHandler<RecordEnsDeclarationCommand, RecordEnsOutcome>, RecordEnsDeclarationHandler>();
+        services.AddScoped<ICommandHandler<SupersedeEnsDeclarationCommand, SupersedeEnsOutcome>, SupersedeEnsDeclarationHandler>();
+        services.AddScoped<IQueryHandler<GetManifestEnsQuery, EnsDeclarationReadModel?>, GetManifestEnsHandler>();
+        services.AddScoped<IQueryHandler<GetEnsFilingSheetQuery, EnsFilingSheetReadModel?>, GetEnsFilingSheetHandler>();
 
         return services.AddInstrumentedCommandHandlers();
     }

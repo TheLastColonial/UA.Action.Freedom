@@ -26,27 +26,28 @@ namespace UA.Action.Freedom.Tests.BDD.Features
         
         private static string[] featureTags = ((string[])(null));
         
-        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "A box, packed to delivered", @"    The whole road one box travels, end to end against the deployed containers: packed by a
-    Loader, validated and weighed, loaded onto a vehicle's manifest, approved — which is what
-    releases the border paperwork — then prepared, readied, departed and delivered.
-
-    The point of walking it in one scenario is that every slice has its own feature already,
-    and none of them proves the slices join up. The joins are where this system goes wrong: a
-    box on a manifest whose convoy never published its truck list, a vehicle that departs
-    without insurance, a manifest frozen with paperwork that was never handed off.
-
-    The French logistics envelope is part of that road now. France requires one per transport
-    unit at the Smart Border, so approval asks for it and the Customs Worker obtains it
-    asynchronously — which is why the scenario waits for it rather than asserting immediately.
-
-    Note what is NOT proven here: the envelope carries a placeholder declaration identifier
-    until Freedom can obtain a real ENS from ICS2, and real French customs would refuse it
-    (FONC-ERR-004). The local WireMock stub accepts it, so this exercises the durable path
-    without exercising the declaration. See docs/gotchas-and-open-questions.md 8.
-
-    These scenarios run against the running containers (the edge on
-    http://localhost:8080, Keycloak on http://localhost:8081) and skip themselves
-    when that stack is not up.", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
+        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "A box, packed to delivered", "    The whole road one box travels, end to end against the deployed containers: p" +
+                "acked by a\r\n    Loader, validated and weighed, loaded onto a vehicle\'s manifest," +
+                " approved — which is what\r\n    releases the border paperwork — then prepared, re" +
+                "adied, departed and delivered.\r\n\r\n    The point of walking it in one scenario is" +
+                " that every slice has its own feature already,\r\n    and none of them proves the " +
+                "slices join up. The joins are where this system goes wrong: a\r\n    box on a mani" +
+                "fest whose convoy never published its truck list, a vehicle that departs\r\n    wi" +
+                "thout insurance, a manifest frozen with paperwork that was never handed off.\r\n\r\n" +
+                "    The French logistics envelope is part of that road now. France requires one " +
+                "per transport\r\n    unit at the Smart Border, so approval asks for it and the Cus" +
+                "toms Worker obtains it\r\n    asynchronously — which is why the scenario waits for" +
+                " it rather than asserting immediately.\r\n\r\n    The ICS2 Entry Summary Declaration" +
+                " comes before all of it, because the envelope pairs the\r\n    crossing against it" +
+                "s MRN — so there is nothing to generate without one, and approval is\r\n    refuse" +
+                "d outright. Freedom does not submit the declaration: a Ground Officer files it i" +
+                "n the\r\n    EU Customs Trader Portal and the MRN is recorded here. See docs/adr/0" +
+                "003.\r\n\r\n    Note what is NOT proven here: the MRN is invented, and real French c" +
+                "ustoms checks it against\r\n    ICS2 and would answer FONC-ERR-004 for one it does" +
+                " not recognise. The local WireMock stub\r\n    accepts anything, so this exercises" +
+                " the durable path without exercising the declaration.\r\n\r\n    These scenarios run" +
+                " against the running containers (the edge on\r\n    http://localhost:8080, Keycloa" +
+                "k on http://localhost:8081) and skip themselves\r\n    when that stack is not up.", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
         
 #line 1 "BoxDelivery.feature"
 #line hidden
@@ -125,9 +126,9 @@ namespace UA.Action.Freedom.Tests.BDD.Features
         
         public virtual async global::System.Threading.Tasks.Task FeatureBackgroundAsync()
         {
-#line 24
+#line 28
 #line hidden
-#line 25
+#line 29
     await testRunner.GivenAsync("the Freedom API exposes \"/manifests\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
         }
@@ -173,7 +174,7 @@ namespace UA.Action.Freedom.Tests.BDD.Features
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A validated box travels on an approved manifest and is delivered", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 27
+#line 31
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -183,140 +184,197 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
             else
             {
                 await this.ScenarioStartAsync();
-#line 24
+#line 28
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 28
+#line 32
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 29
+#line 33
     await testRunner.AndAsync("a volunteer exists who can validate boxes", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 30
+#line 34
     await testRunner.AndAsync("a convoy exists with an insured vehicle on its published truck list", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 31
+#line 35
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 35
+#line 39
     await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 39
+#line 43
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 40
+#line 44
     await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 41
+#line 45
     await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" on the remembered box with body:", "{ \"description\": \"Blankets\", \"properties\": { \"size\": \"double\" } }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 45
+#line 49
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 46
+#line 50
     await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" on the remembered box with the validating volunteer" +
                         " weighing 12", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 47
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
 #line 51
-    await testRunner.WhenAsync("I POST a manifest for the insured vehicle on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 52
-    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 53
-    await testRunner.WhenAsync("I put the remembered box on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 54
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 55
-    await testRunner.WhenAsync("I GET \"/boxes\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I POST a manifest for the insured vehicle on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 56
-    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 57
-    await testRunner.AndAsync("the response body is a list of 1 or more", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.WhenAsync("I put the remembered box on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 58
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 59
-    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 60
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 64
-    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
-#line hidden
-#line 65
-    await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 66
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 67
-    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 68
-    await testRunner.ThenAsync("the response body field \"status\" is \"Confirmed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 69
-    await testRunner.AndAsync("the response body field \"frozen\" is \"True\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 72
-    await testRunner.ThenAsync("within 60 seconds the remembered manifest has a French logistics envelope", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 73
-    await testRunner.AndAsync("the envelope names a declaration and is closed but not yet paired", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 74
-    await testRunner.AndAsync("the envelope\'s barcode document is a PDF", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 78
-    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
-#line hidden
-#line 79
-    await testRunner.WhenAsync("I POST \"prepare\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 80
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 81
-    await testRunner.WhenAsync("I POST \"ready\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 82
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 83
-    await testRunner.WhenAsync("I POST \"depart\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 84
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 85
-    await testRunner.WhenAsync("I POST \"deliver\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 86
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 87
-    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 88
-    await testRunner.ThenAsync("the response body field \"status\" is \"Delivered\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 91
     await testRunner.WhenAsync("I GET \"/boxes\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 92
+#line 60
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 93
+#line 61
     await testRunner.AndAsync("the response body is a list of 1 or more", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 94
+#line 63
+    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 64
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 69
+    await testRunner.WhenAsync("I GET the filing sheet for the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 70
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 71
+    await testRunner.AndAsync("the filing sheet declares a mode of transport and a gross mass", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 72
+    await testRunner.AndAsync("the filing sheet withholds the delivery address and says where to get it", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 77
+    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 78
+    await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 79
+    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 80
+    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 81
+    await testRunner.ThenAsync("the response body field \"frozen\" is \"False\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 82
+    await testRunner.AndAsync("the response body field \"status\" is \"Proposed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 85
+    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 86
+    await testRunner.WhenAsync("I record an ICS2 declaration for the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 87
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 88
+    await testRunner.WhenAsync("I record the same ICS2 declaration again", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 89
+    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 90
+    await testRunner.WhenAsync("I GET the ICS2 declaration for the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 91
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 92
+    await testRunner.AndAsync("the recorded declaration is the one I filed", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 96
+    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 97
+    await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 98
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 99
+    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 100
+    await testRunner.ThenAsync("the response body field \"status\" is \"Confirmed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 101
+    await testRunner.AndAsync("the response body field \"frozen\" is \"True\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 104
+    await testRunner.ThenAsync("within 60 seconds the remembered manifest has a French logistics envelope", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 105
+    await testRunner.AndAsync("the envelope names a declaration and is closed but not yet paired", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 106
+    await testRunner.AndAsync("the envelope names the declaration I recorded", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 107
+    await testRunner.AndAsync("the envelope\'s barcode document is a PDF", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 111
+    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 112
+    await testRunner.WhenAsync("I POST \"prepare\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 113
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 114
+    await testRunner.WhenAsync("I POST \"ready\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 115
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 116
+    await testRunner.WhenAsync("I POST \"depart\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 117
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 118
+    await testRunner.WhenAsync("I POST \"deliver\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 119
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 120
+    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 121
+    await testRunner.ThenAsync("the response body field \"status\" is \"Delivered\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 124
+    await testRunner.WhenAsync("I GET \"/boxes\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 125
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 126
+    await testRunner.AndAsync("the response body is a list of 1 or more", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 127
     await testRunner.ThenAsync("the remembered manifest still has its French logistics envelope", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -334,7 +392,7 @@ await this.FeatureBackgroundAsync();
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A ground officer cannot see a vehicle\'s border paperwork", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 96
+#line 129
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -344,37 +402,37 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
             else
             {
                 await this.ScenarioStartAsync();
-#line 24
+#line 28
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 97
+#line 130
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 98
+#line 131
     await testRunner.AndAsync("a convoy exists with an insured vehicle on its published truck list", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 99
+#line 132
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 100
+#line 133
     await testRunner.WhenAsync("I POST a manifest for the insured vehicle on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 101
+#line 134
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 102
+#line 135
     await testRunner.GivenAsync("I am authenticated as \"groundofficer\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 103
+#line 136
     await testRunner.WhenAsync("I GET \"/elo\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 104
+#line 137
     await testRunner.ThenAsync("the response status is 403", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 105
+#line 138
     await testRunner.WhenAsync("I GET \"/elo/document\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 106
+#line 139
     await testRunner.ThenAsync("the response status is 403", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -392,7 +450,7 @@ await this.FeatureBackgroundAsync();
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An envelope cannot be requested on its own", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 108
+#line 141
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -402,16 +460,16 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
             else
             {
                 await this.ScenarioStartAsync();
-#line 24
+#line 28
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 109
+#line 142
     await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 110
+#line 143
     await testRunner.WhenAsync("I POST \"/manifests/NOSUCH/elo\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 111
+#line 144
     await testRunner.ThenAsync("the response status is 405", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }

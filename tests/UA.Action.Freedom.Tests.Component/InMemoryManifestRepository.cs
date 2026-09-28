@@ -178,6 +178,29 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
                 .Select(box => new ManifestDocumentLineReadModel(
                     box.BoxId, box.WeightKg, ItemCount: 0, "Kharkiv Regional Hospital", "Kharkiv oblast"))
                 .ToList());
+
+    /// <summary>The one receiver this fake's boxes are all bound for.</summary>
+    private static readonly Guid Receiver = new("3f1a6c20-5b4d-4e71-8a92-1c0d7e2f4b33");
+
+    /// <summary>
+    /// One goods line per box, carrying a commodity code, so a filing sheet composed from this fake
+    /// reports nothing missing unless a test arranges for it to.
+    /// </summary>
+    /// <remarks>
+    /// The SQL returns a row per <em>item</em> and repeats the box's weight across them; one item per
+    /// box is the simplest shape that still exercises the grouping, and it keeps the fake's
+    /// de-duplication honest — a caller that summed rows rather than distinct boxes would pass here
+    /// and double-count in production.
+    /// </remarks>
+    public Task<IReadOnlyList<EnsGoodsLineReadModel>> GetEnsGoodsLinesAsync(
+        string id, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<EnsGoodsLineReadModel>>(
+            boxes.GetValueOrDefault(id, [])
+                .Select(box => new EnsGoodsLineReadModel(
+                    box.BoxId, box.WeightKg, box.Validated, Receiver,
+                    "Kharkiv Regional Hospital", "Kharkiv oblast",
+                    $"Aid supplies in box {box.BoxId}", EnsCommodity.HumanitarianAid))
+                .ToList());
 }
 
 /// <summary>

@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Azure.Storage.Blobs" />
     <PackageReference Include="coverlet.collector">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -25,6 +26,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The blob-backed adapters live in the API project, beside the endpoints that read them.
+         Referenced here because the two rules that matter about them — the conditional create that
+         makes a recorded ENS write-once, and copying before deleting when one is superseded — are
+         enforced by the storage service and not by our code, so only a real account can prove them. -->
+    <ProjectReference Include="../../src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj" />
     <ProjectReference Include="../../src/UA.Action.Freedom.Application/UA.Action.Freedom.Application.csproj" />
     <ProjectReference Include="../../src/UA.Action.Freedom.Data/UA.Action.Freedom.Data.csproj" />
     <ProjectReference Include="../../src/UA.Action.Freedom.Domain/UA.Action.Freedom.Domain.csproj" />

@@ -128,18 +128,20 @@ What the rules require for our traffic:
   **at least one ENS** — a safety-and-security entry summary declaration. Without TIR/ATA it would
   need an ENS *and* a customs-clearance formality (an import or transit MRN), so the TIR/ATA ruling
   halves the paperwork.
-- An ENS comes from **ICS2**. A transit MRN, if one is ever used, comes from **DELTA-T / NCTS**.
-  Freedom integrates with neither.
+- An ENS comes from **ICS2**. A transit MRN, if one is ever used, comes from **DELTA-T / NCTS**,
+  which Freedom does not integrate with — and under TIR/ATA it does not need to.
 
-Until then `Elo:PlaceholderDeclarationIdentifier` carries a stand-in, which the local WireMock stub
-accepts and real customs would answer with `FONC-ERR-004` ("Format de déclaration incorrect"). This
-is deliberate sequencing rather than an oversight: it makes the whole durable path — enqueue, submit,
-store, serve — real and tested, leaving one named gap. See
-`docs/gotchas-and-open-questions.md` §8.
+**This gap is closed.** The envelope now carries the ICS2 ENS MRN recorded against the manifest, and
+`Elo:PlaceholderDeclarationIdentifier` is gone. Approving a manifest is refused outright if no MRN has
+been recorded, before anything is frozen. Freedom does not *submit* the ENS — a Ground Officer files it
+in the EU Customs Trader Portal and a Dispatcher records the MRN — so read
+`docs/schemas/ics2/onboarding.md` next: it carries the one prerequisite that still blocks a real
+crossing, which is an EU-issued EORI for a UK-established charity.
 
-Also noted in issue #24 but not used by the code: commodity code **`9919 00 00`** applies to
-humanitarian aid. It belongs on the underlying declaration, not on the envelope, so it will matter
-when ICS2 is integrated.
+Also from issue #24: commodity code **`9919 00 00`** applies to humanitarian aid. It belongs on the
+underlying declaration rather than on the envelope, which is why it appeared with ICS2 and not before —
+it now lives as `EnsCommodity.HumanitarianAid` and on `dbo.BoxItem.CommodityCode`, and the filing sheet
+reports any item without one.
 
 ---
 
@@ -186,9 +188,12 @@ cd ../tofu   && tofu apply                      # creates elo-envelopes + its po
 cd ../local  && docker compose up -d --wait app edge customs-worker
 ```
 
-Approve a manifest, then `GET /manifests/{id}/elo` and `GET /manifests/{id}/elo/document`. The
-refusal path is rehearsed by setting `ELO_PLACEHOLDER_DECLARATION_ID=REFUSE-ME`, which the
-`elo-create-envelope-rejected.json` mapping answers with a real `FONC-ERR-004` body.
+Record an MRN with `PUT /manifests/{id}/ens`, approve the manifest, then
+`GET /manifests/{id}/elo` and `GET /manifests/{id}/elo/document`. Approving without the MRN answers
+409 — that is the ENV_CTR_RG08 guard, moved ahead of the freeze. The refusal path from French customs
+is rehearsed by putting a message on `elo-envelopes` by hand with `"declarationIdentifiers":
+["REFUSE-ME"]`, which the `elo-create-envelope-rejected.json` mapping answers with a real
+`FONC-ERR-004` body; see `iac/README.md`.
 
 **WireMock loads its mappings at boot**, so `docker compose restart wiremock` after editing one.
 

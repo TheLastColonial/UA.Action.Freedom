@@ -219,6 +219,35 @@ Drop `declarationIdentifiers` to watch the worker refuse it before calling custo
 (ENV_CTR_RG08 — a loaded lorry must name at least one formality) and move it to
 `elo-envelopes-poison`.
 
+Putting a message on the queue by hand is now the *only* way to reach either refusal path, and that is
+the point: since ICS2 landed, `POST /manifests/{id}/approve` refuses a manifest with no declaration
+before it freezes anything, and the request validator refuses an MRN that is not shaped like one. Use
+`"declarationIdentifiers": ["REFUSE-ME"]` for the 400 from
+`elo-create-envelope-rejected.json`.
+
+### The ICS2 declaration has no stub, because there is nothing to call
+
+Freedom does not submit Entry Summary Declarations — ICS2's Shared Trader Interface speaks eDelivery
+AS4, which needs the always-on inbound access point `docs/recommendations.md` §4.1 declines. So the
+whole path is Freedom's own, and there is no WireMock mapping for it:
+
+```bash
+# Approving without a declaration is refused, and nothing is frozen.
+curl -i -X POST http://localhost:8080/manifests/MAN-0001/approve -H "Authorization: Bearer $TOKEN"
+
+# Record what a Ground Officer got back from the EU Customs Trader Portal.
+curl -i -X PUT http://localhost:8080/manifests/MAN-0001/ens   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"mrn":"25FR17551780961AT5","acceptedAt":"2026-08-24T09:30:00Z","filedBy":"groundofficer"}'
+
+az storage blob list --container-name ens -o table    # MAN-0001.json
+
+# Now approval succeeds, and the envelope names the real MRN rather than a placeholder.
+curl -s http://localhost:8080/manifests/MAN-0001/ens/filing-sheet -H "Authorization: Bearer $TOKEN"
+```
+
+`PUT` it twice for the 409 — a recorded declaration is write-once, enforced by a conditional blob
+create. `DELETE` then `PUT` again to rehearse invalidate-and-refile, and the withdrawn one stays in the
+`ens` container under `MAN-0001/`.
+
 ### Changing a customs stub
 
 Stubs are plain JSON in `local/wiremock/mappings/` — HMRC's and French customs' alike — loaded at
@@ -345,21 +374,25 @@ except the barcode, because the container had been up for a day serving the prev
 had no `pdf` field. Nothing in the logs says "stale mapping" — the stub simply answers the old
 way. `POST /__admin/mappings/reset` re-reads them too, if you would rather not restart.
 
-### The ELO stubs accept a declaration real French customs would refuse
+### The ELO stubs accept anything, so a green local run proves less than it looks
 
-`Elo__PlaceholderDeclarationIdentifier` carries a stand-in until Freedom can obtain a real ENS from
-ICS2. `elo-create-envelope.json` accepts it and returns a `FERMEE` envelope with a real base64 PDF;
-real French customs would answer `FONC-ERR-004` ("Format de déclaration incorrect").
+`elo-create-envelope.json` returns a `FERMEE` envelope with a real base64 PDF for any well-formed
+request. Real French customs checks the declaration identifier against ICS2 and answers
+`FONC-ERR-004` ("Format de déclaration incorrect") if it does not recognise it — and the MRNs used
+locally are invented, so **a green local run is not evidence that a real submission would succeed**.
 
-That is deliberate — it makes the durable path testable without a certified EDI account — but it
-means **a green local run is not evidence that a real submission would succeed**. See
-`docs/schemas/edi/onboarding.md`.
+What *is* now real is the shape: the envelope carries the MRN recorded against the manifest rather than
+the `Elo__PlaceholderDeclarationIdentifier` setting that used to supply one, and that setting is gone.
+The remaining gap is administrative — see `docs/schemas/edi/onboarding.md` for the DGDDI side and
+`docs/schemas/ics2/onboarding.md` for the EU EORI that still has to be obtained before any declaration
+can be filed at all.
 
-To rehearse the refusal instead, set `ELO_PLACEHOLDER_DECLARATION_ID=REFUSE-ME` on the `app`
-container. `elo-create-envelope-rejected.json` matches that identifier at a higher priority and
-answers 400 with the real `informationsErreur` body from the service contract; the message should
-land in `elo-envelopes-poison`, and the worker's log should name the status and `FONC-ERR-004` and
-nothing from `libelleErreur`.
+To rehearse the refusal, put a message on `elo-envelopes` with
+`"declarationIdentifiers": ["REFUSE-ME"]` as above. There is no setting for it any more:
+`elo-create-envelope-rejected.json` matches that identifier at a higher priority and answers 400 with
+the real `informationsErreur` body from the service contract; the message should land in
+`elo-envelopes-poison`, and the worker's log should name the status and `FONC-ERR-004` and nothing
+from `libelleErreur`.
 
 ### `NU1903` on `System.Security.Cryptography.Xml`
 

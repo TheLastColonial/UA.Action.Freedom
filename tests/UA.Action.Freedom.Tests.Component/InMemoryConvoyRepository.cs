@@ -177,10 +177,17 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     public Task<bool> ExistsAsync(int id, CancellationToken cancellationToken) =>
         Task.FromResult(convoys.ContainsKey(id));
 
-    public Task<int> AddAsync(DateTime start, DateTime expectedEnd, CancellationToken cancellationToken)
+    public Task<int> AddAsync(
+        DateTime start,
+        DateTime expectedEnd,
+        CancellationToken cancellationToken,
+        ChannelCrossing crossingMode = ChannelCrossing.Ferry,
+        string? vesselImo = null)
     {
         var id = nextId++;
-        convoys[id] = new ConvoyReadModel(id, start, expectedEnd, TruckListPublishedAt: null);
+        convoys[id] = new ConvoyReadModel(
+            id, start, expectedEnd, TruckListPublishedAt: null, ArrivedAt: null,
+            CrossingMode: crossingMode, VesselImo: vesselImo);
         return Task.FromResult(id);
     }
 

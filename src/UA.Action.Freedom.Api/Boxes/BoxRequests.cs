@@ -32,9 +32,11 @@ public sealed record ValidateBoxRequest(
 }
 
 /// <summary>Body of <c>POST /boxes/{id}/items</c>.</summary>
-public sealed record AddBoxItemRequest(string Description, Dictionary<string, string>? Properties)
+public sealed record AddBoxItemRequest(
+    string Description, Dictionary<string, string>? Properties, string? CommodityCode = null)
 {
-    public AddBoxItemCommand ToCommand(int boxId) => new(boxId, Description, Properties ?? []);
+    public AddBoxItemCommand ToCommand(int boxId) =>
+        new(boxId, Description, Properties ?? [], CommodityCode);
 }
 
 /// <summary>Written out for each body rather than shared, matching the vehicle and volunteer validators.</summary>

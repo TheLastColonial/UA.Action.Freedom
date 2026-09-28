@@ -54,7 +54,8 @@ public class HealthEndpointTests
         var response = await client.GetAsync("/health/ready", TestContext.Current.CancellationToken);
         var report = await ReadReport(response);
 
-        report.Should().ContainKeys("database", "documents", "customs-queue", "elo-queue", "identity");
+        report.Should().ContainKeys(
+            "database", "documents", "customs-queue", "elo-queue", "ens-store", "identity");
         report.Values.Should().AllBe("Unhealthy");
     }
 
@@ -67,7 +68,8 @@ public class HealthEndpointTests
         var response = await client.GetAsync("/health/ready", TestContext.Current.CancellationToken);
         var report = await ReadReport(response);
 
-        report.Should().ContainKeys("database", "documents", "customs-queue", "elo-queue", "identity");
+        report.Should().ContainKeys(
+            "database", "documents", "customs-queue", "elo-queue", "ens-store", "identity");
         report.Values.Should().AllBe("Unhealthy");
     }
 

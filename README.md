@@ -256,7 +256,9 @@ Core resource endpoints:
   - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo assignment
   - `GET /manifests/{id}/elo` — The French logistics envelope for this vehicle: its `jeton`, `numeroDossier` and `statut`. **Read-only** — an envelope is requested by approving the manifest, never by a `POST` here — and `404` until the Customs Worker has obtained one (`manifests:read`)
   - `GET /manifests/{id}/elo/document` — The barcode PDF a driver presents at the French Smart Border, streamed through the authenticated API rather than as a blob URL (`manifests:read`)
-  - `POST /manifests/{id}/{transition}` — State transitions: `propose`, `approve`, `reject`, `prepare`, `ready`, `depart`, `deliver`, `lose`, `return`. **`approve` is Administrator-only and hands off three things at once**: the UK Goods Movement Reference, the document that travels with the vehicle, and the French logistics envelope
+  - `GET /manifests/{id}/ens/filing-sheet` — Everything an **ICS2 Entry Summary Declaration** asks for that Freedom can know, plus a `missing` list of what it cannot. Deliberately carries **no delivery address**: the filer is a Ground Officer and holds it already (`manifests:read`)
+  - `GET|PUT|DELETE /manifests/{id}/ens` — The ENS MRN this crossing was accepted under. **Recorded, not submitted** — Freedom does not talk to ICS2 — and **write-once**: `DELETE` withdraws it (keeping it) so a refiled declaration can be recorded. `PUT`/`DELETE` are `manifests:declare`, Administrator and Dispatcher
+  - `POST /manifests/{id}/{transition}` — State transitions: `propose`, `approve`, `reject`, `prepare`, `ready`, `depart`, `deliver`, `lose`, `return`. **`approve` is Administrator-only and hands off three things at once**: the UK Goods Movement Reference, the document that travels with the vehicle, and the French logistics envelope. It is **refused with 409 unless an ENS MRN has been recorded**, and refused *before* anything is frozen
 - `GET|POST /locations` — Distribution hubs (garages/warehouses); writes are **Administrator only**
   - `PUT|DELETE /locations/{id}` — Rename or remove a location
   - `GET|POST /locations/{id}/bays` — Bays within a location (code unique per location, not globally)
@@ -269,8 +271,10 @@ See `docs/local-authentication.md` for the full role/policy matrix.
 The **operator UI (`web/`) covers every endpoint above** — all seven slices, every sub-resource
 (convoy route/truck list/crew/insurance, box items/validate/bay, box QR label issue/print/revoke,
 location bays, manifest crew/boxes/weight), all nine manifest transitions, and the reason-gated
-receiver-detail flow — except the two ELO reads, which have no UI yet —
-with nav and actions gated by the same policy matrix (the API stays the enforcement point). The
+receiver-detail flow — except the two ELO reads and the four ICS2 declaration routes, which have no
+UI yet — with nav and actions gated by the same policy matrix (the API stays the enforcement point).
+Recording an ENS MRN is the one gap that costs an operator something, because approval now refuses
+without it: until there is a screen, it is a `PUT /manifests/{id}/ens` by hand. The
 box detail page's **QR label** panel issues a label, shows it inline and prints it (a print
 stylesheet reveals the label alone); `/boxes/scan/{token}` is consumed by whatever scans the
 printed label, not the operator UI.
@@ -349,14 +353,58 @@ registration. It is an index: crossing flags plus a list of declaration identifi
 customs systems. Freedom reads it back at `GET /manifests/{id}/elo`, and its barcode at
 `/elo/document`.
 
-> **The ELO path is complete; the declaration is not.** An envelope references formalities issued by
-> ICS2 (an ENS) and DELTA-T (a transit MRN), and Freedom integrates with neither, so
-> `Elo:PlaceholderDeclarationIdentifier` carries a stand-in that the local WireMock stub accepts and
-> real French customs would refuse with `FONC-ERR-004`. Everything else — enqueue, authenticate,
-> submit, decode the barcode, store, serve — is real and tested end to end. Integrating ICS2 is what
-> closes the gap. See [`docs/schemas/edi/onboarding.md`](docs/schemas/edi/onboarding.md), which also
-> covers the DGDDI authorisation, user agreement and certification run that no amount of code
-> replaces.
+The declaration identifier the envelope names is the **ENS MRN**, recorded against the manifest — which
+is what closed the one gap the ELO integration shipped with. See
+[`docs/schemas/edi/onboarding.md`](docs/schemas/edi/onboarding.md) for the DGDDI authorisation, user
+agreement and certification run that no amount of code replaces.
+
+### The ICS2 Entry Summary Declaration: recorded, not submitted
+
+An **ENS** is the EU's pre-arrival safety-and-security declaration, lodged in ICS2, mandatory for road
+carriers since September 2025. **The ELO cannot be created without its MRN**, so the order is
+ENS → MRN → ELO → barcode → check-in, with no catching up at the border. For an accompanied movement
+only one party may file, and it is the carrier — Ukrainian Action's own volunteers drive, so the charity
+is the filer.
+
+**Freedom records the MRN; it does not submit the declaration.** ICS2's Shared Trader Interface speaks
+EU eDelivery **AS4** — SOAP over ebMS3, with an eIDAS sealing certificate registered in UUM&DS and a
+mandatory conformance run — so the NSwag-generated-client pattern behind `EDI.ELO` and the two HMRC SDKs
+does not transfer, and AS4 needs the permanently reachable *inbound* endpoint this design refuses
+(`docs/recommendations.md` §4.1). There is therefore **no `src/ICS2.*` project and no queue**: a Ground
+Officer files in the EU Customs Trader Portal and a Dispatcher records the MRN. `IEnsDeclarationStore`
+is the seam an IT Service Provider's adapter drops into later, which is a procurement decision rather
+than a coding one.
+
+Three things fall out of that and are worth knowing before touching this slice:
+
+- **`GET /manifests/{id}/ens/filing-sheet` is deliberately incomplete.** It composes the declarant and
+  carrier EORI, consignor, office of first entry, mode of transport, active and passive means of
+  transport, countries of routing, goods items with commodity codes, package counts and gross mass — and
+  the consignee at **organisation and region only**. The delivery address lives in the `sensitive`
+  schema, the sheet is composed on a connection that is `DENY SELECT`'d there, and a sheet listing
+  Ukrainian addresses would be a targeting document. It sets `consigneeAddressWithheld` and names
+  `GET /receivers/{ref}/detail` instead, so a filer cannot conclude there is none. The sheet also
+  reports its own gaps in `missing` — an unclassified item by description, a route stop with no ISO
+  code, a ferry with no vessel IMO, boxes nobody has validated — because a gap found here costs a phone
+  call and one found at the border costs a convoy.
+- **Approval refuses *before* it freezes**, the one exception to freeze-then-enqueue. A manifest frozen
+  with no declaration is frozen for ever against an envelope French customs will never issue.
+- **A recorded MRN is write-once, enforced by blob storage.** `SaveAsync` creates with
+  `IfNoneMatch = ETag.All`, which is the blob equivalent of the conditional `UPDATE` behind
+  `Manifest.GmrSubmittedAt`, and the withdrawal path copies before it deletes — several ENS fields are
+  non-amendable, so invalidate-and-refile is the normal correction and the withdrawn MRN is what a
+  customs query months later is about.
+
+`dbo.Convoy` gained `CrossingMode` and `VesselImo` for this: mode of transport describes the **crossing**,
+not the vehicle — a ferry sailing is maritime (1), a LeShuttle crossing is road (3), and rail is not
+accepted at the Brexit Smart Border.
+
+> **One prerequisite is not ours to solve.** An ENS declarant's EORI must be issued by an EU member
+> state, and a GB EORI is not accepted. Ukrainian Action is UK-established, and the Commission's FAQ does
+> not say what a non-EU carrier must do. Until that is settled with DGDDI or a customs agent, no
+> declaration can be filed by anyone. See
+> [`docs/schemas/ics2/onboarding.md`](docs/schemas/ics2/onboarding.md) and
+> [`docs/adr/0003-ens-declaration-recorded-not-submitted.md`](docs/adr/0003-ens-declaration-recorded-not-submitted.md).
 
 ### Database
 
@@ -556,7 +604,9 @@ Unset, nothing is exported. Sampling is the SDK's own (`OTEL_TRACES_SAMPLER`, 10
   `Convoy Operations`, `Access & Sensitive Data`.
 - **Failures carry a `traceId`.** A 500 or 400 from the API returns the id of the trace that
   recorded it, so an operator can quote it back and find the request in Tempo.
-- **Health checks** on `/health/live` and `/health/ready` (SQL, Blob, both work queues, OIDC).
+- **Health checks** on `/health/live` and `/health/ready` (SQL, Blob, both work queues, the ICS2
+  declaration store, OIDC). The declaration store has its own check because it is the one container
+  the API *writes*: without it no ENS can be recorded and no manifest can be approved.
   Probes are not traced or counted in the HTTP metrics.
 
 ## Known Issues & Gotchas

@@ -34,7 +34,7 @@ public sealed class AzureManifestWorkQueueTests : IDisposable
     private const string DocumentQueue = "manifest-documents";
     private const string EloQueue = "elo-envelopes";
 
-    /// <summary>A stand-in ENS, as <c>Elo:PlaceholderDeclarationIdentifier</c> supplies today.</summary>
+    /// <summary>The ICS2 MRN the crossing was accepted under, recorded against the manifest.</summary>
     private const string Declaration = "25FR17551780961AT5";
 
     private readonly ActivityListener _listener;
@@ -111,7 +111,7 @@ public sealed class AzureManifestWorkQueueTests : IDisposable
         _meter.Dispose();
     }
 
-    private AzureManifestWorkQueue Queue(string declaration = Declaration) => new(
+    private AzureManifestWorkQueue Queue() => new(
         _queues,
         Options.Create(new StorageOptions
         {
@@ -120,14 +120,14 @@ public sealed class AzureManifestWorkQueueTests : IDisposable
             EloQueue = EloQueue,
         }),
         Options.Create(new CustomsOptions { HaulierEori = "GB123456789000", RouteId = "1" }),
-        Options.Create(new EloOptions { PlaceholderDeclarationIdentifier = declaration }),
         new QueueFlowMetrics(_meter));
 
     private static GmrSubmissionRequest ASubmission(string manifestId) =>
         new(manifestId, "AB12 CDE", new DateTime(2026, 9, 1, 6, 0, 0, DateTimeKind.Utc));
 
-    private static EloEnvelopeRequest AnEnvelope(string manifestId) =>
-        new(manifestId, EloCrossingProfile.HumanitarianAidToUkraine);
+    private static EloEnvelopeRequest AnEnvelope(string manifestId, params string[] declarations) =>
+        new(manifestId, EloCrossingProfile.HumanitarianAidToUkraine,
+            declarations.Length == 0 ? [Declaration] : declarations);
 
     [Fact]
     public async Task The_gmr_message_keeps_the_shape_the_customs_worker_reads()
@@ -141,6 +141,13 @@ public sealed class AzureManifestWorkQueueTests : IDisposable
         message.GetProperty("vehicleRegistration").GetString().Should().Be("AB12 CDE");
         message.GetProperty("routeId").GetString().Should().Be("1");
         message.GetProperty("localDateTimeOfDeparture").GetString().Should().Be("2026-09-01T06:00");
+
+        // No ENS MRN. GVMS wants one in sAndSMasterRefNum, which hangs off a declaration container
+        // whose required primary identifier Freedom does not hold (gotchas 5b), so sending it would
+        // mean filing an ICS2 reference as a CDS one.
+        message.EnumerateObject().Select(property => property.Name).Should().BeEquivalentTo(
+            "manifestId", "haulierEori", "vehicleRegistration", "routeId",
+            "localDateTimeOfDeparture", "traceparent");
     }
 
     [Fact]
@@ -221,20 +228,47 @@ public sealed class AzureManifestWorkQueueTests : IDisposable
     }
 
     /// <summary>
-    /// ENV_CTR_RG08: a loaded transport unit must name at least one declaration. Refused here
-    /// rather than paying a round trip to French customs to be told the same thing — and the
-    /// message has to name the missing setting, because by this point the manifest is frozen and
-    /// somebody has to be able to fix it.
+    /// ENV_CTR_RG08: a loaded transport unit must name at least one declaration. Refused here rather
+    /// than paying a round trip to French customs to be told the same thing.
     /// </summary>
+    /// <remarks>
+    /// This is now a guard against a caller bypassing <c>ApproveManifestHandler</c>, which refuses
+    /// before it freezes anything. It used to be the last stop before a placeholder identifier real
+    /// customs would reject, so the message named the missing setting; there is no setting any more,
+    /// and it names the manifest instead — by this point the manifest is frozen, so the error has to
+    /// say which one.
+    /// </remarks>
     [Fact]
     public async Task Refuses_an_envelope_for_a_loaded_lorry_that_names_no_declaration()
     {
-        var enqueue = () => Queue(declaration: string.Empty)
-            .EnqueueEloEnvelopeAsync(AnEnvelope("MAN-NO-DECL"), TestContext.Current.CancellationToken);
+        var enqueue = () => Queue().EnqueueEloEnvelopeAsync(
+            new EloEnvelopeRequest("MAN-NO-DECL", EloCrossingProfile.HumanitarianAidToUkraine, []),
+            TestContext.Current.CancellationToken);
 
         (await enqueue.Should().ThrowAsync<InvalidOperationException>())
-            .WithMessage($"*{nameof(EloOptions.PlaceholderDeclarationIdentifier)}*");
+            .WithMessage("*MAN-NO-DECL*");
         _sent.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// An empty lorry crosses with no formalities at all, which ENV_CTR_RG08 not only permits but
+    /// requires. The guard is on the profile, not on the list being non-empty.
+    /// </summary>
+    [Fact]
+    public async Task Accepts_an_envelope_for_an_empty_lorry_that_names_no_declaration()
+    {
+        var empty = EloCrossingProfile.HumanitarianAidToUkraine with
+        {
+            LorryType = EloLorryType.Empty,
+            TirAta = false,
+        };
+
+        await Queue().EnqueueEloEnvelopeAsync(
+            new EloEnvelopeRequest("MAN-EMPTY", empty, []), TestContext.Current.CancellationToken);
+
+        var message = JsonDocument.Parse(_sent.Single(body => body.Contains("MAN-EMPTY"))).RootElement;
+
+        message.GetProperty("declarationIdentifiers").EnumerateArray().Should().BeEmpty();
     }
 
     [Fact]

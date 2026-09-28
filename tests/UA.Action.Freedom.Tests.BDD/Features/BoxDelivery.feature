@@ -12,10 +12,14 @@ Feature: A box, packed to delivered
     unit at the Smart Border, so approval asks for it and the Customs Worker obtains it
     asynchronously — which is why the scenario waits for it rather than asserting immediately.
 
-    Note what is NOT proven here: the envelope carries a placeholder declaration identifier
-    until Freedom can obtain a real ENS from ICS2, and real French customs would refuse it
-    (FONC-ERR-004). The local WireMock stub accepts it, so this exercises the durable path
-    without exercising the declaration. See docs/gotchas-and-open-questions.md 8.
+    The ICS2 Entry Summary Declaration comes before all of it, because the envelope pairs the
+    crossing against its MRN — so there is nothing to generate without one, and approval is
+    refused outright. Freedom does not submit the declaration: a Ground Officer files it in the
+    EU Customs Trader Portal and the MRN is recorded here. See docs/adr/0003.
+
+    Note what is NOT proven here: the MRN is invented, and real French customs checks it against
+    ICS2 and would answer FONC-ERR-004 for one it does not recognise. The local WireMock stub
+    accepts anything, so this exercises the durable path without exercising the declaration.
 
     These scenarios run against the running containers (the edge on
     http://localhost:8080, Keycloak on http://localhost:8081) and skip themselves
@@ -59,6 +63,34 @@ Scenario: A validated box travels on an approved manifest and is delivered
     When I POST "propose" on the remembered manifest
     Then the response status is 204
 
+    # The filing sheet is what a Ground Officer takes to the portal. It is deliberately
+    # incomplete: the Ukrainian delivery address is not on it, because the filer already holds
+    # it under the one policy allowed to read it.
+    When I GET the filing sheet for the remembered manifest
+    Then the response status is 200
+    And the filing sheet declares a mode of transport and a gross mass
+    And the filing sheet withholds the delivery address and says where to get it
+
+    # Approving before the declaration exists is refused, and nothing is frozen — the one check
+    # on approval that happens before the freeze, because a manifest frozen with no declaration
+    # is frozen for ever against an envelope customs will never issue.
+    Given I am authenticated as "admin"
+    When I POST "approve" on the remembered manifest
+    Then the response status is 409
+    When I GET the remembered manifest
+    Then the response body field "frozen" is "False"
+    And the response body field "status" is "Proposed"
+
+    # Record what came back from ICS2. Write-once, because the envelope names it.
+    Given I am authenticated as "operator"
+    When I record an ICS2 declaration for the remembered manifest
+    Then the response status is 201
+    When I record the same ICS2 declaration again
+    Then the response status is 409
+    When I GET the ICS2 declaration for the remembered manifest
+    Then the response status is 200
+    And the recorded declaration is the one I filed
+
     # Approval freezes the manifest and releases three things at once: the GMR, the document
     # that travels with the vehicle, and the French envelope. Administrator only.
     Given I am authenticated as "admin"
@@ -71,6 +103,7 @@ Scenario: A validated box travels on an approved manifest and is delivered
     # Obtained by the Customs Worker off a queue, so it arrives a poll cycle later.
     Then within 60 seconds the remembered manifest has a French logistics envelope
     And the envelope names a declaration and is closed but not yet paired
+    And the envelope names the declaration I recorded
     And the envelope's barcode document is a PDF
 
     # A frozen manifest still progresses — recommendations 5.2 forbids edits, not progress —

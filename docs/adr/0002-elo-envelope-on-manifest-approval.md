@@ -4,7 +4,8 @@ Date: 2026-09-27
 
 ## Status
 
-Accepted.
+Accepted. The declaration-identifier gap recorded under Consequences was closed by
+[ADR 0003](0003-ens-declaration-recorded-not-submitted.md); everything else here still stands.
 
 ## Context
 

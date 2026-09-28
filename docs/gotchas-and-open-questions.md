@@ -501,6 +501,89 @@ except the barcode, because the container had been up for a day with the previou
 
 ---
 
+## 5b. ICS2 (the Entry Summary Declaration)
+
+### The Shared Trader Interface is not an HTTP API
+
+It runs on EU **eDelivery AS4** — ebMS3/AS4, SOAP 1.2 with attachments — with a TLS certificate, a
+separate eIDAS sealing certificate from a LOTL-listed CA registered in UUM&DS, and a mandatory
+self-conformance run before production. Every other third-party integration here is an NSwag-generated
+client from a committed OpenAPI spec, and **that pattern does not transfer**. There is no
+`src/ICS2.*` project and no `build/nswag` entry, and adding one would produce a client that cannot
+connect. AS4 also needs a permanently reachable *inbound* endpoint, which `recommendations.md` §4.1
+declines on purpose.
+
+So Freedom records the MRN a Ground Officer obtained in the EU Customs Trader Portal.
+`IEnsDeclarationStore` is where an IT Service Provider's adapter drops in later — that is a procurement
+decision, not a coding one. See `docs/adr/0003`.
+
+### Approval refuses *before* it freezes, and that is the one exception
+
+Everywhere else in the manifest lifecycle the rule is freeze-then-enqueue, because an editable manifest
+whose GMR is on its way is what §5.2 forbids. `ApproveManifestHandler` checks for a recorded ENS before
+`ConfirmAndFreezeAsync` instead, and the asymmetry is deliberate: a manifest frozen with no declaration
+is frozen for ever against an envelope French customs will never issue. There is a test asserting that
+nothing was frozen and nothing enqueued.
+
+### A recorded MRN is write-once, enforced by blob storage
+
+`ens/{manifestId}.json` has no `WHERE` clause to be conditional on, so `BlobEnsDeclarationStore.SaveAsync`
+uploads with `IfNoneMatch = ETag.All` — create, never replace — and reports the 409 rather than throwing.
+That is the blob equivalent of the conditional `UPDATE` behind `Manifest.GmrSubmittedAt`, and it is only
+provable against a real storage account: a substituted blob client would show that we *pass* a condition,
+not that the service honours it. Hence
+`tests/UA.Action.Freedom.Tests.Integration/Manifests/EnsDeclarationStoreTests.cs`, and hence the
+Integration project referencing the API project at all.
+
+### Non-amendable fields mean invalidate-and-refile, not correct
+
+Mode of transport, the declarant, the customs office of first entry, the carrier identifier, transport
+document references and the goods item number cannot be amended once filed. Neither can a ferry's
+**vessel IMO**, which "must not be subsequently modified" once entered. Correcting any of them means
+invalidating the declaration in ICS2 and lodging a new one — which is why `DELETE /manifests/{id}/ens`
+exists, why it copies before it deletes, and why the goods item number comes from a stable `ORDER BY`
+rather than whatever the database felt like returning.
+
+### Mode of transport describes the crossing, not the vehicle
+
+A lorry accompanied on a **ferry** is declared maritime (**1**). A lorry on **LeShuttle** is declared
+road (**3**) even though it travels on a train. **Rail (2) is not accepted at the Brexit Smart Border.**
+This is why `dbo.Convoy` has `CrossingMode` at all, and it is a non-amendable field, so getting it wrong
+costs a refiling rather than an edit.
+
+### The filing sheet is deliberately incomplete
+
+`GET /manifests/{id}/ens/filing-sheet` has no field for a street, a postcode or a contact, and a
+component test asserts the serialised body contains none. An ENS genuinely needs the consignee's
+address; the filer is a Ground Officer and already holds it, so the sheet names the consignee at
+organisation and region, sets `consigneeAddressWithheld` and points at
+`GET /receivers/{ref}/detail` — because a filer who saw no address might otherwise conclude there is
+none. The address goes from their screen into the portal and never through a Freedom queue, blob or
+payload.
+
+### The ENS MRN cannot go on the GMR, and the field that looks right is the wrong one
+
+`customsDeclarations[].customsDeclarationId` is the **CDS** identifier — a DUCR for an outbound
+movement. The right field for an ENS is `sAndSMasterRefNum`, *"the Movement Reference Number for a
+Safety & Security declaration"*, but it hangs off a declaration container, and every container requires a
+primary identifier Freedom does not hold: a CDS DUCR, a TIR carnet number or an ATA carnet number. The
+spec also scopes ICS2 MRNs to the `GB_TO_NI` direction while these movements are `UK_OUTBOUND`. So
+`GmrSubmissionRequest` carries no MRN, and a property-set test pins that with the reasoning attached.
+
+### The filing type code is unconfirmed, so nothing asserts one
+
+Secondary sources disagree between **F50** and **F40** for a complete road ENS, and one page on the same
+site gives both. The authority is the ICS2 Functional Specifications in the CIRCABC group
+`18fb5859-3970-4ac5-b30b-6604977a15a7`. The filing sheet carries the mode-of-transport code, which is
+unambiguous, and leaves the dataset code to the portal. Do not hard-code one from a blog post.
+
+### The MRN is never a metric tag, span attribute or log field
+
+It is a customs reference tied to one consignment, so it belongs with plates, VINs, EORIs and route
+stops on the list in § Observability below — not on a bounded-set tag.
+
+---
+
 ## 6. Testing
 
 ### Reqnroll matches step text globally
@@ -637,7 +720,8 @@ The OTLP-to-Prometheus mapping turns `service.namespace` into a prefix of the `j
 ### What is never a tag, an attribute or a log field
 
 Receiver address, contact or free-text `reason`; volunteer names, dates of birth, phone numbers;
-plates and VINs; EORI and insurance detail; route stops; principal ids (`sub`); HMRC error bodies.
+plates and VINs; EORI and insurance detail; route stops; principal ids (`sub`); HMRC error bodies;
+ICS2 MRNs and ELO envelope numbers, which are customs references tied to one consignment.
 A metric tag must be a **bounded set** — a handler name, an outcome enum member, a `ManifestStatus`,
 a fixed reason. `ManifestId` and the queue `MessageId` are allowed on spans and in log scopes (the
 workers already log them) but never on a metric, where each would mint a series.
@@ -794,9 +878,10 @@ address field to leak.
 | Item | Where it is written down |
 | --- | --- |
 | **Receiver detail retention sweep.** `sensitive.ReceiverDetail.DeleteAfter` exists and is populated; nothing deletes expired rows. Wants a timer-triggered job. | §4.4.5 |
-| **A real declaration identifier for the ELO envelope.** The envelope itself is built (below), but it references formalities issued by systems Freedom does not talk to. `Elo:PlaceholderDeclarationIdentifier` carries a stand-in the local stub accepts and real French customs refuses with `FONC-ERR-004`. **This is the one thing between the ELO integration and a usable border document.** Closing it means integrating **ICS2** for an ENS; at that point the identifiers become per-manifest data and the setting goes away. | §5.2, `docs/schemas/edi/onboarding.md` |
 | **ELO status after creation.** `POST /enveloppe/recuperer` returns `statut` (`FERMEE` → `APPAIREE` → `EMBARQUEE` → `DEBARQUEE`) plus the pairing, boarding and landing timestamps. Nothing polls it, so a stored envelope stays `FERMEE` for ever and a dispatcher cannot see that a lorry boarded. Pull rather than the `ENV_NOT01` push callback, so §4.1 holds and no inbound endpoint is needed; the WireMock stub already exists. | §4.1 |
-| **ELO modification.** An envelope may be amended while `FERMEE` and not yet paired (`POST /enveloppe/modifier`, declarations to add and to remove). Worth having once declarations can change — which is to say, once ICS2 lands. | — |
+| **ELO modification.** An envelope may be amended while `FERMEE` and not yet paired (`POST /enveloppe/modifier`, declarations to add and to remove). Now worth having: declarations *can* change, because an ENS with a wrong non-amendable field is invalidated and refiled, and nothing propagates the new MRN to an envelope that already names the old one. | §5b |
+| **System-to-system ICS2 submission.** Declarations are filed by hand in the EU Customs Trader Portal and the MRN is recorded. The STI speaks eDelivery AS4, which needs an always-on inbound access point §4.1 declines — so this waits on an ITSP behind `IEnsDeclarationStore`, not on code. | `docs/adr/0003`, `docs/schemas/ics2/onboarding.md` |
+| **An EU-issued EORI for the declarant.** A GB EORI is not accepted for an ENS and Ukrainian Action is UK-established. **This blocks filing entirely**, by anyone, in any environment, and it is an administrative question rather than a technical one. | `docs/schemas/ics2/onboarding.md` §1 |
 | **Short-lived user-delegation SAS for documents.** Documents are written to blob storage; nothing serves them yet. Never put a document URL in an email — link to an authenticated page that mints the SAS. | §4.3 |
 | **Notification worker.** Driver allocation and manifest approval emails, via Mailpit locally and ACS in Azure. Not started. | plan increment 8 |
 | **Blob versioning and soft delete.** Assumed by `BlobManifestDocumentStore`'s overwrite-on-save comment; not provisioned in `iac/`. | §4.3 |

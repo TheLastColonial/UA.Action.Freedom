@@ -35,12 +35,10 @@ public sealed class AzureManifestWorkQueue(
     QueueServiceClient? queues,
     IOptions<StorageOptions> storage,
     IOptions<CustomsOptions> customs,
-    IOptions<EloOptions> elo,
     QueueFlowMetrics? metrics = null) : IManifestWorkQueue
 {
     private readonly StorageOptions _storage = storage.Value;
     private readonly CustomsOptions _customs = customs.Value;
-    private readonly EloOptions _elo = elo.Value;
 
     public Task EnqueueGmrSubmissionAsync(
         GmrSubmissionRequest submission, CancellationToken cancellationToken) =>
@@ -78,22 +76,21 @@ public sealed class AzureManifestWorkQueue(
     public Task EnqueueEloEnvelopeAsync(
         EloEnvelopeRequest envelope, CancellationToken cancellationToken)
     {
-        // Which declarations go on the envelope comes from configuration, the way the haulier EORI
-        // and route do for a GMR — today it is an environment fact rather than a per-manifest one.
-        // It stops being one as soon as Freedom obtains a real ENS from ICS2.
-        var declarations = string.IsNullOrWhiteSpace(_elo.PlaceholderDeclarationIdentifier)
-            ? Array.Empty<string>()
-            : [_elo.PlaceholderDeclarationIdentifier];
-
-        // ENV_CTR_RG08: a loaded transport unit must name at least one declaration. Refusing here
-        // rather than paying a round trip to be told the same thing, and saying which setting is
-        // missing — the manifest is already frozen by this point, so the message has to be useful.
-        if (envelope.Profile.RequiresADeclaration && declarations.Length == 0)
+        // The declarations arrive on the request: they are the ICS2 MRNs recorded against the
+        // manifest, which is per-manifest data, unlike the haulier EORI and route a GMR takes from
+        // configuration. Until Freedom integrated ICS2 they came from
+        // Elo:PlaceholderDeclarationIdentifier, a stand-in real French customs refuses with
+        // FONC-ERR-004; that setting is gone.
+        //
+        // ENV_CTR_RG08: a loaded transport unit must name at least one declaration. ApproveManifest
+        // refuses before it freezes anything, so reaching here means a caller bypassed it — the
+        // manifest is frozen by now, so the message names it.
+        if (envelope.Profile.RequiresADeclaration && envelope.DeclarationIdentifiers.Count == 0)
         {
             throw new InvalidOperationException(
-                $"{EloOptions.SectionName}:{nameof(EloOptions.PlaceholderDeclarationIdentifier)} is not "
-                + "configured, and French customs refuses an envelope for a loaded lorry that names no "
-                + "declaration (ENV_CTR_RG08). Set it, or integrate ICS2 so a real ENS is available.");
+                $"Manifest {envelope.ManifestId} names no customs declaration, and French customs "
+                + "refuses an envelope for a loaded lorry that names none (ENV_CTR_RG08). Record the "
+                + "ICS2 ENS for it with PUT /manifests/{id}/ens before approving.");
         }
 
         return Enqueue(
@@ -114,7 +111,7 @@ public sealed class AzureManifestWorkQueue(
                 emptyPackaging = envelope.Profile.EmptyPackaging,
                 sanitaryOrPhytosanitary = envelope.Profile.SanitaryOrPhytosanitary,
                 fisheryProducts = envelope.Profile.FisheryProducts,
-                declarationIdentifiers = declarations,
+                declarationIdentifiers = envelope.DeclarationIdentifiers,
             },
             cancellationToken);
     }

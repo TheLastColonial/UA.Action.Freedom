@@ -118,6 +118,11 @@ services:
       Storage__DocumentQueue: manifest-documents
       Storage__EloQueue: elo-envelopes
       Storage__EloContainer: elo
+      # The only container the API writes. Nothing submits an ENS — ICS2's Shared Trader Interface
+      # speaks eDelivery AS4, and an always-on inbound access point is what recommendations 4.1
+      # declines — so a Ground Officer files in the EU Customs Trader Portal and the MRN is recorded
+      # here. There is no queue and no worker in this path. See docs/adr/0003.
+      Storage__EnsContainer: ens
 
       # What HMRC needs to identify a movement that the manifest itself does not carry. Both are
       # charity- or route-level facts; WireMock accepts anything, so these exist so the message
@@ -125,10 +130,14 @@ services:
       Customs__HaulierEori: ${CUSTOMS_HAULIER_EORI:-GB123456789000}
       Customs__RouteId: ${CUSTOMS_ROUTE_ID:-20000}
 
-      # The declaration identifier that goes on every ELO envelope. A placeholder until Freedom
-      # obtains a real ENS from ICS2 — the local stub accepts it, real French customs would not
-      # (FONC-ERR-004). See docs/gotchas-and-open-questions.md 8.
-      Elo__PlaceholderDeclarationIdentifier: ${ELO_PLACEHOLDER_DECLARATION_ID:-25FR17551780961AT5}
+      # What an ICS2 declaration needs that neither the manifest nor the convoy knows. Read only by
+      # GET /manifests/{id}/ens/filing-sheet, which a Ground Officer transcribes into the portal —
+      # nothing here is sent anywhere. The declarant EORI is Customs__HaulierEori above, not
+      # repeated, because the same charity is declarant, carrier and consignor on these movements.
+      # FR620001 is Calais. Like Customs__RouteId this is really a property of the crossing
+      # (gotchas 9), and it is non-amendable in ICS2 once filed.
+      Ens__ConsignorName: ${ENS_CONSIGNOR_NAME:-Ukrainian Action}
+      Ens__OfficeOfFirstEntry: ${ENS_OFFICE_OF_FIRST_ENTRY:-FR620001}
 
       # Split-horizon OIDC. The browser reaches Keycloak on localhost, the container
       # reaches it on the compose network — the same server, two URLs. The issuer in

@@ -9,12 +9,28 @@ group Administration {
     :Truck List Created;
     :Truck List Published;
     :Manifest Proposed;
+
+    ' The ENS comes first, and not as part of the fork below: the ELO pairs the crossing against
+    ' its MRN, so there is nothing to generate without one. Filed outside Freedom, in the EU
+    ' Customs Trader Portal, because ICS2's Shared Trader Interface speaks eDelivery AS4 and we
+    ' expose no inbound endpoint (recommendations 4.1). See docs/adr/0003.
+    :File ENS in ICS2 (Ground Officer, outside Freedom);
+    :Record ENS MRN;
+
+    if (ENS MRN recorded?) then (no)
+        ' Refused before the freeze, unlike every other check on approval: a manifest frozen with
+        ' no declaration is frozen for ever against an envelope customs will never issue.
+        :Refuse approval (409);
+        stop
+    else (yes)
+    endif
+
     :Manifest Approved;
 
     fork
         :Generate GMR;
     fork again
-        :Generate ELO;
+        :Generate ELO (names the ENS MRN);
     end fork
 
 }

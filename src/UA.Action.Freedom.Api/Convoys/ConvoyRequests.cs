@@ -5,27 +5,49 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Api.Convoys;
 
 /// <summary>Body of <c>POST /convoys</c>. The identifier is assigned by the database.</summary>
-public sealed record CreateConvoyRequest(DateTime Start, DateTime ExpectedEnd)
+/// <remarks>
+/// <paramref name="CrossingMode"/> defaults to <see cref="ChannelCrossing.Ferry"/> so existing callers
+/// keep working, but it is worth supplying: it decides the ENS mode-of-transport code, and a ferry
+/// crossing also needs <paramref name="VesselImo"/>. Both are non-amendable in ICS2 once the
+/// declaration is filed.
+/// </remarks>
+public sealed record CreateConvoyRequest(
+    DateTime Start,
+    DateTime ExpectedEnd,
+    ChannelCrossing? CrossingMode = null,
+    string? VesselImo = null)
 {
-    public CreateConvoyCommand ToCommand() => new(Start, ExpectedEnd);
+    public CreateConvoyCommand ToCommand() =>
+        new(Start, ExpectedEnd, CrossingMode ?? ChannelCrossing.Ferry, VesselImo);
 }
 
 /// <summary>
 /// Body of <c>PUT /convoys/{id}</c>. The route supplies the identifier, and the truck list's
 /// publication is not settable here — it has its own endpoint.
 /// </summary>
-public sealed record UpdateConvoyRequest(DateTime Start, DateTime ExpectedEnd)
+public sealed record UpdateConvoyRequest(
+    DateTime Start,
+    DateTime ExpectedEnd,
+    ChannelCrossing? CrossingMode = null,
+    string? VesselImo = null)
 {
-    public UpdateConvoyCommand ToCommand(int id) => new(id, Start, ExpectedEnd);
+    public UpdateConvoyCommand ToCommand(int id) =>
+        new(id, Start, ExpectedEnd, CrossingMode ?? ChannelCrossing.Ferry, VesselImo);
 }
 
 /// <summary>One stop in a <c>PUT /convoys/{id}/route</c> body. Position in the list is the order.</summary>
+/// <param name="CountryCode">
+/// The ISO 3166-1 alpha-2 code for <paramref name="Country"/>. An ENS declares its countries of
+/// routing as codes, and EU customs cannot complete its pre-arrival risk assessment without every
+/// country the goods pass through — so it is supplied rather than inferred from free text.
+/// </param>
 public sealed record RouteStopRequest(
     string? House,
     string? Street,
     string? City,
     string? Country,
-    string Postcode);
+    string Postcode,
+    string? CountryCode = null);
 
 /// <summary>
 /// Body of <c>PUT /convoys/{id}/route</c> — the whole journey, replaced in one go.
@@ -39,7 +61,8 @@ public sealed record ReplaceConvoyRouteRequest(IReadOnlyList<RouteStopRequest> S
     public ReplaceConvoyRouteCommand ToCommand(int convoyId) => new(
         convoyId,
         [.. Stops.Select((stop, index) => new RouteStopReadModel(
-            index + 1, stop.House, stop.Street, stop.City, stop.Country, stop.Postcode))]);
+            index + 1, stop.House, stop.Street, stop.City, stop.Country, stop.Postcode,
+            stop.CountryCode))]);
 }
 
 /// <summary>

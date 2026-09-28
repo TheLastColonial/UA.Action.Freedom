@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Convoys;
 
@@ -27,7 +28,18 @@ public interface IConvoyRepository
     Task<bool> ExistsAsync(int id, CancellationToken cancellationToken);
 
     /// <summary>Inserts a convoy and returns the identifier the database assigned.</summary>
-    Task<int> AddAsync(DateTime start, DateTime expectedEnd, CancellationToken cancellationToken);
+    /// <remarks>
+    /// <paramref name="crossingMode"/> and <paramref name="vesselImo"/> are ordinary editable fields,
+    /// not write-once stamps — a crossing may change while the convoy is still being planned. They
+    /// stop being changeable once the ENS is filed, because mode of transport and the vessel IMO are
+    /// both non-amendable in ICS2.
+    /// </remarks>
+    Task<int> AddAsync(
+        DateTime start,
+        DateTime expectedEnd,
+        CancellationToken cancellationToken,
+        ChannelCrossing crossingMode = ChannelCrossing.Ferry,
+        string? vesselImo = null);
 
     Task<bool> UpdateAsync(ConvoyReadModel convoy, CancellationToken cancellationToken);
 
