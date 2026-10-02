@@ -7,6 +7,7 @@
 | **Depends on** | Nothing. May run before or after plan 01. |
 | **Gate** | Run the `/security-review` skill before opening the PR |
 | **Flows** | [01 Login and attribution](../sequences/01-login-and-attribution.puml) ([process](../process/01-login-and-attribution.puml)) |
+| **Diagrams** | [People and access (use cases)](../use-cases/people-and-access.puml) |
 
 ## Context
 

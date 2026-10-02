@@ -5,7 +5,8 @@ conversation with Ukrainian Action.
 
 Related: [System Context](../c4/1-system-context.puml) · [Containers](../c4/2-containers.puml) ·
 [Manifest creation process](../process.puml) · [Manifest status](../manifest-status.puml) ·
-[Architecture recommendations](../recommendations.md) · [Sequence diagrams](../sequences/README.md) · [Process diagrams](../process/README.md)
+[Architecture recommendations](../recommendations.md) · [Sequence diagrams](../sequences/README.md) · [Process diagrams](../process/README.md) ·
+[State diagrams](../states/README.md) · [Use cases](../use-cases/README.md) · [Domain model](../model/domain-model.puml) · [Convoy timeline](../timeline/convoy-timeline.puml)
 
 ---
 
@@ -27,6 +28,8 @@ For scale: about 500 vehicles over four years, one convoy a month, and about 25 
 ---
 
 ## Roles
+
+*Diagrams: [People and access (use cases)](../use-cases/people-and-access.puml), [Convoy operations (use cases)](../use-cases/convoy-operations.puml), [Boxes and donations (use cases)](../use-cases/boxes-and-donations.puml), [Declarations and Receivers (use cases)](../use-cases/declarations-and-receivers.puml).*
 
 Each role below maps to one application role in the identity provider. They are deliberately narrow: least
 privilege is easier to keep when the roles already describe distinct jobs.
@@ -121,6 +124,8 @@ Represents a country's border authority. Verifies a load in transit. Has no acco
 ## Core Concepts
 
 ### Convoy
+
+*Diagrams: [Convoy lifecycle (state)](../states/convoy-lifecycle.puml).*
 
 A collection of [Vehicles](#vehicle) travelling together to Ukraine, with a departure timestamp, an expected
 arrival timestamp and a [Route](#route). The convoy is the unit that is planned; the [Manifest](#manifest) is the
@@ -250,6 +255,8 @@ transit — they are tracked as the contents of a [Box](#box).
 
 ### Box
 
+*Diagrams: [Box lifecycle (state)](../states/box-lifecycle.puml).*
+
 *Flows: [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)), [03 Box replacement](../sequences/03-box-replacement.puml) ([process](../process/03-box-replacement.puml)).*
 
 A packed container of [Items](#item) with a confirmed weight, a current [Location](#location), and a target
@@ -303,6 +310,8 @@ being in two bays at once.
 
 ### Receiver
 
+*Diagrams: [Receiver registration (state)](../states/receiver-registration.puml).*
+
 *Flows: [11 Receiver registration](../sequences/11-receiver-registration.puml) ([process](../process/11-receiver-registration.puml)).*
 
 The destination of a box's contents: a responsible individual, an organisation, and an [Address](#address) in
@@ -350,16 +359,19 @@ appears on it is a security question — see [Data Sensitivity](#data-sensitivit
 
 ### Manifest Status
 
-The lifecycle a manifest moves through. `ManifestStatus` is a ten-state enum — `Created, Proposed, Rejected,
-Confirmed, Preparing, Ready, InTransit, Delivered, Lost, Returned` — kept in sync with
-[`manifest-status.puml`](../manifest-status.puml) edge-for-edge; the allowed transitions live as data in
-`ManifestTransitions.CanTransition` (`Manifest.cs`), pinned by
-`tests/UA.Action.Freedom.Tests.Unit/Domain/ManifestTransitionsTests.cs`. The happy path is linear; the only
-backward edge is `Rejected → Proposed`. GMR submission is triggered from the `Confirmed → approve` transition,
-which freezes the manifest in the same statement that stamps the GMR timestamp — see CLAUDE.md's manifest
-lifecycle section for the freeze semantics.
+*Diagrams: [Manifest status (state)](../manifest-status.puml).*
+
+The sign-off of one vehicle's load: **Proposed**, then **Approved** or **Rejected**. A rejected load is fixed and
+proposed again, and **any change to an approved load returns it to Proposed** for re-approval
+([P6](decisions.md#p6), [X3](decisions.md#x3)). Approval files nothing: declarations are prepared and filed
+afterwards ([Customs declarations](customs-declarations.md)). Drawn in [`manifest-status.puml`](../manifest-status.puml).
+
+> The code still implements the earlier ten-state `ManifestStatus` (`Created` to `Returned`), with approval freezing
+> the manifest, until [plan 15](../plans/15-manifest-signoff-lifecycle.md) merges.
 
 ### Truck List
+
+*Diagrams: [Truck-list entry (state)](../states/truck-list-entry.puml).*
 
 The set of vehicles committed to a [Convoy](#convoy), produced at the start of the process and published so that
 manifests can be proposed against it (see [`process.puml`](../process.puml)). One row per vehicle per convoy, and

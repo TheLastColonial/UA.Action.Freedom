@@ -1,0 +1,39 @@
+@startuml Declaration Lifecycle
+
+title Declaration lifecycle (GMR, ENS, ELO, Ukrainian goods list)
+caption Target design. Customs declarations: Lifecycle. Decisions X5, X6, D13, X2. ADRs 0005, 0006.
+
+state "Draft" as Draft : being prepared
+state "Ready to file" as Ready : snapshot of the load stored
+state "Filed" as Filed : submitted, or recorded as filed
+state "Accepted" as Accepted : authority issued a reference;\nthe only "current" state
+state "Refused" as Refused : bounded reason code only
+state "Stale" as Stale : load differs from the snapshot;\nderived, never set by hand
+state "Withdrawn" as Withdrawn : cancelled or invalidated;\nrecord and reference kept
+state "Closed" as Closed : its border has been crossed;\nfrozen
+
+[*] --> Draft
+Draft --> Ready : load signed off,\nsnapshot taken
+Ready --> Filed : filed (automatic)\nor reference recorded (manual)
+Filed --> Accepted : authority accepts
+Filed --> Refused : authority refuses
+Refused --> Draft : corrected
+Filed --> Stale : load changed
+Accepted --> Stale : load changed
+Stale --> Withdrawn : withdraw (re-declare task)
+Withdrawn --> Draft : replacement started\nfor the same scope
+Accepted --> Closed : Convoy Leader (or Dispatcher\non their behalf) marks the crossing
+Closed --> [*]
+
+note right of Filed
+  ENS: Filed and Accepted collapse,
+  because an MRN exists only on acceptance.
+  ELO: needs an Accepted ENS first.
+end note
+
+note left of Stale
+  Stale while the convoy is planned
+  blocks departure.
+end note
+
+@enduml

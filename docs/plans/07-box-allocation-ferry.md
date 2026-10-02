@@ -7,6 +7,7 @@
 | **Depends on** | [03](03-last-changed-audit.md) |
 | **Gate** | None |
 | **Flows** | [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)) |
+| **Diagrams** | [Box lifecycle (state)](../states/box-lifecycle.puml), [Truck-list entry (state)](../states/truck-list-entry.puml) |
 
 ## Context
 

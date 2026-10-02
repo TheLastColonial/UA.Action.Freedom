@@ -14,7 +14,7 @@ How the Ukrainian Action domain is described, and where to look.
 | [Ukrainian customs research](ua-customs-requirements.md) | What Ukrainian customs appear to require, with sources and what is unverified. **Research only, not authoritative.** |
 
 How the rules get built is in the [implementation plans](../plans/README.md). The new flows are drawn as
-[sequence diagrams](../sequences/README.md) and [process diagrams](../process/README.md).
+[sequence diagrams](../sequences/README.md) and [process diagrams](../process/README.md), with [state diagrams](../states/README.md), [use cases](../use-cases/README.md), a class diagram of the [domain model](../model/domain-model.puml) and a worked [convoy timeline](../timeline/convoy-timeline.puml).
 
 The first four describe **business rules** and nothing else. The reasoning, history and open questions live in
 [Decisions](decisions.md), and every rule links to the decision it comes from.

@@ -7,6 +7,7 @@
 | **Depends on** | [02](02-login-person-link.md), [10](10-route-points-convoy-leader.md) |
 | **Gate** | **Increment 0: the owner signs off the mechanism.** Stop. |
 | **Flows** | [10 Leader address access](../sequences/10-leader-address-access.puml) ([process](../process/10-leader-address-access.puml)), [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)) |
+| **Diagrams** | [People and access (use cases)](../use-cases/people-and-access.puml), [Convoy operations (use cases)](../use-cases/convoy-operations.puml), [Boxes and donations (use cases)](../use-cases/boxes-and-donations.puml) |
 
 ## Context
 

@@ -7,6 +7,7 @@
 | **Depends on** | [04](04-receiver-registration.md), [18](18-leader-checklist-progress.md) |
 | **Gate** | **Increment 0: security review.** Stop for the owner and a security reviewer. |
 | **Flows** | [10 Leader address access](../sequences/10-leader-address-access.puml) ([process](../process/10-leader-address-access.puml)) |
+| **Diagrams** | [Convoy timeline (Gantt)](../timeline/convoy-timeline.puml), [Convoy operations (use cases)](../use-cases/convoy-operations.puml) |
 
 ## Context
 

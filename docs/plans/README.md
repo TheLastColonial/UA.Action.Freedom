@@ -7,7 +7,10 @@ executes a plan, opens the PR and **stops**. The developer reviews and merges, a
 The business rules each plan implements are in [`docs/domain/`](../domain/README.md). The flows are drawn twice:
 as calls between people and systems in [`docs/sequences/`](../sequences/README.md), and as role-by-role processes in
 [`docs/process/`](../process/README.md), starting with the
-[end-to-end overview](../process/00-end-to-end-overview.puml). When a plan changes a drawn flow, it updates both
+[end-to-end overview](../process/00-end-to-end-overview.puml). Lifecycles are in
+[`docs/states/`](../states/README.md), permissions in [`docs/use-cases/`](../use-cases/README.md), the target
+[domain model](../model/domain-model.puml) is one class diagram, and the time rules are on a worked
+[convoy timeline](../timeline/convoy-timeline.puml). When a plan changes a drawn flow, it updates both
 diagrams. When a plan and a domain document
 disagree, the domain document wins: raise it in the PR rather than building around it.
 

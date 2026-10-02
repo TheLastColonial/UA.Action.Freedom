@@ -1,0 +1,30 @@
+@startuml Convoy Lifecycle
+
+title Convoy lifecycle
+caption Target design. Convoy operations. Decisions O36, P4, O3, O10, O25. ADRs 0001, 0008, 0015.
+
+state "Planning" as Planning {
+  state "Truck list open" as Open : route, crew, leader, budget,\nequipment, insurance, bookings
+  state "Truck list published" as Published : no vehicle may join;\nmanifests may be proposed
+  [*] --> Open
+  Open --> Published : publish truck list
+}
+
+state "Departed" as Departed : on the road; marks, crossings,\nfuel and outcomes recorded
+state "Arrived" as Arrived : every travelling vehicle delivered;\ndelivered vehicles handed over
+state "Closed" as Closed : closing report generated;\nnot locked (O25)
+
+[*] --> Planning : create convoy
+Planning --> [*] : deleted before departure
+Published --> Departed : Dispatcher departs\n[every blocking requirement holds]
+Published --> Published : depart refused (409)\nlists what is missing
+Departed --> Arrived : Dispatcher marks arrived\n[no vehicle still travelling]
+Arrived --> Closed : Dispatcher closes
+Closed --> Closed : correction;\nreport regenerated
+
+note right of Published
+  No override, waiver or "depart anyway" (O3).
+  A vehicle may still be withdrawn after publication.
+end note
+
+@enduml

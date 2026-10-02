@@ -1,0 +1,57 @@
+@startuml Box Lifecycle
+
+title Box lifecycle
+caption Target design. Boxes and donations: Box lifecycle. Decisions O22, D3, D1, O2, O5, O8, O9, O24, O28. ADRs 0011, 0015.
+
+state "Expected" as Expected : ordered or mailed in;\nentering it early is optional (O22)
+state "Arrived" as Arrived : at a hub; may be in a bay
+state "Composed" as Composed : built at the hub from\nseveral donations (optional)
+state "Attested" as Attested : verified, weighed, sized, signed;\nQR label issued; contents fixed
+state "Allocated" as Allocated : on a vehicle of a convoy
+state "Departed" as Departed : the vehicle has left
+state "Delivered" as Delivered : marked arrived by the\nConvoy Leader or Dispatcher
+state "Accepted" as Accepted : Ukrainian customs accepted\nits goods list
+state "Seized" as Seized : kept by customs
+state "Returned to hub" as Returned : refused, sent back to a\nregistered hub the leader chose
+state "Undeliverable" as Undeliverable : damaged or stolen,\nwith a reason
+state "Void" as Void : replaced by a new box (D3)
+
+[*] --> Expected : donor announced it
+[*] --> Arrived : entered on arrival
+Expected --> Arrived : checked in at a hub
+Arrived --> Composed : combine donations
+Composed --> Attested : Loader attests
+Arrived --> Attested : Loader attests\n[no expired item]
+Attested --> Allocated : allocated to a vehicle\n[Receiver registered]
+Allocated --> Attested : allocation removed
+Allocated --> Allocated : moved to another vehicle\n(declarations go stale)
+Allocated --> Departed : convoy departs
+
+Departed --> Delivered : arrived
+Delivered --> Accepted : goods list accepted (O24)
+Departed --> Seized : customs keep it
+Departed --> Returned : customs send it back
+Departed --> Undeliverable : damaged or stolen
+Returned --> Arrived : back at the hub,\nlabel and contents unchanged (O28)
+
+Attested --> Void : replaced
+Allocated --> Void : replaced
+Arrived --> Void : replaced
+
+Accepted --> [*]
+Seized --> [*]
+Undeliverable --> [*]
+Void --> [*]
+
+note right of Attested
+  An attested box is never edited or deleted.
+  A change means replacement (Void + a new box).
+end note
+
+note bottom of Allocated
+  "Declared" is not a stored state: whether a box's
+  declarations are current is derived from the
+  vehicle's declaration snapshots.
+end note
+
+@enduml

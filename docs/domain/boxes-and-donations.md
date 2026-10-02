@@ -3,7 +3,7 @@
 The business rules for boxes, the items in them, who donated them, and where they go. Why each rule exists is in
 [Decisions](decisions.md); the rules link to it.
 
-See also: [Sequence diagrams](../sequences/README.md), [Process diagrams](../process/README.md), [Convoy operations](convoy-operations.md), [Customs declarations](customs-declarations.md),
+See also: [Sequence diagrams](../sequences/README.md), [Process diagrams](../process/README.md), [State diagrams](../states/README.md), [Use cases](../use-cases/README.md), [Domain model](../model/domain-model.puml), [Convoy timeline](../timeline/convoy-timeline.puml), [Convoy operations](convoy-operations.md), [Customs declarations](customs-declarations.md),
 [Key concepts](key-concepts.md).
 
 ## Purpose of a box
@@ -17,6 +17,8 @@ A box is the container of donated items sent to Ukraine. It must be:
   checkpoints.
 
 ## Box lifecycle
+
+*Diagrams: [Box lifecycle (state)](../states/box-lifecycle.puml), [Domain model (class)](../model/domain-model.puml).*
 
 *Flows: [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)), [03 Box replacement](../sequences/03-box-replacement.puml) ([process](../process/03-box-replacement.puml)), [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)), [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)).*
 
@@ -53,6 +55,8 @@ A box is the container of donated items sent to Ukraine. It must be:
   **The Administrator maintains the mapping** ([O31](decisions.md#o31)).
 
 ## Donations and donors
+
+*Diagrams: [Boxes and donations (use cases)](../use-cases/boxes-and-donations.puml).*
 
 *Flows: [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)).*
 
@@ -117,6 +121,8 @@ A box is the container of donated items sent to Ukraine. It must be:
 
 ## Receivers and destinations
 
+*Diagrams: [Receiver registration (state)](../states/receiver-registration.puml), [Declarations and Receivers (use cases)](../use-cases/declarations-and-receivers.puml).*
+
 *Flows: [11 Receiver registration](../sequences/11-receiver-registration.puml) ([process](../process/11-receiver-registration.puml)).*
 
 - A box has a destination **Receiver**, which may be set before the box arrives at a hub.
@@ -144,6 +150,8 @@ A box is the container of donated items sent to Ukraine. It must be:
   ([O5](decisions.md#o5)). Insurance is for the vehicle to travel on the road.
 
 ## Declarations: the box-side rules
+
+*Diagrams: [Convoy timeline (Gantt)](../timeline/convoy-timeline.puml).*
 
 *Flows: [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)), [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)).*
 

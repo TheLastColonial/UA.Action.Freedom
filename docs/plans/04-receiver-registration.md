@@ -7,6 +7,7 @@
 | **Depends on** | [03](03-last-changed-audit.md) |
 | **Gate** | None |
 | **Flows** | [11 Receiver registration](../sequences/11-receiver-registration.puml) ([process](../process/11-receiver-registration.puml)), [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)) |
+| **Diagrams** | [Receiver registration (state)](../states/receiver-registration.puml), [Declarations and Receivers (use cases)](../use-cases/declarations-and-receivers.puml) |
 
 ## Context
 

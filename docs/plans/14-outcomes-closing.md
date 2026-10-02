@@ -7,6 +7,7 @@
 | **Depends on** | [08](08-declarations-filing.md), [12](12-budget-equipment.md), [13](13-readiness-departure.md) |
 | **Gate** | None |
 | **Flows** | [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)), [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)) |
+| **Diagrams** | [Box lifecycle (state)](../states/box-lifecycle.puml), [Truck-list entry (state)](../states/truck-list-entry.puml), [Convoy lifecycle (state)](../states/convoy-lifecycle.puml) |
 
 ## Context
 

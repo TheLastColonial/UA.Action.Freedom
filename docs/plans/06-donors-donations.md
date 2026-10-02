@@ -7,6 +7,7 @@
 | **Depends on** | [05](05-item-classification-value.md) |
 | **Gate** | None |
 | **Flows** | [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)) |
+| **Diagrams** | [Boxes and donations (use cases)](../use-cases/boxes-and-donations.puml), [Domain model (class)](../model/domain-model.puml) |
 
 ## Context
 

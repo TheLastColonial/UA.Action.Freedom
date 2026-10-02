@@ -7,6 +7,7 @@
 | **Depends on** | [08](08-declarations-filing.md) |
 | **Gate** | None |
 | **Flows** | [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)) |
+| **Diagrams** | [Declaration lifecycle (state)](../states/declaration-lifecycle.puml) |
 
 ## Context
 

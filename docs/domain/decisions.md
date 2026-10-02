@@ -19,7 +19,7 @@ the domain documents, which link back here.
   a decision began, not what it governs. The sections below group them by topic.
 - A **superseded** decision is struck through and says what replaced it. It is kept so the reasoning is not lost.
 - **UNVERIFIED** means the decision rests on a claim that has not been confirmed against a primary source.
-- The flows these decisions shape are drawn in the [sequence diagrams](../sequences/README.md) and [process diagrams](../process/README.md).
+- The flows these decisions shape are drawn in the [sequence diagrams](../sequences/README.md) and [process diagrams](../process/README.md), with [state diagrams](../states/README.md), [use cases](../use-cases/README.md), the [domain model](../model/domain-model.puml) and a worked [convoy timeline](../timeline/convoy-timeline.puml).
 
 ## Contents
 

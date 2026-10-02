@@ -1,0 +1,85 @@
+@startuml Convoy Operations Use Cases
+
+title Use cases: planning and running a convoy
+caption Target design. Convoy operations. Decisions D17, P14, O36, O27, O20, O2, O8, O24, O25, X7. ADRs 0007, 0008, 0009, 0010, 0015, 0016.
+
+left to right direction
+
+actor Purchaser as purch
+actor Mechanic as mech
+actor Dispatcher as disp
+actor Administrator as admin
+actor "Convoy Leader\n(own convoy only)" as leader
+actor "Other drivers" as drivers
+
+rectangle "Freedom" {
+  usecase "Source a vehicle" as V1
+  usecase "Record a vehicle inspection" as V2
+  usecase "Create a convoy and its route" as C1
+  usecase "Build and publish the truck list" as C2
+  usecase "Set budget and vehicle equipment" as C3
+  usecase "Seat crew" as C4
+  usecase "Nominate or reassign\nthe Convoy Leader" as C5
+  usecase "Record insurance" as C6
+  usecase "Book ferries and accommodation" as C7
+  usecase "Set handover Receivers" as C8
+  usecase "Allocate boxes to vehicles" as C9
+  usecase "Sign off a vehicle's load" as C10
+  usecase "Review readiness" as C11
+  usecase "Depart the convoy" as C12
+  usecase "Mark route points and crossings" as R1
+  usecase "Enter fuel" as R2
+  usecase "Record box outcomes" as R3
+  usecase "Record goods-list acceptance" as R4
+  usecase "Read route and Receiver addresses" as R5
+  usecase "Mark the convoy arrived" as E1
+  usecase "Close the convoy and read the report" as E2
+}
+
+purch --> V1
+mech --> V2
+admin --> V2
+disp --> C1
+disp --> C2
+disp --> C3
+disp --> C4
+disp --> C5
+admin --> C5
+disp --> C6
+disp --> C7
+disp --> C8
+disp --> C9
+admin --> C10
+disp --> C11
+disp --> C12
+leader --> R1
+disp --> R1
+leader --> R2
+leader --> R3
+disp --> R3
+leader --> R4
+disp --> R4
+leader --> R5
+disp --> E1
+disp --> E2
+
+leader ..> drivers : radio
+C12 ..> C11 : <<include>>
+
+note right of R1
+  A Dispatcher records marks on the
+  leader's behalf, named (O27).
+end note
+
+note right of R5
+  From 14 days before departure until
+  arrival or reassignment; audited.
+  Other drivers are given no addresses (O1).
+end note
+
+note right of C12
+  Refused until every blocking
+  requirement holds; no override (O3).
+end note
+
+@enduml

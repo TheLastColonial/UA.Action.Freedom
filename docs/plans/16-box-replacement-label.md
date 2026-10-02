@@ -7,6 +7,7 @@
 | **Depends on** | [02](02-login-person-link.md), [05](05-item-classification-value.md), [09](09-declaration-staleness.md) |
 | **Gate** | **Increment 0: translation spike and label data-sensitivity review.** Stop for the owner. |
 | **Flows** | [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)), [03 Box replacement](../sequences/03-box-replacement.puml) ([process](../process/03-box-replacement.puml)) |
+| **Diagrams** | [Box lifecycle (state)](../states/box-lifecycle.puml), [Boxes and donations (use cases)](../use-cases/boxes-and-donations.puml) |
 
 ## Context
 

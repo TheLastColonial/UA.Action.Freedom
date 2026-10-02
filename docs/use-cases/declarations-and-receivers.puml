@@ -1,0 +1,64 @@
+@startuml Declarations and Receivers Use Cases
+
+title Use cases: customs declarations and Receivers
+caption Target design. Customs declarations; Boxes and donations: Receivers. Decisions X1, O32, D12, D20, X5, D13, D30, D35. ADRs 0003, 0005, 0006, 0012.
+
+left to right direction
+
+actor Dispatcher as disp
+actor Administrator as admin
+actor "Ground Officer" as go
+actor "Receiver\n(Ukraine)" as rcv <<external>>
+actor "EU Customs\nTrader Portal" as eu <<system>>
+actor "HMRC GVMS" as hmrc <<system>>
+actor "French customs\n(ELO)" as elo <<system>>
+actor "Ukraine humanitarian\naid system" as ua <<system>>
+
+rectangle "Freedom" {
+  usecase "Read the ENS filing sheet\n(no address)" as D1
+  usecase "Record the ENS MRN" as D2
+  usecase "File or record the ELO" as D3
+  usecase "File or record the GMR" as D4
+  usecase "Prepare a goods list per Receiver" as D5
+  usecase "Record a goods-list reference" as D6
+  usecase "Withdraw a stale declaration\n(re-declare task)" as D7
+  usecase "Create a Receiver" as RC1
+  usecase "Record a Receiver's address\nand contact" as RC2
+  usecase "Register, suspend or expire\na Receiver" as RC3
+  usecase "See where a Receiver is used" as RC4
+  usecase "Review the address access log" as RC5
+}
+
+disp --> D1
+disp --> D2
+disp --> D3
+disp --> D4
+disp --> D5
+disp --> D6
+disp --> D7
+go --> RC1
+go --> RC2
+admin --> RC1
+admin --> RC3
+admin --> RC4
+go --> RC5
+
+disp ..> eu : files the ENS
+go ..> eu : enters the consignee\naddress (O32)
+D3 ..> elo : automatic mode
+D4 ..> hmrc : automatic mode
+disp ..> rcv : sends the goods list
+rcv ..> ua : files it
+
+note right of RC2
+  Ground Officer only. Isolated both ways:
+  the Ground Officer has no manifest or
+  declaration permissions.
+end note
+
+note right of D3
+  Manual by default: the Dispatcher
+  records the reference (X5).
+end note
+
+@enduml

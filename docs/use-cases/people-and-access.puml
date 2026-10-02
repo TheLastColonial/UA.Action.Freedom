@@ -1,0 +1,46 @@
+@startuml People and Access Use Cases
+
+title Use cases: volunteers, logins and access
+caption Target design. Decisions O34, O35, O19, X12, O14, O31. ADRs 0010, 0017.
+
+left to right direction
+
+actor "Volunteer\n(any role)" as vol
+actor Administrator as admin
+actor "Identity provider" as idp <<system>>
+
+rectangle "Freedom" {
+  usecase "Sign in" as A1
+  usecase "See who I am (/me)" as A2
+  usecase "Approve a volunteer" as A3
+  usecase "Link a login to a person" as A4
+  usecase "Grant roles\n(via the identity provider)" as A5
+  usecase "Assign a Loader to locations" as A6
+  usecase "Erase a volunteer" as A7
+  usecase "Make a change\n(recorded as theirs)" as A8
+}
+
+vol --> A1
+vol --> A2
+vol --> A8
+admin --> A3
+admin --> A4
+admin --> A5
+admin --> A6
+admin --> A7
+A1 ..> idp
+A5 ..> idp
+
+note right of A8
+  Refused (403) for a login not linked
+  to a person (O35). Every change records
+  who made it and when (O19).
+end note
+
+note right of A7
+  Deletes personal details and the login link.
+  Refused while the volunteer is still needed.
+  Records that name them read "Former volunteer".
+end note
+
+@enduml

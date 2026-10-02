@@ -4,7 +4,7 @@ The business rules for planning and running a convoy: its vehicles, crew, accomm
 Convoy Leader, and when a convoy is ready to leave. Why each rule exists is in [Decisions](decisions.md); the rules
 link to it.
 
-See also: [Sequence diagrams](../sequences/README.md), [Process diagrams](../process/README.md), [Boxes and donations](boxes-and-donations.md), [Customs declarations](customs-declarations.md),
+See also: [Sequence diagrams](../sequences/README.md), [Process diagrams](../process/README.md), [State diagrams](../states/README.md), [Use cases](../use-cases/README.md), [Domain model](../model/domain-model.puml), [Convoy timeline](../timeline/convoy-timeline.puml), [Boxes and donations](boxes-and-donations.md), [Customs declarations](customs-declarations.md),
 [Key concepts](key-concepts.md).
 
 ## Purpose
@@ -14,6 +14,8 @@ that answer it have different owners and different granularities, so each has a 
 [readiness](#readiness) is computed from all of them.
 
 ## How the concepts fit together
+
+*Diagrams: [Domain model (class)](../model/domain-model.puml).*
 
 ```mermaid
 erDiagram
@@ -50,6 +52,8 @@ Alongside the route, dates and truck list, creating a convoy includes two steps:
 
 ## Convoy
 
+*Diagrams: [Convoy lifecycle (state)](../states/convoy-lifecycle.puml), [Convoy timeline (Gantt)](../timeline/convoy-timeline.puml).*
+
 A convoy owns what is shared by every vehicle: the route, the dates, the [Convoy Leader](#the-convoy-leader) and the
 budget. A convoy is the thing a Dispatcher plans.
 
@@ -66,6 +70,8 @@ A route is an ordered list of route points. The Dispatcher may flag a route poin
 **The service never calculates routes or times.** A stop is an overnight stop only because the Dispatcher says so.
 
 ## Truck-list entry
+
+*Diagrams: [Truck-list entry (state)](../states/truck-list-entry.puml).*
 
 A truck-list entry is a vehicle's place on a convoy, and the anchor for everything specific to that vehicle:
 
@@ -172,6 +178,8 @@ Equipment the charity buys for a vehicle, such as warning triangles, is **accoun
 
 ## Manifest: the load sign-off
 
+*Diagrams: [Manifest status (state)](../manifest-status.puml).*
+
 *Flows: [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)), [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)).*
 
 A manifest is **the load sign-off for one truck-list entry, and the document pack generated from the load and its
@@ -184,6 +192,8 @@ declarations** ([P6](decisions.md#p6)).
   [Customs declarations](customs-declarations.md#the-manifest-sign-off).
 
 ## The Convoy Leader
+
+*Diagrams: [Convoy operations (use cases)](../use-cases/convoy-operations.puml).*
 
 *Flows: [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)).*
 
@@ -210,6 +220,8 @@ and enters fuel on it.
   service worker or an offline cache.
 
 ### Access to addresses
+
+*Diagrams: [Convoy timeline (Gantt)](../timeline/convoy-timeline.puml).*
 
 *Flows: [10 Leader address access](../sequences/10-leader-address-access.puml) ([process](../process/10-leader-address-access.puml)).*
 
@@ -240,6 +252,8 @@ a state (*done, to do, blocked* or *warning*), an owner role, a severity (*block
 where it is resolved. A withdrawn vehicle is skipped.
 
 ### Departure
+
+*Diagrams: [Convoy lifecycle (state)](../states/convoy-lifecycle.puml).*
 
 *Flows: [07 Departure](../sequences/07-departure.puml) ([process](../process/07-departure.puml)).*
 

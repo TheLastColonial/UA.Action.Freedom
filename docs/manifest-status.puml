@@ -1,32 +1,33 @@
 @startuml Manifest Status
 
-title Manifest Status
+' TARGET DESIGN (ADR 0004, decisions P6 and X3).
+' The manifest is the Administrator's sign-off of one vehicle's load, plus the document pack generated
+' from the load and its declarations. Cargo, ferry, declarations and delivery state have moved elsewhere:
+' see docs/states/ for the box, convoy, truck-list entry and declaration lifecycles.
+'
+' The code still implements the earlier ten-state model (Created, Proposed, Rejected, Confirmed,
+' Preparing, Ready, InTransit, Delivered, Lost, Returned) until docs/plans/15-manifest-signoff-lifecycle.md
+' merges. That version of this file is in git history at commit f659eed.
 
-state "Created" as Created : Initial state of the manifest. \nThe manifest has been created but not populated completely.
-state "Proposed" as Proposed : Requesting approval for the manifest.
-state "Rejected" as Rejected : The manifest has been rejected.
-state "Confirmed" as Confirmed : The manifest has been confirmed.
-state "Preparing" as Preparing : Volunteers are preparing the boxes for transit.
-state "Ready" as Ready : The manifest is ready for collection.
-state "In Transit" as InTransit : The manifest is on a convoy.
-state "Delivered" as Delivered : The manifest has arrived at the ultimate destination.
-state "Lost" as Lost : The manifest has been lost during transit.
-state "Returned" as Returned : The manifest has been returned by the destination.
+title Manifest status: the load sign-off
+caption Target design. ADR 0004; decisions P6, X3. Implemented by plan 15.
 
-[*] --> Created
-Created --> Proposed
-Created --> Rejected
-Proposed --> Rejected
-Rejected --> Proposed
-Proposed --> Confirmed
-Confirmed --> Preparing
-Preparing --> Ready
-Ready --> InTransit
-InTransit --> Delivered
-InTransit --> Lost
-Delivered --> Returned
-Lost -->[*]
-Returned -->[*]
-Delivered -->[*]
+state "Proposed" as Proposed : the load is ready for sign-off
+state "Approved" as Approved : an Administrator has vouched\nfor the vehicle's load
+state "Rejected" as Rejected : sent back to be fixed
+
+[*] --> Proposed : opened on the truck-list entry\n[truck list published]
+Proposed --> Approved : Administrator approves
+Proposed --> Rejected : Administrator rejects
+Rejected --> Proposed : load fixed, proposed again
+Approved --> Proposed : the load changed\n(re-approval needed, X3)
+
+note right of Approved
+  Approval files nothing. Declarations are
+  prepared after sign-off, and filing is a
+  separate act (ADR 0006).
+  The freeze applies to the declared snapshot,
+  not to the load.
+end note
 
 @enduml

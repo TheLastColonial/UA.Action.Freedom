@@ -7,6 +7,7 @@
 | **Depends on** | [09](09-declaration-staleness.md), [11](11-accommodation.md), [12](12-budget-equipment.md), [14](14-outcomes-closing.md), [17](17-scoped-permissions.md) |
 | **Gate** | None |
 | **Flows** | [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)) |
+| **Diagrams** | [Declaration lifecycle (state)](../states/declaration-lifecycle.puml), [Convoy timeline (Gantt)](../timeline/convoy-timeline.puml), [Convoy operations (use cases)](../use-cases/convoy-operations.puml) |
 
 ## Context
 

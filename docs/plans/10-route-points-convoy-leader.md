@@ -7,6 +7,7 @@
 | **Depends on** | [01](01-crew-without-legs.md), [03](03-last-changed-audit.md) |
 | **Gate** | None |
 | **Flows** | [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)) |
+| **Diagrams** | [Convoy lifecycle (state)](../states/convoy-lifecycle.puml), [Convoy operations (use cases)](../use-cases/convoy-operations.puml) |
 
 ## Context
 

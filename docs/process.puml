@@ -1,37 +1,58 @@
 @startuml Manifest Creation Process
 
+' TARGET DESIGN (ADRs 0004, 0005, 0006, 0008; decisions P6, X3, X5, O36).
+' Approval is no longer the fork that releases the paperwork: it signs off a vehicle's load, and the
+' declarations are prepared and filed afterwards, manually by default. The code still implements the
+' earlier version (approval refuses without an ENS, freezes the manifest, then hands off the GMR, the
+' document and the ELO) until docs/plans/08 and docs/plans/15 merge. That version of this file is in
+' git history at commit f659eed.
+'
+' Role-by-role detail: docs/process/00-end-to-end-overview.puml and docs/process/05.
+
 title Manifest Creation Process
+caption Target design. ADRs 0004, 0005, 0006, 0008. Detail in docs/process.
 
 start
 
-group Administration {
-    
+group Planning {
+
     :Truck List Created;
+    ' Still the gate it always was: a manifest is proposed only against a published list.
     :Truck List Published;
+    :Boxes Allocated to Vehicles;
     :Manifest Proposed;
 
-    ' The ENS comes first, and not as part of the fork below: the ELO pairs the crossing against
-    ' its MRN, so there is nothing to generate without one. Filed outside Freedom, in the EU
-    ' Customs Trader Portal, because ICS2's Shared Trader Interface speaks eDelivery AS4 and we
-    ' expose no inbound endpoint (recommendations 4.1). See docs/adr/0003.
-    :File ENS in ICS2 (Ground Officer, outside Freedom);
-    :Record ENS MRN;
-
-    if (ENS MRN recorded?) then (no)
-        ' Refused before the freeze, unlike every other check on approval: a manifest frozen with
-        ' no declaration is frozen for ever against an envelope customs will never issue.
-        :Refuse approval (409);
-        stop
+    if (Administrator approves the load?) then (no)
+        :Manifest Rejected;
+        :Load fixed, proposed again;
     else (yes)
     endif
 
-    :Manifest Approved;
+    :Manifest Approved (sign-off only);
 
+}
+
+group Declarations {
+
+    ' The ENS comes first: the ELO pairs the crossing against its MRN. Filed outside Freedom by the
+    ' Dispatcher, with the Ground Officer entering the consignee address (decisions X1, O32).
     fork
-        :Generate GMR;
+        :File ENS in ICS2 (outside Freedom);
+        :Record ENS MRN;
+        :File or record ELO (names the ENS MRN);
     fork again
-        :Generate ELO (names the ENS MRN);
+        :File or record GMR;
+    fork again
+        :Prepare goods list per Receiver;
+        :Receiver files it in Ukraine;
+        :Record goods-list reference;
     end fork
+
+    if (Load changed after filing?) then (yes)
+        :Manifest back to Proposed;
+        :Declarations stale: re-approve and re-declare;
+    else (no)
+    endif
 
 }
 
@@ -40,7 +61,12 @@ group Execution {
     :Prepare Boxes;
     :Place Boxes in Bays;
     :Load Trucks;
-    :Truck Departs;
+    if (Every blocking requirement holds?) then (no)
+        :Departure refused, with what is missing;
+        stop
+    else (yes)
+    endif
+    :Convoy Departs;
 
 }
 

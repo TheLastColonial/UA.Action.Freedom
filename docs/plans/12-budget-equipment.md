@@ -7,6 +7,7 @@
 | **Depends on** | [03](03-last-changed-audit.md), [05](05-item-classification-value.md) |
 | **Gate** | None |
 | **Flows** | [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)) |
+| **Diagrams** | [Convoy operations (use cases)](../use-cases/convoy-operations.puml) |
 
 ## Context
 

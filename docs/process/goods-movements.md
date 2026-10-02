@@ -1,97 +1,69 @@
-# Goods Movement Flow: Box Validation to GMR/ELO
+# Goods movement: box attestation to declarations
 
-> **Describes the flow as built today, and is superseded by the target design.** See
-> [05 Load sign-off and declarations](05-load-signoff-and-declarations.puml) and
-> [06 Load change and re-declare](06-load-change-and-redeclare.puml). [Plan 08](../plans/08-declarations-filing.md)
-> and [plan 15](../plans/15-manifest-signoff-lifecycle.md) bring the code, and this document, into line.
+> **Target design.** This describes the flow after [plan 08](../plans/08-declarations-filing.md) and
+> [plan 15](../plans/15-manifest-signoff-lifecycle.md). Until they merge, the code runs the earlier flow, in which
+> approval requires an ENS, freezes the manifest and hands off the GMR, the document and the ELO automatically. That
+> version of this document is in git history at commit `f659eed`.
 
-Sequence diagram showing how a box progresses from validation through manifest approval to GMR submission and French logistics envelope (ELO) generation.
+The sequence is drawn in [`goods-movements.puml`](goods-movements.puml). The role-by-role processes are
+[05 Load sign-off and declarations](05-load-signoff-and-declarations.puml) and
+[06 Load change and re-declare](06-load-change-and-redeclare.puml). The rules are in
+[Customs declarations](../domain/customs-declarations.md).
 
-See `goods-movements.puml` in this directory for the PlantUML diagram.
+## Flow summary
 
-## Flow Summary
+### 1. Box attestation
 
-### 1. Box Validation
-- Loader validates a box: `POST /boxes/{id}/validate`
-- `ValidatedAt` and `ValidatedByPersonId` are set atomically
-- Box is now **frozen** — cannot add/remove items, change receiver, or invalidate
+- A Loader attests a box: `POST /boxes/{id}/validate`. The signer is taken **from the login**, never the request body.
+- `ValidatedAt` and `ValidatedByPersonId` are set by a conditional update, once.
+- Contents are now fixed. A change means **replacing** the box: the old one is voided and its QR code revoked
+  ([ADR 0011](../adr/0011-attested-boxes-are-replaced-not-edited.md)).
 
-### 2. Manifest Creation & Cargo Assembly
-- Dispatcher creates manifest for a convoy/vehicle pair: `POST /convoys/{convoyId}/vehicles/{vin}/manifest`
-- Loader adds validated boxes to manifest: `PUT /manifests/{id}/boxes/{boxId}`
-- Manifest progresses through states: **Proposed** → ... → Confirmed (frozen)
+### 2. Allocation to a vehicle
 
-### 3. ENS Declaration (Outside Freedom)
-- Ground Officer files Entry Summary Declaration in EU Customs Trader Portal (ICS2)
-- Dispatcher records the MRN in Freedom: `PUT /manifests/{id}/ens`
-- MRN is stored in blob storage (`ens/{manifestId}/declaration-*.json`)
-- **Required before approval** — manifest cannot freeze without an ENS MRN
+- The Dispatcher allocates the box to a vehicle on the truck list:
+  `PUT /convoys/{id}/vehicles/{vin}/boxes/{boxId}`.
+- A box is on at most one vehicle. Its Receiver must be registered.
 
-### 4. The Approval Fork
-Admin approves manifest: `POST /manifests/{id}/approve`
+### 3. Load sign-off
 
-**Pre-Freeze Check:**
-- Verify ENS MRN is recorded
-- If missing → 409 EnsNotFiled (manifest stays editable)
-- If present → proceed to freeze and handoffs
+- The manifest is proposed, then an Administrator approves it: `POST /manifests/{id}/approve`.
+- **Approval signs off the load and files nothing**
+  ([ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md)).
+- A later load change returns the manifest to Proposed for re-approval.
 
-**Freeze & Enqueue (Atomic):**
-- Set `Manifest.Status = Confirmed`
-- Set `Manifest.GmrSubmittedAt = NOW()`
-- Enqueue three independent jobs:
-  1. GMR submission to HMRC
-  2. ELO envelope creation for French Customs
-  3. Manifest document generation (redacted, no addresses)
+### 4. Declarations, per vehicle
 
-### 5. Three Parallel Handoffs
+- The Dispatcher marks each declaration ready to file, which stores a **snapshot** of the load.
+- **ENS:** filed by the Dispatcher in the EU Customs Trader Portal, with the Ground Officer entering the consignee
+  address. The filing sheet never carries it. The MRN is recorded, write-once.
+- **ELO:** needs an accepted ENS. Manual by default (record the reference). In automatic mode it is enqueued on
+  `elo-envelopes` and created by the Customs Worker.
+- **GMR:** manual by default. In automatic mode it is enqueued on `customs-work`.
+- **Ukrainian goods list:** prepared per Receiver, filed by the Receiver in Ukraine, and its reference recorded.
 
-#### GMR Submission (Customs Worker)
-- Dequeues from `customs-work`
-- Calls HMRC Goods Vehicle Movement System API
-- Stores response in `dbo.GmrDocument` (blob storage)
-- Manifest now has HMRC's submission ID and Local Reference Number
+### 5. When the load changes
 
-#### ELO Envelope Creation (Customs Worker)
-- Dequeues from `elo-envelopes`
-- Reads ENS MRN from blob storage
-- Calls French Customs EDI API with crossing profile (Humanitarian Aid to Ukraine)
-- Receives `numeroDossier` and PDF barcode (base64)
-- Stores envelope in `dbo.EloEnvelope` and blob storage
-- **Not idempotent** — retry with same ENS MRN creates second envelope
+- Moving, replacing, refusing or removing a box makes the affected declarations **stale** (derived from the
+  snapshot), raises a re-declare task, and blocks departure until it is resolved.
+- A declaration closed at its border crossing is no longer compared.
 
-#### Manifest Document Generation (Manifest Worker)
-- Dequeues from `manifest-documents`
-- Reads manifest, boxes, crew, insurance from database
-- **Cannot read receiver detail** — no access to `ISensitiveDbConnectionFactory`
-- Renders plain-text travelling document (deterministic, testable)
-- Uploads to blob storage (`manifests/{manifestId}/manifest.txt`)
-- No delivery address leaves the system
-
-### 6. Ready for Departure
-Manifest transitions through remaining states:
-- **Confirmed** (frozen) — cannot edit items, crew, insurance
-- **Ready** — all boxes prepared, loaded
-- **InTransit** — convoy has departed
-- **Delivered/Lost/Returned** — journey complete, vehicles handed over
-
-Status transitions are **reports of what happened**, not edits of the frozen state.
-
-## Constraints & Invariants
+## Constraints and invariants
 
 | Invariant | Enforcement |
-|-----------|------------|
-| ENS MRN required before approval | Check in `ApproveManifestHandler`, throw 409 before freeze |
-| Manifest frozen after approval | `GmrSubmittedAt IS NOT NULL` blocks all edits except status transitions |
-| Box locked after validation | `ValidatedAt IS NOT NULL` blocks all edits to box |
-| Receiver address not in traveling document | Manifest worker has no `ISensitiveDbConnectionFactory` injected |
-| Delivery address never logged | Redaction in `ReceiverReadModel` (no address field) |
-| Delivery address access audited | Every resolve writes audit row in same transaction |
-| One envelope per ENS | ELO API is not idempotent; retry creates second envelope |
-| GMR & document idempotent | Can replay job (idempotency key or conditional insert) |
+|---|---|
+| An attested box is never edited or deleted | Conditional stamp; replacement instead of edit; delete refused |
+| A box is on at most one vehicle | Allocation keyed on `BoxId` |
+| Approval files nothing | `ApproveManifestHandler` only signs off ([ADR 0006](../adr/0006-filing-is-manual-by-default.md)) |
+| ELO needs the ENS MRN | Filing refused unless the ENS is Accepted |
+| The ENS MRN is write-once | Blob created with `IfNoneMatch = ETag.All`; correction is withdraw and refile |
+| No delivery address leaves the system | The filing sheet withholds it; workers have no database; the label has no receiver parameter |
+| Staleness cannot be forgotten | Derived on read from the snapshot, never set by hand |
 
 ## Gotchas
 
-- **ENS MRN is write-once**: Stored in blob via conditional create (`IfNoneMatch = ETag.All`). Invalidate & refile via `SupersedeAsync` (copies to `ens/{manifestId}/superseded-*.json` before delete).
-- **ELO envelope carries only declaration identifier**: No independent data, pairs crossing against ICS2 MRN. Address stays on filing sheet shown to Ground Officer only.
-- **Manifest document is plain text on purpose**: Deterministic and testable; a PDF wrapper can be applied later without changing what is written.
-- **Three handoffs, three failure modes**: GMR stuck on queue = manifest frozen with no HMRC confirmation (visible, retryable). ELO stuck = no barcode for border handover. Document stuck = no travelling paperwork. Each is queue-watched separately.
+- **Automatic "Filed" means enqueued.** The workers have no database, so in automatic mode a declaration is stamped
+  Filed when the message is enqueued, not when the authority answers.
+- **Creating an ELO is not idempotent.** A retry after a successful create makes a second envelope. The disposition
+  rules in [ADR 0002](../adr/0002-elo-envelope-on-manifest-approval.md) still apply.
+- **The document that travels with the vehicle is plain text** on purpose: deterministic and testable.

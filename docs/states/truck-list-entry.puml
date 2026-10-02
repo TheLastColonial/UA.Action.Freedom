@@ -1,0 +1,27 @@
+@startuml Truck List Entry
+
+title A vehicle on a convoy (truck-list entry)
+caption Target design. Convoy operations: Truck-list entry. Decisions O8, P5, P11. ADRs 0001, 0015.
+
+state "On the list" as Listed : crew, insurance, ferry, boxes,\nhandover Receiver, manifest, declarations
+state "Travelling" as Travelling : convoy departed
+state "Delivered" as Delivered : marked arrived (O8)
+state "Handed over" as HandedOver : the vehicle stays in Ukraine;\nnever offered again
+state "Withdrawn" as Withdrawn : broke down or left; a stamp,\nnot a delete; may join a later convoy
+
+[*] --> Listed : add vehicle\n[inspection Passed]
+Listed --> [*] : removed\n[truck list not published]
+Listed --> Withdrawn : withdraw\n[truck list published]
+Listed --> Travelling : convoy departs
+Travelling --> Withdrawn : withdraw (breakdown)
+Travelling --> Delivered : delivered
+Delivered --> HandedOver : convoy arrives
+HandedOver --> [*]
+Withdrawn --> [*]
+
+note right of Withdrawn
+  Entry, crew, insurance and manifest are kept.
+  Withdrawn vehicles are skipped by readiness and arrival.
+end note
+
+@enduml

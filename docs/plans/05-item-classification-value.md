@@ -7,6 +7,7 @@
 | **Depends on** | [03](03-last-changed-audit.md) |
 | **Gate** | None |
 | **Flows** | [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)) |
+| **Diagrams** | [Box lifecycle (state)](../states/box-lifecycle.puml), [Domain model (class)](../model/domain-model.puml), [Boxes and donations (use cases)](../use-cases/boxes-and-donations.puml) |
 
 ## Context
 

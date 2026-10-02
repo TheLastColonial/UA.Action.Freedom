@@ -7,6 +7,7 @@
 | **Depends on** | [10](10-route-points-convoy-leader.md) |
 | **Gate** | None |
 | **Flows** | [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [07 Departure](../sequences/07-departure.puml) ([process](../process/07-departure.puml)) |
+| **Diagrams** | [Convoy operations (use cases)](../use-cases/convoy-operations.puml) |
 
 ## Context
 

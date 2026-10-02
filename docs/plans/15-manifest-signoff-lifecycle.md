@@ -7,6 +7,7 @@
 | **Depends on** | [13](13-readiness-departure.md), [14](14-outcomes-closing.md) |
 | **Gate** | None |
 | **Flows** | [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)), [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)), [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)) |
+| **Diagrams** | [Manifest status (state)](../manifest-status.puml) |
 
 ## Context
 
@@ -108,10 +109,14 @@ The web keeps nine verbs in `web/src/pages/manifests/transitions.ts`. `docs/mani
 
 ## Docs to update
 
-- [`docs/process/goods-movements.md`](../process/goods-movements.md) and `goods-movements.puml`: the freeze and the
-  ten-state "Ready for departure" section. If plan 08 did not retire them, retire them now in favour of
-  [process 05](../process/05-load-signoff-and-declarations.puml) and
-  [process 06](../process/06-load-change-and-redeclare.puml).
+- **The diagrams already show the target.** [`docs/manifest-status.puml`](../manifest-status.puml) draws the
+  three-state sign-off this plan builds. Once the code matches, remove its "target design" header, and the
+  "code still implements" note in [`key-concepts.md` § Manifest Status](../domain/key-concepts.md#manifest-status).
+  Remove any header plan 08 left on `process.puml` and `goods-movements.*`.
+- **Code and tests that cite `manifest-status.puml` as ten states:** `Domain/Manifest.cs`,
+  `ManifestTransitionUseCases.cs`, `ManifestEndpoints.cs`, `dbo/Tables/Manifest.sql`,
+  `ManifestTransitionsTests.cs` ("every edge drawn … transcribed by hand") and `Manifests.feature`. Rewrite them
+  against the new diagram. `README.md` ("Manifests follow a 10-state model") and `CLAUDE.md` change too.
 - `CLAUDE.md`: the long "manifest lifecycle" and "frozen" paragraphs, the "three write-once records" paragraph, the API
   list, and the Domain model `ManifestStatus` paragraph.
 - `README.md`.

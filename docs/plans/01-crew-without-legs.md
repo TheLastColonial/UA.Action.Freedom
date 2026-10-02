@@ -7,6 +7,7 @@
 | **Depends on** | Nothing. May run before or after plan 02. |
 | **Gate** | None |
 | **Flows** | [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)) |
+| **Diagrams** | [Convoy operations (use cases)](../use-cases/convoy-operations.puml) |
 
 ## Context
 

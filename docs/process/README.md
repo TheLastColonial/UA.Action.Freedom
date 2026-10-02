@@ -23,12 +23,16 @@ Where a diagram and a [domain document](../domain/README.md) disagree, the domai
 | 10 | [Leader address access](10-leader-address-access.puml) | Convoy Leader, Ground Officer | [10](../sequences/10-leader-address-access.puml) | [17](../plans/17-scoped-permissions.md), [19](../plans/19-leader-address-access.md) |
 | 11 | [Receiver registration](11-receiver-registration.puml) | Ground Officer, Administrator, Dispatcher | [11](../sequences/11-receiver-registration.puml) | [04](../plans/04-receiver-registration.md) |
 
-## The flow as built today
+## Goods movements, and the older top-level diagrams
 
-[`goods-movements.puml`](goods-movements.puml) and [`goods-movements.md`](goods-movements.md) describe the **current**
-flow: approval freezes the manifest, requires an ENS filed by the Ground Officer, and hands off the GMR, ELO and
-document automatically. They are **superseded** by processes 05 and 06 once [plan 08](../plans/08-declarations-filing.md)
-and [plan 15](../plans/15-manifest-signoff-lifecycle.md) have merged, and those plans update or retire them.
+[`goods-movements.puml`](goods-movements.puml) and [`goods-movements.md`](goods-movements.md) trace one box from
+attestation through allocation, sign-off and declarations, as a sequence. Like [`../process.puml`](../process.puml) and
+[`../manifest-status.puml`](../manifest-status.puml), they now show the **target design**. The code still runs the
+earlier flow (approval freezes the manifest and hands off the paperwork) until [plan 08](../plans/08-declarations-filing.md)
+and [plan 15](../plans/15-manifest-signoff-lifecycle.md) merge. The as-built versions are in git history at `f659eed`.
+
+Related: [state diagrams](../states/README.md), [use case diagrams](../use-cases/README.md),
+[domain model](../model/domain-model.puml), [convoy timeline](../timeline/convoy-timeline.puml).
 
 ## Rendering
 

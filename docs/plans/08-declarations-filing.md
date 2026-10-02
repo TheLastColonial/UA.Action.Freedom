@@ -7,6 +7,7 @@
 | **Depends on** | [04](04-receiver-registration.md), [05](05-item-classification-value.md), [07](07-box-allocation-ferry.md) |
 | **Gate** | None |
 | **Flows** | [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)) |
+| **Diagrams** | [Declaration lifecycle (state)](../states/declaration-lifecycle.puml), [Manifest status (state)](../manifest-status.puml), [Declarations and Receivers (use cases)](../use-cases/declarations-and-receivers.puml), [Convoy timeline (Gantt)](../timeline/convoy-timeline.puml) |
 
 ## Context
 
@@ -150,9 +151,14 @@ Rules: [Customs declarations](../domain/customs-declarations.md).
 
 ## Docs to update
 
-- [`docs/process/goods-movements.md`](../process/goods-movements.md) and `goods-movements.puml`: update the approval
-  and ENS steps to match, or retire them in favour of [process 05](../process/05-load-signoff-and-declarations.puml).
-  Remove their "superseded" note when they are current again.
+- **The diagrams already show the target.** [`docs/process.puml`](../process.puml),
+  [`goods-movements.md`](../process/goods-movements.md) and `goods-movements.puml` describe the declarations flow
+  this plan builds. Check them against the code, and remove their "target design" headers once the approval and
+  declarations steps match. Leave the manifest-status header for plan 15.
+- **Code comments that cite the old fork in `docs/process.puml`** ("approval is the fork that releases the
+  paperwork"): `ManifestTransitionUseCases.cs`, `IManifestRepository.cs`, `ManifestEndpoints.cs`,
+  `AuthenticationExtensions.cs`, `ApproveManifestHandlerTests.cs`, `ManifestEndpointTests.cs` and
+  `Manifests.feature`. Rewrite them to the new rule. The truck-list gate they also cite still holds.
 - `CLAUDE.md`: the Manifests slice, approval, the declarations slice, `SubmissionMode`, the API list, and the "approval
   hands off three things" paragraph.
 - `README.md`: endpoints and the local environment variable.

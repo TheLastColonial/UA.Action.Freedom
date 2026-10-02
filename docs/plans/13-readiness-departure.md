@@ -7,6 +7,7 @@
 | **Depends on** | [01](01-crew-without-legs.md), [04](04-receiver-registration.md), [07](07-box-allocation-ferry.md), [09](09-declaration-staleness.md), [11](11-accommodation.md), [12](12-budget-equipment.md) |
 | **Gate** | None |
 | **Flows** | [07 Departure](../sequences/07-departure.puml) ([process](../process/07-departure.puml)) |
+| **Diagrams** | [Convoy lifecycle (state)](../states/convoy-lifecycle.puml), [Truck-list entry (state)](../states/truck-list-entry.puml), [Convoy timeline (Gantt)](../timeline/convoy-timeline.puml) |
 
 ## Context
 

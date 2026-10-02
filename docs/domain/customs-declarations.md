@@ -4,10 +4,12 @@ The business rules for the declarations made to customs authorities about a vehi
 move through states, when they go stale, and how each is corrected. Why each rule exists is in
 [Decisions](decisions.md); the rules link to it.
 
-See also: [Sequence diagrams](../sequences/README.md), [Process diagrams](../process/README.md), [Convoy operations](convoy-operations.md), [Boxes and donations](boxes-and-donations.md),
+See also: [Sequence diagrams](../sequences/README.md), [Process diagrams](../process/README.md), [State diagrams](../states/README.md), [Use cases](../use-cases/README.md), [Domain model](../model/domain-model.puml), [Convoy timeline](../timeline/convoy-timeline.puml), [Convoy operations](convoy-operations.md), [Boxes and donations](boxes-and-donations.md),
 [Key concepts](key-concepts.md), [Ukrainian customs research](ua-customs-requirements.md).
 
 ## What a declaration is
+
+*Diagrams: [Declarations and Receivers (use cases)](../use-cases/declarations-and-receivers.puml), [Convoy timeline (Gantt)](../timeline/convoy-timeline.puml).*
 
 *Flows: [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)).*
 
@@ -41,6 +43,8 @@ In manual mode, **"filed" means a Dispatcher records the authority's reference.*
 completed by hand in their portals ([X3](decisions.md#x3), [D4](decisions.md#d4)).
 
 ## Lifecycle
+
+*Diagrams: [Declaration lifecycle (state)](../states/declaration-lifecycle.puml).*
 
 One lifecycle serves all four instruments.
 
@@ -115,6 +119,8 @@ The [manifest](convoy-operations.md#manifest-the-load-sign-off) is the Administr
 - **Declarations are prepared after sign-off.** Filing is an explicit act, not a side effect of approval.
 
 ## Closing at the border
+
+*Diagrams: [Declaration lifecycle (state)](../states/declaration-lifecycle.puml).*
 
 *Flows: [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)).*
 
