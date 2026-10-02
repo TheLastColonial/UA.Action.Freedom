@@ -321,7 +321,7 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
         var policy = await connection.QuerySingleOrDefaultAsync<VehicleInsuranceReadModel>(new CommandDefinition(
             """
             SELECT ConvoyId, Vin, Insurer, PolicyNumber, CoverStart, CoverEnd, CostGbp,
-                   RecordedBySub AS RecordedBy, RecordedAt, VoidedAt
+                   RecordedByPersonId AS RecordedBy, RecordedAt, VoidedAt
             FROM dbo.ConvoyVehicleInsurance
             WHERE ConvoyId = @convoyId AND Vin = @vin
             """,
@@ -371,10 +371,10 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             ON target.ConvoyId = source.ConvoyId AND target.Vin = source.Vin
             WHEN MATCHED THEN UPDATE SET
                 Insurer = @Insurer, PolicyNumber = @PolicyNumber, CoverStart = @CoverStart,
-                CoverEnd = @CoverEnd, CostGbp = @CostGbp, RecordedBySub = @RecordedBy,
+                CoverEnd = @CoverEnd, CostGbp = @CostGbp, RecordedByPersonId = @RecordedBy,
                 RecordedAt = SYSUTCDATETIME(), VoidedAt = NULL
             WHEN NOT MATCHED THEN INSERT
-                (ConvoyId, Vin, Insurer, PolicyNumber, CoverStart, CoverEnd, CostGbp, RecordedBySub)
+                (ConvoyId, Vin, Insurer, PolicyNumber, CoverStart, CoverEnd, CostGbp, RecordedByPersonId)
                 VALUES (@ConvoyId, @Vin, @Insurer, @PolicyNumber, @CoverStart, @CoverEnd, @CostGbp, @RecordedBy);
             """,
             insurance,

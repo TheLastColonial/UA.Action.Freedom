@@ -421,7 +421,7 @@ public class ConvoyEndpointTests
     public async Task A_dispatcher_crews_a_vehicle_and_every_operational_role_can_read_the_crew()
     {
         var repository = AConvoyWithAVehicleOnIt();
-        await using (var dispatcher = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher"))
+        await using (var dispatcher = FreedomApi.WithConvoys(repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId)), roles: "Dispatcher"))
         {
             using var client = dispatcher.CreateClient();
 
@@ -452,7 +452,7 @@ public class ConvoyEndpointTests
     public async Task Only_a_dispatcher_may_crew_a_vehicle(string role)
     {
         var repository = AConvoyWithAVehicleOnIt().WithCrew(Vin, DriverId);
-        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: role);
+        await using var api = FreedomApi.WithConvoys(repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId)), roles: role);
         using var client = api.CreateClient();
 
         var assign = await client.PutAsJsonAsync(
@@ -469,7 +469,7 @@ public class ConvoyEndpointTests
     public async Task Crewing_a_vehicle_that_is_not_on_the_convoy_is_a_404_not_a_conflict()
     {
         var repository = new InMemoryConvoyRepository(AConvoy()).WithVehicle(Vin).WithPerson(DriverId, "Olena", "Bondar");
-        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        await using var api = FreedomApi.WithConvoys(repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId)), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
@@ -482,7 +482,7 @@ public class ConvoyEndpointTests
     public async Task Crewing_a_vehicle_with_a_driver_already_on_it_is_a_conflict()
     {
         var repository = AConvoyWithAVehicleOnIt().WithCrew(Vin, DriverId);
-        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        await using var api = FreedomApi.WithConvoys(repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId)), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
@@ -496,7 +496,7 @@ public class ConvoyEndpointTests
     {
         var repository = AConvoyWithAVehicleOnIt();
         await using var api = FreedomApi.WithConvoys(
-            repository, new InMemoryPersonRepository(APerson(DriverId, isDriver: false)), roles: "Dispatcher");
+            repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId, isDriver: false)), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
@@ -516,7 +516,7 @@ public class ConvoyEndpointTests
     {
         const string otherVin = "WVWZZZ1JZXW000002";
         var repository = AConvoyWithAVehicleOnIt().WithVehicle(otherVin, onConvoy: Id).WithCrew(otherVin, DriverId);
-        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        await using var api = FreedomApi.WithConvoys(repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId)), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
@@ -533,7 +533,7 @@ public class ConvoyEndpointTests
     {
         var repository = AConvoyWithAVehicleOnIt();
         await using var api = FreedomApi.WithConvoys(
-            repository, new InMemoryPersonRepository(APerson(DriverId, isDriver: false)), roles: "Dispatcher");
+            repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId, isDriver: false)), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
@@ -635,8 +635,24 @@ public class ConvoyEndpointTests
             $"/convoys/{Id}/vehicles/{Vin}/insurance", TestContext.Current.CancellationToken);
         policy.GetProperty("policyNumber").GetString().Should().Be("POL-1");
         policy.GetProperty("costGbp").GetDecimal().Should().Be(412.50m);
-        policy.GetProperty("recordedBy").GetString().Should().Be("test-user");
+        policy.GetProperty("recordedBy").GetGuid().Should().Be(InMemoryPersonRepository.TestUserId);
         policy.GetProperty("voided").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Insurance_is_not_recorded_from_a_login_that_is_not_linked_to_a_volunteer()
+    {
+        var repository = AConvoyWithAVehicleOnIt();
+        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("type").GetString().Should().Be("login-not-linked");
+        repository.InsuranceOf(Id, Vin).Should().BeNull();
     }
 
     [Theory]
@@ -698,7 +714,7 @@ public class ConvoyEndpointTests
     public async Task Adding_a_driver_after_insuring_leaves_them_uncovered_and_the_policy_in_cover()
     {
         var repository = AConvoyWithAVehicleOnIt();
-        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        await using var api = FreedomApi.WithConvoys(repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId)), roles: "Dispatcher");
         using var client = api.CreateClient();
         await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
 
@@ -714,7 +730,7 @@ public class ConvoyEndpointTests
     public async Task Removing_a_driver_keeps_the_policy_in_cover_for_the_rest()
     {
         var repository = AConvoyWithAVehicleOnIt().WithCrew(Vin, DriverId);
-        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        await using var api = FreedomApi.WithConvoys(repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId)), roles: "Dispatcher");
         using var client = api.CreateClient();
         await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
 
@@ -730,7 +746,7 @@ public class ConvoyEndpointTests
     public async Task Recording_the_insurance_again_covers_every_driver()
     {
         var repository = AConvoyWithAVehicleOnIt();
-        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        await using var api = FreedomApi.WithConvoys(repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId)), roles: "Dispatcher");
         using var client = api.CreateClient();
         await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
         await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
@@ -839,7 +855,7 @@ public class ConvoyEndpointTests
     {
         var repository = new InMemoryConvoyRepository(AnArrivedConvoy())
             .WithVehicle(Vin, onConvoy: Id).WithPerson(DriverId, "Olena", "Bondar");
-        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        await using var api = FreedomApi.WithConvoys(repository, InMemoryPersonRepository.WithLinkedTestUser(APerson(DriverId)), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var crew = await client.PutAsJsonAsync(

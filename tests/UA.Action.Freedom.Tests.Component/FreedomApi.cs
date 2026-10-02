@@ -78,7 +78,7 @@ internal static class FreedomApi
             // two tables rather than two stores.
             services.Replace<IConvoyRepository>(repository);
             services.Replace<IConvoyVehicleRepository>(repository);
-            services.Replace(people ?? new InMemoryPersonRepository());
+            services.Replace(people ?? InMemoryPersonRepository.WithLinkedTestUser());
 
             // Opening a manifest is a convoy route now — POST /convoys/{id}/vehicles/{vin}/manifest
             // — so the convoy tests need somewhere for it to land.
@@ -95,10 +95,20 @@ internal static class FreedomApi
         IReceiverDetailRepository detail,
         bool authenticated = true,
         params string[] roles) =>
+        WithReceivers(receivers, detail, InMemoryPersonRepository.WithLinkedTestUser(), authenticated, roles);
+
+    /// <summary>As above, with the volunteer roster the caller's login is looked up in.</summary>
+    internal static WebApplicationFactory<Program> WithReceivers(
+        IReceiverRepository receivers,
+        IReceiverDetailRepository detail,
+        IPersonRepository people,
+        bool authenticated = true,
+        params string[] roles) =>
         WithFakes(authenticated, roles, services =>
         {
             services.Replace(receivers);
             services.Replace(detail);
+            services.Replace(people);
         });
 
     /// <summary>

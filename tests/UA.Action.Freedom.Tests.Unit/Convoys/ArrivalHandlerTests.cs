@@ -112,7 +112,7 @@ public class ArrivalHandlerTests
         var repository = ARepository(ConvoyTestData.APublishedConvoy() with { ArrivedAt = Arrived });
         var truckList = Substitute.For<IConvoyVehicleRepository>();
         var policy = new VehicleInsuranceRecord(
-            ConvoyTestData.Id, Vin, "Ukraine Aid Mutual", "POL-1", Arrived.AddDays(-10), Arrived.AddDays(10), null, "sub");
+            ConvoyTestData.Id, Vin, "Ukraine Aid Mutual", "POL-1", Arrived.AddDays(-10), Arrived.AddDays(10), null, Guid.Empty);
 
         var record = await new RecordInsuranceHandler(repository, truckList).HandleAsync(
             new RecordInsuranceCommand(policy), TestContext.Current.CancellationToken);

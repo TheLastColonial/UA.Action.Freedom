@@ -27,8 +27,8 @@ public sealed class VehicleInsurance
 
     public decimal? CostGbp { get; init; }
 
-    /// <summary>The token subject of whoever recorded it — never taken from a request body.</summary>
-    public required string RecordedBy { get; init; }
+    /// <summary>The person who recorded it, from their login — never taken from a request body.</summary>
+    public required Guid RecordedBy { get; init; }
 
     public DateTime RecordedAt { get; init; }
 

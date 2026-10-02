@@ -49,7 +49,7 @@ public class ManifestTransitionHandlerTests
         IReadOnlyList<Guid>? uncoveredDrivers = null) => new(
         ConvoyId, Vin, "Ukraine Aid Mutual", "POL-1",
         coverStart ?? DateTime.UtcNow.Date.AddDays(-7), coverEnd ?? DateTime.UtcNow.Date.AddDays(30),
-        400m, "operator-sub", DateTime.UtcNow.AddDays(-7), voidedAt)
+        400m, Guid.NewGuid(), DateTime.UtcNow.AddDays(-7), voidedAt)
     {
         UncoveredDrivers = uncoveredDrivers ?? [],
     };

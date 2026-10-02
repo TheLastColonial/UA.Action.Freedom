@@ -20,7 +20,7 @@ public sealed class ReceiverDetailRepository(ISensitiveDbConnectionFactory conne
         "ReceiverRef AS [Ref], ContactName, ContactPhone, AddressLine1, AddressLine2, City, PostCode, DeleteAfter";
 
     public async Task<ReceiverDetailReadModel?> ResolveAsync(
-        Guid receiverRef, string principalId, string? reason, CancellationToken cancellationToken)
+        Guid receiverRef, Guid personId, string? reason, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
         await connection.OpenAsync(cancellationToken);
@@ -35,10 +35,10 @@ public sealed class ReceiverDetailRepository(ISensitiveDbConnectionFactory conne
         // resolve an address is the thing worth seeing in the trail, whether or not one exists.
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO sensitive.ReceiverDetailAccessLog (ReceiverRef, PrincipalId, Reason)
-            VALUES (@receiverRef, @principalId, @reason)
+            INSERT INTO sensitive.ReceiverDetailAccessLog (ReceiverRef, PersonId, Reason)
+            VALUES (@receiverRef, @personId, @reason)
             """,
-            new { receiverRef, principalId, reason },
+            new { receiverRef, personId, reason },
             transaction,
             cancellationToken: cancellationToken));
 

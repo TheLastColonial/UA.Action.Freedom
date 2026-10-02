@@ -11,10 +11,11 @@ namespace UA.Action.Freedom.Tests.Unit.Convoys;
 public class InsuranceHandlerTests
 {
     private const string Vin = "WVWZZZ1JZXW000001";
+    private static readonly Guid Recorder = new("1b0e5c10-0000-4000-8000-000000000001");
 
     private static VehicleInsuranceRecord APolicy() => new(
         ConvoyTestData.Id, Vin, "Ukraine Aid Mutual", "POL-1",
-        new DateTime(2026, 8, 25), new DateTime(2026, 9, 30), 412.50m, "operator-sub");
+        new DateTime(2026, 8, 25), new DateTime(2026, 9, 30), 412.50m, Recorder);
 
     private static (IConvoyRepository Convoys, IConvoyVehicleRepository TruckList) Repositories(ConvoyReadModel? convoy)
     {
@@ -82,7 +83,7 @@ public class InsuranceHandlerTests
     {
         var policy = new VehicleInsuranceReadModel(
             ConvoyTestData.Id, Vin, "Ukraine Aid Mutual", "POL-1",
-            new DateTime(2026, 8, 25), new DateTime(2026, 9, 30), 412.50m, "operator-sub",
+            new DateTime(2026, 8, 25), new DateTime(2026, 9, 30), 412.50m, Recorder,
             new DateTime(2026, 8, 20), VoidedAt: null);
 
         var truckList = Substitute.For<IConvoyVehicleRepository>();

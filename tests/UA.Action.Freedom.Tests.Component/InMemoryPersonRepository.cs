@@ -41,6 +41,19 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
 
     public InMemoryPersonRepository WithTestUserLinkedTo(Guid personId) => LinkedTo(TestUserSubject, personId);
 
+    /// <summary>The volunteer <see cref="WithLinkedTestUser"/> puts on file for the caller.</summary>
+    public static readonly Guid TestUserId = new("7e57a5e2-0000-4000-8000-000000000001");
+
+    /// <summary>A roster in which the test caller is a volunteer, so writes that record who did them are allowed.</summary>
+    public static InMemoryPersonRepository WithLinkedTestUser(params PersonReadModel[] others)
+    {
+        var testUser = new PersonReadModel(
+            TestUserId, "Test", "User", new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), null, false, false);
+
+        return new InMemoryPersonRepository([testUser, .. others]).WithTestUserLinkedTo(TestUserId);
+    }
+
     public int Count => store.Count;
 
     public bool Contains(Guid id) => store.ContainsKey(id);

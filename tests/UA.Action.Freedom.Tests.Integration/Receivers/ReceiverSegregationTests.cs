@@ -24,6 +24,8 @@ namespace UA.Action.Freedom.Tests.Integration.Receivers;
 [Trait("Category", "Integration")]
 public class ReceiverSegregationTests
 {
+    private static readonly Guid GroundOfficerId = new("6f0f1ce2-0000-4000-8000-000000000001");
+
     private const string DefaultAppConnectionString =
         "Server=localhost,1433;Database=Freedom;User Id=freedom_app;Password=Local_Freedom_App_1;TrustServerCertificate=True;Encrypt=False;Connect Timeout=3";
 
@@ -170,14 +172,14 @@ public class ReceiverSegregationTests
             (await detail.CountAccessesAsync(receiverRef, cancellationToken)).Should().Be(0);
 
             var resolved = await detail.ResolveAsync(
-                receiverRef, "ground-officer-1", "Delivery scheduled 12 Sept", cancellationToken);
+                receiverRef, GroundOfficerId, "Delivery scheduled 12 Sept", cancellationToken);
 
             resolved!.AddressLine1.Should().Be("12 Vulytsia Sumska");
 
             // The audit row and the read commit together, so one resolve is one entry.
             (await detail.CountAccessesAsync(receiverRef, cancellationToken)).Should().Be(1);
 
-            await detail.ResolveAsync(receiverRef, "ground-officer-1", null, cancellationToken);
+            await detail.ResolveAsync(receiverRef, GroundOfficerId, null, cancellationToken);
             (await detail.CountAccessesAsync(receiverRef, cancellationToken)).Should().Be(2);
         }
         finally
@@ -199,7 +201,7 @@ public class ReceiverSegregationTests
         {
             await receivers.AddAsync(AReceiver(receiverRef), cancellationToken);
 
-            var resolved = await detail.ResolveAsync(receiverRef, "ground-officer-1", null, cancellationToken);
+            var resolved = await detail.ResolveAsync(receiverRef, GroundOfficerId, null, cancellationToken);
 
             resolved.Should().BeNull();
             (await detail.CountAccessesAsync(receiverRef, cancellationToken)).Should().Be(1);
@@ -224,11 +226,11 @@ public class ReceiverSegregationTests
         {
             await receivers.AddAsync(AReceiver(receiverRef), cancellationToken);
             await detail.UpsertAsync(ADetail(receiverRef), cancellationToken);
-            await detail.ResolveAsync(receiverRef, "ground-officer-1", null, cancellationToken);
+            await detail.ResolveAsync(receiverRef, GroundOfficerId, null, cancellationToken);
 
             (await detail.DeleteAsync(receiverRef, cancellationToken)).Should().BeTrue();
 
-            (await detail.ResolveAsync(receiverRef, "ground-officer-1", null, cancellationToken)).Should().BeNull();
+            (await detail.ResolveAsync(receiverRef, GroundOfficerId, null, cancellationToken)).Should().BeNull();
             (await detail.CountAccessesAsync(receiverRef, cancellationToken)).Should().Be(2);
         }
         finally
@@ -253,7 +255,7 @@ public class ReceiverSegregationTests
             await detail.UpsertAsync(ADetail(receiverRef) with { City = "Poltava", AddressLine1 = "4 Vulytsia Soborna" },
                 cancellationToken);
 
-            var resolved = await detail.ResolveAsync(receiverRef, "ground-officer-1", null, cancellationToken);
+            var resolved = await detail.ResolveAsync(receiverRef, GroundOfficerId, null, cancellationToken);
 
             resolved!.City.Should().Be("Poltava");
             resolved.AddressLine1.Should().Be("4 Vulytsia Soborna");
