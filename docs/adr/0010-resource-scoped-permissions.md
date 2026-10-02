@@ -5,7 +5,7 @@ Date: 2026-10-02
 ## Status
 
 **Proposed.** The need is decided ([X12](../domain/decisions.md#x12), [O14](../domain/decisions.md#o14)). The
-mechanism below is a recommendation that has not been agreed. Not yet implemented.
+mechanism below is a recommendation that has not been agreed. Not yet implemented, except the groundwork [plan 02](../plans/02-login-person-link.md) built: a login is linked to a person ([O34](../domain/decisions.md#o34)) and an unlinked login is refused on any write that records who did it ([O35](../domain/decisions.md#o35)).
 
 ## Context
 
