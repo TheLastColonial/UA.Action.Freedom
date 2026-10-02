@@ -89,3 +89,17 @@ delivered value.
 
 **Existing statuses retire with the manifest's.** `Delivered`, `Lost` and `Returned` leave `ManifestStatus`
 ([ADR 0004](0004-the-manifest-is-the-load-sign-off.md)), and `manifest-status.puml` changes with it.
+
+## Amendments
+
+Added 2026-10-02, from questions resolved before implementation planning.
+
+- **Acceptance is recorded once per Ukrainian goods list,** by the Convoy Leader or the Dispatcher, and every box on the
+  list becomes accepted ([decision O24](../domain/decisions.md#o24)).
+- **The Dispatcher closes a convoy, and closing does not lock it.** Corrections remain possible and the report can be
+  regenerated ([decision O25](../domain/decisions.md#o25)). This replaces the working assumption above that closing
+  locks.
+- **A returned box goes to the registered hub the Convoy Leader chooses,** and is reusable unchanged
+  ([decision O28](../domain/decisions.md#o28)).
+- Until scoped permissions exist ([ADR 0010](0010-resource-scoped-permissions.md)), the leader's actions are performed
+  by the Dispatcher. Implementation is planned in [plan 14](../plans/14-outcomes-closing.md).

@@ -72,3 +72,12 @@ That is deliberate, and should be said plainly to anyone expecting a map.
 **There is no position data to protect or retain.** Which is the point. What is held is a list of reached points
 with who marked them and when ([ADR 0017](0017-every-entity-records-its-last-change.md)), and the retention of
 that list is part of [Q-retention](../domain/decisions.md#q-retention).
+
+## Amendments
+
+Added 2026-10-02, from questions resolved before implementation planning.
+
+- **A Dispatcher may record a mark or a crossing on the leader's behalf,** from a radio or phone report, and is named as
+  the person who recorded it ([decision O27](../domain/decisions.md#o27)). That resolves the "forgotten mark" concern
+  above.
+- **Only the time of entry is recorded** ([decision O27](../domain/decisions.md#o27)).

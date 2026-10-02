@@ -96,3 +96,14 @@ requirement list in place of three hard-coded checks. At roughly ten vehicles a 
 **Departure surfaces three things that were invisible.** A stale declaration, an uncovered added driver and an
 unregistered Receiver all become blocking, so a Dispatcher will meet them in the days before departure, which is
 the point.
+
+## Amendments
+
+Added 2026-10-02, from questions resolved before implementation planning.
+
+- **Departure is one action on the convoy, taken by the Dispatcher** ([decision O36](../domain/decisions.md#o36)). It
+  replaces the manifest's per-vehicle `depart` transition, and it is where the blocking requirements are enforced.
+- **A budget is not required to depart**: an unset budget is advisory ([decision O37](../domain/decisions.md#o37)).
+- **Self-accommodation is flagged per crew member, per overnight stop** ([decision O30](../domain/decisions.md#o30)).
+- Implementation is planned in [plan 13](../plans/13-readiness-departure.md), with the crew and insurance changes in
+  [plan 01](../plans/01-crew-without-legs.md).

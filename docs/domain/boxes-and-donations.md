@@ -28,9 +28,9 @@ A box is the container of donated items sent to Ukraine. It must be:
 | **Declared** | Its contents are covered by current [declarations](customs-declarations.md). |
 | **Departed** | The vehicle carrying it has left. |
 | **Delivered** | Marked arrived by the Convoy Leader or the Dispatcher ([O8](decisions.md#o8)). |
-| **Accepted** | Ukrainian customs have accepted the delivery ([O9](decisions.md#o9)). |
+| **Accepted** | Ukrainian customs have accepted the delivery. Recorded once per goods list, for every box on it ([O9](decisions.md#o9), [O24](decisions.md#o24)). |
 | **Seized** | Customs refused it at a border and kept it. Terminal ([O2](decisions.md#o2)). |
-| **Returned to a hub** | Customs refused it at a border and it went back to a hub. It is then an arrived box again, at that hub ([O2](decisions.md#o2)). |
+| **Returned to a hub** | Customs refused it at a border and it went back to the registered hub the Convoy Leader chose. It is then an arrived box again at that hub, with its label and contents unchanged, and may go on a later convoy ([O2](decisions.md#o2), [O28](decisions.md#o28)). |
 | **Undeliverable** | Damaged or stolen, with the reason recorded. Terminal ([O5](decisions.md#o5)). |
 | **Void** | Terminal. Reachable from any state before departure. A box is voided when it is replaced. |
 
@@ -46,6 +46,7 @@ A box is the container of donated items sent to Ukraine. It must be:
 - **A Loader classifies each item by choosing its category.** Each category maps to the code used in each
   authority's declaration, so a category is classified once and the codes follow from it
   ([O16](decisions.md#o16)). An item in a free-text category has no code until the category is added to the mapping.
+  **The Administrator maintains the mapping** ([O31](decisions.md#o31)).
 
 ## Donations and donors
 
@@ -80,7 +81,8 @@ A box is the container of donated items sent to Ukraine. It must be:
 
 - A QR label ties the physical box to its record. It **carries the item list and the name of the person who signed
   what is inside** ([D2](decisions.md#d2)). It never carries a Receiver, region or address.
-- **Labels carry both English and Ukrainian** ([O17](decisions.md#o17)).
+- **Labels carry both English and Ukrainian** ([O17](decisions.md#o17)). The Ukrainian text is **machine translated
+  with no external dependency**, and is not marked as a translation ([O29](decisions.md#o29)).
 - **Once a box is attested its contents never change.** If they must, **the box is replaced**: the old box is
   voided, a new box is created and attested with the items copied across, and the old QR label stops resolving
   ([D3](decisions.md#d3)).
@@ -96,7 +98,8 @@ A box is the container of donated items sent to Ukraine. It must be:
 
 ## Hubs and stock
 
-- **A Loader sees only the locations they manage** ([O14](decisions.md#o14)).
+- **A Loader sees only the locations they manage** ([O14](decisions.md#o14)). **The Administrator assigns** Loaders
+  to locations ([O31](decisions.md#o31)).
 - Loaders **occasionally review the stock** held in a hub.
 - **There is no required order** in which boxes are allocated to convoys ([O14](decisions.md#o14)).
 - **Items are not tracked once a convoy is on the road.** A box is allocated to a vehicle and left in it
@@ -143,7 +146,8 @@ The full rules are in [Customs declarations](customs-declarations.md).
 ## Reporting
 
 The value report summarises the **count and value of items**, and the **value of vehicles**, for three audiences
-([D29](decisions.md#d29)). A vehicle's value is **what was paid for it** ([O11](decisions.md#o11)). Vehicle equipment
+([D29](decisions.md#d29)). A vehicle's value is **what was paid for it** ([O11](decisions.md#o11)), or, for a vehicle that was given, a GBP
+estimate with its source ([O33](decisions.md#o33)). Vehicle equipment
 the charity buys is not part of the value delivered ([O13](decisions.md#o13)).
 
 | Audience | Level of detail |

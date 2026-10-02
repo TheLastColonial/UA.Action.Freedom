@@ -222,3 +222,9 @@ up.
 | "Correcting a declaration is an explicit supersede" | **Stands, and is generalised.** Invalidate-and-refile is the standard correction when the load changes, and the superseded MRN is kept. |
 | "Approval refuses before it freezes" with `EnsNotFiled` | **Stands**, adjusted: a vehicle needs a current ENS before it can depart ([ADR 0008](0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md)), and approval still refuses when none is recorded where the ELO would otherwise be requested. |
 | The ENS is recorded, never submitted | **Stands.** Manual filing is now the default for every authority ([ADR 0006](0006-filing-is-manual-by-default.md)), so this ADR's reasoning for the ENS is the general rule. |
+
+### Resolved: who enters the consignee address
+
+Added 2026-10-02. [Decision O32](../domain/decisions.md#o32): **the Ground Officer enters the consignee address field**
+in the EU portal, alongside the Dispatcher who files the ENS. Freedom keeps withholding the address from the
+Dispatcher. It remains a process rule that the system cannot enforce.

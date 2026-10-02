@@ -68,3 +68,16 @@ Leader and a scoped Loader beside `admin`, `operator` and `groundofficer`.
 
 **An assignment is also an audit fact.** Who was leader when, and who managed a location when, is kept
 ([ADR 0017](0017-every-entity-records-its-last-change.md)).
+
+## Amendments
+
+Added 2026-10-02, from questions resolved before implementation planning.
+
+- **The mechanism stays Proposed until a decision checkpoint.** The first step of
+  [plan 17](../plans/17-scoped-permissions.md) writes the concrete mechanism into this ADR, opens a draft PR and stops
+  for the owner's sign-off. This ADR becomes Accepted then, not before.
+- **A login is linked to a person** by storing the identity provider's subject on the erasable person details,
+  linked by an Administrator ([decision O34](../domain/decisions.md#o34)). That resolves the first consequence above,
+  and is built in [plan 02](../plans/02-login-person-link.md).
+- **An unlinked login is refused (403) on any write that records who did it** ([decision O35](../domain/decisions.md#o35)).
+- **The Administrator assigns Loaders to locations** ([decision O31](../domain/decisions.md#o31)).

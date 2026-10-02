@@ -87,3 +87,15 @@ the **convoy's route and the destinations it genuinely needs to reach**, and not
 **An address also has to be *entered* before it can be read.** Route stops are addresses on the convoy's route, and
 a Ukrainian final destination is a Receiver's detail held in the `sensitive` schema. Which reads come from which
 store is an implementation question the review should settle.
+
+## Amendments
+
+Added 2026-10-02, from questions resolved before implementation planning.
+
+- **The scope is wider than this ADR first recorded.** The Convoy Leader sees **the route and the addresses of all
+  Receivers on their convoy**, every box's and every vehicle's ([decision O26](../domain/decisions.md#o26)). This
+  supersedes the limit in [X9](../domain/decisions.md#x9) and resolves "Final destination is not yet well defined"
+  above. Every safeguard in this ADR applies to every one of those reads, and the security review should weigh the
+  wider scope.
+- **The security review is the first step of [plan 19](../plans/19-leader-address-access.md)**, which stops for
+  sign-off before any code. It may be started early, in parallel with the plans before it.

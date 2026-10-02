@@ -105,7 +105,8 @@ Insurance is for **the vehicle to travel on the road**. Cargo is not insured ([O
 - **Every crew member must be covered at every overnight stop** ([P8](decisions.md#p8)). Drivers never sleep in
   vehicles or at home.
 - **A crew member who arranges their own accommodation**, for example by staying with family, is **flagged as such**,
-  which satisfies the requirement for that person ([O4](decisions.md#o4)).
+  which satisfies the requirement for that person. The flag is set **per crew member, per overnight stop**
+  ([O4](decisions.md#o4), [O30](decisions.md#o30)).
 - **If a crew member leaves, their booking stays.** The Dispatcher may try to cancel or refund it, and the booking
   raises a warning and a task until they do. **If the crew member is replaced, the booking can be migrated** to the
   new driver ([P13](decisions.md#p13), [P16](decisions.md#p16)).
@@ -116,6 +117,7 @@ A convoy has a **budget with a line for each cost type**: fuel, ferry, hotel, in
 are recorded against each line, and compared with it ([O12](decisions.md#o12), [P3](decisions.md#p3)).
 
 - **Allocating the budget is a step in creating a convoy.** An approval flow may follow later.
+- **A budget is not required to depart.** An unset budget is an advisory warning ([O37](decisions.md#o37)).
 - **Fuel:** the Convoy Leader **records fuel spent** on the road, against a vehicle, from the
   [checklist page](#the-checklist-page). Entries stay under the name of the leader who made them
   ([P14](decisions.md#p14)).
@@ -133,16 +135,21 @@ Equipment the charity buys for a vehicle, such as warning triangles, is **accoun
 ## Delivery, arrival and closing
 
 - **A vehicle or box is delivered when the Convoy Leader or the Dispatcher marks it arrived** ([O8](decisions.md#o8)).
-- It is then **accepted** when Ukrainian customs accept it ([O9](decisions.md#o9)). See
-  [Boxes and donations](boxes-and-donations.md#delivery-refusal-and-loss).
+- It is then **accepted** when Ukrainian customs accept it ([O9](decisions.md#o9)). Acceptance is recorded **once per
+  Ukrainian goods list**, by the Convoy Leader or the Dispatcher, and every box on the list becomes accepted
+  ([O24](decisions.md#o24)). See [Boxes and donations](boxes-and-donations.md#delivery-refusal-and-loss).
 - **A convoy is closed once it has arrived.** Closing generates a **report of expected versus actual costs, and of the
   boxes delivered or not** ([O10](decisions.md#o10)).
+- **The Dispatcher closes a convoy, and closing does not lock it.** Later corrections are allowed, and the report can be
+  regenerated ([O25](decisions.md#o25)).
 
 ## Progress, records and notifications
 
 - **There is no live tracking and no GPS**, because of connectivity and security concerns. The Convoy Leader marks
   arrival at each route point and each accommodation, and HQ sees progress from those marks
   ([O20](decisions.md#o20)).
+- **A Dispatcher may record a mark or a border crossing on the Convoy Leader's behalf,** from a radio or phone
+  report, and is named as the person who recorded it. Only the time of entry is recorded ([O27](decisions.md#o27)).
 - **If the page is unavailable, call HQ and use printed documents** ([O18](decisions.md#o18)).
 - **Every entity records who last changed it, and when** ([O19](decisions.md#o19)).
 - **Notifications are shown on screen.** Email may be built later ([O21](decisions.md#o21)).
@@ -189,7 +196,7 @@ arrive together ([X7](decisions.md#x7)). This is the only access to an address o
 
 | Rule | Source |
 |---|---|
-| They see **all route stops and the final destination of their own convoy**, and not every Receiver's address for every vehicle. | [X9](decisions.md#x9) |
+| They see **the route, and the addresses of all Receivers on their own convoy**: every box's and every vehicle's Receiver. | [X9](decisions.md#x9), [O26](decisions.md#o26) |
 | Addresses **become visible 14 days before the planned departure**, and stop being visible on reassignment or on arrival. The figure is configuration. | [X11](decisions.md#x11) |
 | **Before that window opens** they see only each route point's header (its name and kind, such as "UK port" or "overnight stop"), not its details. | [X13](decisions.md#x13) |
 
@@ -209,6 +216,12 @@ arrive together ([X7](decisions.md#x7)). This is the only access to an address o
 Readiness is **computed from the facts and never stored.** Each requirement has a scope (the convoy, or one vehicle),
 a state (*done, to do, blocked* or *warning*), an owner role, a severity (*blocking* or *advisory*), and a link to
 where it is resolved. A withdrawn vehicle is skipped.
+
+### Departure
+
+**A convoy departs by one action on the convoy, taken by the Dispatcher.** It is refused unless every blocking
+requirement below holds for the convoy and for each vehicle still travelling, and the refusal lists what is
+outstanding ([O36](decisions.md#o36)).
 
 ### Blocking requirements
 
@@ -249,4 +262,4 @@ None of these block departure ([P17](decisions.md#p17)).
 | A ferry sailing time conflicts with the route timing, or ticket details are missing | [P17](decisions.md#p17) |
 | An item has no category, value or donor | [P17](decisions.md#p17) |
 | A Receiver's registration expires before the expected delivery date | [P17](decisions.md#p17) |
-| No budget is set for the convoy, or an actual cost is ahead of its budget line | [P17](decisions.md#p17), [O12](decisions.md#o12) |
+| No budget is set for the convoy, or an actual cost is ahead of its budget line | [P17](decisions.md#p17), [O12](decisions.md#o12), [O37](decisions.md#o37) |

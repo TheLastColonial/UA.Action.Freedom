@@ -37,10 +37,11 @@ the domain documents, which link back here.
 13. [Insurance, budget and costs](#insurance-budget-and-costs)
 14. [Hubs, stock and classification](#hubs-stock-and-classification)
 15. [On the road and records](#on-the-road-and-records)
-16. [Background and alternatives](#background-and-alternatives)
-17. [Consequences and amendments due](#consequences-and-amendments-due)
-18. [Architecture decision records](#architecture-decision-records)
-19. [Open questions](#open-questions)
+16. [Identity and access](#identity-and-access)
+17. [Background and alternatives](#background-and-alternatives)
+18. [Consequences and amendments due](#consequences-and-amendments-due)
+19. [Architecture decision records](#architecture-decision-records)
+20. [Open questions](#open-questions)
 
 ---
 
@@ -127,6 +128,7 @@ the domain documents, which link back here.
 | <a id="p9"></a>**P9** | **One driver per vehicle blocks departure. Two drivers per vehicle is advisory.** | Was "two drivers per leg" until [P12](#p12). |
 | <a id="p11"></a>**P11** | **A vehicle's handover Receiver must be set, and registered, before departure,** exactly as for a box. | |
 | <a id="p17"></a>**P17** | **Advisory warnings adopted:** journey timing, data quality, and Receivers and fuel. **Load-efficiency warnings are not adopted.** | None of them block. Not adopted: boxes allocated but not loaded, validated boxes with nothing allocated, a vehicle carrying much less than it could. |
+| <a id="o36"></a>**O36** | **A convoy departs by one action on the convoy, taken by the Dispatcher,** and it is refused unless every blocking requirement holds for the convoy and for each vehicle still travelling. | Replaces the manifest's per-vehicle `depart` transition. |
 
 ## The Convoy Leader
 
@@ -140,11 +142,13 @@ the domain documents, which link back here.
 | <a id="x2"></a>**X2** | **The Convoy Leader marks each border as crossed** from a **checklist page in the convoy section**, which lists the route's points in order. Fuel is entered on the same page. | A crossing is an event on a route point. |
 | <a id="x7"></a>**X7** | **The Convoy Leader sees every address they need to drive to, including the final destination,** so the convoy can arrive together. | **Widens the receiver segregation.** Safeguards in [X12](#x12). |
 | <a id="x8"></a>~~**X8**~~ | ~~Access begins on nomination.~~ | **Superseded by [X11](#x11).** |
-| <a id="x9"></a>**X9** | **The Convoy Leader sees all route stops and the final destination of their own convoy.** They do not see every Receiver's address for every vehicle. | |
+| <a id="x9"></a>**X9** | **The Convoy Leader sees all route stops and the final destination of their own convoy.** ~~They do not see every Receiver's address for every vehicle.~~ | The struck clause is **superseded by [O26](#o26)**. |
 | <a id="x10"></a>**X10** | **The checklist is a web page used on a phone over the internet.** No app is installed, and nothing is stored on the device. | |
 | <a id="x11"></a>**X11** | **Address access opens 14 days before the planned departure** and ends on reassignment or on arrival. | The figure is configuration. |
 | <a id="x12"></a>**X12** | **Four safeguards on address access are approved:** scoped to their own convoy; a new, narrower permission, not an extension of `receivers:detail`; every read audited and made through the sensitive path; never printed or logged. | Three controls already protect an address: the `receivers:detail` policy, a separate database identity, and a database `DENY`. A Convoy Leader is a fourth reader. |
 | <a id="x13"></a>**X13** | **Before the address window opens ([X11](#x11)), the Convoy Leader sees route point headers** (name and kind, such as "UK port" or "overnight stop") **but not their details.** | Details appear when the window opens, just before departure. |
+| <a id="o26"></a>**O26** | **The Convoy Leader sees the route and the addresses of all Receivers on their convoy** (every box's and every vehicle's Receiver), within the window set by [X11](#x11). | Resolves [Q-final-destination](#q-final-destination). Supersedes the limit in [X9](#x9). The [X12](#x12) safeguards apply to every read. |
+| <a id="o27"></a>**O27** | **A Dispatcher may record route marks and border crossings on the Convoy Leader's behalf,** from a radio or phone report, and is named as the person who recorded them. **Only the time of entry is recorded,** not a separate time it happened. | Resolves [Q-crossing-fallback](#q-crossing-fallback) and [Q-occurrence-time](#q-occurrence-time). |
 
 ## Declarations and filing
 
@@ -164,6 +168,7 @@ the domain documents, which link back here.
 | <a id="d32"></a>**D32** | **Goods held for re-filing go to another registered distribution hub, near the border.** The loaders and the Dispatcher at that site are responsible for them. | Uses the existing `Location` model ([D36](#d36)). |
 | <a id="d34"></a>**D34** | **The Dispatcher is warned one week before a goods-list code or a customs declaration expires.** | Validity lengths are UNVERIFIED. |
 | <a id="d37"></a>**D37** | **Deadline warnings are added now.** Validity lengths are configuration and may change later. | They must not be hard-coded. |
+| <a id="o32"></a>**O32** | **The consignee's address on an ENS is entered by the Ground Officer** in the EU portal, alongside the Dispatcher who files it. Freedom keeps withholding the address from the Dispatcher. | Resolves [Q-ens-address-handling](#q-ens-address-handling). A process rule outside the system. |
 
 ## Box outcomes and delivery
 
@@ -171,10 +176,13 @@ the domain documents, which link back here.
 |---|---|---|
 | <a id="o1"></a>**O1** | **Only the Convoy Leader is given route and destination details.** Other drivers are not. The Convoy Leader communicates with every member of the convoy by radio. | Replaces the earlier principle in [Data Sensitivity](key-concepts.md#data-sensitivity) that precise delivery detail "is released to the driver at the point of delivery". Builds on [X7](#x7). |
 | <a id="o2"></a>**O2** | **When customs refuse a box at a border, the Convoy Leader changes its status** to **seized** (customs keep it) or **returned to a hub**. | Extends [D26](#d26). The box leaves the vehicle's load, so the declarations for that vehicle go stale ([D13](#d13)) while they are still open. |
+| <a id="o28"></a>**O28** | **A box returned to a hub goes to the registered hub the Convoy Leader chooses at the time.** It becomes an arrived box there again, **with its label and contents unchanged**, and may be allocated to a later convoy. | Resolves [Q-returned-box](#q-returned-box). |
 | <a id="o5"></a>**O5** | **Cargo is not insured.** A box that is damaged or stolen is marked **undeliverable**, with the reason. Insurance is for the vehicle to travel on the road. | Replaces the earlier "lost" outcome for a box. |
 | <a id="o8"></a>**O8** | **A box or vehicle is delivered when the Convoy Leader or the Dispatcher marks it arrived.** | |
-| <a id="o9"></a>**O9** | **There is an additional status, "accepted",** recording that Ukrainian customs have accepted the delivery under their acceptance rules. A photo upload to verify acceptance may be added later. | Follows delivered. See [Q-accepted-granularity](#q-accepted-granularity). |
-| <a id="o10"></a>**O10** | **A convoy is closed once it has arrived, and closing generates a report** of expected versus actual costs, and of the boxes delivered or not. | Reimbursing volunteers is not managed by the system for now. See [Q-close-convoy](#q-close-convoy). |
+| <a id="o9"></a>**O9** | **There is an additional status, "accepted",** recording that Ukrainian customs have accepted the delivery under their acceptance rules. A photo upload to verify acceptance may be added later. | Follows delivered. Granularity set by [O24](#o24). |
+| <a id="o24"></a>**O24** | **Acceptance is recorded once per Ukrainian goods list,** by the Convoy Leader or the Dispatcher. Every box on that list becomes accepted. | Resolves [Q-accepted-granularity](#q-accepted-granularity). |
+| <a id="o10"></a>**O10** | **A convoy is closed once it has arrived, and closing generates a report** of expected versus actual costs, and of the boxes delivered or not. | Reimbursing volunteers is not managed by the system for now. Who closes, and whether it locks: [O25](#o25). |
+| <a id="o25"></a>**O25** | **The Dispatcher closes a convoy, and closing does not lock it.** Later corrections are allowed, and the report can be regenerated. | Resolves [Q-close-convoy](#q-close-convoy). |
 | <a id="o6"></a>**O6** | **A donor status report shows the items a donor has given and their status, at a high level only.** Donors have no access to the system. | The report is produced for the donor by a user. |
 | <a id="o22"></a>**O22** | **A donor tells HQ by email that a box is coming, and a Dispatcher or Loader may enter it as an expected box.** Entering it early is optional. It can be entered when it arrives. A thank-you when items reach their destination may be explored later. | The focus is boxes and vehicles reaching their destinations. |
 
@@ -184,19 +192,24 @@ the domain documents, which link back here.
 |---|---|---|
 | <a id="o7"></a>**O7** | **Removing a crew member does not void a vehicle's insurance.** The other members stay covered. **Adding a driver needs the insurance updated** with the insurer, which the Dispatcher records. There is no cut-off after which a change needs extra approval. | Replaces the earlier rule, in [Vehicle Insurance](key-concepts.md#vehicle-insurance), that any crew change voids it. |
 | <a id="o3"></a>**O3** | **Blocking requirements are not overridden.** They are business rules, and, for example, a vehicle is never driven without insurance. | Where a real need exists the rule is changed, as [O4](#o4) does for accommodation. |
-| <a id="o4"></a>**O4** | **A crew member can be flagged as arranging their own accommodation** at an overnight stop, which satisfies the accommodation requirement for that person ([P8](#p8)). | For example, staying with family. See [Q-self-accommodation](#q-self-accommodation). |
+| <a id="o4"></a>**O4** | **A crew member can be flagged as arranging their own accommodation** at an overnight stop, which satisfies the accommodation requirement for that person ([P8](#p8)). | For example, staying with family. Granularity set by [O30](#o30). |
+| <a id="o30"></a>**O30** | **Self-accommodation is flagged per crew member, per overnight stop.** | Resolves [Q-self-accommodation](#q-self-accommodation). |
 | <a id="o12"></a>**O12** | **A convoy has a budget with a line for each cost type** (fuel, ferry, hotel, insurance and others), and records **actual costs** against each. Allocating the budget is a **step in creating a convoy**. An approval flow may follow later. | Widens [P3](#p3), which covered fuel only. |
-| <a id="o11"></a>**O11** | **A vehicle's value is what was paid for it,** and the value report includes vehicles. | See [Q-vehicle-without-price](#q-vehicle-without-price). |
+| <a id="o37"></a>**O37** | **A budget is not required for a convoy to depart.** An unset budget is an advisory warning. | Resolves [Q-budget-required](#q-budget-required). Consistent with [P17](#p17). |
+| <a id="o11"></a>**O11** | **A vehicle's value is what was paid for it,** and the value report includes vehicles. | A vehicle that was given: [O33](#o33). |
+| <a id="o33"></a>**O33** | **A vehicle that was given, not bought, is valued at a GBP estimate, with its source recorded,** as for an item ([D5](#d5)). | Resolves [Q-vehicle-without-price](#q-vehicle-without-price). |
 | <a id="o13"></a>**O13** | **Vehicle equipment bought by the charity** (warning triangles and the like) **is accounted for separately** from donations. It is added to the vehicles in **a step of creating a convoy**, has no donor, and is **not part of the value delivered**. | Scope is open: [Q-vehicle-equipment](#q-vehicle-equipment). |
 
 ## Hubs, stock and classification
 
 | ID | Decision | Notes |
 |---|---|---|
-| <a id="o14"></a>**O14** | **A Loader sees only the locations they manage.** Loaders occasionally review the stock in a hub. **There is no required order** in which boxes are allocated to convoys. | Narrows what a Loader can see. See [Q-admin-assignments](#q-admin-assignments). |
+| <a id="o14"></a>**O14** | **A Loader sees only the locations they manage.** Loaders occasionally review the stock in a hub. **There is no required order** in which boxes are allocated to convoys. | Narrows what a Loader can see. Who assigns: [O31](#o31). |
+| <a id="o31"></a>**O31** | **The Administrator assigns Loaders to the locations they manage, and maintains the mapping from categories to declaration codes.** | Resolves [Q-admin-assignments](#q-admin-assignments). Both are reference data, as locations and bays are. |
 | <a id="o15"></a>**O15** | **Items are not tracked once a convoy is on the road.** A box is allocated to a vehicle and left in it. **Fuel is not carried.** | Consistent with [D21](#d21). |
 | <a id="o16"></a>**O16** | **A Loader classifies each item by category,** and each category maps to the code used in each authority's declaration. | Mapping, not data entry, so a category is classified once ([D6](#d6)). A free-text category has no mapping until it is added. |
-| <a id="o17"></a>**O17** | **Labels carry both English and Ukrainian.** | Source of the Ukrainian text: [Q-label-ukrainian-text](#q-label-ukrainian-text). |
+| <a id="o17"></a>**O17** | **Labels carry both English and Ukrainian.** | Source of the Ukrainian text: [O29](#o29). |
+| <a id="o29"></a>**O29** | **The Ukrainian text on a label is machine translated, with no external dependency,** and is **not marked** as a machine translation. The option is chosen by a time-boxed spike: a Microsoft offline option first, otherwise an open-source model run in-process. | Resolves [Q-label-ukrainian-text](#q-label-ukrainian-text). The spike, and a data-sensitivity review of the label, gate [ADR 0011](../adr/0011-attested-boxes-are-replaced-not-edited.md). |
 
 ## On the road and records
 
@@ -207,6 +220,13 @@ the domain documents, which link back here.
 | <a id="o20"></a>**O20** | **There is no live tracking and no GPS,** because of connectivity and security concerns. **The Convoy Leader marks arrival at each route point and each accommodation,** and HQ sees progress from those marks. | |
 | <a id="o21"></a>**O21** | **Notifications are shown on screen.** Email notifications may be built later. | |
 | <a id="o23"></a>**O23** | **Design assumptions:** about 500 vehicles over four years of operation, **one convoy a month**, and **about 25 users**. | Not a rule. A guide for sizing and for what is worth building. |
+
+## Identity and access
+
+| ID | Decision | Notes |
+|---|---|---|
+| <a id="o34"></a>**O34** | **A login is linked to a person by storing the identity provider's subject on the person's erasable details,** linked by an Administrator. Erasing the person removes the link with the rest of their personal data. | Needed by [O19](#o19), [X12](#x12) and [O14](#o14). Today no login is linked to a person. |
+| <a id="o35"></a>**O35** | **A login that is not linked to a person is refused (403) on any write that records who did it.** No "unknown" identity is ever written. | Today an unlinked caller is recorded as "unknown". |
 
 ---
 
@@ -313,18 +333,18 @@ lists them all.
 |---|---|
 | [0004 The manifest is the load sign-off](../adr/0004-the-manifest-is-the-load-sign-off.md) | [P6](#p6), [X3](#x3), [P1](#p1), [P5](#p5) |
 | [0005 Declarations are per vehicle, with derived staleness](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) | [X6](#x6), [D13](#d13), [D27](#d27), [D24](#d24), [D31](#d31), [X2](#x2) |
-| [0006 Filing is manual by default](../adr/0006-filing-is-manual-by-default.md) | [X5](#x5), [D4](#d4), [D12](#d12), [D20](#d20), [X1](#x1) |
+| [0006 Filing is manual by default](../adr/0006-filing-is-manual-by-default.md) | [X5](#x5), [D4](#d4), [D12](#d12), [D20](#d20), [X1](#x1), [O32](#o32) |
 | [0007 Journey legs are removed from the crew model](../adr/0007-journey-legs-are-removed-from-the-crew-model.md) | [P12](#p12), [P9](#p9) |
-| [0008 Readiness is computed, and blocking rules are not overridden](../adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md) | [P4](#p4), [P9](#p9), [P11](#p11), [P17](#p17), [O3](#o3), [O4](#o4), [O7](#o7) |
-| [0009 The Convoy Leader reads destination addresses](../adr/0009-convoy-leader-reads-destination-addresses.md) | [X7](#x7) to [X13](#x13), [O1](#o1) |
-| [0010 Resource-scoped permissions](../adr/0010-resource-scoped-permissions.md) *(proposed)* | [X12](#x12), [O14](#o14), [D17](#d17), [P14](#p14) |
-| [0011 An attested box is replaced, never edited](../adr/0011-attested-boxes-are-replaced-not-edited.md) | [D2](#d2), [D3](#d3), [O17](#o17) |
+| [0008 Readiness is computed, and blocking rules are not overridden](../adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md) | [P4](#p4), [P9](#p9), [P11](#p11), [P17](#p17), [O3](#o3), [O4](#o4), [O7](#o7), [O30](#o30), [O36](#o36), [O37](#o37) |
+| [0009 The Convoy Leader reads destination addresses](../adr/0009-convoy-leader-reads-destination-addresses.md) | [X7](#x7) to [X13](#x13), [O1](#o1), [O26](#o26) |
+| [0010 Resource-scoped permissions](../adr/0010-resource-scoped-permissions.md) *(proposed)* | [X12](#x12), [O14](#o14), [D17](#d17), [P14](#p14), [O31](#o31), [O34](#o34), [O35](#o35) |
+| [0011 An attested box is replaced, never edited](../adr/0011-attested-boxes-are-replaced-not-edited.md) | [D2](#d2), [D3](#d3), [O17](#o17), [O29](#o29) |
 | [0012 Receiver registration gates convoys and boxes](../adr/0012-receiver-registration-gates-convoys-and-boxes.md) | [D22](#d22), [D30](#d30), [D33](#d33), [D35](#d35), [D36](#d36) |
 | [0013 Donors are a split identity](../adr/0013-donors-are-a-split-identity.md) | [D9](#d9), [D14](#d14), [D15](#d15), [D28](#d28), [O6](#o6), [O22](#o22) |
-| [0014 Items are classified by category and valued in GBP](../adr/0014-items-are-classified-by-category-and-valued-in-gbp.md) | [D5](#d5), [D6](#d6), [O11](#o11), [O13](#o13), [O16](#o16) |
-| [0015 Box and vehicle outcomes, and convoy closing](../adr/0015-box-and-vehicle-outcomes-and-convoy-closing.md) | [O2](#o2), [O5](#o5), [O8](#o8), [O9](#o9), [O10](#o10) |
-| [0016 Progress is reported, not tracked](../adr/0016-progress-is-reported-not-tracked.md) | [O18](#o18), [O20](#o20), [X10](#x10) |
-| [0017 Every entity records its last change](../adr/0017-every-entity-records-its-last-change.md) | [O19](#o19) |
+| [0014 Items are classified by category and valued in GBP](../adr/0014-items-are-classified-by-category-and-valued-in-gbp.md) | [D5](#d5), [D6](#d6), [O11](#o11), [O13](#o13), [O16](#o16), [O31](#o31), [O33](#o33) |
+| [0015 Box and vehicle outcomes, and convoy closing](../adr/0015-box-and-vehicle-outcomes-and-convoy-closing.md) | [O2](#o2), [O5](#o5), [O8](#o8), [O9](#o9), [O10](#o10), [O24](#o24), [O25](#o25), [O28](#o28) |
+| [0016 Progress is reported, not tracked](../adr/0016-progress-is-reported-not-tracked.md) | [O18](#o18), [O20](#o20), [X10](#x10), [O27](#o27) |
+| [0017 Every entity records its last change](../adr/0017-every-entity-records-its-last-change.md) | [O19](#o19), [O34](#o34), [O35](#o35) |
 
 **Decisions with no ADR of their own**, because they are features and not architecture: the budget and vehicle
 equipment steps ([O12](#o12), [O13](#o13)), notifications on screen ([O21](#o21)), the expiry and sensitive-goods
@@ -347,15 +367,22 @@ None of these changes the model. The cautious answer is assumed for each.
 |---|---|---|
 | <a id="q-retention"></a>**Q-retention** | How long must declarations, audit trails and donor records be kept? Customs generally require years, but donor erasure ([D15](#d15)) pulls the other way. Which wins for each kind of record? | Nothing is deleted except by an erasure request. |
 | <a id="q-vehicle-equipment"></a>**Q-vehicle-equipment** | [O13](#o13) covers equipment the charity buys, such as warning triangles. What else is carried for the convoy itself: spare parts, tools, tow straps, drivers' bags? How should those be captured, and do they count towards the vehicle's weight? | Not captured. The fixed weight allowance in [Key concepts](key-concepts.md#manifest) stands. |
-| <a id="q-accepted-granularity"></a>**Q-accepted-granularity** | [O9](#o9): who marks a delivery "accepted" by Ukrainian customs, and for what: each box, a goods list, or a vehicle? | Accepted is recorded per goods list, by the Dispatcher or the Convoy Leader. |
-| <a id="q-returned-box"></a>**Q-returned-box** | [O2](#o2): when a refused box is returned to a hub, which hub, and can it be allocated to a later convoy with the same label and contents? | A registered hub near the border ([D32](#d32)), and yes, because its contents have not changed. |
-| <a id="q-close-convoy"></a>**Q-close-convoy** | [O10](#o10): who closes a convoy, and does closing lock the record and its report? | The Dispatcher closes it, and closing locks it. |
-| <a id="q-label-ukrainian-text"></a>**Q-label-ukrainian-text** | [O17](#o17): labels carry the item list in English and Ukrainian. Where does the Ukrainian text come from: only the fixed categories ([D6](#d6)), or each item's description? Who translates a free-text category or a description? | Fixed categories are translated once. Free text is shown in English only. |
-| <a id="q-vehicle-without-price"></a>**Q-vehicle-without-price** | [O11](#o11): what is the value of a vehicle that was given and not bought? | Its value is the charity's estimate, with the source recorded as for an item ([D5](#d5)). |
-| <a id="q-self-accommodation"></a>**Q-self-accommodation** | [O4](#o4): is self-accommodation flagged per crew member for each overnight stop, or once for the whole convoy? | Per crew member, per overnight stop. |
-| <a id="q-admin-assignments"></a>**Q-admin-assignments** | Who assigns a Loader to the locations they manage ([O14](#o14)), and who maintains the mapping from categories to declaration codes ([O16](#o16))? | The Administrator does both. |
-| <a id="q-budget-required"></a>**Q-budget-required** | [O12](#o12): must a budget be allocated before a convoy is published or departs, or may it be left unset with a warning? | It may be left unset, with a warning. |
-| <a id="q-ens-address-handling"></a>**Q-ens-address-handling** | [X1](#x1): the Dispatcher files the ENS and a Ground Officer helps with destinations. Filing needs the consignee's address, which the system never shows a Dispatcher. How is the address supplied without the Dispatcher seeing it, or is it accepted that they see it in the portal? ([ADR 0003](../adr/0003-ens-declaration-recorded-not-submitted.md)) | The Ground Officer fills in that field, or a Dispatcher sees it only in the portal. |
-| <a id="q-final-destination"></a>**Q-final-destination** | [X9](#x9): the Convoy Leader sees "the final destination". Vehicles have their own handover Receivers ([P5](#p5)) and boxes have theirs, so is there one convoy-level destination, or the set of destinations the leader needs to reach? ([ADR 0009](../adr/0009-convoy-leader-reads-destination-addresses.md)) | The route and the destinations the convoy genuinely needs to reach, and not every Receiver's address. |
-| <a id="q-crossing-fallback"></a>**Q-crossing-fallback** | [X2](#x2): if the leader cannot mark a border crossing, may a Dispatcher record it on their behalf from a radio or phone report? ([ADR 0016](../adr/0016-progress-is-reported-not-tracked.md)) | Yes, with their name recorded ([O19](#o19)). |
-| <a id="q-occurrence-time"></a>**Q-occurrence-time** | When the Convoy Leader enters something after the event (for example after a gap in coverage), does the system need the time it happened as well as the time it was entered? | Only the time entered is recorded ([O19](#o19)). |
+
+### Resolved on 2026-10-02
+
+Kept so that links to them still land. Each is answered by a decision.
+
+| ID | Question | Answered by |
+|---|---|---|
+| <a id="q-accepted-granularity"></a>**Q-accepted-granularity** | Who marks a delivery "accepted", and for what? | [O24](#o24): per goods list, by the Convoy Leader or Dispatcher |
+| <a id="q-returned-box"></a>**Q-returned-box** | Which hub does a returned box go to, and can it be reused? | [O28](#o28): the hub the leader chooses; reusable unchanged |
+| <a id="q-close-convoy"></a>**Q-close-convoy** | Who closes a convoy, and does closing lock it? | [O25](#o25): the Dispatcher; no lock |
+| <a id="q-label-ukrainian-text"></a>**Q-label-ukrainian-text** | Where does the label's Ukrainian text come from? | [O29](#o29): machine translation, no external dependency, unmarked |
+| <a id="q-vehicle-without-price"></a>**Q-vehicle-without-price** | What is a given vehicle worth? | [O33](#o33): a GBP estimate, with its source |
+| <a id="q-self-accommodation"></a>**Q-self-accommodation** | Per stop, or per convoy? | [O30](#o30): per crew member, per stop |
+| <a id="q-admin-assignments"></a>**Q-admin-assignments** | Who assigns Loaders and maintains the code mapping? | [O31](#o31): the Administrator |
+| <a id="q-budget-required"></a>**Q-budget-required** | Must a budget exist before departure? | [O37](#o37): no, a warning |
+| <a id="q-ens-address-handling"></a>**Q-ens-address-handling** | How is the ENS consignee address supplied? | [O32](#o32): the Ground Officer enters it in the portal |
+| <a id="q-final-destination"></a>**Q-final-destination** | What does "the final destination" mean? | [O26](#o26): the route and all Receivers on the convoy |
+| <a id="q-crossing-fallback"></a>**Q-crossing-fallback** | May a Dispatcher record a crossing for the leader? | [O27](#o27): yes, named |
+| <a id="q-occurrence-time"></a>**Q-occurrence-time** | Record when it happened, as well as when it was entered? | [O27](#o27): entered time only |

@@ -13,6 +13,8 @@ How the Ukrainian Action domain is described, and where to look.
 | [Decisions](decisions.md) | **Every decision, and why it was made.** Also the open questions and the amendments still due |
 | [Ukrainian customs research](ua-customs-requirements.md) | What Ukrainian customs appear to require, with sources and what is unverified. **Research only, not authoritative.** |
 
+How the rules get built is in the [implementation plans](../plans/README.md).
+
 The first four describe **business rules** and nothing else. The reasoning, history and open questions live in
 [Decisions](decisions.md), and every rule links to the decision it comes from.
 

@@ -17,8 +17,8 @@ that records it. See [the decision-to-ADR map](../domain/decisions.md#architectu
 | [0007](0007-journey-legs-are-removed-from-the-crew-model.md) | Journey legs are removed from the crew model | Accepted |
 | [0008](0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md) | Readiness is computed from the facts, and blocking requirements are never overridden | Accepted |
 | [0009](0009-convoy-leader-reads-destination-addresses.md) | The Convoy Leader may read destination addresses, scoped, time-limited and audited | Accepted. **Needs a security review before implementation.** |
-| [0010](0010-resource-scoped-permissions.md) | Permissions can be scoped to a resource | **Proposed** |
-| [0011](0011-attested-boxes-are-replaced-not-edited.md) | An attested box is replaced, never edited, and its label attests the contents | Accepted. Needs a data-sensitivity review of the label. |
+| [0010](0010-resource-scoped-permissions.md) | Permissions can be scoped to a resource | **Proposed.** Becomes Accepted at the decision checkpoint that opens [plan 17](../plans/17-scoped-permissions.md). |
+| [0011](0011-attested-boxes-are-replaced-not-edited.md) | An attested box is replaced, never edited, and its label attests the contents | Accepted. Gated by a translation spike and a label data-sensitivity review ([plan 16](../plans/16-box-replacement-label.md)). |
 | [0012](0012-receiver-registration-gates-convoys-and-boxes.md) | Receiver registration gates convoys and boxes, and what a Receiver is stays out of the software | Accepted |
 | [0013](0013-donors-are-a-split-identity.md) | Donors are a split identity, so they can be erased, and a donation is its own entity | Accepted |
 | [0014](0014-items-are-classified-by-category-and-valued-in-gbp.md) | Items are classified by category, which maps to customs codes, and valued in GBP with a recorded source | Accepted |
@@ -30,6 +30,11 @@ that records it. See [the decision-to-ADR map](../domain/decisions.md#architectu
 0017: they describe the intended system, and the code and some documents are behind. Where an ADR changes an
 earlier one, the earlier ADR keeps its original text and gains an **Amendments** section, so the reasoning that was
 true at the time is not lost.
+
+## Implementation
+
+ADRs 0004 to 0017 are implemented by the plan series in [`docs/plans/`](../plans/README.md), one branch and one PR per
+plan. The plans index shows which plan covers which ADR, and each plan's status.
 
 ## Format
 

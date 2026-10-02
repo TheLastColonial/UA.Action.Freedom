@@ -67,3 +67,13 @@ a purpose-built record is added, as it was then.
 
 **Retention is open.** How long this is kept, and how it sits with erasure, is part of
 [Q-retention](../domain/decisions.md#q-retention).
+
+## Amendments
+
+Added 2026-10-02, from questions resolved before implementation planning.
+
+- **The caller's identity reaches the repository through a linked login.** The identity provider's subject is stored on
+  the erasable person details and linked by an Administrator ([decision O34](../domain/decisions.md#o34)), built in
+  [plan 02](../plans/02-login-person-link.md) before this ADR's own [plan 03](../plans/03-last-changed-audit.md).
+- **An unlinked login is refused (403)** on any write that records who did it, so no "unknown" identity is ever stored
+  ([decision O35](../domain/decisions.md#o35)).

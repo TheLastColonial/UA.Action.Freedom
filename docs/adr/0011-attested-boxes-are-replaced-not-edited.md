@@ -76,3 +76,13 @@ described again, not a new one.
 
 **`BoxQrCode` already has the shape this needs.** Issuing a code revokes the active one in one transaction. Voiding
 a box revokes its code the same way, in the same transaction as the void.
+
+## Amendments
+
+Added 2026-10-02, from questions resolved before implementation planning.
+
+- **The Ukrainian text is machine translated with no external dependency, and is not marked as a translation**
+  ([decision O29](../domain/decisions.md#o29)). That resolves "The Ukrainian text needs a source" above.
+- **Two gates come first** in [plan 16](../plans/16-box-replacement-label.md): a time-boxed spike that picks the
+  offline translation option (a Microsoft offline option first, otherwise an open-source model run in-process), and the
+  label's data-sensitivity review. The plan stops for the owner's sign-off on both before changing the label.

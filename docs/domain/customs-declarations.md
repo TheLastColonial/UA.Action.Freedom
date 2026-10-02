@@ -124,7 +124,9 @@ the load can no longer make it stale, because the crossing has happened.
 | File a Ukrainian goods list | The Receiver, outside the system |
 | Re-approve a changed load | Administrator |
 | Mark a border crossed | Convoy Leader |
-| Answer the Dispatcher's questions about destinations while an ENS is completed | Ground Officer, outside the system |
+| Answer the Dispatcher's questions about destinations while an ENS is completed, and **enter the consignee address** in the EU portal ([O32](decisions.md#o32)) | Ground Officer, outside the system |
+| Record a Ukrainian goods list as **accepted** ([O24](decisions.md#o24)) | Convoy Leader or Dispatcher |
+| Mark a border crossed on the Convoy Leader's behalf ([O27](decisions.md#o27)) | Dispatcher, named |
 
 The ENS filing sheet **withholds the Receiver's address**, and the system never shows it to a Dispatcher
 ([X1](decisions.md#x1), [ADR 0003](../adr/0003-ens-declaration-recorded-not-submitted.md)).
