@@ -3,9 +3,9 @@ import { expect, test } from 'vitest';
 
 import { makeBox } from '../../test/factories/box';
 import { makeBay, makeLocation } from '../../test/factories/location';
-import { makePerson } from '../../test/factories/person';
 import { boxApi } from '../../test/msw/boxes';
 import { locationApi } from '../../test/msw/locations';
+import { meApi } from '../../test/msw/me';
 import { personApi } from '../../test/msw/people';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
@@ -54,14 +54,11 @@ test('a Dispatcher can pack a box but sees no validate panel', async () => {
 });
 
 test('validating the box freezes it: panel gone, contents fixed, no Edit', async () => {
-  worker.use(
-    ...boxApi([makeBox({ id: 4 })]).handlers,
-    ...personApi([makePerson({ id: 'v1', firstName: 'Val', lastName: 'Checker' })]).handlers,
-  );
+  worker.use(...boxApi([makeBox({ id: 4 })]).handlers, ...meApi());
 
   const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
 
-  await screen.getByLabelText('Checked by').selectOptions('v1');
+  await expect.element(screen.getByText('Val Checker')).toBeInTheDocument();
   await screen.getByLabelText('Confirmed weight (kg)').fill('18');
   await screen.getByRole('button', { name: 'Validate box' }).click();
 
@@ -76,14 +73,10 @@ test('validating the box freezes it: panel gone, contents fixed, no Edit', async
 });
 
 test('rejects a confirmed weight outside 1..500', async () => {
-  worker.use(
-    ...boxApi([makeBox({ id: 4 })]).handlers,
-    ...personApi([makePerson({ id: 'v1' })]).handlers,
-  );
+  worker.use(...boxApi([makeBox({ id: 4 })]).handlers, ...meApi());
 
   const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
 
-  await screen.getByLabelText('Checked by').selectOptions('v1');
   await screen.getByLabelText('Confirmed weight (kg)').fill('750');
   await screen.getByRole('button', { name: 'Validate box' }).click();
 
@@ -112,14 +105,13 @@ test('a loader places a box in a bay and then vacates it', async () => {
   const bay = makeBay({ id: 9, locationId: 3, code: 'A1' });
   worker.use(
     ...boxApi([makeBox({ id: 4, locationId: 3 })]).handlers,
-    ...personApi([makePerson({ id: 'v1', firstName: 'Val', lastName: 'Checker' })]).handlers,
+    ...meApi(),
     ...locationApi([location], [bay]).handlers,
   );
 
   const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
 
   await screen.getByLabelText('Bay').selectOptions('9');
-  await screen.getByLabelText('Placed by').selectOptions('v1');
   await screen.getByRole('button', { name: 'Place in bay' }).click();
 
   await expect.element(screen.getByText(/Currently in bay.*A1/)).toBeInTheDocument();
@@ -127,4 +119,30 @@ test('a loader places a box in a bay and then vacates it', async () => {
   await screen.getByRole('button', { name: 'Vacate bay' }).click();
 
   await expect.element(screen.getByText('Not currently in a bay.')).toBeInTheDocument();
+});
+
+test('the validate panel says who the box will be signed as', async () => {
+  worker.use(...boxApi([makeBox({ id: 4 })]).handlers, ...meApi({ displayName: 'Val Checker' }));
+
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+
+  await expect.element(screen.getByText(/You will sign as/)).toBeInTheDocument();
+  await expect.element(screen.getByText('Val Checker')).toBeInTheDocument();
+  await expect.element(screen.getByLabelText('Checked by')).not.toBeInTheDocument();
+});
+
+test('a Loader whose login is not linked cannot validate or place a box', async () => {
+  worker.use(
+    ...boxApi([makeBox({ id: 4, locationId: 3 })]).handlers,
+    ...meApi({ personId: null, displayName: null }),
+    ...locationApi([makeLocation({ id: 3 })], [makeBay({ id: 9, locationId: 3 })]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+
+  await expect
+    .element(screen.getByText(/Your login is not linked to a volunteer/).first())
+    .toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Validate box' })).toBeDisabled();
+  await expect.element(screen.getByRole('button', { name: 'Place in bay' })).toBeDisabled();
 });

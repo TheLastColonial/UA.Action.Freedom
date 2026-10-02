@@ -32,14 +32,14 @@ let mintedBayAssignment = 0;
 
 export function boxApi(
   seed: readonly BoxReadModel[] = [],
-  knownVolunteerIds: readonly string[] = [],
+  /** The volunteer the API resolves the caller's login to; what an attestation is signed as. */
+  signedBy = 'caller-person-id',
 ): BoxApi {
   const db = new Map<number, BoxReadModel>(seed.map((b) => [b.id, b]));
   const items = new Map<number, BoxItemReadModel[]>();
   const qr = new Map<number, ActiveQrCode>();
   const bayHistory = new Map<number, BoxBayAssignmentReadModel[]>();
   const idFrom = (raw: string | readonly string[] | undefined) => Number(String(raw));
-  const validators = new Set(knownVolunteerIds);
   const activeBay = (id: number) => (bayHistory.get(id) ?? []).find((a) => a.active);
 
   const validatedGuard = (box: BoxReadModel | undefined) =>
@@ -161,13 +161,10 @@ export function boxApi(
         return problem(409, 'This box has already been validated.');
       }
       const body = (await request.json()) as ValidateBoxRequest;
-      if (validators.size > 0 && !validators.has(body.validatedByPersonId)) {
-        return problem(404, 'The volunteer named as having checked this box is not on file.');
-      }
       db.set(id, {
         ...box,
         validated: true,
-        validatedByPersonId: body.validatedByPersonId,
+        validatedByPersonId: signedBy,
         validatedAt: '2026-04-01T00:00:00',
         weightKg: body.weightKg,
         widthCm: body.widthCm ?? null,
@@ -259,9 +256,6 @@ export function boxApi(
         return new HttpResponse(null, { status: 404 });
       }
       const body = (await request.json()) as AssignBoxBayRequest;
-      if (validators.size > 0 && !validators.has(body.assignedByPersonId)) {
-        return problem(404, 'The volunteer named as having placed this box is not on file.');
-      }
       const now = '2026-05-01T09:00:00';
       const history = (bayHistory.get(id) ?? []).map((a) =>
         a.active ? { ...a, vacatedAt: now, active: false } : a,
@@ -271,7 +265,7 @@ export function boxApi(
         id: mintedBayAssignment,
         boxId: id,
         bayId: body.bayId,
-        assignedByPersonId: body.assignedByPersonId,
+        assignedByPersonId: signedBy,
         assignedAt: now,
         vacatedAt: null,
         active: true,

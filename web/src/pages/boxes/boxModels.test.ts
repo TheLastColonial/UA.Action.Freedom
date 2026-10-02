@@ -57,21 +57,28 @@ describe('validate a box', () => {
   it('coerces the weight to a number', () => {
     expect(
       validateFormToRequest({
-        validatedByPersonId: 'p1',
         weightKg: '12',
         widthCm: '',
         depthCm: '',
         heightCm: '',
       }),
     ).toEqual({
-      validatedByPersonId: 'p1',
       weightKg: 12,
     });
   });
 
+  it('never names who is validating: the API signs as the caller', () => {
+    const request = validateFormToRequest({
+      weightKg: '12',
+      widthCm: '',
+      depthCm: '',
+      heightCm: '',
+    });
+    expect(Object.keys(request)).not.toContain('validatedByPersonId');
+  });
+
   it('coerces the dimensions when given, and omits them when blank', () => {
     const request = validateFormToRequest({
-      validatedByPersonId: 'p1',
       weightKg: '12',
       widthCm: '40',
       depthCm: '30.5',
@@ -84,25 +91,17 @@ describe('validate a box', () => {
 
   const blankDimensions = { widthCm: '', depthCm: '', heightCm: '' };
 
-  it('needs a volunteer and a weight in 1..500', () => {
-    expect(
-      validateFormSchema.safeParse({ validatedByPersonId: '', weightKg: '12', ...blankDimensions })
-        .success,
-    ).toBe(false);
-    expect(
-      validateFormSchema.safeParse({ validatedByPersonId: 'p1', weightKg: '0', ...blankDimensions })
-        .success,
-    ).toBe(false);
+  it('needs a weight in 1..500', () => {
+    expect(validateFormSchema.safeParse({ weightKg: '', ...blankDimensions }).success).toBe(false);
+    expect(validateFormSchema.safeParse({ weightKg: '0', ...blankDimensions }).success).toBe(false);
     expect(
       validateFormSchema.safeParse({
-        validatedByPersonId: 'p1',
         weightKg: '501',
         ...blankDimensions,
       }).success,
     ).toBe(false);
     expect(
       validateFormSchema.safeParse({
-        validatedByPersonId: 'p1',
         weightKg: '250',
         ...blankDimensions,
       }).success,
@@ -110,7 +109,7 @@ describe('validate a box', () => {
   });
 
   it('leaves dimensions optional but bounded to 1..1000 with up to 2 decimal places', () => {
-    const base = { validatedByPersonId: 'p1', weightKg: '250', ...blankDimensions };
+    const base = { weightKg: '250', ...blankDimensions };
     expect(validateFormSchema.safeParse({ ...base, widthCm: '' }).success).toBe(true);
     expect(validateFormSchema.safeParse({ ...base, widthCm: '40.25' }).success).toBe(true);
     expect(validateFormSchema.safeParse({ ...base, widthCm: '40.256' }).success).toBe(false);

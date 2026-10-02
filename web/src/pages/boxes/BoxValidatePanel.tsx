@@ -3,10 +3,10 @@ import type { JSX } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { useValidateBox } from '../../api/boxes';
-import { usePeople } from '../../api/people';
-import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
+import { ApiDomainProblem } from '../../api/problem';
 import { Button } from '../../components/Button';
-import { SelectField, TextField } from '../../components/form/fields';
+import { SigningAs, useCanSign } from '../../components/SigningAs';
+import { TextField } from '../../components/form/fields';
 import { emptyValidateForm, validateFormSchema, validateFormToRequest } from './boxModels';
 import type { ValidateFormValues } from './boxModels';
 
@@ -15,7 +15,7 @@ interface BoxValidatePanelProps {
 }
 
 export function BoxValidatePanel({ boxId }: BoxValidatePanelProps): JSX.Element {
-  const volunteers = usePeople({ page: 1, pageSize: 200 });
+  const canSign = useCanSign();
   const validate = useValidateBox(boxId);
 
   const {
@@ -28,19 +28,9 @@ export function BoxValidatePanel({ boxId }: BoxValidatePanelProps): JSX.Element 
   });
 
   const message =
-    validate.error instanceof ApiNotFound
-      ? 'The volunteer named as having checked this box is not on file.'
-      : validate.error instanceof ApiDomainProblem
-        ? (validate.error.detail ?? validate.error.message)
-        : undefined;
-
-  const options = [
-    { value: '', label: 'Select a volunteer…' },
-    ...(volunteers.data ?? []).map((person) => ({
-      value: person.id,
-      label: `${person.firstName} ${person.lastName}`,
-    })),
-  ];
+    validate.error instanceof ApiDomainProblem
+      ? (validate.error.detail ?? validate.error.message)
+      : undefined;
 
   return (
     <div>
@@ -60,12 +50,7 @@ export function BoxValidatePanel({ boxId }: BoxValidatePanelProps): JSX.Element 
           </p>
         ) : null}
 
-        <SelectField
-          label="Checked by"
-          options={options}
-          error={errors.validatedByPersonId?.message}
-          {...register('validatedByPersonId')}
-        />
+        <SigningAs />
         <TextField
           label="Confirmed weight (kg)"
           type="number"
@@ -98,7 +83,7 @@ export function BoxValidatePanel({ boxId }: BoxValidatePanelProps): JSX.Element 
           {...register('heightCm')}
         />
 
-        <Button type="submit" disabled={validate.isPending}>
+        <Button type="submit" disabled={validate.isPending || !canSign}>
           Validate box
         </Button>
       </form>

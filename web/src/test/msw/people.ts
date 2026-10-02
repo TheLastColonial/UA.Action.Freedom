@@ -6,6 +6,8 @@ import { problem } from './problem';
 
 export interface PersonApi {
   db: Map<string, PersonReadModel>;
+  /** Login subject → person id, as PUT /people/{id}/login records them. */
+  logins: Map<string, string>;
   handlers: RequestHandler[];
 }
 
@@ -35,6 +37,7 @@ export function personApi(
 ): PersonApi {
   const db = new Map<string, PersonReadModel>(seed.map((p) => [p.id, p]));
   const active = new Set(activeIds);
+  const logins = new Map<string, string>();
 
   const handlers: RequestHandler[] = [
     http.get('/people', ({ request }) => {
@@ -70,6 +73,20 @@ export function personApi(
       return new HttpResponse(null, { status: 204 });
     }),
 
+    http.put('/people/:id/login', async ({ params, request }) => {
+      const id = String(params['id']);
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const { subject } = (await request.json()) as { subject: string };
+      const owner = logins.get(subject);
+      if (owner !== undefined && owner !== id) {
+        return problem(409, 'That login is already linked to another volunteer.');
+      }
+      logins.set(subject, id);
+      return new HttpResponse(null, { status: 204 });
+    }),
+
     http.delete('/people/:id', ({ params }) => {
       const id = String(params['id']);
       if (db.has(id) && active.has(id)) {
@@ -84,5 +101,5 @@ export function personApi(
     }),
   ];
 
-  return { db, handlers };
+  return { db, logins, handlers };
 }

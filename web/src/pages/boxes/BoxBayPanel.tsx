@@ -3,8 +3,8 @@ import type { JSX } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { useBays } from '../../api/locations';
-import { usePeople } from '../../api/people';
 import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
+import { SigningAs, useCanSign } from '../../components/SigningAs';
 import { useAssignBoxBay, useBoxBay, useBoxBayHistory, useVacateBoxBay } from '../../api/boxes';
 import { Button } from '../../components/Button';
 import { Gate } from '../../components/Gate';
@@ -22,7 +22,7 @@ export function BoxBayPanel({ boxId, locationId }: BoxBayPanelProps): JSX.Elemen
   const current = useBoxBay(boxId);
   const history = useBoxBayHistory(boxId);
   const bays = useBays(locationId ?? -1, { enabled: locationId !== null });
-  const volunteers = usePeople({ page: 1, pageSize: 200 });
+  const canSign = useCanSign();
   const assign = useAssignBoxBay(boxId);
   const vacate = useVacateBoxBay(boxId);
 
@@ -41,7 +41,7 @@ export function BoxBayPanel({ boxId, locationId }: BoxBayPanelProps): JSX.Elemen
 
   const message =
     assign.error instanceof ApiNotFound
-      ? 'That bay or volunteer could not be found.'
+      ? 'That bay could not be found.'
       : assign.error instanceof ApiDomainProblem
         ? (assign.error.detail ?? assign.error.message)
         : undefined;
@@ -49,13 +49,6 @@ export function BoxBayPanel({ boxId, locationId }: BoxBayPanelProps): JSX.Elemen
   const bayOptions = [
     { value: '', label: 'Select a bay…' },
     ...availableBays.map((bay) => ({ value: String(bay.id), label: bay.code })),
-  ];
-  const volunteerOptions = [
-    { value: '', label: 'Select a volunteer…' },
-    ...(volunteers.data ?? []).map((person) => ({
-      value: person.id,
-      label: `${person.firstName} ${person.lastName}`,
-    })),
   ];
 
   return (
@@ -112,14 +105,9 @@ export function BoxBayPanel({ boxId, locationId }: BoxBayPanelProps): JSX.Elemen
                 error={errors.bayId?.message}
                 {...register('bayId')}
               />
-              <SelectField
-                label="Placed by"
-                options={volunteerOptions}
-                error={errors.assignedByPersonId?.message}
-                {...register('assignedByPersonId')}
-              />
+              <SigningAs />
 
-              <Button type="submit" disabled={assign.isPending}>
+              <Button type="submit" disabled={assign.isPending || !canSign}>
                 Place in bay
               </Button>
             </form>
