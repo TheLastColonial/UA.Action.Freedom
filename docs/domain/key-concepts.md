@@ -105,6 +105,10 @@ personal data** — name, date of birth, phone, driving status — rather than h
 **"Former volunteer"**; nothing links that identity back to the person. Someone no record names is removed
 outright.
 
+A volunteer's **login link** (`PersonDetail.IdentitySubject`, set by an Administrator) is part of the personal data,
+so erasure removes it and the login reads as not linked. A login that is not linked cannot do anything that records
+who did it: such writes are refused with `403 login-not-linked`.
+
 Erasure is **refused while the volunteer is still needed**: on the crew of a convoy that has not arrived, or on the
 team of a manifest still under way. Take them off it first. Only the Administrator erases, and the operator UI asks
 for confirmation, since it cannot be undone.

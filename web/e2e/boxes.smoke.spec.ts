@@ -8,23 +8,10 @@ test.beforeEach(async () => {
 });
 
 test('@smoke loader packs a box, adds an item and validates it', async ({ page }) => {
-  // The operator login carries Loader (pack + validate) and Purchaser (needed to add the
-  // volunteer this test validates against).
-  await signIn(page, 'admin');
-  let nav = page.getByRole('navigation', { name: 'Sections' });
-
-  // A volunteer to validate against.
-  await nav.getByRole('link', { name: 'Volunteers' }).click();
-  await page.getByRole('link', { name: 'New volunteer' }).click();
-  const checker = `Checker${String(Date.now())}`;
-  await page.getByLabel('First name').fill('Box');
-  await page.getByLabel('Last name').fill(checker);
-  await page.getByLabel('Date of birth').fill('1988-02-02');
-  await page.getByRole('button', { name: 'Create volunteer' }).click();
-  await expect(page.getByRole('heading', { name: `Box ${checker}` })).toBeVisible();
-
+  // The operator login carries Loader (pack + validate). The box is signed as the volunteer the
+  // login is linked to (auth.setup.ts links the seed logins), so there is nobody to pick.
   await signIn(page, 'operator');
-  nav = page.getByRole('navigation', { name: 'Sections' });
+  const nav = page.getByRole('navigation', { name: 'Sections' });
   await nav.getByRole('link', { name: 'Boxes' }).click();
   await page.getByRole('link', { name: 'New box' }).click();
   await page.getByRole('button', { name: 'Create box' }).click();
@@ -34,7 +21,7 @@ test('@smoke loader packs a box, adds an item and validates it', async ({ page }
   await page.getByRole('button', { name: 'Add item' }).click();
   await expect(page.getByText('Sleeping bags')).toBeVisible();
 
-  await page.getByLabel('Checked by').selectOption({ label: `Box ${checker}` });
+  await expect(page.getByText(/You will sign as/).first()).toBeVisible();
   await page.getByLabel('Confirmed weight (kg)').fill('14');
   await page.getByRole('button', { name: 'Validate box' }).click();
 
@@ -79,20 +66,6 @@ test('@smoke a loader places a box in a bay and then finds it there', async ({ p
   await page.getByRole('button', { name: 'Add bay' }).click();
   await expect(page.getByText('A1')).toBeVisible();
 
-  // A volunteer to name as having placed the box — its own name so the select is unambiguous
-  // even against the accumulated volunteers from earlier runs.
-  await page
-    .getByRole('navigation', { name: 'Sections' })
-    .getByRole('link', { name: 'Volunteers' })
-    .click();
-  await page.getByRole('link', { name: 'New volunteer' }).click();
-  const loaderName = `Bay${String(Date.now())}`;
-  await page.getByLabel('First name').fill('Placed');
-  await page.getByLabel('Last name').fill(loaderName);
-  await page.getByLabel('Date of birth').fill('1991-03-03');
-  await page.getByRole('button', { name: 'Create volunteer' }).click();
-  await expect(page.getByRole('heading', { name: `Placed ${loaderName}` })).toBeVisible();
-
   // The operator login carries Loader — checks the box in at the depot, then places it in
   // the bay, all within one session (a fresh sign-in always lands on the dashboard, so the
   // box has to be created here rather than reached by a deep link from the admin session).
@@ -105,7 +78,7 @@ test('@smoke a loader places a box in a bay and then finds it there', async ({ p
   await expect(page.getByRole('heading', { name: /Box #/ })).toBeVisible();
 
   await page.getByLabel('Bay').selectOption({ label: 'A1' });
-  await page.getByLabel('Placed by').selectOption({ label: `Placed ${loaderName}` });
+  await expect(page.getByText(/You will sign as/).first()).toBeVisible();
   await page.getByRole('button', { name: 'Place in bay' }).click();
 
   await expect(page.getByText(/Currently in bay.*A1/)).toBeVisible();

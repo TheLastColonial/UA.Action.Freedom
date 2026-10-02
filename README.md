@@ -244,6 +244,8 @@ Core resource endpoints:
 - `GET|POST /vehicles` — Vehicle inventory (natural key: VIN), including optional cargo capacity (max weight, dimensions); writes are Administrator, Purchaser and Mechanic (`vehicles:write`)
   - `PUT /vehicles/{vin}/inspection` — Record the servicing inspection (`Pending`/`Inspecting`/`Passed`/`Failed` + notes) — **Administrator and Mechanic only** (`vehicles:service`). The ordinary `PUT /vehicles/{vin}` cannot change it — nor which convoy the vehicle is on, which only `/convoys/{id}/vehicles/{vin}` changes
 - `GET|POST /people` — Volunteers & drivers; `DELETE /people/{id}` **erases** a volunteer (their personal data is deleted; past records show "Former volunteer"), refused with 409 while they are crewing a convoy that has not arrived or a vehicle whose load is not yet finished
+  - `PUT /people/{id}/login` — Link the login (token subject) a volunteer signs in with — **Administrator only** (`people:write`); 204, 404, or 409 when the login already belongs to another volunteer. An Administrator may link their own login, so the first link can be made
+- `GET /me` — Who the caller is: subject and roles, plus person id and display name once their login is linked. Any authenticated caller, Ground Officer included. **Every write that records who did it** (validating or shelving a box, recording insurance, resolving a delivery address) is signed as the caller's linked volunteer and refused with `403` / `login-not-linked` from a login nobody has linked — there is no body field to forge it with
 - `GET|POST /convoys` — Convoy groups with routes
   - `PUT|GET /convoys/{id}/route` — Ordered stop list
   - `GET /convoys/{id}/vehicles` — The truck list, withdrawn vehicles included (each entry says which it is)

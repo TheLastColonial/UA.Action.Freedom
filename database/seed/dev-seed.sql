@@ -42,7 +42,13 @@ INSERT INTO @people VALUES
     (NEWID(), N'Alex',  N'Example', 1, 1),
     (NEWID(), N'Sam',   N'Sample',  1, 1),
     (NEWID(), N'Jo',    N'Test',    1, 0),
-    (NEWID(), N'Chris', N'Demo',    0, 0);
+    (NEWID(), N'Chris', N'Demo',    0, 0),
+    -- One volunteer per seed login (admin, operator, groundofficer). Deliberately unlinked: a login's
+    -- subject is generated when the Keycloak realm is imported, so it cannot be seeded. Link them as
+    -- the admin login, see docs/local-authentication.md § Linking a login to a volunteer.
+    (NEWID(), N'Ada',   N'Admin',    0, 0),
+    (NEWID(), N'Olly',  N'Operator', 0, 0),
+    (NEWID(), N'Gus',   N'Ground',   0, 0);
 
 INSERT INTO dbo.Person (Id) SELECT Id FROM @people;
 INSERT INTO dbo.PersonDetail (PersonId, FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed)

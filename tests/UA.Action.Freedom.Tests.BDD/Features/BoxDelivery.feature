@@ -30,7 +30,6 @@ Background:
 
 Scenario: A validated box travels on an approved manifest and is delivered
     Given I am authenticated as "operator"
-    And a volunteer exists who can validate boxes
     And a convoy exists with an insured vehicle on its published truck list
     And a manifest reference that is not yet used
 
@@ -47,7 +46,7 @@ Scenario: A validated box travels on an approved manifest and is delivered
         { "description": "Blankets", "properties": { "size": "double" } }
         """
     Then the response status is 204
-    When I POST "/boxes/{id}/validate" on the remembered box with the validating volunteer weighing 12
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 12
     Then the response status is 204
 
     # The manifest is the paperwork for one vehicle on one convoy, so it is opened against the

@@ -226,8 +226,8 @@ the domain documents, which link back here.
 
 | ID | Decision | Notes |
 |---|---|---|
-| <a id="o34"></a>**O34** | **A login is linked to a person by storing the identity provider's subject on the person's erasable details,** linked by an Administrator. Erasing the person removes the link with the rest of their personal data. | Needed by [O19](#o19), [X12](#x12) and [O14](#o14). Today no login is linked to a person. |
-| <a id="o35"></a>**O35** | **A login that is not linked to a person is refused (403) on any write that records who did it.** No "unknown" identity is ever written. | Today an unlinked caller is recorded as "unknown". |
+| <a id="o34"></a>**O34** | **A login is linked to a person by storing the identity provider's subject on the person's erasable details,** linked by an Administrator. Erasing the person removes the link with the rest of their personal data. | Needed by [O19](#o19), [X12](#x12) and [O14](#o14). Built by [plan 02](../plans/02-login-person-link.md): `PersonDetail.IdentitySubject`, `PUT /people/{id}/login`, `GET /me`. |
+| <a id="o35"></a>**O35** | **A login that is not linked to a person is refused (403) on any write that records who did it.** No "unknown" identity is ever written. | Built by [plan 02](../plans/02-login-person-link.md): `ICurrentPerson`, and the 403 `login-not-linked` problem. It used to record "unknown". |
 
 ---
 
