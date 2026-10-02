@@ -42,12 +42,12 @@ public class ManifestCompositionHandlerTests
         // who were not in the vehicle while the insurance covered somebody else.
         var crew = new[]
         {
-            new VehicleCrewReadModel(Driver, "Olena", "Kovalenko", JourneyLeg.Uk, CrewRole.Driver),
-            new VehicleCrewReadModel(Driver, "Olena", "Kovalenko", JourneyLeg.Border, CrewRole.Driver),
+            new VehicleCrewReadModel(Driver, "Olena", "Kovalenko", CrewRole.Driver),
+            new VehicleCrewReadModel(Guid.NewGuid(), "Taras", "Bondar", CrewRole.Passenger),
         };
         var repository = ARepositoryHolding(AManifest());
         var truckList = Substitute.For<IConvoyVehicleRepository>();
-        truckList.ListCrewAsync(ConvoyId, Vin, null, Arg.Any<CancellationToken>()).Returns(crew);
+        truckList.ListCrewAsync(ConvoyId, Vin, Arg.Any<CancellationToken>()).Returns(crew);
 
         var members = await new ListManifestCrewHandler(repository, truckList).HandleAsync(
             new ListManifestCrewQuery(Id), TestContext.Current.CancellationToken);
@@ -66,7 +66,7 @@ public class ManifestCompositionHandlerTests
 
         members.Should().BeNull();
         await truckList.DidNotReceive().ListCrewAsync(
-            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<JourneyLeg?>(), Arg.Any<CancellationToken>());
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

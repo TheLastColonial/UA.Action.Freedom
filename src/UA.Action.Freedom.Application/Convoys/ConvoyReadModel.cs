@@ -57,10 +57,7 @@ public sealed record RouteStopReadModel(
 /// border-check weight and to judge whether it is crewed, not the whole vehicle record.
 /// </summary>
 /// <remarks>
-/// The crew counts are per <see cref="JourneyLeg"/> because a vehicle is crewed twice: once out of
-/// the UK and once into Ukraine, with a handover at the border in between. A single count could
-/// not tell a fully crewed vehicle from one with nobody booked for the second half. A vehicle is
-/// ready for a leg with two <em>drivers</em> on it; passengers do not count towards that.
+/// A vehicle needs one <em>driver</em> and is advised two; passengers do not count towards either.
 ///
 /// <para>
 /// <see cref="WithdrawnAt"/> is set when the vehicle left the convoy mid-journey — a breakdown,
@@ -73,10 +70,8 @@ public sealed record ConvoyVehicleReadModel(
     string Vin,
     string Plate,
     int WeightKg,
-    int UkDriverCount,
-    int UkPassengerCount,
-    int BorderDriverCount,
-    int BorderPassengerCount,
+    int DriverCount,
+    int PassengerCount,
     DateTime? WithdrawnAt = null,
     string? WithdrawnReason = null)
 {
@@ -85,13 +80,10 @@ public sealed record ConvoyVehicleReadModel(
 
     /// <summary>Whether the vehicle has left the convoy.</summary>
     public bool Withdrawn => !this.Travelling;
-
-    /// <summary>The number of drivers crewing <paramref name="leg"/>.</summary>
-    public int DriversOn(JourneyLeg leg) => leg is JourneyLeg.Uk ? this.UkDriverCount : this.BorderDriverCount;
 }
 
 /// <summary>
-/// A crew member of a vehicle on one convoy, for one leg of the journey.
+/// A crew member of a vehicle on one convoy.
 /// </summary>
 /// <remarks>
 /// This is the only crew record in the system. The manifest used to keep its own primary/secondary
@@ -102,5 +94,4 @@ public sealed record VehicleCrewReadModel(
     Guid PersonId,
     string FirstName,
     string LastName,
-    JourneyLeg Leg,
     CrewRole Role);

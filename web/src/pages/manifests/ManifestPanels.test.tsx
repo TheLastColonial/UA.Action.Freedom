@@ -9,18 +9,18 @@ import { ManifestBoxesPanel } from './ManifestBoxesPanel';
 import { ManifestCrewPanel } from './ManifestCrewPanel';
 import { ManifestWeightPanel } from './ManifestWeightPanel';
 
-test('the crew panel reports who is travelling, split by leg', async () => {
+test('the crew panel reports who is travelling', async () => {
   const api = manifestApi([makeManifest({ id: 'T1', convoyId: 7, vin: 'VIN-1' })], {
     crewByManifest: new Map([
       [
         'T1',
         [
-          makeVehicleCrew({ personId: 'd1', firstName: 'Dana', lastName: 'Road', leg: 'Uk' }),
+          makeVehicleCrew({ personId: 'd1', firstName: 'Dana', lastName: 'Road' }),
           makeVehicleCrew({
             personId: 'd2',
             firstName: 'Taras',
             lastName: 'Shevchuk',
-            leg: 'Border',
+            role: 'Passenger',
           }),
         ],
       ],
@@ -35,8 +35,7 @@ test('the crew panel reports who is travelling, split by leg', async () => {
 
   await expect.element(screen.getByRole('cell', { name: 'Dana Road' })).toBeInTheDocument();
   await expect.element(screen.getByRole('cell', { name: 'Taras Shevchuk' })).toBeInTheDocument();
-  await expect.element(screen.getByText('UK to Europe leg')).toBeInTheDocument();
-  await expect.element(screen.getByText('Europe to Ukraine leg')).toBeInTheDocument();
+  await expect.element(screen.getByRole('cell', { name: 'Passenger' })).toBeInTheDocument();
 });
 
 test('the crew panel offers no way to crew from here and points at the convoy', async () => {
@@ -50,7 +49,7 @@ test('the crew panel offers no way to crew from here and points at the convoy', 
     { roles: ['Dispatcher'] },
   );
 
-  await expect.element(screen.getByText('Nobody crewing this leg yet').first()).toBeInTheDocument();
+  await expect.element(screen.getByText('Nobody crewing this vehicle yet')).toBeInTheDocument();
   await expect.element(screen.getByRole('button', { name: /Save/ })).not.toBeInTheDocument();
   await expect
     .element(screen.getByRole('link', { name: /manage the crew of VIN-1 on its convoy/ }))

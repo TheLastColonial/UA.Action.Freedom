@@ -381,8 +381,8 @@ public class ManifestEndpointTests
         var convoys = AConvoy()
             .WithPerson(Primary, "Olena", "Kovalenko")
             .WithPerson(Secondary, "Taras", "Shevchuk")
-            .WithCrew(Vin, Primary, JourneyLeg.Uk)
-            .WithCrew(Vin, Secondary, JourneyLeg.Border);
+            .WithCrew(Vin, Primary)
+            .WithCrew(Vin, Secondary, CrewRole.Passenger);
 
         await using var api = FreedomApi.WithManifests(
             new InMemoryManifestRepository(AManifest()), convoys, ARosterOfDrivers(),
@@ -394,16 +394,15 @@ public class ManifestEndpointTests
 
         var members = crew.EnumerateArray().ToList();
         members.Should().HaveCount(2);
-        members[0].GetProperty("leg").GetString().Should().Be("Uk");
         members[0].GetProperty("lastName").GetString().Should().Be("Kovalenko");
-        members[1].GetProperty("leg").GetString().Should().Be("Border");
-        members[1].GetProperty("role").GetString().Should().Be("Driver");
+        members[0].GetProperty("role").GetString().Should().Be("Driver");
+        members[1].GetProperty("role").GetString().Should().Be("Passenger");
     }
 
     [Fact]
     public async Task There_is_no_way_to_crew_a_manifest_directly()
     {
-        // PUT /manifests/{id}/teams/{leg} is gone. It wrote a second crew record that nothing
+        // PUT /manifests/{id}/teams is gone. It wrote a second crew record that nothing
         // reconciled with the convoy's, so a printed manifest could name people the insurance —
         // which is what actually gates departure — had never heard of.
         await using var api = FreedomApi.WithManifests(

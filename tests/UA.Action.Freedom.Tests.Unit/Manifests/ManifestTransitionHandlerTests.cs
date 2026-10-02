@@ -43,10 +43,16 @@ public class ManifestTransitionHandlerTests
         new(repository, convoys, (IConvoyVehicleRepository)convoys);
 
     private static VehicleInsuranceReadModel APolicy(
-        DateTime? coverStart = null, DateTime? coverEnd = null, DateTime? voidedAt = null) => new(
+        DateTime? coverStart = null,
+        DateTime? coverEnd = null,
+        DateTime? voidedAt = null,
+        IReadOnlyList<Guid>? uncoveredDrivers = null) => new(
         ConvoyId, Vin, "Ukraine Aid Mutual", "POL-1",
         coverStart ?? DateTime.UtcNow.Date.AddDays(-7), coverEnd ?? DateTime.UtcNow.Date.AddDays(30),
-        400m, "operator-sub", DateTime.UtcNow.AddDays(-7), voidedAt);
+        400m, "operator-sub", DateTime.UtcNow.AddDays(-7), voidedAt)
+    {
+        UncoveredDrivers = uncoveredDrivers ?? [],
+    };
 
     /// <summary>
     /// A convoy with its truck list published and the vehicle insured and in cover — the state
@@ -255,7 +261,8 @@ public class ManifestTransitionHandlerTests
     public static TheoryData<string, VehicleInsuranceReadModel?> UninsuredPolicies => new()
     {
         { "never recorded", null },
-        { "voided by a crew change", APolicy(voidedAt: DateTime.UtcNow.AddHours(-1)) },
+        { "voided", APolicy(voidedAt: DateTime.UtcNow.AddHours(-1)) },
+        { "a driver was added and not yet covered", APolicy(uncoveredDrivers: [Guid.NewGuid()]) },
         { "cover already ended", APolicy(coverEnd: DateTime.UtcNow.Date.AddDays(-1)) },
         { "cover not yet started", APolicy(coverStart: DateTime.UtcNow.Date.AddDays(1)) },
     };

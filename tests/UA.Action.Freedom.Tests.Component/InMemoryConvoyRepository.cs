@@ -15,9 +15,9 @@ namespace UA.Action.Freedom.Tests.Component;
 ///
 /// <para>
 /// <strong>Every rule here mirrors a statement in the SQL.</strong> The truck list keeps withdrawn
-/// vehicles; a person holds one seat per leg (<c>UQ_ConvoyVehicleCrew_Convoy_Person_Leg</c>); crew
+/// vehicles; a person holds one seat per convoy (<c>UQ_ConvoyVehicleCrew_Convoy_Person</c>); crew
 /// and insurance are cleared when a vehicle is removed before publication and kept when it is
-/// withdrawn after; a crew change voids the insurance; arrival ignores withdrawn vehicles and
+/// withdrawn after; removing a driver removes them from the policy and keeps it in cover, adding one leaves them uncovered until it is recorded again; arrival ignores withdrawn vehicles and
 /// releases nothing. A fake that is kinder than the SQL lets a test pass that production fails —
 /// this one returned <c>[]</c> where the SQL returned <c>null</c> once already.
 /// </para>
@@ -48,16 +48,19 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     /// <summary>Standing in for <c>dbo.ConvoyVehicle</c>.</summary>
     private readonly List<TruckListEntry> truckList = [];
 
-    private sealed record CrewSeat(int ConvoyId, string Vin, Guid PersonId, JourneyLeg Leg, CrewRole Role);
+    private sealed record CrewSeat(int ConvoyId, string Vin, Guid PersonId, CrewRole Role);
 
     /// <summary>
     /// Standing in for <c>dbo.ConvoyVehicleCrew</c>, keyed as the table is: one seat per person per
-    /// leg (<c>UQ_ConvoyVehicleCrew_Convoy_Person_Leg</c>).
+    /// convoy (<c>UQ_ConvoyVehicleCrew_Convoy_Person</c>).
     /// </summary>
     private readonly List<CrewSeat> crew = [];
 
     /// <summary>Standing in for <c>dbo.ConvoyVehicleInsurance</c>, keyed (ConvoyId, Vin).</summary>
     private readonly Dictionary<(int ConvoyId, string Vin), VehicleInsuranceReadModel> insurance = [];
+
+    /// <summary>Standing in for <c>dbo.ConvoyVehicleInsuranceDriver</c>: the drivers each policy names.</summary>
+    private readonly Dictionary<(int ConvoyId, string Vin), HashSet<Guid>> coveredDrivers = [];
 
     /// <summary>Names for the crew list, standing in for the join to <c>dbo.PersonDetail</c>.</summary>
     private readonly Dictionary<Guid, (string FirstName, string LastName)> persons = [];
@@ -96,11 +99,20 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         return this;
     }
 
-    public InMemoryConvoyRepository WithCrew(
-        string vin, Guid personId, JourneyLeg leg = JourneyLeg.Uk, CrewRole role = CrewRole.Driver)
+    /// <summary>
+    /// Seeds a seat as it stood when any policy was recorded: a driver seeded onto an insured vehicle
+    /// is covered. A test about an uncovered driver adds them through the API instead.
+    /// </summary>
+    public InMemoryConvoyRepository WithCrew(string vin, Guid personId, CrewRole role = CrewRole.Driver)
     {
-        crew.Add(new CrewSeat(
-            ConvoyOf(vin) ?? throw new InvalidOperationException($"{vin} is on no convoy."), vin, personId, leg, role));
+        var convoyId = ConvoyOf(vin) ?? throw new InvalidOperationException($"{vin} is on no convoy.");
+        crew.Add(new CrewSeat(convoyId, vin, personId, role));
+
+        if (role == CrewRole.Driver && coveredDrivers.TryGetValue((convoyId, vin.ToUpperInvariant()), out var covered))
+        {
+            covered.Add(personId);
+        }
+
         return this;
     }
 
@@ -130,11 +142,26 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     public InMemoryConvoyRepository WithInsurance(VehicleInsuranceReadModel policy)
     {
         insurance[(policy.ConvoyId, policy.Vin.ToUpperInvariant())] = policy;
+        coveredDrivers[(policy.ConvoyId, policy.Vin.ToUpperInvariant())] = DriversOf(policy.ConvoyId, policy.Vin);
         return this;
     }
 
-    public VehicleInsuranceReadModel? InsuranceOf(int convoyId, string vin) =>
-        insurance.GetValueOrDefault((convoyId, vin.ToUpperInvariant()));
+    public VehicleInsuranceReadModel? InsuranceOf(int convoyId, string vin)
+    {
+        var key = (convoyId, vin.ToUpperInvariant());
+        if (!insurance.TryGetValue(key, out var policy))
+        {
+            return null;
+        }
+
+        var covered = coveredDrivers.GetValueOrDefault(key) ?? [];
+        return policy with { UncoveredDrivers = DriversOf(convoyId, vin).Where(id => !covered.Contains(id)).ToList() };
+    }
+
+    private HashSet<Guid> DriversOf(int convoyId, string vin) =>
+        crew.Where(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin) && seat.Role == CrewRole.Driver)
+            .Select(seat => seat.PersonId)
+            .ToHashSet();
 
     public int Count => convoys.Count;
 
@@ -225,6 +252,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         foreach (var key in insurance.Keys.Where(key => key.ConvoyId == id).ToList())
         {
             insurance.Remove(key);
+            coveredDrivers.Remove(key);
         }
 
         truckList.RemoveAll(entry => entry.ConvoyId == id);
@@ -309,10 +337,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         entry.Vin,
         "AB12CDE",
         1_400,
-        CountOf(entry, JourneyLeg.Uk, CrewRole.Driver),
-        CountOf(entry, JourneyLeg.Uk, CrewRole.Passenger),
-        CountOf(entry, JourneyLeg.Border, CrewRole.Driver),
-        CountOf(entry, JourneyLeg.Border, CrewRole.Passenger),
+        CountOf(entry, CrewRole.Driver),
+        CountOf(entry, CrewRole.Passenger),
         entry.WithdrawnAt,
         entry.WithdrawnReason);
 
@@ -359,6 +385,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         // The crew and the insurance cascade from the truck-list row.
         crew.RemoveAll(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin));
         insurance.Remove((convoyId, vin.ToUpperInvariant()));
+        coveredDrivers.Remove((convoyId, vin.ToUpperInvariant()));
         truckList.RemoveAll(entry => entry.ConvoyId == convoyId && Same(entry.Vin, vin));
 
         return Task.FromResult(true);
@@ -382,7 +409,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     }
 
     public Task<IReadOnlyList<VehicleCrewReadModel>?> ListCrewAsync(
-        int convoyId, string vin, JourneyLeg? leg, CancellationToken cancellationToken)
+        int convoyId, string vin, CancellationToken cancellationToken)
     {
         if (EntryFor(convoyId, vin) is null)
         {
@@ -390,7 +417,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         }
 
         var members = crew
-            .Where(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin) && (leg is null || seat.Leg == leg))
+            .Where(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin))
             .Select(seat =>
             {
                 // LEFT JOIN: an erased volunteer keeps their seat in the history, but not their name.
@@ -398,10 +425,9 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
                     ? found
                     : ("Former", "volunteer");
 
-                return new VehicleCrewReadModel(seat.PersonId, firstName, lastName, seat.Leg, seat.Role);
+                return new VehicleCrewReadModel(seat.PersonId, firstName, lastName, seat.Role);
             })
-            .OrderBy(member => member.Leg)
-            .ThenBy(member => member.Role)
+            .OrderBy(member => member.Role)
             .ThenBy(member => member.LastName)
             .ThenBy(member => member.FirstName)
             .ToList();
@@ -410,10 +436,10 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     }
 
     public Task<AssignCrewResult> AssignCrewAsync(
-        int convoyId, string vin, Guid personId, JourneyLeg leg, CrewRole role, CancellationToken cancellationToken)
+        int convoyId, string vin, Guid personId, CrewRole role, CancellationToken cancellationToken)
     {
         var seat = crew.Find(existing =>
-            existing.ConvoyId == convoyId && existing.PersonId == personId && existing.Leg == leg);
+            existing.ConvoyId == convoyId && existing.PersonId == personId);
 
         if (seat is not null)
         {
@@ -427,20 +453,19 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
             return Task.FromResult(AssignCrewResult.VehicleNotOnConvoy);
         }
 
-        crew.Add(new CrewSeat(convoyId, vin, personId, leg, role));
-        VoidInsurance(convoyId, vin);
+        crew.Add(new CrewSeat(convoyId, vin, personId, role));
         return Task.FromResult(AssignCrewResult.Assigned);
     }
 
     public Task<bool> UnassignCrewAsync(
-        int convoyId, string vin, Guid personId, JourneyLeg leg, CancellationToken cancellationToken)
+        int convoyId, string vin, Guid personId, CancellationToken cancellationToken)
     {
         var removed = crew.RemoveAll(seat =>
-            seat.ConvoyId == convoyId && Same(seat.Vin, vin) && seat.PersonId == personId && seat.Leg == leg) > 0;
+            seat.ConvoyId == convoyId && Same(seat.Vin, vin) && seat.PersonId == personId) > 0;
 
-        if (removed)
+        if (removed && coveredDrivers.TryGetValue((convoyId, vin.ToUpperInvariant()), out var covered))
         {
-            VoidInsurance(convoyId, vin);
+            covered.Remove(personId);
         }
 
         return Task.FromResult(removed);
@@ -460,20 +485,19 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         insurance[(policy.ConvoyId, policy.Vin.ToUpperInvariant())] = new VehicleInsuranceReadModel(
             policy.ConvoyId, policy.Vin, policy.Insurer, policy.PolicyNumber, policy.CoverStart, policy.CoverEnd,
             policy.CostGbp, policy.RecordedBy, DateTime.UtcNow, VoidedAt: null);
+        coveredDrivers[(policy.ConvoyId, policy.Vin.ToUpperInvariant())] = DriversOf(policy.ConvoyId, policy.Vin);
         return Task.FromResult(true);
     }
 
     public Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken) =>
-        Task.FromResult(insurance.Remove((convoyId, vin.ToUpperInvariant())));
+        Task.FromResult(RemovePolicy(convoyId, vin));
 
     // ---- helpers ------------------------------------------------------------------------------
 
-    private void VoidInsurance(int convoyId, string vin)
+    private bool RemovePolicy(int convoyId, string vin)
     {
-        if (InsuranceOf(convoyId, vin) is { VoidedAt: null } policy)
-        {
-            insurance[(convoyId, vin.ToUpperInvariant())] = policy with { VoidedAt = DateTime.UtcNow };
-        }
+        coveredDrivers.Remove((convoyId, vin.ToUpperInvariant()));
+        return insurance.Remove((convoyId, vin.ToUpperInvariant()));
     }
 
     private TruckListEntry? EntryFor(int convoyId, string vin) =>
@@ -488,9 +512,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
             .Select(entry => entry.Vin)
             .ToList();
 
-    private int CountOf(TruckListEntry entry, JourneyLeg leg, CrewRole role) =>
-        crew.Count(seat =>
-            seat.ConvoyId == entry.ConvoyId && Same(seat.Vin, entry.Vin) && seat.Leg == leg && seat.Role == role);
+    private int CountOf(TruckListEntry entry, CrewRole role) =>
+        crew.Count(seat => seat.ConvoyId == entry.ConvoyId && Same(seat.Vin, entry.Vin) && seat.Role == role);
 
     private static bool Same(string left, string right) =>
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);

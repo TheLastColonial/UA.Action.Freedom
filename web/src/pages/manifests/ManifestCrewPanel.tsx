@@ -1,7 +1,6 @@
 import type { JSX } from 'react';
 
 import { useManifestCrew } from '../../api/manifests';
-import { journeyLegLabels, journeyLegSchema } from '../../api/schemas/common';
 import type { VehicleCrewReadModel } from '../../api/schemas/convoys';
 import { DataTable } from '../../components/DataTable';
 import { Spinner } from '../../components/Spinner';
@@ -16,7 +15,7 @@ const fullName = (member: { firstName: string; lastName: string }) =>
   `${member.firstName} ${member.lastName}`;
 
 /**
- * Who is travelling with this manifest's vehicle, per leg.
+ * Who is travelling with this manifest's vehicle.
  *
  * Read-only on purpose. Crewing happens once, on the convoy's truck-list entry, and this reports
  * it — the manifest used to keep its own driver teams, written here, connected to the convoy's
@@ -47,19 +46,16 @@ export function ManifestCrewPanel({
         <a href={`/convoys/${String(convoyId)}`}>manage the crew of {vin} on its convoy</a>.
       </p>
 
-      {journeyLegSchema.options.map((leg) => (
-        <DataTable<VehicleCrewReadModel>
-          key={leg}
-          caption={`${journeyLegLabels[leg]} leg`}
-          columns={[
-            { header: 'Name', cell: fullName },
-            { header: 'Role', cell: (member) => member.role },
-          ]}
-          rows={crew.filter((member) => member.leg === leg)}
-          rowKey={(member) => member.personId}
-          emptyMessage="Nobody crewing this leg yet"
-        />
-      ))}
+      <DataTable<VehicleCrewReadModel>
+        caption="Crew"
+        columns={[
+          { header: 'Name', cell: fullName },
+          { header: 'Role', cell: (member) => member.role },
+        ]}
+        rows={crew}
+        rowKey={(member) => member.personId}
+        emptyMessage="Nobody crewing this vehicle yet"
+      />
     </section>
   );
 }

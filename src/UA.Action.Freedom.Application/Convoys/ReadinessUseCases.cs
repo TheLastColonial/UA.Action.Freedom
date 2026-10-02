@@ -3,21 +3,14 @@ using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Convoys;
 
-/// <summary>Whether one leg of one vehicle's journey is crewed, and if not, why.</summary>
-public sealed record VehicleLegReadinessReadModel(
-    JourneyLeg Leg,
-    int Drivers,
-    bool Ready,
-    IReadOnlyList<string> Reasons);
-
 /// <summary>Whether one vehicle on a convoy is ready to travel, and if not, why.</summary>
 public sealed record VehicleReadinessReadModel(
     string Vin,
     string Plate,
     bool Insured,
     bool Ready,
-    IReadOnlyList<VehicleLegReadinessReadModel> Legs,
-    IReadOnlyList<string> Reasons);
+    IReadOnlyList<string> Reasons,
+    IReadOnlyList<string> Advisories);
 
 /// <summary>Whether a convoy is ready to travel, and if not, why. Advisory: nothing is blocked by it.</summary>
 public sealed record ConvoyReadinessReadModel(
@@ -30,16 +23,11 @@ public sealed record ConvoyReadinessReadModel(
 /// The readiness rules, as one pure function so they can be read and tested in one place.
 /// </summary>
 /// <remarks>
-/// A vehicle is ready when every leg has at least <see cref="DriversNeeded"/> drivers — passengers
-/// do not count — and its insurance is recorded, not voided by a crew change, and in cover on the
-/// day the convoy departs. A convoy is ready when it has a route, has vehicles still travelling
-/// with it, and every one of them is ready.
-///
-/// <para>
-/// Crew is asked for per leg because a vehicle is crewed twice, with a handover at the European
-/// border in between: fully crewed out of the UK with nobody booked to take it into Ukraine is not
-/// ready, and a single count could not say so.
-/// </para>
+/// A vehicle is ready when it has at least <see cref="DriversRequired"/> driver — passengers do not
+/// count — and its insurance is recorded, not voided, in cover on the day the convoy departs and
+/// names every driver. <see cref="DriversAdvised"/> drivers are advised; fewer is an advisory, not a
+/// reason. A convoy is ready when it has a route, has vehicles still travelling with it, and every
+/// one of them is ready.
 ///
 /// <para>
 /// A withdrawn vehicle is skipped entirely rather than reported as unready. It broke down and left;
@@ -49,10 +37,9 @@ public sealed record ConvoyReadinessReadModel(
 /// </remarks>
 public static class ConvoyReadiness
 {
-    public const int DriversNeeded = 2;
+    public const int DriversRequired = 1;
 
-    /// <summary>The legs of the journey, in the order they are driven.</summary>
-    private static readonly JourneyLeg[] Legs = [JourneyLeg.Uk, JourneyLeg.Border];
+    public const int DriversAdvised = 2;
 
     public static ConvoyReadinessReadModel Assess(
         DateTime departs,
@@ -79,44 +66,28 @@ public static class ConvoyReadiness
     private static VehicleReadinessReadModel AssessVehicle(
         DateTime departs, ConvoyVehicleReadModel vehicle, VehicleInsuranceReadModel? policy)
     {
-        var legs = Legs.Select(leg => AssessLeg(leg, vehicle.DriversOn(leg))).ToList();
-
         var insuranceProblem = policy switch
         {
             null => "Insurance not recorded",
-            { Voided: true } => "Insurance voided by a crew change",
+            { Voided: true } => "Insurance voided",
             _ when !policy.CoversOn(departs) => "Insurance does not cover the departure date",
+            { CoversAllDrivers: false } => "Insurance does not cover every driver",
             _ => null,
         };
 
         string[] reasons =
         [
-            .. legs.SelectMany(leg => leg.Reasons),
+            .. vehicle.DriverCount >= DriversRequired ? [] : new[] { "No driver assigned" },
             .. insuranceProblem is null ? [] : new[] { insuranceProblem },
         ];
 
+        string[] advisories = vehicle.DriverCount is >= DriversRequired and < DriversAdvised
+            ? ["Only one driver; two are advised"]
+            : [];
+
         return new VehicleReadinessReadModel(
-            vehicle.Vin, vehicle.Plate, insuranceProblem is null, reasons.Length == 0, legs, reasons);
+            vehicle.Vin, vehicle.Plate, insuranceProblem is null, reasons.Length == 0, reasons, advisories);
     }
-
-    private static VehicleLegReadinessReadModel AssessLeg(JourneyLeg leg, int drivers)
-    {
-        string[] reasons = drivers >= DriversNeeded
-            ? []
-            : [$"Fewer than two drivers on the {Describe(leg)} leg"];
-
-        return new VehicleLegReadinessReadModel(leg, drivers, reasons.Length == 0, reasons);
-    }
-
-    /// <summary>
-    /// The leg as a dispatcher would say it out loud. The enum names are for code; a reason shown
-    /// on the convoy overview has to name the half of the journey somebody has to crew.
-    /// </summary>
-    private static string Describe(JourneyLeg leg) => leg switch
-    {
-        JourneyLeg.Uk => "UK to Europe",
-        _ => "Europe to Ukraine",
-    };
 }
 
 public sealed record GetConvoyReadinessQuery(int ConvoyId);

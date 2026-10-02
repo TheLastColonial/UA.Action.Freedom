@@ -4,8 +4,8 @@ import { useConvoyReadiness } from '../../api/convoys';
 import { DetailCard } from '../../components/DetailCard';
 
 /**
- * Whether the convoy is ready to travel, and what is missing if not: two drivers and insurance
- * for each vehicle, and a route. Advisory — it blocks nothing.
+ * Whether the convoy is ready to travel, and what is missing if not: a driver and insurance
+ * naming every driver for each vehicle, and a route. Advisory — it blocks nothing.
  */
 export function ConvoyReadinessPanel({ convoyId }: { convoyId: number }): JSX.Element {
   const query = useConvoyReadiness(convoyId);

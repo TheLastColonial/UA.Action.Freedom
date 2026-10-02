@@ -1,7 +1,7 @@
 namespace UA.Action.Freedom.Domain;
 
 /// <summary>
-/// A <see cref="Person"/> who drives a leg of a <see cref="Convoy"/>
+/// A <see cref="Person"/> who drives a vehicle on a <see cref="Convoy"/>
 /// </summary>
 /// <remarks>
 /// Which convoys a driver has been on is not a field here: it is the set of crew rows naming them,

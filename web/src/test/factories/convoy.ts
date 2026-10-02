@@ -41,10 +41,8 @@ export function makeConvoyVehicle(
     vin: 'VIN-CONVOY-1',
     plate: 'AB12 CDE',
     weightKg: 2000,
-    ukDriverCount: 0,
-    ukPassengerCount: 0,
-    borderDriverCount: 0,
-    borderPassengerCount: 0,
+    driverCount: 0,
+    passengerCount: 0,
     withdrawnAt: null,
     withdrawnReason: null,
     travelling: true,
@@ -73,7 +71,6 @@ export function makeVehicleCrew(
     personId: 'driver-1',
     firstName: 'Olena',
     lastName: 'Bondar',
-    leg: 'Uk',
     role: 'Driver',
     ...overrides,
   };
@@ -94,6 +91,8 @@ export function makeInsurance(
     recordedAt: '2026-08-24T12:00:00',
     voidedAt: null,
     voided: false,
+    uncoveredDrivers: [],
+    coversAllDrivers: true,
     ...overrides,
   };
 }

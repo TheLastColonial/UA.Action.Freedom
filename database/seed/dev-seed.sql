@@ -81,12 +81,10 @@ INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin)
 VALUES (@convoy, 'SEEDVIN0000000001'),
        (@convoy, 'SEEDVIN0000000002');
 
--- Crew, per leg: the same pair drives both legs of the Transit, which is the ordinary case. Role 0
--- is Driver. Leg 0 is UK to Europe, 1 is Europe to Ukraine.
-INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, Leg, [Role])
-SELECT @convoy, 'SEEDVIN0000000001', p.Id, l.Leg, 0
-FROM (SELECT TOP 2 Id FROM @people WHERE IsDriver = 1 ORDER BY LastName) AS p
-CROSS JOIN (VALUES (0), (1)) AS l (Leg);
+-- Crew: one seat per person per convoy. Role 0 is Driver.
+INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, [Role])
+SELECT @convoy, 'SEEDVIN0000000001', p.Id, 0
+FROM (SELECT TOP 2 Id FROM @people WHERE IsDriver = 1 ORDER BY LastName) AS p;
 
 -- Boxes waiting at the Coventry depot, not yet validated.
 INSERT INTO dbo.Box (WeightKg, LocationId) VALUES (12, @coventry), (8, @coventry), (15, @london);

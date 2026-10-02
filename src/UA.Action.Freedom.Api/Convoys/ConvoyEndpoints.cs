@@ -226,11 +226,10 @@ public static class ConvoyEndpoints
         convoys.MapGet("/{id:int}/vehicles/{vin}/crew", async (
             int id,
             string vin,
-            JourneyLeg? leg,
             IQueryHandler<ListVehicleCrewQuery, IReadOnlyList<VehicleCrewReadModel>?> handler,
             CancellationToken cancellationToken) =>
         {
-            var crew = await handler.HandleAsync(new ListVehicleCrewQuery(id, vin, leg), cancellationToken);
+            var crew = await handler.HandleAsync(new ListVehicleCrewQuery(id, vin), cancellationToken);
             return crew is null ? Results.NotFound() : Results.Ok(crew);
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
@@ -243,11 +242,9 @@ public static class ConvoyEndpoints
             ICommandHandler<AssignCrewToVehicleCommand, AssignCrewOutcome> handler,
             CancellationToken cancellationToken) =>
         {
-            // The leg is required — a vehicle is crewed twice, once out of the UK and once into
-            // Ukraine, and there is no sensible default for which half somebody is driving. The
-            // role is optional and means Driver, which is what most crewing is.
+            // The role is optional and means Driver, which is what most crewing is.
             var outcome = await handler.HandleAsync(
-                new AssignCrewToVehicleCommand(id, vin, personId, request.Leg, request.Role ?? CrewRole.Driver),
+                new AssignCrewToVehicleCommand(id, vin, personId, request.Role ?? CrewRole.Driver),
                 cancellationToken);
 
             return outcome switch
@@ -268,10 +265,10 @@ public static class ConvoyEndpoints
                     detail: $"Vehicle '{vin}' has been withdrawn from this convoy, so its crew can no longer change.",
                     statusCode: StatusCodes.Status409Conflict),
                 AssignCrewOutcome.OnAnotherVehicle => Results.Problem(
-                    detail: "That volunteer is already crewing another vehicle on this leg. A person takes one seat per leg.",
+                    detail: "That volunteer is already crewing another vehicle on this convoy. A person takes one seat per convoy.",
                     statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Problem(
-                    detail: "That volunteer is already crewing this vehicle on this leg.",
+                    detail: "That volunteer is already crewing this vehicle.",
                     statusCode: StatusCodes.Status409Conflict),
             };
         })
@@ -282,12 +279,11 @@ public static class ConvoyEndpoints
             int id,
             string vin,
             Guid personId,
-            JourneyLeg leg,
             ICommandHandler<UnassignCrewFromVehicleCommand, UnassignCrewOutcome> handler,
             CancellationToken cancellationToken) =>
         {
             var outcome = await handler.HandleAsync(
-                new UnassignCrewFromVehicleCommand(id, vin, personId, leg), cancellationToken);
+                new UnassignCrewFromVehicleCommand(id, vin, personId), cancellationToken);
 
             return outcome switch
             {

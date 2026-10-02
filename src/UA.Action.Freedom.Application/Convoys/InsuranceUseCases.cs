@@ -17,7 +17,7 @@ public sealed record VehicleInsuranceRecord(
     decimal? CostGbp,
     string RecordedBy);
 
-/// <summary>A vehicle's insurance for one convoy, as stored — including whether a crew change voided it.</summary>
+/// <summary>A vehicle's insurance for one convoy, as stored, with the drivers it does not yet name.</summary>
 public sealed record VehicleInsuranceReadModel(
     int ConvoyId,
     string Vin,
@@ -30,6 +30,11 @@ public sealed record VehicleInsuranceReadModel(
     DateTime RecordedAt,
     DateTime? VoidedAt)
 {
+    /// <summary>Drivers on the crew whom the policy does not name. Empty when it covers them all.</summary>
+    public IReadOnlyList<Guid> UncoveredDrivers { get; init; } = [];
+
+    public bool CoversAllDrivers => UncoveredDrivers.Count == 0;
+
     public bool Voided => VoidedAt is not null;
 
     public bool CoversOn(DateTime day) => VehicleInsurance.InCover(CoverStart, CoverEnd, VoidedAt, day);
@@ -46,8 +51,8 @@ public enum RecordInsuranceOutcome
 }
 
 /// <summary>
-/// Record (or replace) a vehicle's insurance for a convoy. Recording again after a crew change is
-/// how a voided policy is renewed, so a replacement clears <c>VoidedAt</c>.
+/// Record (or replace) a vehicle's insurance for a convoy. Recording it again names every current
+/// driver, and a replacement clears <c>VoidedAt</c>.
 /// </summary>
 public sealed class RecordInsuranceHandler(IConvoyRepository convoys, IConvoyVehicleRepository truckList)
     : ICommandHandler<RecordInsuranceCommand, RecordInsuranceOutcome>

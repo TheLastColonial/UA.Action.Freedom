@@ -9,8 +9,6 @@ import {
 } from '../../api/convoys';
 import { usePeople } from '../../api/people';
 import { ApiDomainProblem } from '../../api/problem';
-import { journeyLegLabels, journeyLegSchema } from '../../api/schemas/common';
-import type { JourneyLeg } from '../../api/schemas/common';
 import { crewRoleSchema } from '../../api/schemas/convoys';
 import type {
   ConvoyVehicleReadModel,
@@ -85,16 +83,8 @@ interface VehicleCrewProps {
 
 const ROLE_OPTIONS = crewRoleSchema.options.map((role) => ({ value: role, label: role }));
 
-// A vehicle is crewed twice, with a handover at the European border, so the leg is part of every
-// assignment rather than something the form can leave out.
-const LEG_OPTIONS = journeyLegSchema.options.map((leg) => ({
-  value: leg,
-  label: journeyLegLabels[leg],
-}));
-
 function VehicleCrew({ convoyId, vehicle, volunteers }: VehicleCrewProps): JSX.Element {
   const crewQuery = useVehicleCrew(convoyId, vehicle.vin);
-  const [leg, setLeg] = useState<JourneyLeg>('Uk');
   const [role, setRole] = useState<CrewRole>('Driver');
   const [selected, setSelected] = useState('');
   const assign = useAssignCrew(convoyId, vehicle.vin);
@@ -108,13 +98,11 @@ function VehicleCrew({ convoyId, vehicle, volunteers }: VehicleCrewProps): JSX.E
   }
 
   const crew = 'parentMissing' in crewQuery.data ? [] : crewQuery.data;
-  // One seat per person per leg: somebody crewing the UK leg is still free for the border one.
-  const seatedOnThisLeg = new Set(
-    crew.filter((member) => member.leg === leg).map((member) => member.personId),
-  );
+  // One seat per person per convoy. The API refuses somebody already crewing another vehicle.
+  const seated = new Set(crew.map((member) => member.personId));
   // A driver must be registered to drive; a passenger can be any volunteer.
   const eligible = volunteers.filter(
-    (person) => !seatedOnThisLeg.has(person.id) && (role === 'Passenger' || person.isDriver),
+    (person) => !seated.has(person.id) && (role === 'Passenger' || person.isDriver),
   );
   const noun = role === 'Driver' ? 'driver' : 'passenger';
   const options = [
@@ -129,7 +117,6 @@ function VehicleCrew({ convoyId, vehicle, volunteers }: VehicleCrewProps): JSX.E
         caption={`Crew for ${vehicle.plate}`}
         columns={[
           { header: 'Name', cell: fullName },
-          { header: 'Leg', cell: (member) => journeyLegLabels[member.leg] },
           { header: 'Role', cell: (member) => member.role },
           {
             header: 'Action',
@@ -137,10 +124,10 @@ function VehicleCrew({ convoyId, vehicle, volunteers }: VehicleCrewProps): JSX.E
               <Gate policy="convoys:assign-drivers">
                 <Button
                   variant="secondary"
-                  aria-label={`Remove ${fullName(member)} from the ${journeyLegLabels[member.leg]} leg`}
+                  aria-label={`Remove ${fullName(member)} from ${vehicle.plate}`}
                   disabled={unassign.isPending}
                   onClick={() => {
-                    unassign.mutate({ personId: member.personId, leg: member.leg });
+                    unassign.mutate({ personId: member.personId });
                   }}
                 >
                   Remove
@@ -150,7 +137,7 @@ function VehicleCrew({ convoyId, vehicle, volunteers }: VehicleCrewProps): JSX.E
           },
         ]}
         rows={crew}
-        rowKey={(member) => `${member.personId}:${member.leg}`}
+        rowKey={(member) => member.personId}
         emptyMessage="No crew assigned yet"
       />
 
@@ -161,7 +148,7 @@ function VehicleCrew({ convoyId, vehicle, volunteers }: VehicleCrewProps): JSX.E
             event.preventDefault();
             if (selected) {
               assign.mutate(
-                { personId: selected, leg, role },
+                { personId: selected, role },
                 {
                   onSuccess: () => {
                     setSelected('');
@@ -171,16 +158,6 @@ function VehicleCrew({ convoyId, vehicle, volunteers }: VehicleCrewProps): JSX.E
             }
           }}
         >
-          <SelectField
-            label={`Leg for ${vehicle.plate}`}
-            value={leg}
-            onChange={(event) => {
-              setLeg(journeyLegSchema.parse(event.target.value));
-              setSelected('');
-            }}
-            options={LEG_OPTIONS}
-            disabled={assign.isPending}
-          />
           <SelectField
             label={`Role on ${vehicle.plate}`}
             value={role}

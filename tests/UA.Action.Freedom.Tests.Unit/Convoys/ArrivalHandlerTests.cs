@@ -93,16 +93,16 @@ public class ArrivalHandlerTests
         people.GetByIdAsync(PersonTestData.Id, Arg.Any<CancellationToken>()).Returns(PersonTestData.AReadModel(isDriver: true));
 
         var assign = await new AssignCrewToVehicleHandler(repository, truckList, people).HandleAsync(
-            new AssignCrewToVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id, JourneyLeg.Uk),
+            new AssignCrewToVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id),
             TestContext.Current.CancellationToken);
         var unassign = await new UnassignCrewFromVehicleHandler(repository, truckList).HandleAsync(
-            new UnassignCrewFromVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id, JourneyLeg.Uk),
+            new UnassignCrewFromVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id),
             TestContext.Current.CancellationToken);
 
         assign.Should().Be(AssignCrewOutcome.ConvoyArrived);
         unassign.Should().Be(UnassignCrewOutcome.ConvoyArrived);
         await truckList.DidNotReceive().AssignCrewAsync(
-            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<JourneyLeg>(), Arg.Any<CrewRole>(),
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CrewRole>(),
             Arg.Any<CancellationToken>());
     }
 

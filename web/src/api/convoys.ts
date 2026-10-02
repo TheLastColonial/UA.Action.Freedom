@@ -7,7 +7,6 @@ import { delete204, getCollection, getJson, postCreate, postTransition, put204 }
 import { ApiNotFound } from './problem';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
-import type { JourneyLeg } from './schemas/common';
 import type { CreateConvoyVehicleManifestRequest } from './schemas/manifests';
 import {
   convoyReadModelSchema,
@@ -94,29 +93,23 @@ export function fetchVehicleCrew(
 
 export interface CrewAssignment {
   personId: string;
-  leg: JourneyLeg;
   role: CrewRole;
 }
 
 export function assignCrew(
   id: number,
   vin: string,
-  { personId, leg, role }: CrewAssignment,
+  { personId, role }: CrewAssignment,
 ): Promise<void> {
-  return put204(`${vinPath(id, vin)}/crew/${encodeURIComponent(personId)}`, { leg, role });
+  return put204(`${vinPath(id, vin)}/crew/${encodeURIComponent(personId)}`, { role });
 }
 
 export interface CrewRemoval {
   personId: string;
-  leg: JourneyLeg;
 }
 
-export function unassignCrew(
-  id: number,
-  vin: string,
-  { personId, leg }: CrewRemoval,
-): Promise<void> {
-  return delete204(`${vinPath(id, vin)}/crew/${encodeURIComponent(personId)}?leg=${leg}`);
+export function unassignCrew(id: number, vin: string, { personId }: CrewRemoval): Promise<void> {
+  return delete204(`${vinPath(id, vin)}/crew/${encodeURIComponent(personId)}`);
 }
 
 // A manifest is the paperwork for one vehicle on one convoy, so it is opened here rather than

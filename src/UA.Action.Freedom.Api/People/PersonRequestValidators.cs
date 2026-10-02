@@ -23,7 +23,7 @@ public sealed class CreatePersonRequestValidator : AbstractValidator<CreatePerso
         RuleFor(r => r.Joined).GreaterThan(PersonDates.Earliest)
             .WithMessage("'Joined' is not a plausible date.");
 
-        // Commitment is a commitment to drive a leg of a convoy. A volunteer who does not drive
+        // Commitment is a commitment to drive on a convoy. A volunteer who does not drive
         // cannot be committed to one, and letting the two disagree would put someone on the
         // dispatcher's driver shortlist who never agreed to drive.
         RuleFor(r => r.Committed).Must((request, committed) => !committed || request.IsDriver)

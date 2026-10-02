@@ -426,7 +426,7 @@ public class ConvoyEndpointTests
             using var client = dispatcher.CreateClient();
 
             var response = await client.PutAsJsonAsync(
-                $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { leg = "Uk" }, TestContext.Current.CancellationToken);
+                $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
 
             response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         }
@@ -441,7 +441,7 @@ public class ConvoyEndpointTests
 
         crew.EnumerateArray().Should().ContainSingle()
             .Which.GetProperty("personId").GetGuid().Should().Be(DriverId);
-        vehicles.EnumerateArray().Single().GetProperty("ukDriverCount").GetInt32().Should().Be(1);
+        vehicles.EnumerateArray().Single().GetProperty("driverCount").GetInt32().Should().Be(1);
     }
 
     [Theory]
@@ -456,9 +456,9 @@ public class ConvoyEndpointTests
         using var client = api.CreateClient();
 
         var assign = await client.PutAsJsonAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{Guid.NewGuid()}", new { leg = "Uk" }, TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{Guid.NewGuid()}", new { }, TestContext.Current.CancellationToken);
         var unassign = await client.DeleteAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}?leg=Uk", TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", TestContext.Current.CancellationToken);
 
         assign.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         unassign.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -473,7 +473,7 @@ public class ConvoyEndpointTests
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { leg = "Uk" }, TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -486,7 +486,7 @@ public class ConvoyEndpointTests
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { leg = "Uk" }, TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
@@ -500,15 +500,15 @@ public class ConvoyEndpointTests
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { leg = "Uk", role = "Passenger" }, TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { role = "Passenger" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         var crew = await client.GetFromJsonAsync<JsonElement>(
             $"/convoys/{Id}/vehicles/{Vin}/crew", TestContext.Current.CancellationToken);
         crew.EnumerateArray().Single().GetProperty("role").GetString().Should().Be("Passenger");
         var vehicles = await client.GetFromJsonAsync<JsonElement>($"/convoys/{Id}/vehicles", TestContext.Current.CancellationToken);
-        vehicles.EnumerateArray().Single().GetProperty("ukDriverCount").GetInt32().Should().Be(0);
-        vehicles.EnumerateArray().Single().GetProperty("ukPassengerCount").GetInt32().Should().Be(1);
+        vehicles.EnumerateArray().Single().GetProperty("driverCount").GetInt32().Should().Be(0);
+        vehicles.EnumerateArray().Single().GetProperty("passengerCount").GetInt32().Should().Be(1);
     }
 
     [Fact]
@@ -520,11 +520,11 @@ public class ConvoyEndpointTests
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { leg = "Uk" }, TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-        problem.GetProperty("detail").GetString().Should().Contain("another vehicle on this leg");
+        problem.GetProperty("detail").GetString().Should().Contain("another vehicle on this convoy");
         repository.CrewIdsOf(Id, Vin).Should().BeEmpty();
     }
 
@@ -537,7 +537,7 @@ public class ConvoyEndpointTests
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { leg = "Uk" }, TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
         repository.CrewIdsOf(Id, Vin).Should().BeEmpty();
@@ -550,7 +550,7 @@ public class ConvoyEndpointTests
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { leg = "Uk" }, TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -563,9 +563,9 @@ public class ConvoyEndpointTests
         using var client = api.CreateClient();
 
         var response = await client.DeleteAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}?leg=Uk", TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", TestContext.Current.CancellationToken);
         var again = await client.DeleteAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}?leg=Uk", TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         again.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -695,18 +695,51 @@ public class ConvoyEndpointTests
     }
 
     [Fact]
-    public async Task Changing_the_crew_after_insuring_voids_the_insurance()
+    public async Task Adding_a_driver_after_insuring_leaves_them_uncovered_and_the_policy_in_cover()
     {
         var repository = AConvoyWithAVehicleOnIt();
         await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
         using var client = api.CreateClient();
         await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
 
-        await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { leg = "Uk" }, TestContext.Current.CancellationToken);
+        await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
 
         var policy = await client.GetFromJsonAsync<JsonElement>(
             $"/convoys/{Id}/vehicles/{Vin}/insurance", TestContext.Current.CancellationToken);
-        policy.GetProperty("voided").GetBoolean().Should().BeTrue();
+        policy.GetProperty("voided").GetBoolean().Should().BeFalse();
+        policy.GetProperty("uncoveredDrivers").EnumerateArray().Select(id => id.GetGuid()).Should().Equal(DriverId);
+    }
+
+    [Fact]
+    public async Task Removing_a_driver_keeps_the_policy_in_cover_for_the_rest()
+    {
+        var repository = AConvoyWithAVehicleOnIt().WithCrew(Vin, DriverId);
+        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        using var client = api.CreateClient();
+        await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+
+        await client.DeleteAsync($"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", TestContext.Current.CancellationToken);
+
+        var policy = await client.GetFromJsonAsync<JsonElement>(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", TestContext.Current.CancellationToken);
+        policy.GetProperty("voided").GetBoolean().Should().BeFalse();
+        policy.GetProperty("uncoveredDrivers").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Recording_the_insurance_again_covers_every_driver()
+    {
+        var repository = AConvoyWithAVehicleOnIt();
+        await using var api = FreedomApi.WithConvoys(repository, new InMemoryPersonRepository(APerson(DriverId)), roles: "Dispatcher");
+        using var client = api.CreateClient();
+        await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+        await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
+
+        await client.PutAsJsonAsync($"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
+
+        var policy = await client.GetFromJsonAsync<JsonElement>(
+            $"/convoys/{Id}/vehicles/{Vin}/insurance", TestContext.Current.CancellationToken);
+        policy.GetProperty("uncoveredDrivers").GetArrayLength().Should().Be(0);
     }
 
     [Fact]
@@ -810,7 +843,7 @@ public class ConvoyEndpointTests
         using var client = api.CreateClient();
 
         var crew = await client.PutAsJsonAsync(
-            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { leg = "Uk" }, TestContext.Current.CancellationToken);
+            $"/convoys/{Id}/vehicles/{Vin}/crew/{DriverId}", new { }, TestContext.Current.CancellationToken);
         var insurance = await client.PutAsJsonAsync(
             $"/convoys/{Id}/vehicles/{Vin}/insurance", AnInsuranceBody(), TestContext.Current.CancellationToken);
 
@@ -837,20 +870,11 @@ public class ConvoyEndpointTests
         vehicle.GetProperty("vin").GetString().Should().Be(Vin);
         vehicle.GetProperty("insured").GetBoolean().Should().BeFalse();
 
-        // Crewed for one leg only. The reasons name the half of the journey somebody still has to
-        // find drivers for — a single count could not say which.
+        // One driver is enough to be ready; the advisory says a second is wanted.
         vehicle.GetProperty("reasons").EnumerateArray().Select(reason => reason.GetString())
-            .Should().Equal(
-                "Fewer than two drivers on the UK to Europe leg",
-                "Fewer than two drivers on the Europe to Ukraine leg",
-                "Insurance not recorded");
-
-        var legs = vehicle.GetProperty("legs").EnumerateArray().ToList();
-        legs.Should().HaveCount(2);
-        legs[0].GetProperty("leg").GetString().Should().Be("Uk");
-        legs[0].GetProperty("drivers").GetInt32().Should().Be(1);
-        legs[1].GetProperty("leg").GetString().Should().Be("Border");
-        legs[1].GetProperty("drivers").GetInt32().Should().Be(0);
+            .Should().Equal("Insurance not recorded");
+        vehicle.GetProperty("advisories").EnumerateArray().Select(reason => reason.GetString())
+            .Should().Equal("Only one driver; two are advised");
     }
 
     [Fact]

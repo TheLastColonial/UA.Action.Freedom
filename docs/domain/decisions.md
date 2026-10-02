@@ -260,14 +260,12 @@ per-vehicle anchor.
 |---|---|---|
 | `Manifest` | cargo, GMR, ELO, ENS, ferry and status | load sign-off only. Documents are generated. |
 | Boxes | `ManifestBox` | allocation to the truck-list entry |
-| Crew | one seat per person per **leg** | one seat per person per vehicle per convoy |
 | Ferry booking | status on the manifest | per-vehicle outbound booking with reference and ticket details |
 | Accommodation, fuel | not modelled | per-person stays linked to route points; fuel budget and entries |
 | Customs | GMR, ELO and ENS as special cases | one `Declaration` shape |
 | Readiness | advisory: route, crew, insurance | requirement checklist, with blocking requirements |
 | Delivery | manifest status | per box, rolled up per vehicle |
 | Convoy Leader | not modelled | one per convoy, with a scoped checklist page |
-| Insurance | any crew change voids it | only a **new driver** needs it updated ([O7](#o7)) |
 | Box outcomes | delivered, lost or returned | delivered, accepted, seized, returned to a hub, or undeliverable ([O2](#o2), [O5](#o5), [O9](#o9)) |
 | Convoy end | arrival | arrival, then closing with a report ([O10](#o10)) |
 | Budget | not modelled | a budget line per cost type, with actuals ([O12](#o12)) |
@@ -276,13 +274,6 @@ per-vehicle anchor.
 | Item classification | free text and properties | category, mapped to each authority's codes ([O16](#o16)) |
 | Label | one language | English and Ukrainian ([O17](#o17)) |
 | Audit | who validated or shelved | who last changed every entity ([O19](#o19)) |
-
-### Consequences of removing legs ([P12](#p12))
-
-- A crew handover at the European border can no longer be recorded until legs return.
-- `JourneyLeg` is used in the domain, the database, the API (a `leg` field in the crew body), validators, readiness,
-  and the unit, component, integration and BDD tests. Removing it is a breaking change to plan deliberately. The
-  schema is rebuilt from scratch, as for every schema change in this project.
 
 ### Other consequences
 

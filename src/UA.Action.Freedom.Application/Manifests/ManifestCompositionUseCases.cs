@@ -5,7 +5,7 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Application.Manifests;
 
 /// <summary>
-/// The crew travelling with this manifest's vehicle, per leg. <c>null</c> if there is no such
+/// The crew travelling with this manifest's vehicle. <c>null</c> if there is no such
 /// manifest.
 /// </summary>
 /// <remarks>
@@ -27,7 +27,7 @@ public sealed class ListManifestCrewHandler(IManifestRepository repository, ICon
 
         return manifest is null
             ? null
-            : await truckList.ListCrewAsync(manifest.ConvoyId, manifest.Vin, leg: null, cancellationToken);
+            : await truckList.ListCrewAsync(manifest.ConvoyId, manifest.Vin, cancellationToken);
     }
 }
 

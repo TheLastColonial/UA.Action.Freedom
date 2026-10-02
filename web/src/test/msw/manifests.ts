@@ -342,7 +342,7 @@ export function manifestApi(
         if (edge.verb === 'depart' && !insuredVins.has(manifest.vin)) {
           return problem(
             409,
-            'This vehicle cannot depart: its insurance is not recorded, was voided by a crew change, or does not cover today. Record the insurance for its current crew first.',
+            'This vehicle cannot depart: its insurance is not recorded, was voided, does not cover today, or does not name every driver. Record the insurance again to cover its current drivers.',
           );
         }
         db.set(id, {

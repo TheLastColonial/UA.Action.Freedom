@@ -33,12 +33,12 @@ internal static class ConvoyTestData
         new(sequence, "Unit 4", "Cross Road", "Coventry", "United Kingdom", postcode);
 
     /// <summary>
-    /// A truck-list entry, crewed on both legs by default — that is the ordinary case, and a test
+    /// A truck-list entry, crewed by two drivers by default — that is the ordinary case, and a test
     /// about crewing says so itself.
     /// </summary>
     internal static ConvoyVehicleReadModel AVehicle(
-        string vin = "VIN-1", int ukDrivers = 2, int borderDrivers = 2) =>
-        new(vin, "AB12CDE", 1_800, ukDrivers, 0, borderDrivers, 0);
+        string vin = "VIN-1", int drivers = 2) =>
+        new(vin, "AB12CDE", 1_800, drivers, 0);
 
     /// <summary>A vehicle that broke down and left the convoy. Its row, crew and manifest survive.</summary>
     internal static ConvoyVehicleReadModel AWithdrawnVehicle(string vin = "VIN-1") =>

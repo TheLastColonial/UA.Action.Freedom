@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented. Amends [ADR 0001](0001-truck-list-as-a-table.md).
+Accepted. The insurance part (removing a driver keeps cover, an added driver is uncovered) is implemented by [plan 01](../plans/01-crew-without-legs.md); the rest is not yet implemented. Amends [ADR 0001](0001-truck-list-as-a-table.md).
 
 ## Context
 

@@ -65,7 +65,7 @@ test('cover that ends before it starts is refused before anything is sent', asyn
   expect(convoys.insurance.has('7:VIN-TEST-1')).toBe(false);
 });
 
-test('insurance voided by a crew change says it must be recorded again', async () => {
+test('a voided policy says it must be recorded again', async () => {
   const convoys = serve();
   convoys.insurance.set(
     '7:VIN-TEST-1',
@@ -81,7 +81,7 @@ test('insurance voided by a crew change says it must be recorded again', async (
 
   await expect
     .element(screen.getByRole('status'))
-    .toHaveTextContent('voided by a crew change — record it again');
+    .toHaveTextContent('was voided — record it again');
 });
 
 test('a role that cannot record insurance sees its state but no form', async () => {

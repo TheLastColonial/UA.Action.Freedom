@@ -117,14 +117,10 @@ public sealed class ConvoysSteps(FreedomApiClient api, ScenarioState state)
         state.Pin(key, personId);
     }
 
-    /// <summary>
-    /// Crews the driver on the UK leg. A leg is required by the endpoint — a vehicle is crewed
-    /// twice, with a handover at the European border — and every scenario that does not say which
-    /// half it means is about the first one.
-    /// </summary>
+    /// <summary>Crews the driver. The role is optional and defaults to Driver.</summary>
     [When("I PUT \"(.*)\" on the remembered convoy for the driver")]
     public Task WhenIPutOnTheRememberedConvoyForTheDriver(string template) =>
-        api.SendAsync(HttpMethod.Put, ForTheDriver(template), state.CurrentToken, UkLeg);
+        api.SendAsync(HttpMethod.Put, ForTheDriver(template), state.CurrentToken, "{}");
 
     [When("I PUT \"(.*)\" on the remembered convoy for the driver with body:")]
     public Task WhenIPutOnTheRememberedConvoyForTheDriverWithBody(string template, string body) =>
@@ -134,14 +130,22 @@ public sealed class ConvoysSteps(FreedomApiClient api, ScenarioState state)
     public Task WhenIDeleteOnTheRememberedConvoyForTheDriver(string template) =>
         api.SendAsync(HttpMethod.Delete, ForTheDriver(template), state.CurrentToken, null);
 
-    /// <summary>The body every crewing step sends unless a scenario names a different leg.</summary>
-    private const string UkLeg = """{ "leg": "Uk" }""";
-
     [Then("the response body lists the driver")]
     public void ThenTheResponseBodyListsTheDriver() =>
         JsonDocument.Parse(api.LastBody).RootElement.EnumerateArray()
             .Select(member => member.GetProperty("personId").GetString())
             .Should().Contain(state.Pinned(DriverKey), "the body was: {0}", api.LastBody);
+
+    [Then("the insurance does not yet cover the driver")]
+    public void ThenTheInsuranceDoesNotYetCoverTheDriver() =>
+        JsonDocument.Parse(api.LastBody).RootElement.GetProperty("uncoveredDrivers").EnumerateArray()
+            .Select(id => id.GetString())
+            .Should().Equal([state.Pinned(DriverKey)], "the body was: {0}", api.LastBody);
+
+    [Then("the insurance covers every driver")]
+    public void ThenTheInsuranceCoversEveryDriver() =>
+        JsonDocument.Parse(api.LastBody).RootElement.GetProperty("uncoveredDrivers").GetArrayLength()
+            .Should().Be(0, "the body was: {0}", api.LastBody);
 
     private const string DriverKey = "driver";
     private const string PassengerKey = "passenger";

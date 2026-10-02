@@ -114,14 +114,14 @@ public sealed class TransitionManifestHandler(
     }
 
     /// <summary>
-    /// The policy names the crew, so it has to be recorded after the last crew change — a change
-    /// voids it — and cover the day the vehicle leaves.
+    /// The policy names the drivers, so it has to cover every one of them as well as the day the
+    /// vehicle leaves.
     /// </summary>
     private async Task<bool> IsInsuredToday(ManifestReadModel manifest, CancellationToken cancellationToken)
     {
         var policy = await truckList.GetInsuranceAsync(manifest.ConvoyId, manifest.Vin, cancellationToken);
 
-        return policy?.CoversOn(DateTime.UtcNow) ?? false;
+        return policy is { CoversAllDrivers: true } && policy.CoversOn(DateTime.UtcNow);
     }
 
     /// <summary>

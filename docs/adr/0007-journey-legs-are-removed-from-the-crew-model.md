@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented. Supersedes part of [ADR 0001](0001-truck-list-as-a-table.md).
+Accepted. Implemented by [plan 01](../plans/01-crew-without-legs.md). Supersedes part of [ADR 0001](0001-truck-list-as-a-table.md).
 
 ## Context
 
