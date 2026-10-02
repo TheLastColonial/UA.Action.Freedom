@@ -19,6 +19,7 @@ using UA.Action.Freedom.Api.Installer;
 using UA.Action.Freedom.Api.People;
 using UA.Action.Freedom.Api.Vehicles;
 using UA.Action.Freedom.Application;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Telemetry;
@@ -60,6 +61,8 @@ builder.Services.AddFreedomAuthorization();
 
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddFreedomApplication();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentPerson, ClaimsCurrentPerson>();
 builder.Services.AddFreedomData();
 builder.Services.AddFreedomQueueFlowMetrics();
 
@@ -251,6 +254,7 @@ app.UseAuthorization();
 app.MapFreedomHealthChecks();
 app.MapFreedomVehicles();
 app.MapFreedomPeople();
+app.MapFreedomMe();
 app.MapFreedomConvoys();
 app.MapFreedomReceivers();
 app.MapFreedomBoxes();

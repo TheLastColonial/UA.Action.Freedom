@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Boxes;
-using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Tests.Unit.Boxes;
 
@@ -34,13 +33,6 @@ public class BoxHandlerTests
         ValidatedByPersonId: validated ? Loader : null,
         ValidatedAt: validated ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null);
 
-    private static IPersonRepository AKnownLoader()
-    {
-        var people = Substitute.For<IPersonRepository>();
-        people.ExistsAsync(Loader, Arg.Any<CancellationToken>()).Returns(true);
-        return people;
-    }
-
     [Fact]
     public async Task A_new_box_starts_with_no_confirmed_weight()
     {
@@ -66,7 +58,7 @@ public class BoxHandlerTests
                 BoxId, Loader, 24, Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(),
                 Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(true);
-        var handler = new ValidateBoxHandler(repository, AKnownLoader());
+        var handler = new ValidateBoxHandler(repository);
 
         var outcome = await handler.HandleAsync(
             new ValidateBoxCommand(BoxId, Loader, 24), CancellationToken.None);
@@ -81,7 +73,7 @@ public class BoxHandlerTests
         repository.ValidateAsync(
                 BoxId, Loader, 24, 40m, 30m, 20m, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(true);
-        var handler = new ValidateBoxHandler(repository, AKnownLoader());
+        var handler = new ValidateBoxHandler(repository);
 
         var outcome = await handler.HandleAsync(
             new ValidateBoxCommand(BoxId, Loader, 24, WidthCm: 40m, DepthCm: 30m, HeightCm: 20m),
@@ -103,7 +95,7 @@ public class BoxHandlerTests
                 Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(false);
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
-        var handler = new ValidateBoxHandler(repository, AKnownLoader());
+        var handler = new ValidateBoxHandler(repository);
 
         var outcome = await handler.HandleAsync(
             new ValidateBoxCommand(BoxId, Loader, 24), CancellationToken.None);
@@ -120,32 +112,12 @@ public class BoxHandlerTests
                 Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(false);
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns((BoxReadModel?)null);
-        var handler = new ValidateBoxHandler(repository, AKnownLoader());
+        var handler = new ValidateBoxHandler(repository);
 
         var outcome = await handler.HandleAsync(
             new ValidateBoxCommand(BoxId, Loader, 24), CancellationToken.None);
 
         outcome.Should().Be(ValidateBoxOutcome.NotFound);
-    }
-
-    [Fact]
-    public async Task Refuses_to_record_a_validator_who_is_not_a_volunteer_on_file()
-    {
-        // A signature naming somebody who does not exist is worse than no signature, because it
-        // looks like accountability.
-        var repository = Substitute.For<IBoxRepository>();
-        var people = Substitute.For<IPersonRepository>();
-        people.ExistsAsync(Loader, Arg.Any<CancellationToken>()).Returns(false);
-        var handler = new ValidateBoxHandler(repository, people);
-
-        var outcome = await handler.HandleAsync(
-            new ValidateBoxCommand(BoxId, Loader, 24), CancellationToken.None);
-
-        outcome.Should().Be(ValidateBoxOutcome.NoSuchValidator);
-        await repository.DidNotReceive().ValidateAsync(
-            Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<int>(),
-            Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(),
-            Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

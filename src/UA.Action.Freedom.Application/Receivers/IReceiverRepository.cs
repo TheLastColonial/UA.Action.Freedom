@@ -40,7 +40,7 @@ public interface IReceiverDetailRepository
     /// the select, so a read cannot be committed without its audit entry.
     /// </remarks>
     Task<ReceiverDetailReadModel?> ResolveAsync(
-        Guid receiverRef, string principalId, string? reason, CancellationToken cancellationToken);
+        Guid receiverRef, Guid personId, string? reason, CancellationToken cancellationToken);
 
     Task UpsertAsync(ReceiverDetailReadModel detail, CancellationToken cancellationToken);
 

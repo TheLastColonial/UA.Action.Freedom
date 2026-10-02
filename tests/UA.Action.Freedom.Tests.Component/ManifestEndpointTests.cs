@@ -58,7 +58,7 @@ public class ManifestEndpointTests
         return insured
             ? convoys.WithInsurance(new VehicleInsuranceReadModel(
                 ConvoyId, Vin, "Ukraine Aid Mutual", "POL-1",
-                DateTime.UtcNow.Date.AddDays(-1), DateTime.UtcNow.Date.AddDays(30), null, "test-user",
+                DateTime.UtcNow.Date.AddDays(-1), DateTime.UtcNow.Date.AddDays(30), null, InMemoryPersonRepository.TestUserId,
                 DateTime.UtcNow, VoidedAt: null))
             : convoys;
     }

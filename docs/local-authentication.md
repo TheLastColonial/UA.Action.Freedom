@@ -137,6 +137,36 @@ not the same as holding it.
 
 ---
 
+## Linking a login to a volunteer
+
+A login is not a volunteer. Until an Administrator links the two, `GET /me` shows the login's
+`subject` and `roles` and a `null` `personId`, and **every write that records who did it is refused
+with `403` and a problem of type `login-not-linked`** — validating a box, placing it in a bay,
+recording insurance, resolving a delivery address. Nothing is written and nothing is logged as
+"unknown".
+
+```bash
+# 1. What does the API think I am?
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/me
+# { "subject": "5be7…", "roles": ["Dispatcher", …], "personId": null, "displayName": null }
+
+# 2. As admin, link that subject to a volunteer (204; 404 no such volunteer; 409 subject in use).
+curl -s -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json"   -d '{ "subject": "5be7…" }' http://localhost:8080/people/<person-id>/login
+```
+
+An Administrator may link **their own** login, which is how the first link is made. In the operator
+UI it is *Link login* on a volunteer's page, with *Use my login* to fill in your own subject.
+Erasing a volunteer deletes the link with their personal data, so `GET /me` reads "not linked" again.
+
+**Keycloak generates a subject per user each time the realm is imported**, so the seed logins'
+subjects change whenever the realm is recreated (`docker compose down -v` plus `tofu apply`) and
+cannot be seeded. `database/seed/dev-seed.sql` therefore adds a volunteer for each seed login
+(*Ada Admin*, *Olly Operator*, *Gus Ground*) **without** a subject; link them as above. The BDD
+suite does this itself: `LoginLinkHooks` links every seed login before the run, reusing the
+volunteer it made last time, because nothing it could hard-code would survive a realm recreation.
+
+---
+
 ## What is in the token
 
 ```
@@ -155,8 +185,11 @@ Three details matter, and each corresponds to a line in
 - **`aud` is `account`**, which is Keycloak's default and not something Freedom issued. Audience
   validation is therefore only switched on when `Oidc:Audience` is explicitly set. In Azure it
   will be set, and this is the line to revisit.
-- **`sub` is the principal id** written to the receiver access log. It comes from the token, never
-  from a request body — an audit trail a caller could write their own name into would not be one.
+- **`sub` is how a login finds its volunteer.** An Administrator links a login's `sub` to a
+  volunteer (see [Linking a login to a volunteer](#linking-a-login-to-a-volunteer)), and every
+  "who did this" the system records — who validated a box, who placed it in a bay, who recorded
+  insurance, who read a delivery address — is that volunteer, resolved from the token. It is never
+  a request field: an audit trail a caller could write their own name into would not be one.
 
 To decode a token yourself, paste it into [jwt.io](https://jwt.io), or:
 

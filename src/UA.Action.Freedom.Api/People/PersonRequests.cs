@@ -31,3 +31,9 @@ public sealed record UpdatePersonRequest(
     public UpdatePersonCommand ToCommand(Guid id) => new(
         id, FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed);
 }
+
+/// <summary>Body of <c>PUT /people/{id}/login</c>: the token subject the volunteer signs in as.</summary>
+public sealed record LinkLoginRequest(string Subject)
+{
+    public LinkLoginCommand ToCommand(Guid personId) => new(personId, Subject);
+}

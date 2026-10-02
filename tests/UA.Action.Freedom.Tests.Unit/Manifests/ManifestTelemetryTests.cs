@@ -191,14 +191,14 @@ public sealed class ManifestTelemetryTests : IDisposable
     {
         var receiverRef = Guid.NewGuid();
         var detail = Substitute.For<IReceiverDetailRepository>();
-        detail.ResolveAsync(receiverRef, "ground-officer-sub", "loading day", Arg.Any<CancellationToken>())
+        detail.ResolveAsync(receiverRef, Guid.Empty, "loading day", Arg.Any<CancellationToken>())
             .Returns(exists
                 ? new ReceiverDetailReadModel(receiverRef, "Olena Kovalenko", "+380501234567", "12 Vulytsia Sumska", null, "Kharkiv", "61002", null)
                 : null);
         var handler = new GetReceiverDetailHandler(detail, _metrics);
 
         await handler.HandleAsync(
-            new GetReceiverDetailQuery(receiverRef, "ground-officer-sub", "loading day"), CancellationToken.None);
+            new GetReceiverDetailQuery(receiverRef, Guid.Empty, "loading day"), CancellationToken.None);
 
         _capture.Sum("freedom.receiver.detail.resolves", ("result", label)).Should().Be(1);
         _capture.Measurements

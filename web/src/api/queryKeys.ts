@@ -11,6 +11,7 @@ export interface PeopleListParams extends PageParams {
 // hooks module. A published truck list is a precondition for proposing a manifest, so
 // publishing invalidates ['manifests'] as well as the convoy.
 export const qk = {
+  me: ['me'] as const,
   vehicles: {
     all: ['vehicles'] as const,
     list: (params: PageParams) => ['vehicles', 'list', params] as const,

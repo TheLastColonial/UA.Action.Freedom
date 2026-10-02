@@ -4,7 +4,7 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Application.Convoys;
 
 /// <summary>
-/// What is written when insurance is recorded. <see cref="RecordedBy"/> is the caller's token
+/// What is written when insurance is recorded. <see cref="RecordedBy"/> is the caller's person id
 /// subject, supplied by the endpoint rather than the request body.
 /// </summary>
 public sealed record VehicleInsuranceRecord(
@@ -15,7 +15,7 @@ public sealed record VehicleInsuranceRecord(
     DateTime CoverStart,
     DateTime CoverEnd,
     decimal? CostGbp,
-    string RecordedBy);
+    Guid RecordedBy);
 
 /// <summary>A vehicle's insurance for one convoy, as stored, with the drivers it does not yet name.</summary>
 public sealed record VehicleInsuranceReadModel(
@@ -26,7 +26,7 @@ public sealed record VehicleInsuranceReadModel(
     DateTime CoverStart,
     DateTime CoverEnd,
     decimal? CostGbp,
-    string RecordedBy,
+    Guid RecordedBy,
     DateTime RecordedAt,
     DateTime? VoidedAt)
 {

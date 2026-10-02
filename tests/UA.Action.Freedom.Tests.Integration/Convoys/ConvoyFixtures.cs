@@ -111,7 +111,14 @@ internal static class ConvoyFixtures
     internal static Task RemoveManifestsAsync(int convoyId) =>
         ExecuteAsync("DELETE FROM dbo.Manifest WHERE ConvoyId = @id", ("@id", convoyId));
 
+    /// <summary>A standing identity for whoever "recorded" a policy; the column is a foreign key to <c>dbo.Person</c>.</summary>
+    internal static readonly Guid RecorderId = new("1b0e5c10-0000-4000-8000-000000000001");
+
+    internal static Task EnsureRecorderAsync() => ExecuteAsync(
+        "IF NOT EXISTS (SELECT 1 FROM dbo.Person WHERE Id = @id) INSERT INTO dbo.Person (Id) VALUES (@id)",
+        ("@id", RecorderId));
+
     internal static VehicleInsuranceRecord AnInsurance(int convoyId, string vin, string policy = "POL-1") => new(
         convoyId, vin, "Ukraine Aid Mutual", policy,
-        new DateTime(2026, 8, 25), new DateTime(2026, 9, 30), 412.50m, "operator-sub");
+        new DateTime(2026, 8, 25), new DateTime(2026, 9, 30), 412.50m, RecorderId);
 }

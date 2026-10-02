@@ -9,7 +9,9 @@
     (ConvoyId, Vin) as two unrelated foreign keys, so the row cannot describe a vehicle that is not
     on the convoy — and, unlike before, its parent still exists after the convoy has arrived.
 
-    RecordedBySub is the token subject of whoever recorded it, never a request field. Cover dates
+    RecordedByPersonId is the volunteer who recorded it, resolved from their login and never a
+    request field. It is a foreign key to the anonymous identity, so erasing the volunteer keeps the
+    row and it reads "Former volunteer". Cover dates
     are `date`; cost is optional.
 */
 CREATE TABLE [dbo].[ConvoyVehicleInsurance] (
@@ -20,13 +22,14 @@ CREATE TABLE [dbo].[ConvoyVehicleInsurance] (
     [CoverStart]    date          NOT NULL,
     [CoverEnd]      date          NOT NULL,
     [CostGbp]       decimal(10,2) NULL,
-    [RecordedBySub] nvarchar(200) NOT NULL,
+    [RecordedByPersonId] uniqueidentifier NOT NULL,
     [RecordedAt]    datetime2(0)  NOT NULL CONSTRAINT [DF_ConvoyVehicleInsurance_RecordedAt] DEFAULT SYSUTCDATETIME(),
     [VoidedAt]      datetime2(0)  NULL,
 
     CONSTRAINT [PK_ConvoyVehicleInsurance] PRIMARY KEY ([ConvoyId], [Vin]),
     CONSTRAINT [FK_ConvoyVehicleInsurance_ConvoyVehicle] FOREIGN KEY ([ConvoyId], [Vin])
         REFERENCES [dbo].[ConvoyVehicle] ([ConvoyId], [Vin]) ON DELETE CASCADE,
+    CONSTRAINT [FK_ConvoyVehicleInsurance_Person] FOREIGN KEY ([RecordedByPersonId]) REFERENCES [dbo].[Person] ([Id]),
     CONSTRAINT [CK_ConvoyVehicleInsurance_Cover] CHECK ([CoverEnd] >= [CoverStart]),
     CONSTRAINT [CK_ConvoyVehicleInsurance_Cost] CHECK ([CostGbp] IS NULL OR [CostGbp] >= 0)
 );

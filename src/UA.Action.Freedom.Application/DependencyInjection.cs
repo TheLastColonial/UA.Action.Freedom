@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<CreatePersonCommand, Guid>, CreatePersonHandler>();
         services.AddScoped<ICommandHandler<UpdatePersonCommand, UpdatePersonOutcome>, UpdatePersonHandler>();
         services.AddScoped<ICommandHandler<DeletePersonCommand, DeletePersonOutcome>, DeletePersonHandler>();
+        services.AddScoped<ICommandHandler<LinkLoginCommand, LinkLoginOutcome>, LinkLoginHandler>();
         services.AddScoped<IQueryHandler<GetPersonByIdQuery, PersonReadModel?>, GetPersonByIdHandler>();
         services.AddScoped<IQueryHandler<ListPeopleQuery, IReadOnlyList<PersonReadModel>>, ListPeopleHandler>();
 

@@ -53,11 +53,9 @@ export type UpdateBoxRequest = CreateBoxRequest;
 
 export interface AssignBoxBayRequest {
   bayId: number;
-  assignedByPersonId: string;
 }
 
 export interface ValidateBoxRequest {
-  validatedByPersonId: string;
   weightKg: number;
   widthCm?: number;
   depthCm?: number;

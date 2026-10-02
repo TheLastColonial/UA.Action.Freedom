@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
@@ -313,16 +312,18 @@ public static class ConvoyEndpoints
             int id,
             string vin,
             RecordInsuranceRequest request,
-            ClaimsPrincipal caller,
+            ICurrentPerson currentPerson,
             ICommandHandler<RecordInsuranceCommand, RecordInsuranceOutcome> handler,
             CancellationToken cancellationToken) =>
         {
-            // Who recorded the policy comes from the token, never the body.
-            var recordedBy = caller.FindFirstValue(ClaimTypes.NameIdentifier)
-                             ?? caller.FindFirstValue("sub")
-                             ?? "unknown";
+            // Who recorded the policy comes from the login, never the body.
+            var (recordedBy, refusal) = await LoginNotLinked.RequireAsync(currentPerson, cancellationToken);
+            if (refusal is not null)
+            {
+                return refusal;
+            }
 
-            var outcome = await handler.HandleAsync(request.ToCommand(id, vin, recordedBy), cancellationToken);
+            var outcome = await handler.HandleAsync(request.ToCommand(id, vin, recordedBy!.Value), cancellationToken);
 
             return outcome switch
             {

@@ -88,7 +88,7 @@ public sealed record CreateConvoyVehicleManifestRequest(
 
 /// <summary>
 /// Body of <c>PUT /convoys/{id}/vehicles/{vin}/insurance</c>. Who recorded it comes from the
-/// caller's token; a <c>recordedBy</c> in the body is ignored.
+/// caller's linked login; a <c>recordedBy</c> in the body is ignored.
 /// </summary>
 public sealed record RecordInsuranceRequest(
     string Insurer,
@@ -97,7 +97,7 @@ public sealed record RecordInsuranceRequest(
     DateTime CoverEnd,
     decimal? CostGbp = null)
 {
-    public RecordInsuranceCommand ToCommand(int convoyId, string vin, string recordedBy) =>
+    public RecordInsuranceCommand ToCommand(int convoyId, string vin, Guid recordedBy) =>
         new(new VehicleInsuranceRecord(
             convoyId, vin, Insurer, PolicyNumber, CoverStart.Date, CoverEnd.Date, CostGbp, recordedBy));
 }

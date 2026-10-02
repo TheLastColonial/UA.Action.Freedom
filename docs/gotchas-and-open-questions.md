@@ -386,6 +386,18 @@ None of the five foreign keys onto `dbo.Person` cascades — they are the record
 validated and shelved what. `PersonRepository.DeleteAsync` catches the FK violation (547) and the
 API answers 409, rather than the 500 it used to. See §9 Q9 for the erasure question this raises.
 
+### Who did it comes from the login, and an unlinked login is refused
+
+`ICurrentPerson` (`Api/Configuration/ClaimsCurrentPerson.cs`) is the one answer to "who is calling": the token
+subject (`NameIdentifier`, then `sub`) looked up through `IPersonRepository.FindBySubjectAsync`, which reads
+`dbo.PersonDetail` only. A missing claim, an unlinked login and an erased volunteer are all `NotLinked`, and the
+endpoint returns `403` with problem type `login-not-linked` (`LoginNotLinked.Problem()`) **before** any handler runs, so
+nothing is written. There is no "unknown" fallback and the box and bay request bodies no longer accept a person id
+(an extra `validatedByPersonId`/`assignedByPersonId` is ignored). Insurance records `RecordedByPersonId` (FK to
+`dbo.Person`, so the recorder's row survives their erasure as "Former volunteer"); the receiver access log records
+`PersonId` with **no** foreign key, like its receiver, and deliberately not the token subject, which is erasable.
+The Keycloak subject of a seed user is generated per realm import, so a recreated realm needs its logins linked again.
+
 ### `Committed` requires `IsDriver`
 
 Commitment is a commitment to *drive on a convoy*. Letting the two disagree would put a non-driver on

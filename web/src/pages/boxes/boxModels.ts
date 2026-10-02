@@ -96,7 +96,6 @@ export const addItemFormSchema = z.object({
 // ---- Validate a box ----------------------------------------------------
 
 export interface ValidateFormValues {
-  validatedByPersonId: string;
   weightKg: string;
   widthCm: string;
   depthCm: string;
@@ -104,7 +103,7 @@ export interface ValidateFormValues {
 }
 
 export function emptyValidateForm(): ValidateFormValues {
-  return { validatedByPersonId: '', weightKg: '', widthCm: '', depthCm: '', heightCm: '' };
+  return { weightKg: '', widthCm: '', depthCm: '', heightCm: '' };
 }
 
 function decimalNumber(value: string): number | undefined {
@@ -113,10 +112,8 @@ function decimalNumber(value: string): number | undefined {
 }
 
 export function validateFormToRequest(values: ValidateFormValues): ValidateBoxRequest {
-  const request: ValidateBoxRequest = {
-    validatedByPersonId: values.validatedByPersonId,
-    weightKg: Number(values.weightKg),
-  };
+  // Who vouched for the box is the caller's linked person, resolved by the API from the login.
+  const request: ValidateBoxRequest = { weightKg: Number(values.weightKg) };
 
   const widthCm = decimalNumber(values.widthCm);
   if (widthCm !== undefined) request.widthCm = widthCm;
@@ -138,7 +135,6 @@ const optionalNonNegativeDecimal = (message: string) =>
   }, message);
 
 export const validateFormSchema = z.object({
-  validatedByPersonId: z.string().min(1, 'Name the volunteer who checked the box'),
   weightKg: z.string().refine((raw) => {
     const n = Number(raw.trim());
     return raw.trim().length > 0 && Number.isInteger(n) && n >= 1 && n <= 500;
@@ -158,18 +154,16 @@ export const validateFormSchema = z.object({
 
 export interface AssignBayFormValues {
   bayId: string;
-  assignedByPersonId: string;
 }
 
 export function emptyAssignBayForm(): AssignBayFormValues {
-  return { bayId: '', assignedByPersonId: '' };
+  return { bayId: '' };
 }
 
 export function assignBayFormToRequest(values: AssignBayFormValues): AssignBoxBayRequest {
-  return { bayId: Number(values.bayId), assignedByPersonId: values.assignedByPersonId };
+  return { bayId: Number(values.bayId) };
 }
 
 export const assignBayFormSchema = z.object({
   bayId: z.string().min(1, 'Choose a bay'),
-  assignedByPersonId: z.string().min(1, 'Name the volunteer placing the box'),
 });

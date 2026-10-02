@@ -73,14 +73,14 @@ internal sealed class InMemoryReceiverDetailRepository : IReceiverDetailReposito
     }
 
     /// <summary>Every resolve attempt, as (receiver, who asked, why).</summary>
-    public List<(Guid Ref, string PrincipalId, string? Reason)> AccessLog { get; } = [];
+    public List<(Guid Ref, Guid PersonId, string? Reason)> AccessLog { get; } = [];
 
     public bool Contains(Guid receiverRef) => store.ContainsKey(receiverRef);
 
     public Task<ReceiverDetailReadModel?> ResolveAsync(
-        Guid receiverRef, string principalId, string? reason, CancellationToken cancellationToken)
+        Guid receiverRef, Guid personId, string? reason, CancellationToken cancellationToken)
     {
-        AccessLog.Add((receiverRef, principalId, reason));
+        AccessLog.Add((receiverRef, personId, reason));
         return Task.FromResult(store.GetValueOrDefault(receiverRef));
     }
 

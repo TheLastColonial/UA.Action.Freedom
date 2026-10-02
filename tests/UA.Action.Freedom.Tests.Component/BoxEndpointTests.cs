@@ -23,7 +23,8 @@ public class BoxEndpointTests
 
     private const int LocationId = 3;
 
-    private static readonly Guid Loader = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
+    /// <summary>The volunteer the test caller's login is linked to: whoever signs is whoever is calling.</summary>
+    private static readonly Guid Loader = InMemoryPersonRepository.TestUserId;
 
     private static BoxReadModel ABox(bool validated = false) => new(
         BoxId,
@@ -36,12 +37,7 @@ public class BoxEndpointTests
         ValidatedByPersonId: validated ? Loader : null,
         ValidatedAt: validated ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null);
 
-    private static InMemoryPersonRepository AKnownLoader() => new(
-        new PersonReadModel(
-            Loader, "Sam", "Whitfield",
-            new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            null, IsDriver: false, Committed: false));
+    private static InMemoryPersonRepository AKnownLoader() => InMemoryPersonRepository.WithLinkedTestUser();
 
     private static object AnItemBody() => new
     {
@@ -120,7 +116,7 @@ public class BoxEndpointTests
 
         var validate = await client.PostAsJsonAsync(
             $"/boxes/{BoxId}/validate",
-            new { validatedByPersonId = Loader, weightKg = 24 },
+            new { weightKg = 24 },
             TestContext.Current.CancellationToken);
 
         validate.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -136,7 +132,7 @@ public class BoxEndpointTests
 
         var response = await client.PostAsJsonAsync(
             $"/boxes/{BoxId}/validate",
-            new { validatedByPersonId = Loader, weightKg = 24 },
+            new { weightKg = 24 },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -156,7 +152,7 @@ public class BoxEndpointTests
 
         var response = await client.PostAsJsonAsync(
             $"/boxes/{BoxId}/validate",
-            new { validatedByPersonId = Loader, weightKg = 24, widthCm = 40m, depthCm = 30m, heightCm = 20m },
+            new { weightKg = 24, widthCm = 40m, depthCm = 30m, heightCm = 20m },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -175,7 +171,7 @@ public class BoxEndpointTests
 
         var response = await client.PostAsJsonAsync(
             $"/boxes/{BoxId}/validate",
-            new { validatedByPersonId = Loader, weightKg = 30 },
+            new { weightKg = 30 },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
@@ -183,19 +179,54 @@ public class BoxEndpointTests
     }
 
     [Fact]
-    public async Task Naming_a_validator_who_is_not_on_file_is_a_404()
+    public async Task A_validator_named_in_the_body_is_ignored_the_caller_signs()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/validate",
+            new { validatedByPersonId = Guid.NewGuid(), weightKg = 24 },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var box = await client.GetFromJsonAsync<JsonElement>($"/boxes/{BoxId}", TestContext.Current.CancellationToken);
+        box.GetProperty("validatedByPersonId").GetGuid().Should().Be(Loader);
+    }
+
+    [Fact]
+    public async Task A_login_not_linked_to_a_volunteer_cannot_validate_a_box()
     {
         var boxes = new InMemoryBoxRepository(ABox());
         await using var api = FreedomApi.WithBoxes(boxes, new InMemoryPersonRepository(), roles: "Loader");
         using var client = api.CreateClient();
 
         var response = await client.PostAsJsonAsync(
-            $"/boxes/{BoxId}/validate",
-            new { validatedByPersonId = Loader, weightKg = 24 },
-            TestContext.Current.CancellationToken);
+            $"/boxes/{BoxId}/validate", new { weightKg = 24 }, TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("type").GetString().Should().Be("login-not-linked");
         boxes.Box(BoxId)!.Validated.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_login_not_linked_to_a_volunteer_cannot_place_a_box_in_a_bay()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(
+            boxes, new InMemoryPersonRepository(), new InMemoryBayRepository(AStoredBay()), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/boxes/{BoxId}/bay", new { bayId = BayId }, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("type").GetString().Should().Be("login-not-linked");
+        (await client.GetAsync($"/boxes/{BoxId}/bay", TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -208,7 +239,7 @@ public class BoxEndpointTests
 
         var response = await client.PostAsJsonAsync(
             $"/boxes/{BoxId}/validate",
-            new { validatedByPersonId = Loader, weightKg = 9_999 },
+            new { weightKg = 9_999 },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -354,7 +385,7 @@ public class BoxEndpointTests
 
         var response = await client.PutAsJsonAsync(
             $"/boxes/{BoxId}/bay",
-            new { bayId = BayId, assignedByPersonId = Loader },
+            new { bayId = BayId },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -376,7 +407,7 @@ public class BoxEndpointTests
 
         var response = await client.PutAsJsonAsync(
             $"/boxes/{BoxId}/bay",
-            new { bayId = BayId, assignedByPersonId = Loader },
+            new { bayId = BayId },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -392,7 +423,7 @@ public class BoxEndpointTests
 
         var response = await client.PutAsJsonAsync(
             $"/boxes/{BoxId}/bay",
-            new { bayId = BayId, assignedByPersonId = Loader },
+            new { bayId = BayId },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -408,7 +439,7 @@ public class BoxEndpointTests
 
         var response = await client.PutAsJsonAsync(
             $"/boxes/{BoxId}/bay",
-            new { bayId = BayId, assignedByPersonId = Loader },
+            new { bayId = BayId },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);

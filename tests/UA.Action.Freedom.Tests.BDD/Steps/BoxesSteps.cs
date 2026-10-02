@@ -11,37 +11,12 @@ namespace UA.Action.Freedom.Tests.BDD.Steps;
 /// <see cref="ApiSteps"/>.
 /// </summary>
 /// <remarks>
-/// Validating a box needs a volunteer on file to name as the person who checked it — the
-/// database will not accept a signature from somebody who does not exist. These steps create
-/// one, remember it, and hand it to the validate calls.
+/// Validating a box and shelving it are signed as the caller's linked volunteer, so these steps
+/// name nobody: the seed logins are linked once per run by <see cref="LoginLinkHooks"/>.
 /// </remarks>
 [Binding]
 public sealed class BoxesSteps(FreedomApiClient api, ScenarioState state)
 {
-    private const string ValidatorKey = "validator";
-
-    [Given("a volunteer exists who can validate boxes")]
-    public async Task GivenAVolunteerExistsWhoCanValidateBoxes()
-    {
-        // Only an Administrator may add a volunteer, whatever identity the scenario is using.
-        var admin = await api.TokenForAsync("admin");
-
-        var body = """
-            { "firstName": "Sam", "lastName": "Whitfield", "dateOfBirth": "1990-01-01T00:00:00Z", "joined": "2024-01-01T00:00:00Z", "isDriver": false, "committed": false }
-            """;
-
-        var response = await api.SendAsync(HttpMethod.Post, "/people", admin, body);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Created, "the body was: {0}", api.LastBody);
-
-        var location = response.Headers.Location!;
-        var path = location.IsAbsoluteUri ? location.AbsolutePath : location.ToString();
-        var personId = path.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
-
-        state.CreatedResources.Add(("people", personId));
-        state.Pin(ValidatorKey, personId);
-    }
-
     [Given("I remember the box")]
     public void GivenIRememberTheBox() => state.Remember("box");
 
@@ -62,11 +37,11 @@ public sealed class BoxesSteps(FreedomApiClient api, ScenarioState state)
         }
     }
 
-    [When("I PUT \"(.*)\" on the remembered box with the remembered bay and volunteer")]
+    [When("I PUT \"(.*)\" on the remembered box with the remembered bay")]
     public Task WhenIPutTheRememberedBoxInTheRememberedBay(string template)
     {
         var body = $$"""
-            { "bayId": {{state.Pinned(LocationsSteps.BayKey)}}, "assignedByPersonId": "{{state.Pinned(ValidatorKey)}}" }
+            { "bayId": {{state.Pinned(LocationsSteps.BayKey)}} }
             """;
 
         return api.SendAsync(HttpMethod.Put, state.Recall("box", template), state.CurrentToken, body);
@@ -112,11 +87,11 @@ public sealed class BoxesSteps(FreedomApiClient api, ScenarioState state)
     public Task WhenIGetForTheRememberedQrToken(string template) =>
         api.SendAsync(HttpMethod.Get, state.Recall("qrtoken", template), state.CurrentToken, null);
 
-    [When("I POST \"(.*)\" on the remembered box with the validating volunteer weighing (\\d+)")]
+    [When("I POST \"(.*)\" on the remembered box weighing (\\d+)")]
     public Task WhenIValidateTheRememberedBox(string template, int weightKg)
     {
         var body = $$"""
-            { "validatedByPersonId": "{{state.Pinned(ValidatorKey)}}", "weightKg": {{weightKg}} }
+            { "weightKg": {{weightKg}} }
             """;
 
         return api.SendAsync(HttpMethod.Post, state.Recall("box", template), state.CurrentToken, body);

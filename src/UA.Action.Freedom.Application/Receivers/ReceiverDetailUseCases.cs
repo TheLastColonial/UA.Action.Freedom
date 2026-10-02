@@ -6,9 +6,9 @@ namespace UA.Action.Freedom.Application.Receivers;
 /// <summary>
 /// Resolve a receiver's full delivery detail. Ground Officer only, and audited.
 /// </summary>
-/// <param name="PrincipalId">Who is asking — taken from the caller's token, never from the body.</param>
+/// <param name="PersonId">Who is asking — the caller's linked volunteer, never taken from the body.</param>
 /// <param name="Reason">Why, if they gave one. Free text, recorded verbatim.</param>
-public sealed record GetReceiverDetailQuery(Guid Ref, string PrincipalId, string? Reason);
+public sealed record GetReceiverDetailQuery(Guid Ref, Guid PersonId, string? Reason);
 
 public sealed class GetReceiverDetailHandler(
     IReceiverDetailRepository repository,
@@ -20,7 +20,7 @@ public sealed class GetReceiverDetailHandler(
     public async Task<ReceiverDetailReadModel?> HandleAsync(
         GetReceiverDetailQuery query, CancellationToken cancellationToken)
     {
-        var detail = await repository.ResolveAsync(query.Ref, query.PrincipalId, query.Reason, cancellationToken);
+        var detail = await repository.ResolveAsync(query.Ref, query.PersonId, query.Reason, cancellationToken);
 
         // Aggregate only: who asked and about which receiver is in the audit table, written in
         // the same transaction as the read. Duplicating it here would build a second, weaker

@@ -141,9 +141,28 @@ public class ReceiverEndpointTests
         entry.Ref.Should().Be(Ref);
         entry.Reason.Should().Be("Delivery scheduled 12 Sept");
 
-        // Identity comes from the token, never from the request — an audit trail the caller
+        // Identity comes from the login, never from the request — an audit trail the caller
         // could write their own name into would not be one.
-        entry.PrincipalId.Should().Be("test-user");
+        entry.PersonId.Should().Be(InMemoryPersonRepository.TestUserId);
+    }
+
+    [Fact]
+    public async Task A_ground_officer_whose_login_is_not_linked_resolves_nothing_and_leaves_no_trail()
+    {
+        // The trail names a person. A login linked to no one cannot be named in it, so it is
+        // refused rather than logged as "unknown", and the address is not read.
+        var detail = new InMemoryReceiverDetailRepository(ADetail());
+        var api = FreedomApi.WithReceivers(
+            new InMemoryReceiverRepository(AReceiver()), detail, new InMemoryPersonRepository(), roles: "GroundOfficer");
+        await using var _ = api;
+        using var client = api.CreateClient();
+
+        var response = await client.GetAsync($"/receivers/{Ref}/detail", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("type").GetString().Should().Be("login-not-linked");
+        detail.AccessLog.Should().BeEmpty();
     }
 
     [Fact]

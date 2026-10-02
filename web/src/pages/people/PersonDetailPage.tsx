@@ -9,6 +9,7 @@ import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
+import { LinkLoginPanel } from './LinkLoginPanel';
 
 export function PersonDetailPage(): JSX.Element {
   const { id = '' } = useParams();
@@ -117,6 +118,8 @@ export function PersonDetailPage(): JSX.Element {
           <dd>{person.committed ? 'Yes' : 'No'}</dd>
         </dl>
       </DetailCard>
+
+      <LinkLoginPanel personId={person.id} />
     </section>
   );
 }

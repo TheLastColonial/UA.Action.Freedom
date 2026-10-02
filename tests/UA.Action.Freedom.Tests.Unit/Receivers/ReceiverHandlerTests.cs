@@ -16,6 +16,8 @@ namespace UA.Action.Freedom.Tests.Unit.Receivers;
 /// </remarks>
 public class ReceiverHandlerTests
 {
+    private static readonly Guid GroundOfficerId = new("6f0f1ce2-0000-4000-8000-000000000001");
+
     private static readonly Guid Ref = new("b3f1c4d2-5a6e-4f70-8901-2c3d4e5f6a7b");
 
     private static ReceiverDetailReadModel ADetail() => new(
@@ -45,29 +47,29 @@ public class ReceiverHandlerTests
         // The audit trail matters more than the data it describes (§4.4.3). It is a parameter
         // of the read, so there is no code path that resolves an address without one.
         var repository = Substitute.For<IReceiverDetailRepository>();
-        repository.ResolveAsync(Ref, "ground-officer-1", "Delivery scheduled 12 Sept", Arg.Any<CancellationToken>())
+        repository.ResolveAsync(Ref, GroundOfficerId, "Delivery scheduled 12 Sept", Arg.Any<CancellationToken>())
             .Returns(ADetail());
         var handler = new GetReceiverDetailHandler(repository);
 
         var detail = await handler.HandleAsync(
-            new GetReceiverDetailQuery(Ref, "ground-officer-1", "Delivery scheduled 12 Sept"),
+            new GetReceiverDetailQuery(Ref, GroundOfficerId, "Delivery scheduled 12 Sept"),
             CancellationToken.None);
 
         detail!.City.Should().Be("Kharkiv");
         await repository.Received(1).ResolveAsync(
-            Ref, "ground-officer-1", "Delivery scheduled 12 Sept", Arg.Any<CancellationToken>());
+            Ref, GroundOfficerId, "Delivery scheduled 12 Sept", Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Resolving_an_address_that_was_never_recorded_returns_nothing()
     {
         var repository = Substitute.For<IReceiverDetailRepository>();
-        repository.ResolveAsync(Ref, Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        repository.ResolveAsync(Ref, Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns((ReceiverDetailReadModel?)null);
         var handler = new GetReceiverDetailHandler(repository);
 
         var detail = await handler.HandleAsync(
-            new GetReceiverDetailQuery(Ref, "ground-officer-1", null), CancellationToken.None);
+            new GetReceiverDetailQuery(Ref, GroundOfficerId, null), CancellationToken.None);
 
         detail.Should().BeNull();
     }

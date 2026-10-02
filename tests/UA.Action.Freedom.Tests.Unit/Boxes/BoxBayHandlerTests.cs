@@ -2,7 +2,6 @@ using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Locations;
-using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Tests.Unit.Boxes;
 
@@ -29,13 +28,6 @@ public class BoxBayHandlerTests
 
     private static BayReadModel ABay(int locationId = LocationId) => new(BayId, locationId, "A1");
 
-    private static IPersonRepository AKnownLoader()
-    {
-        var people = Substitute.For<IPersonRepository>();
-        people.ExistsAsync(Loader, Arg.Any<CancellationToken>()).Returns(true);
-        return people;
-    }
-
     [Fact]
     public async Task A_loader_places_a_box_in_a_bay_at_its_own_location()
     {
@@ -43,7 +35,7 @@ public class BoxBayHandlerTests
         var bays = Substitute.For<IBayRepository>();
         boxes.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
         bays.GetByIdAsync(BayId, Arg.Any<CancellationToken>()).Returns(ABay());
-        var handler = new AssignBoxBayHandler(boxes, bays, AKnownLoader());
+        var handler = new AssignBoxBayHandler(boxes, bays);
 
         var outcome = await handler.HandleAsync(
             new AssignBoxBayCommand(BoxId, BayId, Loader), CancellationToken.None);
@@ -60,7 +52,7 @@ public class BoxBayHandlerTests
         var bays = Substitute.For<IBayRepository>();
         boxes.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(locationId: LocationId));
         bays.GetByIdAsync(BayId, Arg.Any<CancellationToken>()).Returns(ABay(locationId: OtherLocationId));
-        var handler = new AssignBoxBayHandler(boxes, bays, AKnownLoader());
+        var handler = new AssignBoxBayHandler(boxes, bays);
 
         var outcome = await handler.HandleAsync(
             new AssignBoxBayCommand(BoxId, BayId, Loader), CancellationToken.None);
@@ -78,7 +70,7 @@ public class BoxBayHandlerTests
         var bays = Substitute.For<IBayRepository>();
         boxes.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(locationId: null));
         bays.GetByIdAsync(BayId, Arg.Any<CancellationToken>()).Returns(ABay());
-        var handler = new AssignBoxBayHandler(boxes, bays, AKnownLoader());
+        var handler = new AssignBoxBayHandler(boxes, bays);
 
         var outcome = await handler.HandleAsync(
             new AssignBoxBayCommand(BoxId, BayId, Loader), CancellationToken.None);
@@ -92,7 +84,7 @@ public class BoxBayHandlerTests
         var boxes = Substitute.For<IBoxRepository>();
         var bays = Substitute.For<IBayRepository>();
         boxes.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns((BoxReadModel?)null);
-        var handler = new AssignBoxBayHandler(boxes, bays, AKnownLoader());
+        var handler = new AssignBoxBayHandler(boxes, bays);
 
         var outcome = await handler.HandleAsync(
             new AssignBoxBayCommand(BoxId, BayId, Loader), CancellationToken.None);
@@ -107,31 +99,12 @@ public class BoxBayHandlerTests
         var bays = Substitute.For<IBayRepository>();
         boxes.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
         bays.GetByIdAsync(BayId, Arg.Any<CancellationToken>()).Returns((BayReadModel?)null);
-        var handler = new AssignBoxBayHandler(boxes, bays, AKnownLoader());
+        var handler = new AssignBoxBayHandler(boxes, bays);
 
         var outcome = await handler.HandleAsync(
             new AssignBoxBayCommand(BoxId, BayId, Loader), CancellationToken.None);
 
         outcome.Should().Be(AssignBoxBayOutcome.BayNotFound);
-    }
-
-    [Fact]
-    public async Task Naming_an_assigner_who_is_not_a_volunteer_on_file_is_refused()
-    {
-        var boxes = Substitute.For<IBoxRepository>();
-        var bays = Substitute.For<IBayRepository>();
-        var people = Substitute.For<IPersonRepository>();
-        boxes.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
-        bays.GetByIdAsync(BayId, Arg.Any<CancellationToken>()).Returns(ABay());
-        people.ExistsAsync(Loader, Arg.Any<CancellationToken>()).Returns(false);
-        var handler = new AssignBoxBayHandler(boxes, bays, people);
-
-        var outcome = await handler.HandleAsync(
-            new AssignBoxBayCommand(BoxId, BayId, Loader), CancellationToken.None);
-
-        outcome.Should().Be(AssignBoxBayOutcome.NoSuchAssigner);
-        await boxes.DidNotReceive().AssignBayAsync(
-            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

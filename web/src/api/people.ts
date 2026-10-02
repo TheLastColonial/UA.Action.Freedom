@@ -7,7 +7,12 @@ import { delete204, getJson, postCreate, put204 } from './http';
 import { qk } from './queryKeys';
 import type { PeopleListParams } from './queryKeys';
 import { personReadModelSchema } from './schemas/people';
-import type { CreatePersonRequest, PersonReadModel, UpdatePersonRequest } from './schemas/people';
+import type {
+  CreatePersonRequest,
+  LinkLoginRequest,
+  PersonReadModel,
+  UpdatePersonRequest,
+} from './schemas/people';
 
 const BASE = '/people';
 const idPath = (id: string) => `${BASE}/${encodeURIComponent(id)}`;
@@ -30,6 +35,10 @@ export function createPerson(body: CreatePersonRequest): Promise<CreatedResource
 
 export function updatePerson(id: string, body: UpdatePersonRequest): Promise<void> {
   return put204(idPath(id), body);
+}
+
+export function linkLogin(id: string, body: LinkLoginRequest): Promise<void> {
+  return put204(`${idPath(id)}/login`, body);
 }
 
 export function deletePerson(id: string): Promise<void> {
@@ -68,5 +77,13 @@ export function useDeletePerson(): UseMutationResult<void, Error, string> {
   return useMutation({
     mutationFn: deletePerson,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.people.all }),
+  });
+}
+
+export function useLinkLogin(id: string): UseMutationResult<void, Error, LinkLoginRequest> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: LinkLoginRequest) => linkLogin(id, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.me }),
   });
 }

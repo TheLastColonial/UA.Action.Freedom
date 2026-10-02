@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented.
+Accepted. Not yet implemented. The groundwork exists ([plan 02](../plans/02-login-person-link.md)): `ICurrentPerson` resolves the caller to a linked volunteer, and the insurer's `RecordedBy` and the receiver access log already record that person.
 
 ## Context
 

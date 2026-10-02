@@ -25,6 +25,7 @@ public class ConvoyVehicleRepositoryTests
         CancellationToken cancellationToken)
     {
         await SkipUnlessReachableAsync(Probe, cancellationToken);
+        await EnsureRecorderAsync();
         return (new ConvoyRepository(ConnectionFactory()), new ConvoyVehicleRepository(ConnectionFactory()));
     }
 
@@ -447,7 +448,7 @@ public class ConvoyVehicleRepositoryTests
             stored!.PolicyNumber.Should().Be("POL-1");
             stored.CoverEnd.Should().Be(new DateTime(2026, 9, 30));
             stored.CostGbp.Should().Be(412.50m);
-            stored.RecordedBy.Should().Be("operator-sub");
+            stored.RecordedBy.Should().Be(RecorderId);
             stored.VoidedAt.Should().BeNull();
             (await truckList.GetInsuranceAsync(id, elsewhere, cancellationToken)).Should().BeNull();
         }

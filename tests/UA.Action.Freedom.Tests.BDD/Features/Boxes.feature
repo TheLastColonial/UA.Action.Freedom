@@ -79,14 +79,13 @@ Scenario: A box with no contents yet has an empty list, not a missing one
 
 Scenario: A loader validates a box and the weight becomes authoritative
     Given I am authenticated as "admin"
-    And a volunteer exists who can validate boxes
     When I POST "/boxes" with body:
         """
         {}
         """
     Then the response status is 201
     Given I remember the box
-    When I POST "/boxes/{id}/validate" on the remembered box with the validating volunteer weighing 24
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 24
     Then the response status is 204
     When I GET "/boxes/{id}" on the remembered box
     Then the response body field "validated" is "True"
@@ -94,14 +93,13 @@ Scenario: A loader validates a box and the weight becomes authoritative
 
 Scenario: A validated box will not take another item
     Given I am authenticated as "admin"
-    And a volunteer exists who can validate boxes
     When I POST "/boxes" with body:
         """
         {}
         """
     Then the response status is 201
     Given I remember the box
-    When I POST "/boxes/{id}/validate" on the remembered box with the validating volunteer weighing 18
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 18
     Then the response status is 204
     When I POST "/boxes/{id}/items" on the remembered box with body:
         """
@@ -111,30 +109,28 @@ Scenario: A validated box will not take another item
 
 Scenario: A box cannot be validated twice
     Given I am authenticated as "admin"
-    And a volunteer exists who can validate boxes
     When I POST "/boxes" with body:
         """
         {}
         """
     Then the response status is 201
     Given I remember the box
-    When I POST "/boxes/{id}/validate" on the remembered box with the validating volunteer weighing 18
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 18
     Then the response status is 204
-    When I POST "/boxes/{id}/validate" on the remembered box with the validating volunteer weighing 25
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 25
     Then the response status is 409
     When I GET "/boxes/{id}" on the remembered box
     Then the response body field "weightKg" is "18"
 
 Scenario: A validated box cannot be moved or re-pointed
     Given I am authenticated as "admin"
-    And a volunteer exists who can validate boxes
     When I POST "/boxes" with body:
         """
         {}
         """
     Then the response status is 201
     Given I remember the box
-    When I POST "/boxes/{id}/validate" on the remembered box with the validating volunteer weighing 18
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 18
     Then the response status is 204
     When I PUT "/boxes/{id}" on the remembered box with body:
         """
@@ -142,7 +138,7 @@ Scenario: A validated box cannot be moved or re-pointed
         """
     Then the response status is 409
 
-Scenario: Naming a validator who is not a volunteer on file is refused
+Scenario: A validator named in the body is ignored, the caller signs
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:
         """
@@ -153,7 +149,10 @@ Scenario: Naming a validator who is not a volunteer on file is refused
         """
         { "validatedByPersonId": "6f9619ff-8b86-d011-b42d-00cf4fc964ff", "weightKg": 20 }
         """
-    Then the response status is 404
+    Then the response status is 204
+    When I GET "/boxes/{id}"
+    Then the response status is 200
+    And the response body does not mention "6f9619ff-8b86-d011-b42d-00cf4fc964ff"
 
 Scenario: A box validated at an implausible weight is rejected
     Given I am authenticated as "operator"
@@ -164,7 +163,7 @@ Scenario: A box validated at an implausible weight is rejected
     Then the response status is 201
     When I POST "/boxes/{id}/validate" with body:
         """
-        { "validatedByPersonId": "6f9619ff-8b86-d011-b42d-00cf4fc964ff", "weightKg": 9999 }
+        { "weightKg": 9999 }
         """
     Then the response status is 400
 
@@ -172,12 +171,11 @@ Scenario: A loader places a box in a bay and can find it there again
     Given I am authenticated as "admin"
     And a location exists
     And a bay exists at the location
-    And a volunteer exists who can validate boxes
     When I POST "/boxes" at the remembered location
     Then the response status is 201
     Given I remember the box
     Given I am authenticated as "operator"
-    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay and volunteer
+    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay
     Then the response status is 204
     When I GET "/boxes/{id}/bay" on the remembered box
     Then the response status is 200
@@ -187,23 +185,21 @@ Scenario: An administrator cannot place a box in a bay
     Given I am authenticated as "admin"
     And a location exists
     And a bay exists at the location
-    And a volunteer exists who can validate boxes
     When I POST "/boxes" at the remembered location
     Then the response status is 201
     Given I remember the box
-    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay and volunteer
+    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay
     Then the response status is 403
 
 Scenario: A loader vacates a box from its bay
     Given I am authenticated as "admin"
     And a location exists
     And a bay exists at the location
-    And a volunteer exists who can validate boxes
     When I POST "/boxes" at the remembered location
     Then the response status is 201
     Given I remember the box
     Given I am authenticated as "operator"
-    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay and volunteer
+    When I PUT "/boxes/{id}/bay" on the remembered box with the remembered bay
     Then the response status is 204
     When I DELETE "/boxes/{id}/bay" on the remembered box
     Then the response status is 204

@@ -29,6 +29,26 @@ public interface IPersonRepository
     /// team: take them off it first.
     /// </summary>
     Task<DeletePersonResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The volunteer a login (its token subject) belongs to, or nothing. Reads the personal data
+    /// alone, so an erased volunteer's login is never found.
+    /// </summary>
+    Task<Guid?> FindBySubjectAsync(string subject, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Links <paramref name="subject"/> to the volunteer, replacing any login they had. One login
+    /// belongs to one person: a subject already linked to someone else is
+    /// <see cref="LinkLoginResult.SubjectInUse"/>.
+    /// </summary>
+    Task<LinkLoginResult> LinkLoginAsync(Guid personId, string subject, CancellationToken cancellationToken);
+}
+
+public enum LinkLoginResult
+{
+    Linked,
+    NotFound,
+    SubjectInUse
 }
 
 public enum DeletePersonResult

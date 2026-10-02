@@ -314,4 +314,100 @@ public class PersonRepositoryTests
             await RemoveAsync(packerId);
         }
     }
+    private static string NewSubject() => "it-" + Guid.NewGuid().ToString("N");
+
+    [Fact]
+    public async Task A_linked_login_is_found_as_its_person()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = Guid.NewGuid();
+        var subject = NewSubject();
+
+        try
+        {
+            await repository.AddAsync(APerson(id, NewSurname()), cancellationToken);
+
+            (await repository.FindBySubjectAsync(subject, cancellationToken)).Should().BeNull();
+            (await repository.LinkLoginAsync(id, subject, cancellationToken)).Should().Be(LinkLoginResult.Linked);
+            (await repository.FindBySubjectAsync(subject, cancellationToken)).Should().Be(id);
+        }
+        finally
+        {
+            await RemoveAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task A_login_cannot_be_linked_to_two_people_and_an_unknown_person_cannot_be_linked()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var subject = NewSubject();
+
+        try
+        {
+            await repository.AddAsync(APerson(first, NewSurname()), cancellationToken);
+            await repository.AddAsync(APerson(second, NewSurname()), cancellationToken);
+            await repository.LinkLoginAsync(first, subject, cancellationToken);
+
+            (await repository.LinkLoginAsync(second, subject, cancellationToken)).Should().Be(LinkLoginResult.SubjectInUse);
+            (await repository.FindBySubjectAsync(subject, cancellationToken)).Should().Be(first);
+            (await repository.LinkLoginAsync(Guid.NewGuid(), NewSubject(), cancellationToken)).Should().Be(LinkLoginResult.NotFound);
+        }
+        finally
+        {
+            await RemoveAsync(first);
+            await RemoveAsync(second);
+        }
+    }
+
+    [Fact]
+    public async Task Linking_the_same_login_to_the_same_person_again_is_not_a_conflict()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = Guid.NewGuid();
+        var subject = NewSubject();
+
+        try
+        {
+            await repository.AddAsync(APerson(id, NewSurname()), cancellationToken);
+            await repository.LinkLoginAsync(id, subject, cancellationToken);
+
+            (await repository.LinkLoginAsync(id, subject, cancellationToken)).Should().Be(LinkLoginResult.Linked);
+        }
+        finally
+        {
+            await RemoveAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task Erasing_a_volunteer_removes_the_link_with_their_personal_data()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = Guid.NewGuid();
+        var subject = NewSubject();
+        var vin = "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
+        await repository.AddAsync(APerson(id, NewSurname(), isDriver: true), cancellationToken);
+        await repository.LinkLoginAsync(id, subject, cancellationToken);
+        var convoyId = await ACrewedConvoyAsync(vin, id, arrived: true);
+
+        try
+        {
+            (await repository.DeleteAsync(id, cancellationToken)).Should().Be(DeletePersonResult.Deleted);
+
+            (await IdentityRowsAsync(id)).Should().Be(1);
+            (await repository.FindBySubjectAsync(subject, cancellationToken)).Should().BeNull();
+        }
+        finally
+        {
+            await RemoveConvoyAsync(convoyId, vin);
+            await RemoveAsync(id);
+        }
+    }
 }

@@ -83,6 +83,26 @@ public static class PersonEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.PeopleWrite);
 
+        people.MapPut("/{id:guid}/login", async (
+            Guid id,
+            LinkLoginRequest request,
+            ICommandHandler<LinkLoginCommand, LinkLoginOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
+
+            return outcome switch
+            {
+                LinkLoginOutcome.Linked => Results.NoContent(),
+                LinkLoginOutcome.SubjectInUse => Results.Problem(
+                    detail: "That login is already linked to another volunteer.",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            };
+        })
+        .AddEndpointFilter<ValidationFilter<LinkLoginRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.PeopleWrite);
+
         return app;
     }
 }

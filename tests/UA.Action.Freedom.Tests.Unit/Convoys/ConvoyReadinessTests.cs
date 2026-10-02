@@ -30,7 +30,7 @@ public class ConvoyReadinessTests
         DateTime? voidedAt = null,
         params Guid[] uncoveredDrivers) => new(
         ConvoyTestData.Id, vin, "Ukraine Aid Mutual", "POL-1",
-        Departs.Date.AddDays(startOffset), Departs.Date.AddDays(endOffset), null, "sub", Departs.AddDays(-10), voidedAt)
+        Departs.Date.AddDays(startOffset), Departs.Date.AddDays(endOffset), null, Guid.Empty, Departs.AddDays(-10), voidedAt)
     {
         UncoveredDrivers = uncoveredDrivers,
     };

@@ -4,10 +4,16 @@ import { dirname } from 'node:path';
 import { test as setup } from '@playwright/test';
 
 import { SEED_USERS, authFile } from './authFiles';
+import { linkSeedLogins } from './linkLogins';
 import { stackIsUp } from './stack';
 
 const PASSWORD = process.env['FREEDOM_TEST_PASSWORD'] ?? 'password';
 const EMPTY_STATE = JSON.stringify({ cookies: [], origins: [] });
+
+setup('link the seed logins to volunteers', async () => {
+  setup.skip(!(await stackIsUp()), 'the local stack is not up (docker compose + tofu apply)');
+  await linkSeedLogins();
+});
 
 // One real Keycloak login per seed user, saved as storage state. The SPA keeps its access
 // token in memory, but the Keycloak SSO cookie in this state lets a spec silently re-auth

@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Receivers;
@@ -83,19 +82,22 @@ public static class ReceiverEndpoints
 
         receivers.MapGet("/{receiverRef:guid}/detail", async (
             Guid receiverRef,
-            ClaimsPrincipal caller,
+            ICurrentPerson currentPerson,
             IQueryHandler<GetReceiverDetailQuery, ReceiverDetailReadModel?> handler,
             CancellationToken cancellationToken,
             string? reason) =>
         {
-            // Identity comes from the token, never from the request. An audit trail a caller
-            // could write their own name into would not be one.
-            var principalId = caller.FindFirstValue(ClaimTypes.NameIdentifier)
-                              ?? caller.FindFirstValue("sub")
-                              ?? "unknown";
+            // Identity comes from the login, never from the request. An audit trail a caller
+            // could write their own name into would not be one — and a login linked to no one
+            // cannot be named in it, so it reads no address.
+            var (personId, refusal) = await LoginNotLinked.RequireAsync(currentPerson, cancellationToken);
+            if (refusal is not null)
+            {
+                return refusal;
+            }
 
             var detail = await handler.HandleAsync(
-                new GetReceiverDetailQuery(receiverRef, principalId, reason), cancellationToken);
+                new GetReceiverDetailQuery(receiverRef, personId!.Value, reason), cancellationToken);
 
             return detail is null ? Results.NotFound() : Results.Ok(detail);
         })

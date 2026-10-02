@@ -27,3 +27,8 @@ export interface CreatePersonRequest {
 }
 
 export type UpdatePersonRequest = CreatePersonRequest;
+
+// Body of PUT /people/{id}/login — the token subject the volunteer signs in as.
+export interface LinkLoginRequest {
+  subject: string;
+}

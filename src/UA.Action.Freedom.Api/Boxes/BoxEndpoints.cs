@@ -27,9 +27,6 @@ public static class BoxEndpoints
     private const string BayLocationMismatchProblem =
         "This bay does not belong to the location the box is currently at.";
 
-    private const string BayNoSuchAssignerProblem =
-        "The volunteer named as having placed this box is not on file.";
-
     public static WebApplication MapFreedomBoxes(this WebApplication app)
     {
         var boxes = app.MapGroup("/boxes").WithTags("Boxes");
@@ -97,18 +94,24 @@ public static class BoxEndpoints
         boxes.MapPost("/{id:int}/validate", async (
             int id,
             ValidateBoxRequest request,
+            ICurrentPerson currentPerson,
             ICommandHandler<ValidateBoxCommand, ValidateBoxOutcome> handler,
             CancellationToken cancellationToken) =>
         {
-            var outcome = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
+            // The attestation names the caller's linked person. A login linked to no one cannot
+            // vouch for a box.
+            var (validatedBy, refusal) = await LoginNotLinked.RequireAsync(currentPerson, cancellationToken);
+            if (refusal is not null)
+            {
+                return refusal;
+            }
+
+            var outcome = await handler.HandleAsync(request.ToCommand(id, validatedBy!.Value), cancellationToken);
 
             return outcome switch
             {
                 ValidateBoxOutcome.Validated => Results.NoContent(),
                 ValidateBoxOutcome.NotFound => Results.NotFound(),
-                ValidateBoxOutcome.NoSuchValidator => Results.Problem(
-                    detail: "The volunteer named as having checked this box is not on file.",
-                    statusCode: StatusCodes.Status404NotFound),
                 _ => Results.Problem(
                     detail: "This box has already been validated.",
                     statusCode: StatusCodes.Status409Conflict),
@@ -227,10 +230,17 @@ public static class BoxEndpoints
         boxes.MapPut("/{id:int}/bay", async (
             int id,
             AssignBoxBayRequest request,
+            ICurrentPerson currentPerson,
             ICommandHandler<AssignBoxBayCommand, AssignBoxBayOutcome> handler,
             CancellationToken cancellationToken) =>
         {
-            var outcome = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
+            var (assignedBy, refusal) = await LoginNotLinked.RequireAsync(currentPerson, cancellationToken);
+            if (refusal is not null)
+            {
+                return refusal;
+            }
+
+            var outcome = await handler.HandleAsync(request.ToCommand(id, assignedBy!.Value), cancellationToken);
 
             return outcome switch
             {
@@ -238,8 +248,6 @@ public static class BoxEndpoints
                 AssignBoxBayOutcome.BoxNotFound => Results.NotFound(),
                 AssignBoxBayOutcome.BayNotFound => Results.Problem(
                     detail: "No such bay.", statusCode: StatusCodes.Status404NotFound),
-                AssignBoxBayOutcome.NoSuchAssigner => Results.Problem(
-                    detail: BayNoSuchAssignerProblem, statusCode: StatusCodes.Status404NotFound),
                 _ => Results.Problem(
                     detail: BayLocationMismatchProblem, statusCode: StatusCodes.Status409Conflict),
             };

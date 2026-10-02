@@ -226,8 +226,8 @@ the domain documents, which link back here.
 
 | ID | Decision | Notes |
 |---|---|---|
-| <a id="o34"></a>**O34** | **A login is linked to a person by storing the identity provider's subject on the person's erasable details,** linked by an Administrator. Erasing the person removes the link with the rest of their personal data. | Needed by [O19](#o19), [X12](#x12) and [O14](#o14). Today no login is linked to a person. |
-| <a id="o35"></a>**O35** | **A login that is not linked to a person is refused (403) on any write that records who did it.** No "unknown" identity is ever written. | Today an unlinked caller is recorded as "unknown". |
+| <a id="o34"></a>**O34** | **A login is linked to a person by storing the identity provider's subject on the person's erasable details,** linked by an Administrator. Erasing the person removes the link with the rest of their personal data. | Needed by [O19](#o19), [X12](#x12) and [O14](#o14). Under review: [Q-staff-and-volunteer-identity](#q-staff-and-volunteer-identity). Built by [plan 02](../plans/02-login-person-link.md): `PersonDetail.IdentitySubject`, `PUT /people/{id}/login`, `GET /me`. |
+| <a id="o35"></a>**O35** | **A login that is not linked to a person is refused (403) on any write that records who did it.** No "unknown" identity is ever written. | Built by [plan 02](../plans/02-login-person-link.md): `ICurrentPerson`, and the 403 `login-not-linked` problem. It used to record "unknown". |
 
 ---
 
@@ -359,6 +359,7 @@ None of these changes the model. The cautious answer is assumed for each.
 |---|---|---|
 | <a id="q-retention"></a>**Q-retention** | How long must declarations, audit trails and donor records be kept? Customs generally require years, but donor erasure ([D15](#d15)) pulls the other way. Which wins for each kind of record? | Nothing is deleted except by an erasure request. |
 | <a id="q-vehicle-equipment"></a>**Q-vehicle-equipment** | [O13](#o13) covers equipment the charity buys, such as warning triangles. What else is carried for the convoy itself: spare parts, tools, tow straps, drivers' bags? How should those be captured, and do they count towards the vehicle's weight? | Not captured. The fixed weight allowance in [Key concepts](key-concepts.md#manifest) stands. |
+| <a id="q-staff-and-volunteer-identity"></a>**Q-staff-and-volunteer-identity** | Is a login linked to a person ([O34](#o34)) the right way to manage who is on the system? Volunteers may never have a login, while charity employees have logins and create convoys, manage boxes and handle destinations. Four doubts: (1) an employee has to be a volunteer record, with a date of birth, joined date and driving flag; (2) the Administrator links by pasting a raw token subject, which Keycloak regenerates when the realm is recreated; (3) erasing a person also erases their login link, which suits a volunteer but not a leaver who must keep their attributed history; (4) what a person is and what they may do live in two places, the person record and the identity provider roles. Options: keep the structure and link by verified email on first sign-in with Administrator approval; let a person be staff without volunteer-only fields; or later split a separate login/account entity behind `ICurrentPerson`. | The project owner |
 
 ### Resolved on 2026-10-02
 
