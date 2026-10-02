@@ -15,20 +15,26 @@ public sealed record UpdateBoxRequest(Guid? ReceiverRef, int? LocationId)
     public UpdateBoxCommand ToCommand(int id) => new(id, ReceiverRef, LocationId);
 }
 
-/// <summary>Body of <c>PUT /boxes/{id}/bay</c> — a Loader placing the box in a bay.</summary>
-public sealed record AssignBoxBayRequest(int BayId, Guid AssignedByPersonId)
+/// <summary>
+/// Body of <c>PUT /boxes/{id}/bay</c> — a Loader placing the box in a bay. Who placed it is the
+/// caller's linked person, never a field here: an <c>assignedByPersonId</c> in the body is ignored.
+/// </summary>
+public sealed record AssignBoxBayRequest(int BayId)
 {
-    public AssignBoxBayCommand ToCommand(int boxId) => new(boxId, BayId, AssignedByPersonId);
+    public AssignBoxBayCommand ToCommand(int boxId, Guid assignedByPersonId) => new(boxId, BayId, assignedByPersonId);
 }
 
 /// <summary>
 /// Body of <c>POST /boxes/{id}/validate</c> — the Loader's confirmation of contents and weight.
+/// Who vouched for the box is the caller's linked person, never a field here: a
+/// <c>validatedByPersonId</c> in the body is ignored.
 /// </summary>
 public sealed record ValidateBoxRequest(
-    Guid ValidatedByPersonId, int WeightKg,
+    int WeightKg,
     decimal? WidthCm = null, decimal? DepthCm = null, decimal? HeightCm = null)
 {
-    public ValidateBoxCommand ToCommand(int id) => new(id, ValidatedByPersonId, WeightKg, WidthCm, DepthCm, HeightCm);
+    public ValidateBoxCommand ToCommand(int id, Guid validatedByPersonId) =>
+        new(id, validatedByPersonId, WeightKg, WidthCm, DepthCm, HeightCm);
 }
 
 /// <summary>Body of <c>POST /boxes/{id}/items</c>.</summary>
@@ -62,8 +68,6 @@ public sealed class AssignBoxBayRequestValidator : AbstractValidator<AssignBoxBa
     public AssignBoxBayRequestValidator()
     {
         RuleFor(r => r.BayId).GreaterThan(0);
-        RuleFor(r => r.AssignedByPersonId).NotEmpty()
-            .WithMessage("'Assigned By Person Id' must name the volunteer who placed the box.");
     }
 }
 
@@ -83,8 +87,6 @@ public sealed class ValidateBoxRequestValidator : AbstractValidator<ValidateBoxR
 
     public ValidateBoxRequestValidator()
     {
-        RuleFor(r => r.ValidatedByPersonId).NotEmpty()
-            .WithMessage("'Validated By Person Id' must name the volunteer who checked the box.");
         RuleFor(r => r.WeightKg).InclusiveBetween(1, MaxBoxWeightKg)
             .WithMessage($"'Weight Kg' must be between 1 and {MaxBoxWeightKg}.");
         RuleFor(r => r.WidthCm).InclusiveBetween(1, MaxBoxDimensionCm).When(r => r.WidthCm is not null)

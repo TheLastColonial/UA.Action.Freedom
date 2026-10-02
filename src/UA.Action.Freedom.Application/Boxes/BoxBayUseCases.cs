@@ -16,7 +16,6 @@ public enum AssignBoxBayOutcome
     Assigned,
     BoxNotFound,
     BayNotFound,
-    NoSuchAssigner,
     LocationMismatch
 }
 
@@ -26,7 +25,7 @@ public enum AssignBoxBayOutcome
 /// the box not yet having a location at all — either way, the bay is not somewhere this box is.
 /// </summary>
 public sealed class AssignBoxBayHandler(
-    IBoxRepository boxes, IBayRepository bays, IPersonRepository people)
+    IBoxRepository boxes, IBayRepository bays)
     : ICommandHandler<AssignBoxBayCommand, AssignBoxBayOutcome>
 {
     public async Task<AssignBoxBayOutcome> HandleAsync(AssignBoxBayCommand command, CancellationToken cancellationToken)
@@ -46,13 +45,6 @@ public sealed class AssignBoxBayHandler(
         if (box.LocationId is null || box.LocationId != bay.LocationId)
         {
             return AssignBoxBayOutcome.LocationMismatch;
-        }
-
-        // The person placing the box has to be a volunteer on file, same reasoning as
-        // ValidateBoxHandler: a signature naming somebody who does not exist is worse than none.
-        if (!await people.ExistsAsync(command.AssignedByPersonId, cancellationToken))
-        {
-            return AssignBoxBayOutcome.NoSuchAssigner;
         }
 
         await boxes.AssignBayAsync(

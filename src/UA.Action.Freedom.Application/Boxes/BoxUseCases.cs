@@ -137,22 +137,16 @@ public enum ValidateBoxOutcome
 {
     Validated,
     NotFound,
-    AlreadyValidated,
-    NoSuchValidator
+    AlreadyValidated
 }
 
-public sealed class ValidateBoxHandler(IBoxRepository repository, IPersonRepository people)
+public sealed class ValidateBoxHandler(IBoxRepository repository)
     : ICommandHandler<ValidateBoxCommand, ValidateBoxOutcome>
 {
     public async Task<ValidateBoxOutcome> HandleAsync(ValidateBoxCommand command, CancellationToken cancellationToken)
     {
-        // The validator has to be a volunteer on file. A signature naming somebody who is not a
-        // real person is worse than no signature, because it looks like accountability.
-        if (!await people.ExistsAsync(command.ValidatedByPersonId, cancellationToken))
-        {
-            return ValidateBoxOutcome.NoSuchValidator;
-        }
-
+        // The validator is the caller's linked person, resolved at the edge from their login — a
+        // volunteer on file by construction, so there is nothing here to look up.
         // Conditional on the box not already being validated, so two Loaders checking the same
         // box at once cannot both record themselves as the one who did it.
         if (await repository.ValidateAsync(
