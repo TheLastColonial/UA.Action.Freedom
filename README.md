@@ -249,10 +249,10 @@ Core resource endpoints:
   - `GET /convoys/{id}/vehicles` — The truck list, withdrawn vehicles included (each entry says which it is)
   - `PUT /convoys/{id}/vehicles/{vin}` — Put a vehicle on the truck list; only one that has **Passed** its inspection, has not been handed over, and is not travelling with another convoy may join (409 otherwise)
   - `DELETE /convoys/{id}/vehicles/{vin}` (`?reason=`) — Before publication this takes the vehicle off the list with its crew and insurance. **Afterwards it is a withdrawal**: the entry, its crew, its insurance and its manifest all stay, because a vehicle that breaks down still has paperwork describing a real load (`convoys:write`)
-  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/crew/{personId}` — Vehicle crew, **per leg**: `{ "leg": "Uk" | "Border", "role": "Driver" | "Passenger" }`; a person takes one seat per leg, so a crew handover at the European border is recordable (**Dispatcher only** for `PUT`/`DELETE`; `GET`, which takes an optional `?leg=`, is in `convoys:read`)
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/crew/{personId}` — Vehicle crew: an optional `{ "role": "Driver" | "Passenger" }` body (default Driver); a person takes one seat per convoy (**Dispatcher only** for `PUT`/`DELETE`; `GET` is in `convoys:read`)
   - `POST /convoys/{id}/vehicles/{vin}/manifest` — **Open the manifest for this vehicle on this convoy.** There is no `POST /manifests`: a manifest is the paperwork for a truck-list entry, and `(ConvoyId, Vin)` is a composite foreign key to it (`convoys:write`)
-  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/insurance` — The vehicle's insurance for this convoy; any crew change voids it, and a manifest cannot depart without it (`convoys:write`)
-  - `GET /convoys/{id}/readiness` — Advisory readiness: **two drivers on each leg** and insurance per vehicle, and a route. Withdrawn vehicles are skipped (`convoys:read`)
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/insurance` — The vehicle's insurance for this convoy. It names the drivers it covers (`uncoveredDrivers` lists crew drivers added since); removing a driver keeps it in cover, and a manifest cannot depart without it covering every driver (`convoys:write`)
+  - `GET /convoys/{id}/readiness` — Advisory readiness: **one driver per vehicle required, two advised**, insurance naming every driver, and a route. Withdrawn vehicles are skipped (`convoys:read`)
   - `POST /convoys/{id}/arrive` — Mark arrived once every vehicle still travelling has a finished manifest; Delivered/Lost vehicles are handed over for good (`convoys:write`)
   - `POST /convoys/{id}/publish-truck-list` — Close the truck list to additions
 - `GET|POST /receivers` — Delivery contacts (reference/org/region)
@@ -266,7 +266,7 @@ Core resource endpoints:
   - `GET /boxes/scan/{token}` — Resolve a scanned token to its box (`boxes:read`)
 - `GET /manifests` — The document pack for one vehicle on one convoy: cargo, border weight, GMR, ferry booking. **Created on its convoy** (above), not here
   - `PUT /manifests/{id}` — Notes and ferry booking only. The convoy and the vehicle are the manifest's identity, so there is no field for either
-  - `GET /manifests/{id}/crew` — Who is travelling with its vehicle, per leg. A **read**: crewing happens once, on the truck-list entry
+  - `GET /manifests/{id}/crew` — Who is travelling with its vehicle. A **read**: crewing happens once, on the truck-list entry
   - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo assignment
   - `GET /manifests/{id}/elo` — The French logistics envelope for this vehicle: its `jeton`, `numeroDossier` and `statut`. **Read-only** — an envelope is requested by approving the manifest, never by a `POST` here — and `404` until the Customs Worker has obtained one (`manifests:read`)
   - `GET /manifests/{id}/elo/document` — The barcode PDF a driver presents at the French Smart Border, streamed through the authenticated API rather than as a blob URL (`manifests:read`)
@@ -331,7 +331,6 @@ domain, recorded in [ADRs 0004–0017](docs/adr/README.md) and **not yet impleme
 
 | Area | As built | Target |
 | --- | --- | --- |
-| Crew | One seat per person **per journey leg** | One seat per person per convoy; legs removed ([ADR 0007](docs/adr/0007-journey-legs-are-removed-from-the-crew-model.md)) |
 | Manifest | Ten states; approval freezes it and hands off the paperwork | The Administrator's **load sign-off** only; a load change needs re-approval ([ADR 0004](docs/adr/0004-the-manifest-is-the-load-sign-off.md)) |
 | Customs paperwork | GMR, ELO and ENS hung off the manifest; submitted automatically on approval | One per-vehicle **Declaration** with derived staleness; **manual filing by default** ([ADRs 0005](docs/adr/0005-declarations-are-per-vehicle-with-derived-staleness.md), [0006](docs/adr/0006-filing-is-manual-by-default.md)) |
 | Departure | Advisory readiness; only insurance is checked | Blocking requirements, **no override**, one convoy depart action ([ADR 0008](docs/adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md)) |
@@ -468,8 +467,8 @@ accepted at the Brexit Smart Border.
 - One repository per slice with dedicated `I*Repository` port
 - **CQRS read models** (flat shapes) separate from domain objects
 - **Transactions** only where one fact spans several rows: route replacement; a convoy being
-  cancelled (its truck list goes, and the crew and insurance cascade with it); a crew change (it
-  voids the vehicle's insurance); convoy arrival (the stamp and the handover); volunteer add and
+  cancelled (its truck list goes, and the crew and insurance cascade with it); a crew change (a
+  removed driver leaves the insurance's covered drivers in the same transaction); convoy arrival (the stamp and the handover); volunteer add and
   erasure; receiver detail resolve + audit; QR-label re-issue and bay assignment. Taking a vehicle
   off an unpublished truck list needs none: the crew and the insurance cascade from the entry.
   See CLAUDE.md for the list.
@@ -479,12 +478,12 @@ accepted at the Brexit Smart Border.
 
 ### Convoy crew, insurance, readiness and arrival
 
-- **Crew** — drivers (registered to drive) and passengers (any volunteer), assigned **per leg** of
-  the journey; one seat per person per leg, enforced by
-  `UQ_ConvoyVehicleCrew_Convoy_Person_Leg`. This is the only crew record in the system: the
+- **Crew** — drivers (registered to drive) and passengers (any volunteer), one seat per person per
+  convoy, enforced by `UQ_ConvoyVehicleCrew_Convoy_Person`; there are no journey legs. This is the only crew record in the system: the
   manifest reads it rather than keeping its own.
-- **Insurance** — per vehicle per convoy, naming the crew. A crew change voids it in the same
-  transaction; `TransitionManifestHandler` refuses `depart` without insurance in cover.
+- **Insurance** — per vehicle per convoy, naming the drivers it covers (`dbo.ConvoyVehicleInsuranceDriver`). Removing a driver
+  keeps it in cover; a driver added afterwards is uncovered until it is recorded again.
+  `TransitionManifestHandler` refuses `depart` without insurance in cover that names every driver.
 - **Readiness** — `ConvoyReadiness.Assess`, one pure function, advisory only.
 - **Withdrawal** — once the truck list is published a vehicle can still *leave*, it just cannot be
   erased: `DELETE /convoys/{id}/vehicles/{vin}?reason=` stamps `WithdrawnAt` and keeps everything.

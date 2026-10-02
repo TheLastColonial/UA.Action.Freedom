@@ -291,7 +291,7 @@ public class PersonRepositoryTests
     public async Task Leaves_non_drivers_out_of_the_drivers_only_page()
     {
         // The dispatcher's shortlist. A non-driver appearing here is someone being asked to
-        // drive a convoy leg they never volunteered for.
+        // drive a convoy they never volunteered for.
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var driverId = Guid.NewGuid();

@@ -201,7 +201,7 @@ A few rows are worth understanding rather than memorising:
 
 - **`convoys:write` also covers a vehicle's insurance, opening a manifest against a truck-list
   entry, and marking a convoy arrived** — all of it the Dispatcher's (and Administrator's)
-  coordination work. Crewing stays narrower, `convoys:assign-drivers`, and it is per journey leg.
+  coordination work. Crewing stays narrower, `convoys:assign-drivers`, and it is one seat per person per convoy.
 - **`people:write` is also volunteer erasure.** `DELETE /people/{id}` permanently deletes the
   volunteer's personal data (UK data protection); it is refused while they are crewing a convoy
   that has not arrived, or a vehicle whose load is not yet delivered, lost or returned.

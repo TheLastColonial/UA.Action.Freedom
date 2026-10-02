@@ -46,22 +46,14 @@ async function addVolunteer(page: Page, first: string, last: string, drives: boo
   await expect(page.getByRole('heading', { name: `${first} ${last}` })).toBeVisible();
 }
 
-// A vehicle is crewed twice, with a handover at the European border, so every assignment names
-// the leg it is for.
-async function assignCrew(
-  page: Page,
-  role: 'Driver' | 'Passenger',
-  name: string,
-  leg: 'UK to Europe' | 'Europe to Ukraine' = 'UK to Europe',
-) {
-  await page.getByLabel('Leg for E2E 002').selectOption({ label: leg });
+async function assignCrew(page: Page, role: 'Driver' | 'Passenger', name: string) {
   await page.getByLabel('Role on E2E 002').selectOption(role);
   await page.getByLabel(`Add ${role.toLowerCase()} to E2E 002`).selectOption({ label: name });
   await page.getByRole('button', { name: 'Assign' }).click();
   await expect(page.getByRole('cell', { name, exact: true }).first()).toBeVisible();
 }
 
-test('@smoke a convoy is planned to readiness: passed vehicle, two drivers per leg, a passenger, insurance', async ({
+test('@smoke a convoy is planned to readiness: passed vehicle, a driver, a passenger, insurance naming the drivers', async ({
   page,
 }) => {
   const stamp = String(Date.now());
@@ -109,13 +101,9 @@ test('@smoke a convoy is planned to readiness: passed vehicle, two drivers per l
   await expect(page.getByRole('cell', { name: vin })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Crew' }).click();
-  // Two drivers on each leg: a vehicle fully crewed out of the UK with nobody booked to take it
-  // into Ukraine is not ready, and readiness says which half is short.
+  // One driver is enough to be ready; a second is advised.
   await assignCrew(page, 'Driver', first);
-  await assignCrew(page, 'Driver', second);
   await assignCrew(page, 'Passenger', rider);
-  await assignCrew(page, 'Driver', first, 'Europe to Ukraine');
-  await assignCrew(page, 'Driver', second, 'Europe to Ukraine');
 
   const insurance = page.getByRole('form', { name: 'Insurance for E2E 002' });
   await insurance.getByLabel('Insurer').fill('Ukraine Aid Mutual');
@@ -128,12 +116,25 @@ test('@smoke a convoy is planned to readiness: passed vehicle, two drivers per l
   await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.getByRole('heading', { name: 'Ready to travel' })).toBeVisible();
 
-  // The policy names the crew: standing the passenger down voids it, and readiness notices.
+  // Standing the passenger down leaves the policy in cover.
   await page.getByRole('tab', { name: 'Crew' }).click();
-  await page.getByRole('button', { name: `Remove ${rider} from the UK to Europe leg` }).click();
-  await expect(page.getByText(/voided by a crew change/)).toBeVisible();
+  await page.getByRole('button', { name: `Remove ${rider} from E2E 002` }).click();
+  await expect(page.getByText(/Insured with Ukraine Aid Mutual/)).toBeVisible();
+
+  // A driver added afterwards is not named on the policy until it is recorded again.
+  await assignCrew(page, 'Driver', second);
+  await expect(
+    page.getByText(/1 driver added since the policy was recorded is not covered/),
+  ).toBeVisible();
 
   await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.getByRole('heading', { name: 'Not ready yet' })).toBeVisible();
-  await expect(page.getByText('E2E 002: Insurance voided by a crew change')).toBeVisible();
+  await expect(page.getByText('E2E 002: Insurance does not cover every driver')).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Crew' }).click();
+  await insurance.getByRole('button', { name: 'Record insurance' }).click();
+  await expect(page.getByText(/not covered/)).toBeHidden();
+
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByRole('heading', { name: 'Ready to travel' })).toBeVisible();
 });

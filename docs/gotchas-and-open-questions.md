@@ -195,10 +195,10 @@ uniqueness.
 
 ### There is one crew record, and the manifest reads it
 
-`dbo.ConvoyVehicleCrew` (was `dbo.VehicleDriver`) carries a `Leg` as well as a `Role`, and
+`dbo.ConvoyVehicleCrew` (was `dbo.VehicleDriver`) carries a `Role` (there are no journey legs), and
 `dbo.ManifestDriverTeam` is gone. They used to coexist, unconnected by any foreign key or join:
 
-- the crew table decided the **insurance**, which a crew change voids, and therefore whether a
+- the crew table decided the **insurance**, which names the drivers it covers, and therefore whether a
   manifest could depart;
 - the manifest's own primary/secondary teams decided **nothing at all**.
 
@@ -207,8 +207,14 @@ So a printed manifest could name a crew the insurance had never heard of, and
 in the vehicle. Crewing is now one act, on the truck-list entry, and `GET /manifests/{id}/crew` is a
 read of it. **Do not give the manifest a crew of its own.**
 
-One seat per person is now **per leg** (`UQ_ConvoyVehicleCrew_Convoy_Person_Leg`), not per convoy,
-because a crew handover at the European border is a real event and is the reason the leg exists.
+One seat per person is **per convoy** (`UQ_ConvoyVehicleCrew_Convoy_Person`). The journey leg, which let a
+person change vehicle at the European border, is removed ([ADR 0007](adr/0007-journey-legs-are-removed-from-the-crew-model.md)).
+
+**Insurance is not voided by a crew change.** `dbo.ConvoyVehicleInsuranceDriver` holds the drivers a policy
+names. Removing a driver deletes their row in the same transaction and the policy stays in cover. A driver added
+afterwards has no row, which is what `VehicleInsuranceReadModel.UncoveredDrivers` reports, until the Dispatcher records
+the insurance again. The `InMemoryConvoyRepository` fake mirrors this, and `WithCrew` seeds a driver as already
+covered when the vehicle is insured.
 
 ### The GMR carries the plate, not the VIN
 
@@ -382,7 +388,7 @@ API answers 409, rather than the 500 it used to. See §9 Q9 for the erasure ques
 
 ### `Committed` requires `IsDriver`
 
-Commitment is a commitment to *drive a leg*. Letting the two disagree would put a non-driver on
+Commitment is a commitment to *drive on a convoy*. Letting the two disagree would put a non-driver on
 the dispatcher's committed-driver shortlist.
 
 ---
@@ -956,8 +962,8 @@ Questions 9–12 from the previous round are **decided and built**:
   on a live crew or manifest team.
 - **One driver on two vehicles of a convoy** — no: one seat per person per convoy, enforced by
   `UQ_VehicleDriver_Convoy_Person`. Passengers exist, and are any volunteer.
-- **Crew changes after publication** — allowed, but they void the vehicle's insurance, which must
-  be recorded again before departure. An arrived convoy's crew cannot change at all.
+- **Crew changes after publication** — allowed. Removing a driver keeps the insurance in cover; a driver added
+  needs it recorded again before departure. An arrived convoy's crew cannot change at all.
 - **The 200-vehicle picker limit** — never reached: arrived vehicles are handed over and leave the
   picker for good, and a convoy is a handful of vans.
 
