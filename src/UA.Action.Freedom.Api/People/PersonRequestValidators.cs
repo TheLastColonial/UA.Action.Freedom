@@ -56,3 +56,12 @@ internal static class PersonDates
     /// </summary>
     internal static readonly DateTime Earliest = new(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 }
+
+/// <summary>The subject is an opaque token claim; the bound mirrors <c>dbo.PersonDetail.IdentitySubject</c>.</summary>
+public sealed class LinkLoginRequestValidator : AbstractValidator<LinkLoginRequest>
+{
+    public LinkLoginRequestValidator()
+    {
+        RuleFor(r => r.Subject).NotEmpty().MaximumLength(200);
+    }
+}
