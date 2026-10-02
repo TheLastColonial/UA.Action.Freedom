@@ -1,0 +1,91 @@
+@startuml Load Sign-off and Declarations
+
+title Signing off a vehicle's load and filing its declarations
+caption Target design. Decisions P6, X3, X6, X5, D4, D12, D20, X1, O32. ADRs 0004, 0005, 0006, 0003, 0002.
+
+autonumber
+
+actor Dispatcher as disp
+actor Administrator as admin
+actor "Ground Officer" as go
+actor "Receiver\n(Ukraine)" as rcv
+participant "Freedom API" as api
+database "Freedom database" as db
+queue "Customs queues" as q
+participant "Customs Worker" as cw
+participant "EU Customs\nTrader Portal" as eu
+participant "HMRC (GVMS)" as hmrc
+participant "French customs (ELO)" as elo
+participant "Ukraine\nhumanitarian aid system" as ua
+
+== Allocate boxes and sign off the load ==
+disp -> api : allocate attested boxes to the vehicle
+disp -> api : POST /manifests/{id}/propose
+admin -> api : POST /manifests/{id}/approve
+api -> db : manifest Approved (sign-off only)
+note right of api
+  Approval no longer files or enqueues anything.
+  Declarations are prepared after sign-off; filing is a separate act.
+end note
+
+== Each declaration is per vehicle ==
+disp -> api : mark declaration Ready to file
+api -> db : store a snapshot of the load
+
+== ENS (always manual) ==
+disp -> api : GET ENS filing sheet
+api --> disp : everything except the consignee address\n(organisation and region only)
+disp -> eu : file the ENS
+go -> eu : enter the consignee address (O32)
+note right of go
+  Freedom never shows the address to the Dispatcher.
+end note
+eu --> disp : MRN
+disp -> api : record ENS MRN (write-once)
+api -> db : ENS Accepted
+
+== ELO (needs the ENS MRN first) ==
+alt ELO mode = manual (default)
+  disp -> elo : request the envelope by hand
+  elo --> disp : envelope reference
+  disp -> api : record ELO reference
+  api -> db : ELO Filed
+else ELO mode = automatic
+  disp -> api : file ELO
+  api -> db : refuse unless ENS Accepted
+  api -> q : enqueue envelope request
+  api -> db : ELO Filed (on enqueue)
+  q -> cw : envelope request
+  cw -> elo : create envelope
+  elo --> cw : file number + barcode
+  cw -> cw : store in blob storage
+end
+
+== GMR ==
+alt GMR mode = manual (default)
+  disp -> hmrc : create GMR in the portal
+  hmrc --> disp : GMR id
+  disp -> api : record GMR reference
+else GMR mode = automatic
+  disp -> api : file GMR
+  api -> q : enqueue GMR submission
+  q -> cw : submission
+  cw -> hmrc : create GMR
+end
+
+== Ukrainian goods list (one per Receiver per vehicle) ==
+disp -> api : prepare goods list (rolled up from the boxes)
+api --> disp : goods list (UKTZED codes, quantities, weights, values)
+disp -> rcv : send goods list
+rcv -> ua : file the goods list (only a registered recipient can)
+ua --> rcv : unique code
+rcv --> disp : unique code
+disp -> api : record goods-list reference
+api -> db : goods list Filed
+
+note over disp, api
+  Refusals keep only a bounded reason code, never the authority's free text.
+  The Dispatcher is warned a week before a code or declaration expires (D34).
+end note
+
+@enduml

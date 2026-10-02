@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0011](../adr/0011-attested-boxes-are-replaced-not-edited.md); [D2](../domain/decisions.md#d2), [D3](../domain/decisions.md#d3), [O17](../domain/decisions.md#o17), [O29](../domain/decisions.md#o29) |
 | **Depends on** | [02](02-login-person-link.md), [05](05-item-classification-value.md), [09](09-declaration-staleness.md) |
 | **Gate** | **Increment 0: translation spike and label data-sensitivity review.** Stop for the owner. |
+| **Flows** | [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)), [03 Box replacement](../sequences/03-box-replacement.puml) ([process](../process/03-box-replacement.puml)) |
 
 ## Context
 

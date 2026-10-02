@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md) (lifecycle); [P6](../domain/decisions.md#p6), [X3](../domain/decisions.md#x3) |
 | **Depends on** | [13](13-readiness-departure.md), [14](14-outcomes-closing.md) |
 | **Gate** | None |
+| **Flows** | [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)), [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)), [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)) |
 
 ## Context
 
@@ -107,6 +108,10 @@ The web keeps nine verbs in `web/src/pages/manifests/transitions.ts`. `docs/mani
 
 ## Docs to update
 
+- [`docs/process/goods-movements.md`](../process/goods-movements.md) and `goods-movements.puml`: the freeze and the
+  ten-state "Ready for departure" section. If plan 08 did not retire them, retire them now in favour of
+  [process 05](../process/05-load-signoff-and-declarations.puml) and
+  [process 06](../process/06-load-change-and-redeclare.puml).
 - `CLAUDE.md`: the long "manifest lifecycle" and "frozen" paragraphs, the "three write-once records" paragraph, the API
   list, and the Domain model `ManifestStatus` paragraph.
 - `README.md`.

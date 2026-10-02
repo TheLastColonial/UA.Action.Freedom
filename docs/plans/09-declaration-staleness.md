@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (snapshot and staleness); [D13](../domain/decisions.md#d13), [D24](../domain/decisions.md#d24), [D27](../domain/decisions.md#d27), [D31](../domain/decisions.md#d31), [O21](../domain/decisions.md#o21) |
 | **Depends on** | [08](08-declarations-filing.md) |
 | **Gate** | None |
+| **Flows** | [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)) |
 
 ## Context
 

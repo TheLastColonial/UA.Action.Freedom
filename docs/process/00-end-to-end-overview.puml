@@ -1,0 +1,44 @@
+@startuml End to End Overview
+
+title End to end: from a donation to a closed convoy
+caption Target design. Each stage links to its own process diagram in docs/process.
+
+|Donor|
+start
+:Email HQ that goods are coming;
+note right: optional (O22)
+
+|Loader|
+:Receive and check in the box at a hub\n(02 Donation and box intake);
+:Record items: category, value, expiry;
+:Attest the box and print its bilingual label;
+
+|Dispatcher|
+:Plan the convoy: route points, truck list,\nbudget, equipment, crew, leader,\ninsurance, ferry, accommodation\n(04 Convoy planning);
+:Allocate attested boxes to vehicles;
+
+|Administrator|
+:Sign off each vehicle's load\n(05 Load sign-off and declarations);
+
+|Dispatcher|
+:File or record each vehicle's declarations\n(GMR, ENS, ELO, Ukrainian goods list);
+
+if (Load changes after filing?) then (yes)
+  :Re-approval and re-declaration\n(06 Load change and re-declare);
+else (no)
+endif
+
+:Depart the convoy\n(07 Departure);
+note right: refused until every blocking requirement holds
+
+|Convoy Leader|
+:Lead the convoy, mark progress and crossings,\nenter fuel, record border refusals\n(08 On the road);
+:Mark vehicles and boxes delivered;
+:Record acceptance per goods list\n(09 Delivery, acceptance and closing);
+
+|Dispatcher|
+:Mark the convoy arrived;
+:Close the convoy and read the report;
+stop
+
+@enduml

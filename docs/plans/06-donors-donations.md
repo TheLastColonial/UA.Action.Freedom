@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0013](../adr/0013-donors-are-a-split-identity.md); [D9](../domain/decisions.md#d9), [D14](../domain/decisions.md#d14), [D15](../domain/decisions.md#d15), [D28](../domain/decisions.md#d28), [O6](../domain/decisions.md#o6), [O22](../domain/decisions.md#o22) |
 | **Depends on** | [05](05-item-classification-value.md) |
 | **Gate** | None |
+| **Flows** | [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)) |
 
 ## Context
 

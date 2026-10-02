@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0012](../adr/0012-receiver-registration-gates-convoys-and-boxes.md); [D22](../domain/decisions.md#d22), [D30](../domain/decisions.md#d30), [D33](../domain/decisions.md#d33), [D35](../domain/decisions.md#d35), [D36](../domain/decisions.md#d36), [P5](../domain/decisions.md#p5), [P11](../domain/decisions.md#p11) |
 | **Depends on** | [03](03-last-changed-audit.md) |
 | **Gate** | None |
+| **Flows** | [11 Receiver registration](../sequences/11-receiver-registration.puml) ([process](../process/11-receiver-registration.puml)), [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)) |
 
 ## Context
 

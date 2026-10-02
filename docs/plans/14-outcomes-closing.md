@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0015](../adr/0015-box-and-vehicle-outcomes-and-convoy-closing.md); [O2](../domain/decisions.md#o2), [O5](../domain/decisions.md#o5), [O8](../domain/decisions.md#o8), [O9](../domain/decisions.md#o9), [O10](../domain/decisions.md#o10), [O24](../domain/decisions.md#o24), [O25](../domain/decisions.md#o25), [O28](../domain/decisions.md#o28), [D29](../domain/decisions.md#d29) |
 | **Depends on** | [08](08-declarations-filing.md), [12](12-budget-equipment.md), [13](13-readiness-departure.md) |
 | **Gate** | None |
+| **Flows** | [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)), [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)) |
 
 ## Context
 

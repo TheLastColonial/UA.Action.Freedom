@@ -1,0 +1,52 @@
+@startuml Load Change and Re-declare Process
+
+title Process: the load changes after its declarations were filed
+caption Target design. Decisions D13, D27, X3, D24, D31, D32, O21. Plans 09 and 15.
+
+|Dispatcher|
+start
+:Change a load\n(move, replace, refuse or remove a box);
+
+|Freedom|
+:Return affected approved manifests to Proposed;
+:Compare each declaration's snapshot with the current load;
+if (Declaration still open and load differs?) then (yes)
+  :Show the declaration as Stale;
+  :Raise a re-declare task on screen;
+  :Block departure until resolved;
+else (no, or already closed at its crossing)
+  stop
+endif
+
+|Administrator|
+:Re-approve the changed loads;
+
+|Dispatcher|
+repeat
+  :Withdraw the stale declaration\n(record and old reference kept);
+  switch (Which instrument?)
+  case (GMR)
+    :Update or recreate it, record the reference;
+  case (ENS)
+    :Invalidate and refile, record the new MRN;
+  case (ELO)
+    :Request a new envelope against the new MRN;
+  case (Goods list)
+    :Prepare a new goods list;
+    :Send it to the Receiver to re-file;
+    if (Goods already near the border?) then (yes)
+      |Loader|
+      :Hold the goods at a registered hub near the border;
+      |Dispatcher|
+    else (no)
+    endif
+    :Record the new reference;
+  endswitch
+repeat while (More stale declarations?) is (yes)
+->no;
+
+|Freedom|
+:Clear the tasks;
+stop
+
+@enduml

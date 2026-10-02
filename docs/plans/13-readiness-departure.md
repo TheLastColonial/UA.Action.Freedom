@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0008](../adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md); [P4](../domain/decisions.md#p4), [P9](../domain/decisions.md#p9), [P11](../domain/decisions.md#p11), [P17](../domain/decisions.md#p17), [O3](../domain/decisions.md#o3), [O7](../domain/decisions.md#o7), [O36](../domain/decisions.md#o36), [D10](../domain/decisions.md#d10), [D7](../domain/decisions.md#d7), [D34](../domain/decisions.md#d34) |
 | **Depends on** | [01](01-crew-without-legs.md), [04](04-receiver-registration.md), [07](07-box-allocation-ferry.md), [09](09-declaration-staleness.md), [11](11-accommodation.md), [12](12-budget-equipment.md) |
 | **Gate** | None |
+| **Flows** | [07 Departure](../sequences/07-departure.puml) ([process](../process/07-departure.puml)) |
 
 ## Context
 

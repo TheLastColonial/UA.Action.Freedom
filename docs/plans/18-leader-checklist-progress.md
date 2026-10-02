@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0016](../adr/0016-progress-is-reported-not-tracked.md); [X2](../domain/decisions.md#x2), [X10](../domain/decisions.md#x10), [X13](../domain/decisions.md#x13), [O18](../domain/decisions.md#o18), [O20](../domain/decisions.md#o20), [O27](../domain/decisions.md#o27), the leader's side of [O2](../domain/decisions.md#o2); closing declarations at a crossing ([ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md)) |
 | **Depends on** | [09](09-declaration-staleness.md), [11](11-accommodation.md), [12](12-budget-equipment.md), [14](14-outcomes-closing.md), [17](17-scoped-permissions.md) |
 | **Gate** | None |
+| **Flows** | [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)) |
 
 ## Context
 

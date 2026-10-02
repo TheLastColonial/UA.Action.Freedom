@@ -5,7 +5,7 @@ conversation with Ukrainian Action.
 
 Related: [System Context](../c4/1-system-context.puml) · [Containers](../c4/2-containers.puml) ·
 [Manifest creation process](../process.puml) · [Manifest status](../manifest-status.puml) ·
-[Architecture recommendations](../recommendations.md)
+[Architecture recommendations](../recommendations.md) · [Sequence diagrams](../sequences/README.md) · [Process diagrams](../process/README.md)
 
 ---
 
@@ -132,6 +132,8 @@ describe a truck that is not on the list.
 
 #### Readiness
 
+*Flows: [07 Departure](../sequences/07-departure.puml) ([process](../process/07-departure.puml)).*
+
 A convoy is **ready** when it has a route, has vehicles still travelling with it, and every blocking requirement is
 met for the convoy and for each of those vehicles. The Dispatcher sees what is still outstanding on the convoy's
 overview. Which requirements **block departure** and which only **warn** is set out in
@@ -214,6 +216,8 @@ and cannot change.
 
 ### Vehicle Insurance
 
+*Flows: [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)).*
+
 Bought by the Dispatcher for each vehicle on a convoy, and it **covers the drivers named on it**. It is for the
 vehicle to travel on the road; cargo is not insured ([O5](decisions.md#o5)). Recorded per vehicle
 per convoy: insurer, policy number, cover start and end, optional cost, and who recorded it (taken from their login,
@@ -245,6 +249,8 @@ A single donated thing, with a description and open-ended properties. Items are 
 transit — they are tracked as the contents of a [Box](#box).
 
 ### Box
+
+*Flows: [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)), [03 Box replacement](../sequences/03-box-replacement.puml) ([process](../process/03-box-replacement.puml)).*
 
 A packed container of [Items](#item) with a confirmed weight, a current [Location](#location), and a target
 [Receiver](#receiver). A box is **validated** when a [Loader](#loader) has confirmed its contents and weight;
@@ -296,6 +302,8 @@ vacates whatever bay the box was already in, as one transactional act, so a box 
 being in two bays at once.
 
 ### Receiver
+
+*Flows: [11 Receiver registration](../sequences/11-receiver-registration.puml) ([process](../process/11-receiver-registration.puml)).*
 
 The destination of a box's contents: a responsible individual, an organisation, and an [Address](#address) in
 Ukraine.
@@ -464,6 +472,8 @@ endpoint — see [recommendations §4.1](../recommendations.md#41-pull-from-hmrc
 ---
 
 ## Data Sensitivity
+
+*Flows: [10 Leader address access](../sequences/10-leader-address-access.puml) ([process](../process/10-leader-address-access.puml)).*
 
 Not all data in Freedom carries the same risk, and the difference drives how it is stored and who may see it.
 

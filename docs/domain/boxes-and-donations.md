@@ -3,7 +3,7 @@
 The business rules for boxes, the items in them, who donated them, and where they go. Why each rule exists is in
 [Decisions](decisions.md); the rules link to it.
 
-See also: [Convoy operations](convoy-operations.md), [Customs declarations](customs-declarations.md),
+See also: [Sequence diagrams](../sequences/README.md), [Process diagrams](../process/README.md), [Convoy operations](convoy-operations.md), [Customs declarations](customs-declarations.md),
 [Key concepts](key-concepts.md).
 
 ## Purpose of a box
@@ -17,6 +17,8 @@ A box is the container of donated items sent to Ukraine. It must be:
   checkpoints.
 
 ## Box lifecycle
+
+*Flows: [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)), [03 Box replacement](../sequences/03-box-replacement.puml) ([process](../process/03-box-replacement.puml)), [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)), [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)).*
 
 | State | Meaning |
 |---|---|
@@ -36,6 +38,8 @@ A box is the container of donated items sent to Ukraine. It must be:
 
 ## Items
 
+*Flows: [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)).*
+
 - An item carries a quantity and properties that vary per item: size, weight, colour, expiry and others.
 - **Every item has a value in GBP.** The value is an estimate, and its **source is recorded**: stated by the donor, or
   estimated by the charity. Values in other currencies are converted by the person entering them
@@ -49,6 +53,8 @@ A box is the container of donated items sent to Ukraine. It must be:
   **The Administrator maintains the mapping** ([O31](decisions.md#o31)).
 
 ## Donations and donors
+
+*Flows: [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)).*
 
 - A **donation** is one donor's drop-off or consignment, containing many items. Items belong to a donation
   ([D14](decisions.md#d14)).
@@ -79,6 +85,8 @@ A box is the container of donated items sent to Ukraine. It must be:
 
 ## Labels and changing a box
 
+*Flows: [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)), [03 Box replacement](../sequences/03-box-replacement.puml) ([process](../process/03-box-replacement.puml)).*
+
 - A QR label ties the physical box to its record. It **carries the item list and the name of the person who signed
   what is inside** ([D2](decisions.md#d2)). It never carries a Receiver, region or address.
 - **Labels carry both English and Ukrainian** ([O17](decisions.md#o17)). The Ukrainian text is **machine translated
@@ -88,6 +96,8 @@ A box is the container of donated items sent to Ukraine. It must be:
   ([D3](decisions.md#d3)).
 
 ## Capacity and allocation
+
+*Flows: [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)), [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)).*
 
 - A vehicle records its **cargo space, maximum cargo weight and kerb weight** ([D18](decisions.md#d18)).
 - Boxes are allocated to a vehicle by **box volume against the vehicle's cargo volume, never exceeding its cargo weight
@@ -107,6 +117,8 @@ A box is the container of donated items sent to Ukraine. It must be:
 
 ## Receivers and destinations
 
+*Flows: [11 Receiver registration](../sequences/11-receiver-registration.puml) ([process](../process/11-receiver-registration.puml)).*
+
 - A box has a destination **Receiver**, which may be set before the box arrives at a hub.
 - **A Receiver has a registration status:** pending, registered, suspended or expired. An Administrator manages it
   ([D22](decisions.md#d22), [D30](decisions.md#d30)).
@@ -120,6 +132,8 @@ A box is the container of donated items sent to Ukraine. It must be:
 
 ## Delivery, refusal and loss
 
+*Flows: [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)), [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)).*
+
 - **A box is delivered when the Convoy Leader or the Dispatcher marks it arrived** ([O8](decisions.md#o8)). It is
   then **accepted** when Ukrainian customs accept it under their acceptance rules. A photo to verify acceptance may be
   added later ([O9](decisions.md#o9)).
@@ -130,6 +144,8 @@ A box is the container of donated items sent to Ukraine. It must be:
   ([O5](decisions.md#o5)). Insurance is for the vehicle to travel on the road.
 
 ## Declarations: the box-side rules
+
+*Flows: [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)), [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)).*
 
 The full rules are in [Customs declarations](customs-declarations.md).
 

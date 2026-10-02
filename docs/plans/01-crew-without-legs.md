@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0007](../adr/0007-journey-legs-are-removed-from-the-crew-model.md); the insurance part of [ADR 0008](../adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md) ([O7](../domain/decisions.md#o7)); [P9](../domain/decisions.md#p9), [P12](../domain/decisions.md#p12) |
 | **Depends on** | Nothing. May run before or after plan 02. |
 | **Gate** | None |
+| **Flows** | [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)) |
 
 ## Context
 

@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0017](../adr/0017-every-entity-records-its-last-change.md), [O19](../domain/decisions.md#o19) |
 | **Depends on** | [02](02-login-person-link.md) |
 | **Gate** | None |
+| **Flows** | [01 Login and attribution](../sequences/01-login-and-attribution.puml) ([process](../process/01-login-and-attribution.puml)) |
 
 ## Context
 

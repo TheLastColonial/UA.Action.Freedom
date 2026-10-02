@@ -1,0 +1,71 @@
+@startuml Convoy Planning
+
+title Planning a convoy: route, truck list, budget, equipment, crew, leader and bookings
+caption Target design. Decisions P15, O12, O13, D17, P14, P9, O7, P1, P2, P8, O4, O30, P11, D35. ADRs 0007, 0008, 0012.
+
+autonumber
+
+actor Dispatcher as disp
+actor Administrator as admin
+participant "Freedom API" as api
+database "Freedom database" as db
+
+== Create the convoy ==
+disp -> api : create convoy (dates)
+disp -> api : PUT route: ordered points, each with a name and kind\n(stop, overnight, border + authority, hub)
+api -> db : merge route points (ids stay stable)
+note right of api
+  Overnight stops are flagged by the Dispatcher.
+  The service never calculates routes or times (P15).
+end note
+
+== Truck list ==
+loop for each vehicle
+  disp -> api : add vehicle to the truck list
+  api -> db : only if inspection Passed
+end
+disp -> api : publish truck list
+
+== Creation steps: budget and equipment ==
+disp -> api : set budget lines (fuel, ferry, hotel, insurance, other)
+note right : Not required to depart; unset is a warning (O37)
+disp -> api : add vehicle equipment (e.g. warning triangles)
+note right : No donor, not part of value delivered (O13)
+
+== Crew and leader ==
+loop for each vehicle
+  disp -> api : seat a person (Driver or Passenger)
+  api -> db : one seat per person per convoy (no legs)
+end
+disp -> api : nominate Convoy Leader (a Driver on the convoy)
+api -> db : close previous assignment, open new one (history kept)
+note right of disp
+  Only a Dispatcher or Administrator may reassign (P14).
+end note
+
+== Insurance ==
+disp -> api : record insurance (insurer, policy, cover dates, drivers covered)
+alt a driver is added later
+  api -> db : seat the driver
+  note right : the new driver is uncovered until the policy is updated (O7)
+  disp -> api : record the updated policy
+else a crew member is removed
+  api -> db : remove seat; insurance stays in cover for the others
+end
+
+== Bookings and handover ==
+loop for each vehicle
+  disp -> api : ferry booking (outbound only, reference, ticket, cost)
+  disp -> api : handover Receiver
+  api -> db : Receiver must be **registered** (P11, D35)
+end
+loop for each overnight stop
+  disp -> api : book accommodation for crew members (may be shared)
+  disp -> api : or flag a crew member as arranging their own (O30)
+end
+
+== Readiness is shown as it is completed ==
+disp -> api : GET readiness
+api --> disp : blocking items and advisory warnings, each with a link to fix it
+
+@enduml

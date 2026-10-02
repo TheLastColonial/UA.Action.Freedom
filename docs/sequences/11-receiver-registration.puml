@@ -1,0 +1,47 @@
+@startuml Receiver Registration
+
+title Receiver registration gates destinations, departure and declarations
+caption Target design. Decisions D22, D30, D35, D33, P11. ADR 0012.
+
+autonumber
+
+actor Administrator as admin
+actor "Ground Officer" as go
+actor Dispatcher as disp
+participant "Freedom API" as api
+database "dbo.Receiver" as rcv
+database "sensitive.ReceiverDetail" as sens
+
+go -> api : create Receiver (organisation, region)
+api -> rcv : Receiver, status **Pending**
+go -> api : record delivery address and contact
+api -> sens : ReceiverDetail (Ground Officer only)
+
+disp -> api : make Receiver a box destination
+api -> rcv : status?
+api --> disp : 409, not registered
+
+admin -> api : PUT /receivers/{ref}/status Registered
+note right of admin
+  Only the Administrator changes status.
+  Nothing records **what kind of body** a Receiver is (D33).
+end note
+api -> rcv : status Registered
+
+disp -> api : make Receiver a box destination
+api --> disp : ok
+disp -> api : set Receiver as a vehicle's handover Receiver
+api --> disp : ok
+
+== Suspension ==
+admin -> api : GET /receivers/{ref}/usage
+api --> admin : convoys and boxes allocated (counts and ids, no address)
+admin -> api : PUT /receivers/{ref}/status Suspended
+api -> rcv : status Suspended
+note over api
+  Boxes and vehicles allocated to it now fail a blocking requirement,
+  and declarations naming it become stale: the convoy cannot depart
+  until they are reallocated or the Receiver is registered again.
+end note
+
+@enduml

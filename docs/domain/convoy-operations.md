@@ -4,7 +4,7 @@ The business rules for planning and running a convoy: its vehicles, crew, accomm
 Convoy Leader, and when a convoy is ready to leave. Why each rule exists is in [Decisions](decisions.md); the rules
 link to it.
 
-See also: [Boxes and donations](boxes-and-donations.md), [Customs declarations](customs-declarations.md),
+See also: [Sequence diagrams](../sequences/README.md), [Process diagrams](../process/README.md), [Boxes and donations](boxes-and-donations.md), [Customs declarations](customs-declarations.md),
 [Key concepts](key-concepts.md).
 
 ## Purpose
@@ -41,6 +41,8 @@ Readiness is not an entity. It is computed from the rest, so it does not appear 
 
 ## Creating a convoy
 
+*Flows: [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)).*
+
 Alongside the route, dates and truck list, creating a convoy includes two steps:
 
 1. **Allocate a budget** ([O12](decisions.md#o12)). See [Budget and costs](#budget-and-costs).
@@ -52,6 +54,8 @@ A convoy owns what is shared by every vehicle: the route, the dates, the [Convoy
 budget. A convoy is the thing a Dispatcher plans.
 
 ### Route points
+
+*Flows: [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)).*
 
 A route is an ordered list of route points. The Dispatcher may flag a route point as:
 
@@ -79,6 +83,8 @@ A truck-list entry is a vehicle's place on a convoy, and the anchor for everythi
 
 ## Crew
 
+*Flows: [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)).*
+
 - A crew seat is **one person, on one vehicle, on one convoy** ([P12](decisions.md#p12)). There are no journey legs.
 - A person cannot sit in two vehicles on the same convoy.
 - Driving rights are not recorded in the system. The Dispatcher verifies them before assigning a driver
@@ -87,6 +93,8 @@ A truck-list entry is a vehicle's place on a convoy, and the anchor for everythi
   See [Insurance](#insurance).
 
 ## Insurance
+
+*Flows: [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [07 Departure](../sequences/07-departure.puml) ([process](../process/07-departure.puml)).*
 
 Insurance is for **the vehicle to travel on the road**. Cargo is not insured ([O5](decisions.md#o5)).
 
@@ -100,6 +108,8 @@ Insurance is for **the vehicle to travel on the road**. Cargo is not insured ([O
 
 ## Accommodation
 
+*Flows: [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [07 Departure](../sequences/07-departure.puml) ([process](../process/07-departure.puml)).*
+
 - Accommodation is booked **per crew member** and linked to a **route point**
   ([P2](decisions.md#p2)). A booking may cover several people who choose to share.
 - **Every crew member must be covered at every overnight stop** ([P8](decisions.md#p8)). Drivers never sleep in
@@ -112,6 +122,8 @@ Insurance is for **the vehicle to travel on the road**. Cargo is not insured ([O
   new driver ([P13](decisions.md#p13), [P16](decisions.md#p16)).
 
 ## Budget and costs
+
+*Flows: [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)).*
 
 A convoy has a **budget with a line for each cost type**: fuel, ferry, hotel, insurance and others. **Actual costs**
 are recorded against each line, and compared with it ([O12](decisions.md#o12), [P3](decisions.md#p3)).
@@ -134,6 +146,8 @@ Equipment the charity buys for a vehicle, such as warning triangles, is **accoun
 
 ## Delivery, arrival and closing
 
+*Flows: [09 Delivery, acceptance and closing](../sequences/09-delivery-acceptance-closing.puml) ([process](../process/09-delivery-acceptance-closing.puml)).*
+
 - **A vehicle or box is delivered when the Convoy Leader or the Dispatcher marks it arrived** ([O8](decisions.md#o8)).
 - It is then **accepted** when Ukrainian customs accept it ([O9](decisions.md#o9)). Acceptance is recorded **once per
   Ukrainian goods list**, by the Convoy Leader or the Dispatcher, and every box on the list becomes accepted
@@ -144,6 +158,8 @@ Equipment the charity buys for a vehicle, such as warning triangles, is **accoun
   regenerated ([O25](decisions.md#o25)).
 
 ## Progress, records and notifications
+
+*Flows: [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)), [01 Login and attribution](../sequences/01-login-and-attribution.puml) ([process](../process/01-login-and-attribution.puml)).*
 
 - **There is no live tracking and no GPS**, because of connectivity and security concerns. The Convoy Leader marks
   arrival at each route point and each accommodation, and HQ sees progress from those marks
@@ -156,6 +172,8 @@ Equipment the charity buys for a vehicle, such as warning triangles, is **accoun
 
 ## Manifest: the load sign-off
 
+*Flows: [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)), [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)).*
+
 A manifest is **the load sign-off for one truck-list entry, and the document pack generated from the load and its
 declarations** ([P6](decisions.md#p6)).
 
@@ -166,6 +184,8 @@ declarations** ([P6](decisions.md#p6)).
   [Customs declarations](customs-declarations.md#the-manifest-sign-off).
 
 ## The Convoy Leader
+
+*Flows: [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)).*
 
 A convoy has **exactly one Convoy Leader**: a Driver on the convoy who is the responsible party and the contact
 point to HQ ([D8](decisions.md#d8), [P7](decisions.md#p7)). "Lead driver" means the same thing.
@@ -190,6 +210,8 @@ and enters fuel on it.
   service worker or an offline cache.
 
 ### Access to addresses
+
+*Flows: [10 Leader address access](../sequences/10-leader-address-access.puml) ([process](../process/10-leader-address-access.puml)).*
 
 The Convoy Leader sees the addresses they need to drive to, **including the final destination**, so the convoy can
 arrive together ([X7](decisions.md#x7)). This is the only access to an address outside the Ground Officer role.
@@ -218,6 +240,8 @@ a state (*done, to do, blocked* or *warning*), an owner role, a severity (*block
 where it is resolved. A withdrawn vehicle is skipped.
 
 ### Departure
+
+*Flows: [07 Departure](../sequences/07-departure.puml) ([process](../process/07-departure.puml)).*
 
 **A convoy departs by one action on the convoy, taken by the Dispatcher.** It is refused unless every blocking
 requirement below holds for the convoy and for each vehicle still travelling, and the refusal lists what is

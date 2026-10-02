@@ -6,6 +6,7 @@
 | **Covers** | [P15](../domain/decisions.md#p15), [D8](../domain/decisions.md#d8), [D17](../domain/decisions.md#d17), [P7](../domain/decisions.md#p7), [P14](../domain/decisions.md#p14); the route-point groundwork for [X2](../domain/decisions.md#x2) and [ADR 0016](../adr/0016-progress-is-reported-not-tracked.md) |
 | **Depends on** | [01](01-crew-without-legs.md), [03](03-last-changed-audit.md) |
 | **Gate** | None |
+| **Flows** | [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)) |
 
 ## Context
 

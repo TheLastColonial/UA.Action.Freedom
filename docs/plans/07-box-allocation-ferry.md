@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md) (cargo and ferry only); [D10](../domain/decisions.md#d10), [P1](../domain/decisions.md#p1) |
 | **Depends on** | [03](03-last-changed-audit.md) |
 | **Gate** | None |
+| **Flows** | [04 Convoy planning](../sequences/04-convoy-planning.puml) ([process](../process/04-convoy-planning.puml)), [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)) |
 
 ## Context
 

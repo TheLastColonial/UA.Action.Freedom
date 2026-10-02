@@ -6,6 +6,7 @@
 | **Covers** | [O34](../domain/decisions.md#o34), [O35](../domain/decisions.md#o35); groundwork for [ADR 0017](../adr/0017-every-entity-records-its-last-change.md), [ADR 0010](../adr/0010-resource-scoped-permissions.md) and [ADR 0009](../adr/0009-convoy-leader-reads-destination-addresses.md) |
 | **Depends on** | Nothing. May run before or after plan 01. |
 | **Gate** | Run the `/security-review` skill before opening the PR |
+| **Flows** | [01 Login and attribution](../sequences/01-login-and-attribution.puml) ([process](../process/01-login-and-attribution.puml)) |
 
 ## Context
 

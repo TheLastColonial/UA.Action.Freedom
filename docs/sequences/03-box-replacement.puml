@@ -1,0 +1,46 @@
+@startuml Box Replacement
+
+title An attested box must change: it is replaced, never edited
+caption Target design. Decisions D3, X3, D13. ADRs 0011, 0004, 0005.
+
+autonumber
+
+actor Loader as loader
+actor Administrator as admin
+participant "Freedom API" as api
+database "Freedom database" as db
+
+loader -> api : edit attested box
+api --> loader : 409, an attested box is never edited
+loader -> api : delete attested box
+api --> loader : 409, an attested box is never deleted
+
+loader -> api : POST /boxes/{id}/replace
+group one transaction
+  api -> db : void the old box (VoidedAt)
+  api -> db : revoke its QR code
+  api -> db : create the replacement, ReplacesBoxId = old\ncopy items (category, value, donor, expiry)
+  api -> db : move the old box's vehicle allocation, if any
+end
+api --> loader : replacement created, **unattested**
+
+note over api, db
+  The old QR label no longer resolves.
+  Voided boxes are excluded from weights, values, reports and declarations.
+end note
+
+loader -> api : correct the replacement's items, then validate it
+api -> db : ValidatedBy, ValidatedAt
+loader -> api : issue a new QR code, print the label
+
+alt the box was on an approved vehicle load
+  api -> db : manifest back to Proposed (X3)
+  note right : the Administrator must re-approve the load
+  admin -> api : approve manifest
+  note over api
+    The vehicle's declarations are now stale (the load
+    differs from their snapshot). See the re-declare flow.
+  end note
+end
+
+@enduml

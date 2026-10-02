@@ -1,5 +1,10 @@
 # Goods Movement Flow: Box Validation to GMR/ELO
 
+> **Describes the flow as built today, and is superseded by the target design.** See
+> [05 Load sign-off and declarations](05-load-signoff-and-declarations.puml) and
+> [06 Load change and re-declare](06-load-change-and-redeclare.puml). [Plan 08](../plans/08-declarations-filing.md)
+> and [plan 15](../plans/15-manifest-signoff-lifecycle.md) bring the code, and this document, into line.
+
 Sequence diagram showing how a box progresses from validation through manifest approval to GMR submission and French logistics envelope (ELO) generation.
 
 See `goods-movements.puml` in this directory for the PlantUML diagram.

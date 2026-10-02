@@ -4,10 +4,12 @@ The business rules for the declarations made to customs authorities about a vehi
 move through states, when they go stale, and how each is corrected. Why each rule exists is in
 [Decisions](decisions.md); the rules link to it.
 
-See also: [Convoy operations](convoy-operations.md), [Boxes and donations](boxes-and-donations.md),
+See also: [Sequence diagrams](../sequences/README.md), [Process diagrams](../process/README.md), [Convoy operations](convoy-operations.md), [Boxes and donations](boxes-and-donations.md),
 [Key concepts](key-concepts.md), [Ukrainian customs research](ua-customs-requirements.md).
 
 ## What a declaration is
+
+*Flows: [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)).*
 
 A declaration is a statement made to a customs authority about a vehicle's load, before that vehicle crosses the
 authority's border. **Every declaration is per vehicle**, because that is what is declared at the border
@@ -29,6 +31,8 @@ authority's border. **Every declaration is per vehicle**, because that is what i
   categories to each authority's codes ([O16](decisions.md#o16)).
 
 ## Submission mode
+
+*Flows: [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)).*
 
 **Filing is manual by default** ([X5](decisions.md#x5)). Each authority has a **submission mode**, *manual* or
 *automatic*, set by configuration. The system must not assume an authority's API is operating.
@@ -71,6 +75,8 @@ For the **ENS**, filed and accepted collapse: an MRN is issued only on acceptanc
 
 ## Staleness
 
+*Flows: [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)).*
+
 When a declaration becomes *ready to file* it stores a **snapshot** of what it was written from: the boxes (by
 identity and version), their items, weights, values, categories and Receivers, and the vehicle. It is **stale**
 whenever the current load differs from the snapshot. No one flags it, so it cannot be forgotten.
@@ -99,6 +105,8 @@ whenever the current load differs from the snapshot. No one flags it, so it cann
 
 ## The manifest sign-off
 
+*Flows: [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)), [06 Load change and re-declare](../sequences/06-load-change-and-redeclare.puml) ([process](../process/06-load-change-and-redeclare.puml)).*
+
 The [manifest](convoy-operations.md#manifest-the-load-sign-off) is the Administrator's sign-off of a vehicle's load.
 
 - **The freeze applies to the declared snapshot, not to the load.** The load may change, but doing so makes the
@@ -107,6 +115,8 @@ The [manifest](convoy-operations.md#manifest-the-load-sign-off) is the Administr
 - **Declarations are prepared after sign-off.** Filing is an explicit act, not a side effect of approval.
 
 ## Closing at the border
+
+*Flows: [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)).*
 
 Each authority has its own crossing: leaving the UK, entering France, entering Ukraine. A declaration **closes**
 when the crossing it covers has been passed. **The Convoy Leader marks the crossing**, per vehicle, from the

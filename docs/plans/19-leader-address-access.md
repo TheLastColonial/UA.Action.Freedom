@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0009](../adr/0009-convoy-leader-reads-destination-addresses.md); [X7](../domain/decisions.md#x7), [X9](../domain/decisions.md#x9), [X11](../domain/decisions.md#x11), [X12](../domain/decisions.md#x12), [X13](../domain/decisions.md#x13), [O1](../domain/decisions.md#o1), [O26](../domain/decisions.md#o26) |
 | **Depends on** | [04](04-receiver-registration.md), [18](18-leader-checklist-progress.md) |
 | **Gate** | **Increment 0: security review.** Stop for the owner and a security reviewer. |
+| **Flows** | [10 Leader address access](../sequences/10-leader-address-access.puml) ([process](../process/10-leader-address-access.puml)) |
 
 ## Context
 

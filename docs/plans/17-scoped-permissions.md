@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0010](../adr/0010-resource-scoped-permissions.md); [X12](../domain/decisions.md#x12), [O14](../domain/decisions.md#o14), [O31](../domain/decisions.md#o31), [D17](../domain/decisions.md#d17), [P14](../domain/decisions.md#p14) |
 | **Depends on** | [02](02-login-person-link.md), [10](10-route-points-convoy-leader.md) |
 | **Gate** | **Increment 0: the owner signs off the mechanism.** Stop. |
+| **Flows** | [10 Leader address access](../sequences/10-leader-address-access.puml) ([process](../process/10-leader-address-access.puml)), [08 On the road](../sequences/08-on-the-road.puml) ([process](../process/08-on-the-road.puml)) |
 
 ## Context
 

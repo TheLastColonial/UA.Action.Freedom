@@ -1,0 +1,39 @@
+@startuml Departure
+
+title A convoy departs only when every blocking requirement holds
+caption Target design. Decisions O36, P4, O3, P9, O7, P11, D35, P8, O4. ADR 0008.
+
+autonumber
+
+actor Dispatcher as disp
+participant "Freedom API" as api
+participant "Readiness\n(pure function)" as ready
+database "Freedom database" as db
+
+disp -> api : POST /convoys/{id}/depart
+api -> db : load the facts: leader, crew, insurance, ferry,\nhandover Receivers, allocations, box validation,\nReceiver status, declarations, accommodation, budget
+api -> ready : assess(facts, as of now)
+ready --> api : requirements (scope, state, owner, severity, link)
+
+alt any blocking requirement unmet
+  api --> disp : **409** with each unmet requirement and where to fix it
+  note right of disp
+    Convoy: leader assigned; accommodation (or self-arranged)
+    for every crew member at every overnight stop.
+    Each vehicle: at least one driver; insurance in cover and
+    covering every driver; ferry booked; handover Receiver
+    registered; every box attested with a registered Receiver;
+    declarations current.
+  end note
+  note right of api
+    There is no override, waiver or "depart anyway" for any role (O3).
+  end note
+else all blocking requirements met
+  api -> db : Convoy.DepartedAt (conditional: only once)
+  api --> disp : departed, with any advisory warnings
+end
+
+disp -> api : POST /convoys/{id}/depart (again)
+api --> disp : 409, already departed
+
+@enduml

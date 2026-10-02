@@ -1,0 +1,72 @@
+@startuml Load Sign-off and Declarations Process
+
+title Process: signing off a vehicle's load and declaring it
+caption Target design. Decisions P6, X3, X6, X5, D4, D12, D20, X1, O32, D34. Plan 08.
+
+|Dispatcher|
+start
+:Allocate attested boxes to the vehicle;
+:Propose the manifest;
+
+|Administrator|
+if (Approve the load?) then (no)
+  :Reject;
+  |Dispatcher|
+  :Fix the load and propose again;
+  stop
+else (yes)
+  |Administrator|
+  :Approve (sign-off only, nothing is filed);
+endif
+
+|Dispatcher|
+:Mark the vehicle's declarations ready to file;
+|Freedom|
+:Store a snapshot of the load;
+
+|Dispatcher|
+fork
+  :Take the ENS filing sheet (no address);
+  :File the ENS in the EU portal;
+  |Ground Officer|
+  :Enter the consignee address in the portal;
+  |Dispatcher|
+  :Record the MRN;
+  if (ELO mode automatic?) then (yes)
+    :File the ELO in Freedom;
+    |Freedom|
+    :Enqueue the envelope request;
+    |Customs Worker|
+    :Create the envelope with French customs;
+  else (no, default)
+    |Dispatcher|
+    :Request the envelope by hand;
+    :Record its reference;
+  endif
+fork again
+  |Dispatcher|
+  if (GMR mode automatic?) then (yes)
+    :File the GMR in Freedom;
+    |Customs Worker|
+    :Create the GMR with HMRC;
+  else (no, default)
+    |Dispatcher|
+    :Create the GMR in the HMRC portal;
+    :Record its reference;
+  endif
+fork again
+  |Dispatcher|
+  :Prepare a goods list per Receiver;
+  :Send it to the Receiver;
+  |Receiver|
+  :File it in Ukraine's humanitarian aid system;
+  :Return the unique code;
+  |Dispatcher|
+  :Record the goods-list reference;
+end fork
+
+|Freedom|
+:Warn the Dispatcher a week before a code or declaration expires;
+stop
+
+@enduml

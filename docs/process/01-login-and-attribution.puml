@@ -1,0 +1,44 @@
+@startuml Login and Attribution Process
+
+title Process: giving a volunteer an account that can change things
+caption Target design. Decisions O34, O35, O19. Plans 02 and 03.
+
+|Volunteer|
+start
+:Sign in with the identity provider;
+
+|Freedom|
+if (Login linked to a person?) then (no)
+  :Allow reads the roles permit;
+  :Refuse every change that records who did it (403);
+  |Administrator|
+  :Open the volunteer's person record;
+  :Link the login to the person;
+  |Freedom|
+  if (Login already linked to someone else?) then (yes)
+    :Refuse the link (409);
+    stop
+  else (no)
+    :Store the subject on the person's erasable details;
+  endif
+else (yes)
+endif
+
+|Volunteer|
+:Make a change;
+
+|Freedom|
+:Take the person from the login, never from the request;
+:Record who changed it and when, in the same write;
+
+|Administrator|
+if (Volunteer asks to be erased?) then (yes)
+  :Erase the volunteer;
+  |Freedom|
+  :Delete personal details, including the login link;
+  :Records that name them now read "Former volunteer";
+else (no)
+endif
+stop
+
+@enduml

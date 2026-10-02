@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (entity and lifecycle; staleness is [plan 09](09-declaration-staleness.md)); [ADR 0006](../adr/0006-filing-is-manual-by-default.md); the "approval only signs off" part of [ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md); amendments to ADRs [0002](../adr/0002-elo-envelope-on-manifest-approval.md) and [0003](../adr/0003-ens-declaration-recorded-not-submitted.md); [X5](../domain/decisions.md#x5), [X6](../domain/decisions.md#x6), [D4](../domain/decisions.md#d4), [D12](../domain/decisions.md#d12), [D20](../domain/decisions.md#d20), [X1](../domain/decisions.md#x1), [O32](../domain/decisions.md#o32) |
 | **Depends on** | [04](04-receiver-registration.md), [05](05-item-classification-value.md), [07](07-box-allocation-ferry.md) |
 | **Gate** | None |
+| **Flows** | [05 Load sign-off and declarations](../sequences/05-load-signoff-and-declarations.puml) ([process](../process/05-load-signoff-and-declarations.puml)) |
 
 ## Context
 
@@ -149,6 +150,9 @@ Rules: [Customs declarations](../domain/customs-declarations.md).
 
 ## Docs to update
 
+- [`docs/process/goods-movements.md`](../process/goods-movements.md) and `goods-movements.puml`: update the approval
+  and ENS steps to match, or retire them in favour of [process 05](../process/05-load-signoff-and-declarations.puml).
+  Remove their "superseded" note when they are current again.
 - `CLAUDE.md`: the Manifests slice, approval, the declarations slice, `SubmissionMode`, the API list, and the "approval
   hands off three things" paragraph.
 - `README.md`: endpoints and the local environment variable.

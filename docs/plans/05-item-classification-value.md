@@ -6,6 +6,7 @@
 | **Covers** | [ADR 0014](../adr/0014-items-are-classified-by-category-and-valued-in-gbp.md); [D1](../domain/decisions.md#d1), [D5](../domain/decisions.md#d5), [D6](../domain/decisions.md#d6), [D7](../domain/decisions.md#d7), [D16](../domain/decisions.md#d16), [D21](../domain/decisions.md#d21), [D25](../domain/decisions.md#d25), [O11](../domain/decisions.md#o11), [O16](../domain/decisions.md#o16), [O31](../domain/decisions.md#o31), [O33](../domain/decisions.md#o33) |
 | **Depends on** | [03](03-last-changed-audit.md) |
 | **Gate** | None |
+| **Flows** | [02 Donation and box intake](../sequences/02-donation-and-box-intake.puml) ([process](../process/02-donation-and-box-intake.puml)) |
 
 ## Context
 

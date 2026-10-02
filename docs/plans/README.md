@@ -4,7 +4,11 @@ A series of plans that implement [ADRs 0004 to 0017](../adr/README.md) and the f
 [Decisions](../domain/decisions.md) that have no ADR of their own. Each plan is one **branch** and one **PR**. An agent
 executes a plan, opens the PR and **stops**. The developer reviews and merges, and only then does the next plan start.
 
-The business rules each plan implements are in [`docs/domain/`](../domain/README.md). When a plan and a domain document
+The business rules each plan implements are in [`docs/domain/`](../domain/README.md). The flows are drawn twice:
+as calls between people and systems in [`docs/sequences/`](../sequences/README.md), and as role-by-role processes in
+[`docs/process/`](../process/README.md), starting with the
+[end-to-end overview](../process/00-end-to-end-overview.puml). When a plan changes a drawn flow, it updates both
+diagrams. When a plan and a domain document
 disagree, the domain document wins: raise it in the PR rather than building around it.
 
 ## Index

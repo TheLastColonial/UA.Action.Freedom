@@ -1,0 +1,56 @@
+@startuml Leader Address Access
+
+title The Convoy Leader reads destination addresses: scoped, time-limited, audited
+caption Target design. Decisions X7, X9, X11, X12, X13, O26, O1. ADRs 0009, 0010. Implementation is gated by a security review.
+
+autonumber
+
+actor "Convoy Leader" as leader
+actor Dispatcher as disp
+actor "Ground Officer" as go
+participant "Checklist page\n(phone)" as page
+participant "Freedom API" as api
+database "dbo\n(route, convoy)" as dbo
+database "sensitive schema\n(Receiver detail + access log)" as sens
+
+== Before the window opens (more than 14 days before planned departure) ==
+leader -> page : open checklist
+page -> api : GET /convoys/{id}/addresses
+api -> dbo : is the caller the current leader of this convoy?
+api --> page : route point **headers only** (name and kind)
+
+== Inside the window ==
+leader -> page : reveal addresses
+page -> leader : re-authenticate
+leader -> page : re-authenticated
+page -> api : GET /convoys/{id}/addresses
+api -> dbo : current leader of this convoy? window open?\nconvoy not arrived?
+group one transaction, through the sensitive connection
+  api -> sens : write access-log row (reader capacity: Convoy Leader, convoy id)
+  api -> sens : read addresses of **all Receivers on this convoy**
+end
+api --> page : route and Receiver addresses\n(Cache-Control: no-store)
+note right of page
+  Shown on this page only. Never printed, logged, queued,
+  or put on a manifest, label or filing sheet.
+  Nothing kept on the device.
+end note
+
+== Refusals ==
+alt a leader of another convoy
+  page -> api : GET /convoys/{other}/addresses
+  api --> page : 403
+else after reassignment or arrival
+  page -> api : GET /convoys/{id}/addresses
+  api --> page : 403 (the window has closed for this person)
+else a Dispatcher or other driver
+  disp -> api : GET /convoys/{id}/addresses
+  api --> disp : 403 (O1)
+end
+
+== Oversight ==
+go -> api : review receiver access log
+api -> sens : read access log
+api --> go : every read, by whom, in what capacity, for which convoy
+
+@enduml
