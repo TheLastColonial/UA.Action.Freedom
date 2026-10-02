@@ -25,14 +25,3 @@ export const manifestStatusSchema = z.enum([
   'Returned',
 ]);
 export type ManifestStatus = z.infer<typeof manifestStatusSchema>;
-
-// src/UA.Action.Freedom.Domain/JourneyLeg.cs. Which half of the journey a crew is driving: a
-// vehicle is crewed twice, with a handover at the European border in between. It was ManifestLeg
-// while the manifest carried its own driver teams — the leg belongs to the convoy's journey.
-export const journeyLegSchema = z.enum(['Uk', 'Border']);
-export type JourneyLeg = z.infer<typeof journeyLegSchema>;
-
-export const journeyLegLabels: Record<JourneyLeg, string> = {
-  Uk: 'UK to Europe',
-  Border: 'Europe to Ukraine',
-};

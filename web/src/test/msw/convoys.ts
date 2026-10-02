@@ -15,7 +15,6 @@ import type { ManifestStatus } from '../../api/schemas/common';
 import type { PersonReadModel } from '../../api/schemas/people';
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
 import { crewRoleSchema } from '../../api/schemas/convoys';
-import { journeyLegSchema } from '../../api/schemas/common';
 import { problem, validationProblem } from './problem';
 
 const FINISHED: readonly ManifestStatus[] = ['Delivered', 'Lost', 'Returned'];
@@ -29,9 +28,8 @@ const insuranceBodySchema = z.object({
   costGbp: z.number().min(0).optional(),
 });
 
-// Mirrors AssignCrewRequest: the leg is required — a vehicle is crewed twice, with a handover at
-// the European border — and the role defaults to Driver.
-const crewBodySchema = z.object({ leg: journeyLegSchema, role: crewRoleSchema.optional() });
+// Mirrors AssignCrewRequest: the role defaults to Driver.
+const crewBodySchema = z.object({ role: crewRoleSchema.optional() });
 
 /**
  * What the truck-list and crew routes look up, as the real API does. Pass the `db` of a
@@ -81,20 +79,25 @@ export function convoyApi(
       ([convoyId, list]) =>
         list.some((v) => v.vin === vin && !v.withdrawn) && db.get(convoyId)?.arrived !== true,
     )?.[0];
-  // The policy names the crew, so any crew change voids it — as ConvoyRepository does.
-  const voidInsurance = (convoyId: number, vin: string) => {
+  // The policy names the drivers it covers: a driver added later is uncovered until it is recorded
+  // again, and removing one keeps it in cover — as ConvoyVehicleRepository does.
+  const setUncovered = (convoyId: number, vin: string, change: (ids: string[]) => string[]) => {
     const key = crewKey(convoyId, vin);
     const policy = insurance.get(key);
-    if (policy && !policy.voided) {
-      insurance.set(key, { ...policy, voided: true, voidedAt: '2026-09-01T10:00:00' });
+    if (policy) {
+      const uncoveredDrivers = change(policy.uncoveredDrivers);
+      insurance.set(key, {
+        ...policy,
+        uncoveredDrivers,
+        coversAllDrivers: uncoveredDrivers.length === 0,
+      });
     }
   };
 
-  // Crew counts are per leg, as the SQL's conditional aggregates compute them.
+  // Crew counts, as the SQL's conditional aggregates compute them.
   const setCrewCounts = (convoyId: number, vin: string) => {
     const members = crew.get(crewKey(convoyId, vin)) ?? [];
-    const count = (leg: string, role: string) =>
-      members.filter((member) => member.leg === leg && member.role === role).length;
+    const count = (role: string) => members.filter((member) => member.role === role).length;
 
     vehicles.set(
       convoyId,
@@ -102,10 +105,8 @@ export function convoyApi(
         v.vin === vin
           ? {
               ...v,
-              ukDriverCount: count('Uk', 'Driver'),
-              ukPassengerCount: count('Uk', 'Passenger'),
-              borderDriverCount: count('Border', 'Driver'),
-              borderPassengerCount: count('Border', 'Passenger'),
+              driverCount: count('Driver'),
+              passengerCount: count('Passenger'),
             }
           : v,
       ),
@@ -231,10 +232,8 @@ export function convoyApi(
             vin,
             plate: vehicle.plate,
             weightKg: vehicle.weightKg,
-            ukDriverCount: 0,
-            ukPassengerCount: 0,
-            borderDriverCount: 0,
-            borderPassengerCount: 0,
+            driverCount: 0,
+            passengerCount: 0,
             withdrawnAt: null,
             withdrawnReason: null,
             travelling: true,
@@ -293,8 +292,8 @@ export function convoyApi(
       return new HttpResponse(null, { status: 204 });
     }),
 
-    // The same rules as ConvoyReadiness.Assess: two drivers *per leg* and insurance covering the
-    // departure date per vehicle; a route and at least one vehicle still travelling for the
+    // The same rules as ConvoyReadiness.Assess: one driver (two advised) and insurance covering the
+    // departure date and every driver per vehicle; a route and at least one vehicle still travelling for the
     // convoy. A withdrawn vehicle is skipped — it has no crew to find and no insurance to renew.
     http.get('/convoys/:id/readiness', ({ params }) => {
       const id = idFrom(params['id']);
@@ -303,7 +302,6 @@ export function convoyApi(
         return new HttpResponse(null, { status: 404 });
       }
       const departs = convoy.start.slice(0, 10);
-      const legLabels = { Uk: 'UK to Europe', Border: 'Europe to Ukraine' } as const;
       const assessed = (vehicles.get(id) ?? [])
         .filter((vehicle) => !vehicle.withdrawn)
         .map((vehicle) => {
@@ -311,27 +309,24 @@ export function convoyApi(
           const insuranceProblem = !policy
             ? 'Insurance not recorded'
             : policy.voided
-              ? 'Insurance voided by a crew change'
+              ? 'Insurance voided'
               : policy.coverStart.slice(0, 10) > departs || policy.coverEnd.slice(0, 10) < departs
                 ? 'Insurance does not cover the departure date'
-                : null;
-          const legs = (['Uk', 'Border'] as const).map((leg) => {
-            const drivers = leg === 'Uk' ? vehicle.ukDriverCount : vehicle.borderDriverCount;
-            const legReasons =
-              drivers >= 2 ? [] : [`Fewer than two drivers on the ${legLabels[leg]} leg`];
-            return { leg, drivers, ready: legReasons.length === 0, reasons: legReasons };
-          });
+                : policy.uncoveredDrivers.length > 0
+                  ? 'Insurance does not cover every driver'
+                  : null;
           const reasons = [
-            ...legs.flatMap((leg) => leg.reasons),
+            ...(vehicle.driverCount >= 1 ? [] : ['No driver assigned']),
             ...(insuranceProblem ? [insuranceProblem] : []),
           ];
+          const advisories = vehicle.driverCount === 1 ? ['Only one driver; two are advised'] : [];
           return {
             vin: vehicle.vin,
             plate: vehicle.plate,
             insured: insuranceProblem === null,
             ready: reasons.length === 0,
-            legs,
             reasons,
+            advisories,
           };
         });
       const routePlanned = (routes.get(id) ?? []).length > 0;
@@ -410,15 +405,13 @@ export function convoyApi(
       return new HttpResponse(null, { status: 204 });
     }),
 
-    http.get('/convoys/:id/vehicles/:vin/crew', ({ params, request }) => {
+    http.get('/convoys/:id/vehicles/:vin/crew', ({ params }) => {
       const convoyId = idFrom(params['id']);
       const vin = decodeURIComponent(String(params['vin']));
       if (!db.has(convoyId) || !onConvoy(convoyId, vin)) {
         return new HttpResponse(null, { status: 404 });
       }
-      const leg = new URL(request.url).searchParams.get('leg');
-      const members = crew.get(crewKey(convoyId, vin)) ?? [];
-      return HttpResponse.json(leg === null ? members : members.filter((m) => m.leg === leg));
+      return HttpResponse.json(crew.get(crewKey(convoyId, vin)) ?? []);
     }),
 
     http.put('/convoys/:id/vehicles/:vin/crew/:personId', async ({ params, request }) => {
@@ -433,11 +426,8 @@ export function convoyApi(
       }
       const body = crewBodySchema.safeParse(await request.json().catch(() => null));
       if (!body.success) {
-        return validationProblem({
-          Leg: ["'Leg' must be 'Uk' (UK to Europe) or 'Border' (Europe to Ukraine)."],
-        });
+        return validationProblem({ Role: ["'Role' must be 'Driver' or 'Passenger'."] });
       }
-      const { leg } = body.data;
       const role = body.data.role ?? 'Driver';
       if (role === 'Driver' && !person.isDriver) {
         return problem(
@@ -457,49 +447,48 @@ export function convoyApi(
       }
       const key = crewKey(convoyId, vin);
       const members = crew.get(key) ?? [];
-      if (members.some((m) => m.personId === person.id && m.leg === leg)) {
-        return problem(409, 'That volunteer is already crewing this vehicle on this leg.');
+      if (members.some((m) => m.personId === person.id)) {
+        return problem(409, 'That volunteer is already crewing this vehicle.');
       }
-      // One seat per person per leg: they may change vehicle at the border, not mid-leg.
+      // One seat per person per convoy.
       const seatedElsewhere = [...crew.entries()].some(
         ([otherKey, others]) =>
           otherKey.startsWith(`${String(convoyId)}:`) &&
           otherKey !== key &&
-          others.some((m) => m.personId === person.id && m.leg === leg),
+          others.some((m) => m.personId === person.id),
       );
       if (seatedElsewhere) {
         return problem(
           409,
-          'That volunteer is already crewing another vehicle on this leg. A person takes one seat per leg.',
+          'That volunteer is already crewing another vehicle on this convoy. A person takes one seat per convoy.',
         );
       }
       crew.set(key, [
         ...members,
-        { personId: person.id, firstName: person.firstName, lastName: person.lastName, leg, role },
+        { personId: person.id, firstName: person.firstName, lastName: person.lastName, role },
       ]);
       setCrewCounts(convoyId, vin);
-      voidInsurance(convoyId, vin);
+      if (role === 'Driver') {
+        setUncovered(convoyId, vin, (ids) => [...ids, person.id]);
+      }
       return new HttpResponse(null, { status: 204 });
     }),
 
-    http.delete('/convoys/:id/vehicles/:vin/crew/:personId', ({ params, request }) => {
+    http.delete('/convoys/:id/vehicles/:vin/crew/:personId', ({ params }) => {
       const convoyId = idFrom(params['id']);
       const vin = decodeURIComponent(String(params['vin']));
       if (!db.has(convoyId) || !onConvoy(convoyId, vin)) {
         return new HttpResponse(null, { status: 404 });
       }
-      const leg = new URL(request.url).searchParams.get('leg');
       const key = crewKey(convoyId, vin);
       const members = crew.get(key) ?? [];
-      const next = members.filter(
-        (m) => !(m.personId === String(params['personId']) && m.leg === leg),
-      );
+      const next = members.filter((m) => m.personId !== String(params['personId']));
       if (next.length === members.length) {
         return new HttpResponse(null, { status: 404 });
       }
       crew.set(key, next);
       setCrewCounts(convoyId, vin);
-      voidInsurance(convoyId, vin);
+      setUncovered(convoyId, vin, (ids) => ids.filter((id) => id !== String(params['personId'])));
       return new HttpResponse(null, { status: 204 });
     }),
 
@@ -538,6 +527,8 @@ export function convoyApi(
         recordedAt: '2026-08-24T12:00:00',
         voidedAt: null,
         voided: false,
+        uncoveredDrivers: [],
+        coversAllDrivers: true,
       });
       return new HttpResponse(null, { status: 204 });
     }),

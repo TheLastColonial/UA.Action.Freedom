@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { journeyLegSchema, type JourneyLeg } from './common';
-
 // Response shapes — src/UA.Action.Freedom.Application/Convoys/ConvoyReadModel.cs.
 export const convoyReadModelSchema = z.object({
   id: z.number().int(),
@@ -25,13 +23,11 @@ export const routeStopReadModelSchema = z.object({
 export type RouteStopReadModel = z.infer<typeof routeStopReadModelSchema>;
 
 // src/UA.Action.Freedom.Domain/CrewRole.cs. A driver must be registered to drive; a passenger
-// can be any volunteer. Only drivers count towards a vehicle's two.
+// can be any volunteer. Only drivers count towards a vehicle's crew requirement.
 export const crewRoleSchema = z.enum(['Driver', 'Passenger']);
 export type CrewRole = z.infer<typeof crewRoleSchema>;
 
-// An entry on the truck list — dbo.ConvoyVehicle. Crew is counted per leg because a vehicle is
-// crewed twice, out of the UK and into Ukraine; a single count could not tell a fully crewed
-// vehicle from one with nobody booked for the second half.
+// An entry on the truck list — dbo.ConvoyVehicle. A vehicle needs one driver and is advised two.
 //
 // `withdrawn` marks a vehicle that left the convoy mid-journey, usually a breakdown. The entry
 // stays on the list: its manifest still describes a real load, and which convoy it set off with
@@ -40,10 +36,8 @@ export const convoyVehicleReadModelSchema = z.object({
   vin: z.string(),
   plate: z.string(),
   weightKg: z.number().int(),
-  ukDriverCount: z.number().int(),
-  ukPassengerCount: z.number().int(),
-  borderDriverCount: z.number().int(),
-  borderPassengerCount: z.number().int(),
+  driverCount: z.number().int(),
+  passengerCount: z.number().int(),
   withdrawnAt: z.string().nullable(),
   withdrawnReason: z.string().nullable(),
   travelling: z.boolean(),
@@ -58,15 +52,13 @@ export const vehicleCrewReadModelSchema = z.object({
   personId: z.string(),
   firstName: z.string(),
   lastName: z.string(),
-  leg: journeyLegSchema,
   role: crewRoleSchema,
 });
 export type VehicleCrewReadModel = z.infer<typeof vehicleCrewReadModelSchema>;
 
-// Body of PUT /convoys/{id}/vehicles/{vin}/crew/{personId}. The leg is required: there is no
-// sensible default for which half of the journey somebody is driving.
+// Body of PUT /convoys/{id}/vehicles/{vin}/crew/{personId}. A seat is one person on one vehicle
+// on one convoy, so there is no leg.
 export interface AssignCrewRequest {
-  leg: JourneyLeg;
   role?: CrewRole;
 }
 
@@ -90,7 +82,8 @@ export interface ReplaceConvoyRouteRequest {
 }
 
 // src/UA.Action.Freedom.Application/Convoys/InsuranceUseCases.cs — VehicleInsuranceReadModel.
-// `voided` is set when the crew changed after it was recorded: the policy names the crew.
+// The policy names the drivers it covers. `uncoveredDrivers` are crew drivers added after it was
+// recorded; `voided` is an explicit void, not set by crew changes.
 export const vehicleInsuranceReadModelSchema = z.object({
   convoyId: z.number().int(),
   vin: z.string(),
@@ -103,6 +96,8 @@ export const vehicleInsuranceReadModelSchema = z.object({
   recordedAt: z.string(),
   voidedAt: z.string().nullable(),
   voided: z.boolean(),
+  uncoveredDrivers: z.array(z.string()),
+  coversAllDrivers: z.boolean(),
 });
 export type VehicleInsuranceReadModel = z.infer<typeof vehicleInsuranceReadModelSchema>;
 
@@ -118,21 +113,13 @@ export interface RecordInsuranceRequest {
 
 // src/UA.Action.Freedom.Application/Convoys/ReadinessUseCases.cs. Advisory: it says what is
 // missing and blocks nothing.
-export const vehicleLegReadinessReadModelSchema = z.object({
-  leg: journeyLegSchema,
-  drivers: z.number().int(),
-  ready: z.boolean(),
-  reasons: z.array(z.string()),
-});
-export type VehicleLegReadinessReadModel = z.infer<typeof vehicleLegReadinessReadModelSchema>;
-
 export const vehicleReadinessReadModelSchema = z.object({
   vin: z.string(),
   plate: z.string(),
   insured: z.boolean(),
   ready: z.boolean(),
-  legs: z.array(vehicleLegReadinessReadModelSchema),
   reasons: z.array(z.string()),
+  advisories: z.array(z.string()),
 });
 export type VehicleReadinessReadModel = z.infer<typeof vehicleReadinessReadModelSchema>;
 

@@ -52,8 +52,8 @@ test('a dispatcher crews a vehicle with a registered driver', async () => {
   await expect
     .element(screen.getByRole('cell', { name: 'Driver', exact: true }))
     .toBeInTheDocument();
-  expect(convoys.crew.get('7:VIN-TEST-1')?.map((d) => [d.personId, d.leg, d.role])).toEqual([
-    [alice.id, 'Uk', 'Driver'],
+  expect(convoys.crew.get('7:VIN-TEST-1')?.map((d) => [d.personId, d.role])).toEqual([
+    [alice.id, 'Driver'],
   ]);
   await expect
     .element(screen.getByRole('option', { name: 'Alice Driver' }))
@@ -73,11 +73,11 @@ test('any volunteer may ride as a passenger', async () => {
   expect(convoys.crew.get('7:VIN-TEST-1')?.map((d) => d.role)).toEqual(['Passenger']);
 });
 
-test('a person already crewing another vehicle on the same leg is refused, with the reason', async () => {
+test('a person already crewing another vehicle on the convoy is refused, with the reason', async () => {
   const convoys = serve();
   convoys.vehicles.set(7, [
     makeConvoyVehicle({ vin: 'VIN-TEST-1', plate: 'PL-001' }),
-    makeConvoyVehicle({ vin: 'VIN-TEST-2', plate: 'PL-002', ukDriverCount: 1 }),
+    makeConvoyVehicle({ vin: 'VIN-TEST-2', plate: 'PL-002', driverCount: 1 }),
   ]);
   convoys.crew.set('7:VIN-TEST-2', [
     makeVehicleCrew({ personId: alice.id, firstName: 'Alice', lastName: 'Driver' }),
@@ -87,29 +87,10 @@ test('a person already crewing another vehicle on the same leg is refused, with 
   await screen.getByLabelText('Add driver to PL-001').selectOptions(alice.id);
   await screen.getByRole('button', { name: 'Assign' }).first().click();
 
-  await expect.element(screen.getByRole('alert')).toHaveTextContent('another vehicle on this leg');
+  await expect
+    .element(screen.getByRole('alert'))
+    .toHaveTextContent('another vehicle on this convoy');
   expect(convoys.crew.get('7:VIN-TEST-1') ?? []).toEqual([]);
-});
-
-test('the same volunteer may take the border leg of another vehicle', async () => {
-  // The handover at the European border is exactly what the leg exists to record: one seat per
-  // person per leg, not per convoy.
-  const convoys = serve();
-  convoys.vehicles.set(7, [
-    makeConvoyVehicle({ vin: 'VIN-TEST-1', plate: 'PL-001' }),
-    makeConvoyVehicle({ vin: 'VIN-TEST-2', plate: 'PL-002', ukDriverCount: 1 }),
-  ]);
-  convoys.crew.set('7:VIN-TEST-2', [
-    makeVehicleCrew({ personId: alice.id, firstName: 'Alice', lastName: 'Driver', leg: 'Uk' }),
-  ]);
-  const screen = await renderPanel();
-
-  await screen.getByLabelText('Leg for PL-001').selectOptions('Border');
-  await screen.getByLabelText('Add driver to PL-001').selectOptions(alice.id);
-  await screen.getByRole('button', { name: 'Assign' }).first().click();
-
-  await expect.element(screen.getByRole('cell', { name: 'Europe to Ukraine' })).toBeInTheDocument();
-  expect(convoys.crew.get('7:VIN-TEST-1')?.map((d) => d.leg)).toEqual(['Border']);
 });
 
 test('a withdrawn vehicle shows why it left and takes no crew', async () => {
@@ -137,9 +118,7 @@ test('a dispatcher stands a driver down', async () => {
   ]);
   const screen = await renderPanel();
 
-  await screen
-    .getByRole('button', { name: 'Remove Alice Driver from the UK to Europe leg' })
-    .click();
+  await screen.getByRole('button', { name: 'Remove Alice Driver from PL-001' }).click();
 
   await expect.element(screen.getByText('No crew assigned yet')).toBeInTheDocument();
   expect(convoys.crew.get('7:VIN-TEST-1')).toEqual([]);
@@ -177,7 +156,7 @@ test.each<[Role]>([['Loader'], ['Administrator'], ['Purchaser']])(
   },
 );
 
-test('changing the crew after insuring the vehicle shows the policy as voided', async () => {
+test('adding a driver after insuring the vehicle says the new driver is not covered', async () => {
   const convoys = serve();
   convoys.insurance.set('7:VIN-TEST-1', makeInsurance({ convoyId: 7, vin: 'VIN-TEST-1' }));
   const screen = await renderPanel();
@@ -186,5 +165,23 @@ test('changing the crew after insuring the vehicle shows the policy as voided', 
   await screen.getByLabelText('Add driver to PL-001').selectOptions(alice.id);
   await screen.getByRole('button', { name: 'Assign' }).click();
 
-  await expect.element(screen.getByText(/voided by a crew change/)).toBeInTheDocument();
+  await expect
+    .element(screen.getByText(/1 driver added since the policy was recorded is not covered/))
+    .toBeInTheDocument();
+  await expect.element(screen.getByText(/Insured with Ukraine Aid Mutual/)).toBeInTheDocument();
+});
+
+test('removing a driver keeps the policy covering the others', async () => {
+  const convoys = serve();
+  convoys.crew.set('7:VIN-TEST-1', [
+    makeVehicleCrew({ personId: alice.id, firstName: 'Alice', lastName: 'Driver' }),
+  ]);
+  convoys.insurance.set('7:VIN-TEST-1', makeInsurance({ convoyId: 7, vin: 'VIN-TEST-1' }));
+  const screen = await renderPanel();
+
+  await screen.getByRole('button', { name: 'Remove Alice Driver from PL-001' }).click();
+
+  await expect.element(screen.getByText('No crew assigned yet')).toBeInTheDocument();
+  await expect.element(screen.getByText(/Insured with Ukraine Aid Mutual/)).toBeInTheDocument();
+  await expect.element(screen.getByText(/not covered/)).not.toBeInTheDocument();
 });

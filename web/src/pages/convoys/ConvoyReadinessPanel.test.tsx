@@ -29,9 +29,7 @@ const insured = (vin: string) =>
 test('a convoy with a route and every vehicle crewed and insured is ready', async () => {
   const convoys = serve();
   convoys.routes.set(7, [makeRouteStop()]);
-  convoys.vehicles.set(7, [
-    makeConvoyVehicle({ vin: 'VIN-1', plate: 'PL-001', ukDriverCount: 2, borderDriverCount: 2 }),
-  ]);
+  convoys.vehicles.set(7, [makeConvoyVehicle({ vin: 'VIN-1', plate: 'PL-001', driverCount: 2 })]);
   convoys.insurance.set('7:VIN-1', insured('VIN-1'));
 
   const screen = await renderWithProviders(<ConvoyReadinessPanel convoyId={7} />, {
@@ -46,20 +44,9 @@ test('a convoy with a route and every vehicle crewed and insured is ready', asyn
 test('says what each vehicle still needs, and that it is advisory', async () => {
   const convoys = serve();
   convoys.vehicles.set(7, [
-    // Crewed for one leg only: the reasons have to say which half still needs drivers.
-    makeConvoyVehicle({
-      vin: 'VIN-1',
-      plate: 'PL-001',
-      ukDriverCount: 1,
-      ukPassengerCount: 2,
-      borderDriverCount: 0,
-    }),
-    makeConvoyVehicle({
-      vin: 'VIN-2',
-      plate: 'PL-002',
-      ukDriverCount: 2,
-      borderDriverCount: 2,
-    }),
+    // Passengers do not count as drivers.
+    makeConvoyVehicle({ vin: 'VIN-1', plate: 'PL-001', driverCount: 0, passengerCount: 2 }),
+    makeConvoyVehicle({ vin: 'VIN-2', plate: 'PL-002', driverCount: 2 }),
   ]);
   convoys.insurance.set('7:VIN-2', {
     ...insured('VIN-2'),
@@ -74,15 +61,9 @@ test('says what each vehicle still needs, and that it is advisory', async () => 
   await expect.element(screen.getByRole('heading', { name: 'Not ready yet' })).toBeInTheDocument();
   await expect.element(screen.getByText('No route planned')).toBeInTheDocument();
   await expect
-    .element(
-      screen.getByText(
-        'PL-001: Fewer than two drivers on the UK to Europe leg; Fewer than two drivers on the Europe to Ukraine leg; Insurance not recorded',
-      ),
-    )
+    .element(screen.getByText('PL-001: No driver assigned; Insurance not recorded'))
     .toBeInTheDocument();
-  await expect
-    .element(screen.getByText('PL-002: Insurance voided by a crew change'))
-    .toBeInTheDocument();
+  await expect.element(screen.getByText('PL-002: Insurance voided')).toBeInTheDocument();
   await expect.element(screen.getByText(/advisory/)).toBeInTheDocument();
 });
 
@@ -92,7 +73,7 @@ test('a withdrawn vehicle is not reported as unready', async () => {
   const convoys = serve();
   convoys.routes.set(7, [makeRouteStop()]);
   convoys.vehicles.set(7, [
-    makeConvoyVehicle({ vin: 'VIN-1', plate: 'PL-001', ukDriverCount: 2, borderDriverCount: 2 }),
+    makeConvoyVehicle({ vin: 'VIN-1', plate: 'PL-001', driverCount: 2 }),
     makeWithdrawnConvoyVehicle({ vin: 'VIN-2', plate: 'PL-002' }),
   ]);
   convoys.insurance.set('7:VIN-1', insured('VIN-1'));

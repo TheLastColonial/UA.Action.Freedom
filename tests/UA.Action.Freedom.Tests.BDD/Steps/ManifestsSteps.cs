@@ -77,7 +77,7 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
         var driverId = volunteerPath.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
         state.CreatedResources.Add(("people", driverId));
         state.Pin(CrewKey, driverId);
-        (await api.SendAsync(HttpMethod.Put, $"/convoys/{convoyId}/vehicles/{vin}/crew/{driverId}", operatorToken, """{ "leg": "Uk" }"""))
+        (await api.SendAsync(HttpMethod.Put, $"/convoys/{convoyId}/vehicles/{vin}/crew/{driverId}", operatorToken, "{}"))
             .StatusCode.Should().Be(HttpStatusCode.NoContent, "the body was: {0}", api.LastBody);
 
         var today = DateTime.UtcNow.Date;

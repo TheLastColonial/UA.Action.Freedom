@@ -56,16 +56,26 @@ function InsuranceStatus({ policy }: { policy: VehicleInsuranceReadModel | null 
   if (policy.voided) {
     return (
       <p role="status">
-        Policy {policy.policyNumber} was voided by a crew change — record it again before the
-        vehicle departs.
+        Policy {policy.policyNumber} was voided — record it again before the vehicle departs.
       </p>
     );
   }
+  const uncovered = policy.uncoveredDrivers.length;
   return (
-    <p role="status">
-      Insured with {policy.insurer}, policy {policy.policyNumber}, cover {day(policy.coverStart)} to{' '}
-      {day(policy.coverEnd)}.
-    </p>
+    <>
+      <p role="status">
+        Insured with {policy.insurer}, policy {policy.policyNumber}, cover {day(policy.coverStart)}{' '}
+        to {day(policy.coverEnd)}.
+      </p>
+      {uncovered > 0 ? (
+        <p role="alert">
+          {uncovered === 1
+            ? '1 driver added since the policy was recorded is not covered'
+            : `${String(uncovered)} drivers added since the policy was recorded are not covered`}{' '}
+          — record it again to cover them before the vehicle departs.
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -76,8 +86,9 @@ interface VehicleInsurancePanelProps {
 }
 
 /**
- * A vehicle's insurance for this convoy. It names the crew, so a crew change voids it; a
- * manifest cannot depart without it recorded, not voided, and in cover.
+ * A vehicle's insurance for this convoy. It names the drivers it covers: removing one keeps it in
+ * cover, and a driver added afterwards is uncovered until it is recorded again. A manifest cannot
+ * depart without it recorded, not voided, in cover and naming every driver.
  */
 export function VehicleInsurancePanel({
   convoyId,

@@ -177,10 +177,10 @@ Scenario: A dispatcher crews a vehicle on the truck list and stands the driver d
     When I GET "/convoys/{id}/vehicles/WDB9066331S0BDC66/crew" on the remembered convoy
     Then the response status is 200
     And the response body lists the driver
-    When I DELETE "/convoys/{id}/vehicles/WDB9066331S0BDC66/crew/{driver}?leg=Uk" on the remembered convoy for the driver
+    When I DELETE "/convoys/{id}/vehicles/WDB9066331S0BDC66/crew/{driver}" on the remembered convoy for the driver
     Then the response status is 204
 
-Scenario: A volunteer who does not drive rides as a passenger, and takes only one seat per leg
+Scenario: A volunteer who does not drive rides as a passenger, and takes only one seat per convoy
     Given I am authenticated as "operator"
     When I POST "/convoys" with body:
         """
@@ -199,23 +199,48 @@ Scenario: A volunteer who does not drive rides as a passenger, and takes only on
     And I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC33" on the remembered convoy
     And I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC44/crew/{passenger}" on the remembered convoy for the passenger with body:
         """
-        { "leg": "Uk", "role": "Passenger" }
+        { "role": "Passenger" }
         """
     Then the response status is 204
     When I GET "/convoys/{id}/vehicles/WDB9066331S0BDC44/crew" on the remembered convoy
     Then the crew lists the passenger as a "Passenger"
     When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC33/crew/{passenger}" on the remembered convoy for the passenger with body:
         """
-        { "leg": "Uk", "role": "Passenger" }
+        { "role": "Passenger" }
         """
     Then the response status is 409
-    # The other half of the journey is a different seat: a handover at the European border is
-    # exactly what the leg exists to record.
-    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC33/crew/{passenger}" on the remembered convoy for the passenger with body:
+
+Scenario: Adding a driver leaves the insurance needing an update
+    Given I am authenticated as "operator"
+    When I POST "/convoys" with body:
         """
-        { "leg": "Border", "role": "Passenger" }
+        { "start": "2026-09-01T06:00:00Z", "expectedEnd": "2026-09-05T18:00:00Z" }
+        """
+    Then the response status is 201
+    Given I remember the convoy
+    And no vehicle exists with VIN "WDB9066331S0BDC55"
+    And a vehicle exists with VIN "WDB9066331S0BDC55"
+    And the vehicle "WDB9066331S0BDC55" has passed its inspection
+    And a driver exists
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC55" on the remembered convoy
+    And I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC55/insurance" on the remembered convoy with body:
+        """
+        { "insurer": "Ukraine Aid Mutual", "policyNumber": "POL-1", "coverStart": "2026-08-25", "coverEnd": "2026-09-30" }
         """
     Then the response status is 204
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC55/crew/{driver}" on the remembered convoy for the driver
+    Then the response status is 204
+    When I GET "/convoys/{id}/vehicles/WDB9066331S0BDC55/insurance" on the remembered convoy
+    Then the response status is 200
+    And the response body field "voided" is "False"
+    And the insurance does not yet cover the driver
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDC55/insurance" on the remembered convoy with body:
+        """
+        { "insurer": "Ukraine Aid Mutual", "policyNumber": "POL-2", "coverStart": "2026-08-25", "coverEnd": "2026-09-30" }
+        """
+    Then the response status is 204
+    When I GET "/convoys/{id}/vehicles/WDB9066331S0BDC55/insurance" on the remembered convoy
+    Then the insurance covers every driver
 
 Scenario: An administrator may not crew a vehicle
     Given I am authenticated as "admin"

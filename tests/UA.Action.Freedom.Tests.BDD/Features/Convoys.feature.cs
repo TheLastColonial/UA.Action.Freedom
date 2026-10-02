@@ -128,7 +128,7 @@ namespace UA.Action.Freedom.Tests.BDD.Features
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Convoys.feature.ndjson", 18);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Convoys.feature.ndjson", 19);
         }
         
         async System.Threading.Tasks.ValueTask Xunit.IAsyncLifetime.InitializeAsync()
@@ -782,8 +782,8 @@ await this.FeatureBackgroundAsync();
     await testRunner.AndAsync("the response body lists the driver", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
 #line 180
-    await testRunner.WhenAsync("I DELETE \"/convoys/{id}/vehicles/WDB9066331S0BDC66/crew/{driver}?leg=Uk\" on the r" +
-                        "emembered convoy for the driver", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I DELETE \"/convoys/{id}/vehicles/WDB9066331S0BDC66/crew/{driver}\" on the remember" +
+                        "ed convoy for the driver", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 181
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
@@ -793,17 +793,17 @@ await this.FeatureBackgroundAsync();
         }
         
         [global::Xunit.FactAttribute(DisplayName="A volunteer who does not drive rides as a passenger, and takes only one seat per " +
-            "leg")]
+            "convoy")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Convoys API")]
         [global::Xunit.TraitAttribute("Description", "A volunteer who does not drive rides as a passenger, and takes only one seat per " +
-            "leg")]
-        public async global::System.Threading.Tasks.Task AVolunteerWhoDoesNotDriveRidesAsAPassengerAndTakesOnlyOneSeatPerLeg()
+            "convoy")]
+        public async global::System.Threading.Tasks.Task AVolunteerWhoDoesNotDriveRidesAsAPassengerAndTakesOnlyOneSeatPerConvoy()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "11";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A volunteer who does not drive rides as a passenger, and takes only one seat per " +
-                    "leg", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+                    "convoy", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 183
@@ -860,7 +860,7 @@ await this.FeatureBackgroundAsync();
 #line hidden
 #line 200
     await testRunner.AndAsync("I PUT \"/convoys/{id}/vehicles/WDB9066331S0BDC44/crew/{passenger}\" on the remember" +
-                        "ed convoy for the passenger with body:", "{ \"leg\": \"Uk\", \"role\": \"Passenger\" }", ((global::Reqnroll.Table)(null)), "And ");
+                        "ed convoy for the passenger with body:", "{ \"role\": \"Passenger\" }", ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
 #line 204
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
@@ -873,34 +873,27 @@ await this.FeatureBackgroundAsync();
 #line hidden
 #line 207
     await testRunner.WhenAsync("I PUT \"/convoys/{id}/vehicles/WDB9066331S0BDC33/crew/{passenger}\" on the remember" +
-                        "ed convoy for the passenger with body:", "{ \"leg\": \"Uk\", \"role\": \"Passenger\" }", ((global::Reqnroll.Table)(null)), "When ");
+                        "ed convoy for the passenger with body:", "{ \"role\": \"Passenger\" }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 211
     await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 214
-    await testRunner.WhenAsync("I PUT \"/convoys/{id}/vehicles/WDB9066331S0BDC33/crew/{passenger}\" on the remember" +
-                        "ed convoy for the passenger with body:", "{ \"leg\": \"Border\", \"role\": \"Passenger\" }", ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 218
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="An administrator may not crew a vehicle")]
+        [global::Xunit.FactAttribute(DisplayName="Adding a driver leaves the insurance needing an update")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Convoys API")]
-        [global::Xunit.TraitAttribute("Description", "An administrator may not crew a vehicle")]
-        public async global::System.Threading.Tasks.Task AnAdministratorMayNotCrewAVehicle()
+        [global::Xunit.TraitAttribute("Description", "Adding a driver leaves the insurance needing an update")]
+        public async global::System.Threading.Tasks.Task AddingADriverLeavesTheInsuranceNeedingAnUpdate()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "12";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An administrator may not crew a vehicle", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Adding a driver leaves the insurance needing an update", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 220
+#line 213
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -913,41 +906,139 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 18
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 221
-    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line 214
+    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 222
+#line 215
     await testRunner.WhenAsync("I POST \"/convoys\" with body:", "{ \"start\": \"2026-09-01T06:00:00Z\", \"expectedEnd\": \"2026-09-05T18:00:00Z\" }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 226
+#line 219
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 227
+#line 220
     await testRunner.GivenAsync("I remember the convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 228
+#line 221
     await testRunner.AndAsync("no vehicle exists with VIN \"WDB9066331S0BDC55\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 229
+#line 222
     await testRunner.AndAsync("a vehicle exists with VIN \"WDB9066331S0BDC55\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 230
+#line 223
     await testRunner.AndAsync("the vehicle \"WDB9066331S0BDC55\" has passed its inspection", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 231
+#line 224
     await testRunner.AndAsync("a driver exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 232
+#line 225
     await testRunner.WhenAsync("I PUT \"/convoys/{id}/vehicles/WDB9066331S0BDC55\" on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 233
+#line 226
+    await testRunner.AndAsync("I PUT \"/convoys/{id}/vehicles/WDB9066331S0BDC55/insurance\" on the remembered conv" +
+                        "oy with body:", "{ \"insurer\": \"Ukraine Aid Mutual\", \"policyNumber\": \"POL-1\", \"coverStart\": \"2026-0" +
+                        "8-25\", \"coverEnd\": \"2026-09-30\" }", ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 230
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 234
+#line 231
     await testRunner.WhenAsync("I PUT \"/convoys/{id}/vehicles/WDB9066331S0BDC55/crew/{driver}\" on the remembered " +
                         "convoy for the driver", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
+#line 232
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 233
+    await testRunner.WhenAsync("I GET \"/convoys/{id}/vehicles/WDB9066331S0BDC55/insurance\" on the remembered conv" +
+                        "oy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 234
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
 #line 235
+    await testRunner.AndAsync("the response body field \"voided\" is \"False\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 236
+    await testRunner.AndAsync("the insurance does not yet cover the driver", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 237
+    await testRunner.WhenAsync("I PUT \"/convoys/{id}/vehicles/WDB9066331S0BDC55/insurance\" on the remembered conv" +
+                        "oy with body:", "{ \"insurer\": \"Ukraine Aid Mutual\", \"policyNumber\": \"POL-2\", \"coverStart\": \"2026-0" +
+                        "8-25\", \"coverEnd\": \"2026-09-30\" }", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 241
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 242
+    await testRunner.WhenAsync("I GET \"/convoys/{id}/vehicles/WDB9066331S0BDC55/insurance\" on the remembered conv" +
+                        "oy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 243
+    await testRunner.ThenAsync("the insurance covers every driver", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.FactAttribute(DisplayName="An administrator may not crew a vehicle")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Convoys API")]
+        [global::Xunit.TraitAttribute("Description", "An administrator may not crew a vehicle")]
+        public async global::System.Threading.Tasks.Task AnAdministratorMayNotCrewAVehicle()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "13";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An administrator may not crew a vehicle", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 245
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 18
+await this.FeatureBackgroundAsync();
+#line hidden
+#line 246
+    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 247
+    await testRunner.WhenAsync("I POST \"/convoys\" with body:", "{ \"start\": \"2026-09-01T06:00:00Z\", \"expectedEnd\": \"2026-09-05T18:00:00Z\" }", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 251
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 252
+    await testRunner.GivenAsync("I remember the convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 253
+    await testRunner.AndAsync("no vehicle exists with VIN \"WDB9066331S0BDC55\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 254
+    await testRunner.AndAsync("a vehicle exists with VIN \"WDB9066331S0BDC55\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 255
+    await testRunner.AndAsync("the vehicle \"WDB9066331S0BDC55\" has passed its inspection", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 256
+    await testRunner.AndAsync("a driver exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 257
+    await testRunner.WhenAsync("I PUT \"/convoys/{id}/vehicles/WDB9066331S0BDC55\" on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 258
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 259
+    await testRunner.WhenAsync("I PUT \"/convoys/{id}/vehicles/WDB9066331S0BDC55/crew/{driver}\" on the remembered " +
+                        "convoy for the driver", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 260
     await testRunner.ThenAsync("the response status is 403", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -961,11 +1052,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "13";
+            string pickleIndex = "14";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Putting an unknown vehicle on a truck list is a 404", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 237
+#line 262
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -978,19 +1069,19 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 18
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 238
+#line 263
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 239
+#line 264
     await testRunner.WhenAsync("I POST \"/convoys\" with body:", "{ \"start\": \"2026-09-01T06:00:00Z\", \"expectedEnd\": \"2026-09-05T18:00:00Z\" }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 243
+#line 268
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 244
+#line 269
     await testRunner.WhenAsync("I PUT \"/convoys/{id}/vehicles/NOSUCHVIN0000BDD1\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 245
+#line 270
     await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -1004,11 +1095,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "14";
+            string pickleIndex = "15";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Fetching an unknown convoy is a 404", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 247
+#line 272
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -1021,13 +1112,13 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 18
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 248
+#line 273
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 249
+#line 274
     await testRunner.WhenAsync("I GET \"/convoys/99999999\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 250
+#line 275
     await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -1041,11 +1132,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "15";
+            string pickleIndex = "16";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Publishing the truck list of an unknown convoy is a 404", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 252
+#line 277
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -1058,13 +1149,13 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 18
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 253
+#line 278
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 254
+#line 279
     await testRunner.WhenAsync("I POST \"/convoys/99999999/publish-truck-list\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 255
+#line 280
     await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
