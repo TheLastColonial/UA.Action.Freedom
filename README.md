@@ -67,11 +67,25 @@ iac/
 └── tofu/                               # OpenTofu provisioning (resources)
 
 docs/
-├── domain/key-concepts.md              # Shared vocabulary & domain concepts
+├── domain/                             # Business rules (target design)
+│   ├── key-concepts.md                 #   Shared vocabulary & domain concepts — start here
+│   ├── convoy-operations.md            #   Convoy, crew, accommodation, budget, Convoy Leader, readiness
+│   ├── boxes-and-donations.md          #   Boxes, items, donors, Receivers, reporting
+│   ├── customs-declarations.md         #   GMR, ENS, ELO and the Ukrainian goods list
+│   ├── decisions.md                    #   Every decision, its rationale, and open questions
+│   └── ua-customs-requirements.md      #   Research on Ukrainian customs (not authoritative)
+├── plans/                              # Implementation plans for ADRs 0004–0017 (one PR each)
+├── adr/                                # Architecture decision records
+├── sequences/                          # Sequence diagrams of each new flow
+├── process/                            # Process (swimlane) diagrams, incl. the end-to-end overview
+├── states/                             # State diagrams: box, convoy, truck-list entry, declaration, Receiver
+├── use-cases/                          # Use case diagrams: who can do what
+├── model/domain-model.puml             # Class diagram of the target domain
+├── timeline/convoy-timeline.puml       # Gantt worked example of the convoy time rules
+├── process.puml, manifest-status.puml  # Manifest process and states (target design)
 ├── local-authentication.md             # Token & role setup guide
 ├── gotchas-and-open-questions.md       # Debugging & known traps
 ├── recommendations.md                  # Azure architecture & design decisions
-├── adr/                                # Architecture decision records
 ├── schemas/edi/onboarding.md           # Becoming an ELO EDI operator with French Customs
 └── c4/                                 # C4 system & container diagrams
 ```
@@ -310,6 +324,28 @@ Three independent controls enforce receiver address segregation:
 2. **Identity** — `ISensitiveDbConnectionFactory` grants read access only to the ground officer role
 3. **Database** — `DENY SELECT ON SCHEMA::sensitive TO freedom_app` — the app cannot read sensitive data
 
+### Where the design is going
+
+The sections below describe the system **as built**. Product discovery has since redesigned large parts of the
+domain, recorded in [ADRs 0004–0017](docs/adr/README.md) and **not yet implemented**. In short:
+
+| Area | As built | Target |
+| --- | --- | --- |
+| Crew | One seat per person **per journey leg** | One seat per person per convoy; legs removed ([ADR 0007](docs/adr/0007-journey-legs-are-removed-from-the-crew-model.md)) |
+| Manifest | Ten states; approval freezes it and hands off the paperwork | The Administrator's **load sign-off** only; a load change needs re-approval ([ADR 0004](docs/adr/0004-the-manifest-is-the-load-sign-off.md)) |
+| Customs paperwork | GMR, ELO and ENS hung off the manifest; submitted automatically on approval | One per-vehicle **Declaration** with derived staleness; **manual filing by default** ([ADRs 0005](docs/adr/0005-declarations-are-per-vehicle-with-derived-staleness.md), [0006](docs/adr/0006-filing-is-manual-by-default.md)) |
+| Departure | Advisory readiness; only insurance is checked | Blocking requirements, **no override**, one convoy depart action ([ADR 0008](docs/adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md)) |
+| Roles | Six global roles | Adds a **Convoy Leader** scoped to one convoy, with audited, time-limited address access, and Loaders scoped to their locations ([ADRs 0009](docs/adr/0009-convoy-leader-reads-destination-addresses.md), [0010](docs/adr/0010-resource-scoped-permissions.md)) |
+| Boxes and items | Validation freezes a box; free-form item properties | Attested boxes are **replaced, never edited**, with a bilingual label; categories mapped to customs codes; GBP values; donors as an erasable split identity ([ADRs 0011](docs/adr/0011-attested-boxes-are-replaced-not-edited.md), [0013](docs/adr/0013-donors-are-a-split-identity.md), [0014](docs/adr/0014-items-are-classified-by-category-and-valued-in-gbp.md)) |
+| Receivers | No status | Registration status gates destinations and departure ([ADR 0012](docs/adr/0012-receiver-registration-gates-convoys-and-boxes.md)) |
+
+The business rules are in [`docs/domain/`](docs/domain/README.md) and every decision in
+[`docs/domain/decisions.md`](docs/domain/decisions.md). The work is split into **19 plans** in
+[`docs/plans/`](docs/plans/README.md), one branch and PR each, with an agent execution protocol and owner gates. The
+target design is drawn as [sequence](docs/sequences/README.md), [process](docs/process/README.md),
+[state](docs/states/README.md) and [use case](docs/use-cases/README.md) diagrams, a
+[domain model](docs/model/domain-model.puml) and a [convoy timeline](docs/timeline/convoy-timeline.puml).
+
 ### Convoy and Manifest — what each one is for
 
 The convoy is the unit that is **planned**; the manifest is the unit that is **executed per
@@ -328,14 +364,18 @@ vehicle**. The fact that ties them, "this vehicle is travelling with this convoy
 
 ### Manifest Lifecycle
 
-Manifests follow a 10-state model (see `docs/manifest-status.puml`):
+As built, manifests follow a 10-state model (the as-built diagram is in git history at `f659eed`;
+`docs/manifest-status.puml` now draws the target three-state sign-off, which
+[plan 15](docs/plans/15-manifest-signoff-lifecycle.md) implements):
 - Proposed → Confirmed (admin approval freezes it)
 - Once confirmed, only progress states run: Preparing → Ready → InTransit → Delivered
 - A confirmed manifest cannot be edited (backward transitions blocked)
 
 ### Border paperwork, and how it is obtained
 
-Approving a manifest is the fork in `docs/process.puml`. It freezes the manifest and then hands off
+As built, approving a manifest is the fork in the earlier version of `docs/process.puml` (git `f659eed`; the file
+now shows the target, where approval only signs off and filing is manual by default —
+[plan 08](docs/plans/08-declarations-filing.md)). Today it freezes the manifest and then hands off
 three things, each onto a durable queue rather than by calling out inside the HTTP request:
 
 | What | Queue | Obtained by | Stored in |
@@ -628,7 +668,8 @@ See `docs/gotchas-and-open-questions.md` for:
 
 ## Contributing
 
-1. Create a feature branch from `main`
+1. Create a feature branch from `main`. If the work implements ADRs 0004–0017, take the matching plan in
+   `docs/plans/` and follow its execution protocol: one plan per branch and PR, in dependency order.
 2. Write failing tests first (TDD)
 3. Implement the minimum to pass tests
 4. Run all tests to ensure no regressions
@@ -637,11 +678,15 @@ See `docs/gotchas-and-open-questions.md` for:
 
 ## Resources
 
-- **Domain concepts** — `docs/domain/key-concepts.md`
+- **Domain concepts** — `docs/domain/key-concepts.md`, and the index of business rules in `docs/domain/README.md`
+- **Decisions** — `docs/domain/decisions.md` (every decision, its rationale and the open questions)
+- **Implementation plans** — `docs/plans/README.md` (index, dependency graph, gates and agent protocol)
 - **Local authentication** — `docs/local-authentication.md`
 - **Architecture & design** — `docs/recommendations.md`
-- **Decision records** — `docs/adr/` (start with `0001-truck-list-as-a-table.md`)
-- **State diagram** — `docs/manifest-status.puml`
+- **Decision records** — `docs/adr/` (index in `docs/adr/README.md`; start with `0001-truck-list-as-a-table.md`)
+- **Diagrams (target design)** — sequences `docs/sequences/`, processes `docs/process/` (start with
+  `00-end-to-end-overview.puml`), states `docs/states/` and `docs/manifest-status.puml`, use cases `docs/use-cases/`,
+  the domain model `docs/model/domain-model.puml`, and the convoy timeline `docs/timeline/convoy-timeline.puml`
 - **System diagram** — `docs/c4/2-containers.puml`
 - **HMRC API specs** — `docs/schemas/hmrc/`
 - **French customs ELO (EDI) spec** — `docs/schemas/edi/`
