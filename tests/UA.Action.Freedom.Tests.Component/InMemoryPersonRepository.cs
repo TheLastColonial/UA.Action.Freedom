@@ -27,6 +27,20 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
         return this;
     }
 
+    /// <summary>Logins by token subject. Erasing a volunteer removes theirs, as deleting the detail row does.</summary>
+    private readonly Dictionary<string, Guid> logins = [];
+
+    /// <summary>The subject <see cref="TestAuthHandler"/> gives every caller.</summary>
+    public const string TestUserSubject = "test-user";
+
+    public InMemoryPersonRepository LinkedTo(string subject, Guid personId)
+    {
+        logins[subject] = personId;
+        return this;
+    }
+
+    public InMemoryPersonRepository WithTestUserLinkedTo(Guid personId) => LinkedTo(TestUserSubject, personId);
+
     public int Count => store.Count;
 
     public bool Contains(Guid id) => store.ContainsKey(id);
@@ -74,6 +88,40 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
             return Task.FromResult(DeletePersonResult.StillActive);
         }
 
-        return Task.FromResult(store.Remove(id) ? DeletePersonResult.Deleted : DeletePersonResult.NotFound);
+        if (!store.Remove(id))
+        {
+            return Task.FromResult(DeletePersonResult.NotFound);
+        }
+
+        foreach (var subject in logins.Where(login => login.Value == id).Select(login => login.Key).ToList())
+        {
+            logins.Remove(subject);
+        }
+
+        return Task.FromResult(DeletePersonResult.Deleted);
+    }
+
+    public Task<Guid?> FindBySubjectAsync(string subject, CancellationToken cancellationToken) =>
+        Task.FromResult<Guid?>(logins.TryGetValue(subject, out var id) && store.ContainsKey(id) ? id : null);
+
+    public Task<LinkLoginResult> LinkLoginAsync(Guid personId, string subject, CancellationToken cancellationToken)
+    {
+        if (!store.ContainsKey(personId))
+        {
+            return Task.FromResult(LinkLoginResult.NotFound);
+        }
+
+        if (logins.TryGetValue(subject, out var owner) && owner != personId)
+        {
+            return Task.FromResult(LinkLoginResult.SubjectInUse);
+        }
+
+        foreach (var previous in logins.Where(login => login.Value == personId).Select(login => login.Key).ToList())
+        {
+            logins.Remove(previous);
+        }
+
+        logins[subject] = personId;
+        return Task.FromResult(LinkLoginResult.Linked);
     }
 }

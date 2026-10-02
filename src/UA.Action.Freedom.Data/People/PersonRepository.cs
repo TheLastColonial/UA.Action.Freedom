@@ -183,4 +183,33 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
         await transaction.CommitAsync(cancellationToken);
         return DeletePersonResult.Deleted;
     }
+
+    public async Task<Guid?> FindBySubjectAsync(string subject, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<Guid?>(new CommandDefinition(
+            "SELECT PersonId FROM dbo.PersonDetail WHERE IdentitySubject = @subject",
+            new { subject },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<LinkLoginResult> LinkLoginAsync(Guid personId, string subject, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        try
+        {
+            var affected = await connection.ExecuteAsync(new CommandDefinition(
+                "UPDATE dbo.PersonDetail SET IdentitySubject = @subject, UpdatedAt = SYSUTCDATETIME() WHERE PersonId = @personId",
+                new { personId, subject },
+                cancellationToken: cancellationToken));
+
+            return affected > 0 ? LinkLoginResult.Linked : LinkLoginResult.NotFound;
+        }
+        catch (SqlException exception) when (exception.Number is SqlErrors.UniqueIndexViolation or SqlErrors.UniqueConstraintViolation)
+        {
+            return LinkLoginResult.SubjectInUse;
+        }
+    }
 }
