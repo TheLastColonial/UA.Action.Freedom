@@ -21,6 +21,9 @@ between convoys are an accepted trade. See [recommendations §2.2](../recommenda
 The **convoy window** — the days either side of departure when the system is actually in use — is therefore a
 first-class operational concept, not just a date range.
 
+For scale: about 500 vehicles over four years, one convoy a month, and about 25 users
+([O23](decisions.md#o23)).
+
 ---
 
 ## Roles
@@ -50,6 +53,8 @@ boundary between the donor and Ukrainian Action.
 
 Also the only role that may place a [Box](#box) in a [Bay](#bay) — narrower even than validating a box,
 because it is the physical, on-site act of shelving one so it can be found again for loading.
+
+A Loader **sees only the locations they manage** ([O14](decisions.md#o14)).
 
 ### Purchaser
 
@@ -86,7 +91,7 @@ The Ground Officer is the only role that sees full [Receiver](#receiver) detail.
 
 ### Driver
 
-A volunteer who drives a vehicle on one leg of a convoy. Drivers are notified of their allocation and receive
+A volunteer who drives a vehicle on a convoy. Drivers are notified of their allocation and receive
 their manifest, but do not administer the system. A driver may be *committed* to a convoy or merely available.
 
 ### Volunteer erasure
@@ -127,15 +132,13 @@ describe a truck that is not on the list.
 
 #### Readiness
 
-A convoy is **ready** when it has a route, has vehicles still travelling with it, and every one of them is ready; a
-vehicle is ready with **at least two drivers on each [leg](#journey-leg)** (passengers do not count) and
-[insurance](#vehicle-insurance) that is recorded, not voided, and in cover on the departure date. Crew is asked for
-per leg because a vehicle fully crewed out of the UK with nobody booked to take it into Ukraine is not ready, and a
-single count could not say so.
+A convoy is **ready** when it has a route, has vehicles still travelling with it, and every blocking requirement is
+met for the convoy and for each of those vehicles. The Dispatcher sees what is still outstanding on the convoy's
+overview. Which requirements **block departure** and which only **warn** is set out in
+[Convoy operations](convoy-operations.md#readiness) ([P4](decisions.md#p4)).
 
 A [withdrawn](#withdrawal) vehicle is skipped entirely rather than reported as unready: it has no crew to find and no
-insurance to renew. Readiness is **advisory** — it says what is missing and blocks nothing — and is shown on the
-convoy's overview. Cargo checks will join it later.
+insurance to renew.
 
 #### Arrival
 
@@ -187,44 +190,39 @@ while the inspection status tracks how far through that process it has progresse
 > **Naming:** the domain type was renamed from `Veichle` to `Vehicle`. The rename is complete across the
 > solution.
 
-### Journey Leg
-
-A journey has two halves, and a vehicle is crewed for each: **UK to Europe** (`Uk`) and **Europe to Ukraine**
-(`Border`), with a handover at the European border in between. The leg is a property of the convoy's journey, which
-is why it lives on the [crew](#vehicle-crew) row. It was once called a *manifest* leg, back when the manifest kept
-its own driver teams.
-
 ### Vehicle Crew
 
-The people travelling in a [Vehicle](#vehicle) on one [Convoy](#convoy), for one [leg](#journey-leg) of the journey,
-decided while it is planned. Each crew member is either:
+The people travelling in a [Vehicle](#vehicle) on one [Convoy](#convoy), decided while it is planned. There are no
+journey legs: a crew seat is one person on one vehicle on one convoy ([P12](decisions.md#p12)). Each crew member is
+either:
 
 - a **Driver** — a volunteer registered to drive; or
 - a **Passenger** — any volunteer.
 
 **This is the only crew record in the system.** The [Manifest](#manifest) reads it; it does not keep its own.
 
-**A person takes one seat per leg**: they cannot be in two vehicles on the same half of the same journey (the
-database enforces it). They may change vehicle at the border, which is exactly what the leg exists to record. A
-vehicle needs **two drivers on each leg** to be [ready](#readiness) — the norm for sustained driving and border
-compliance; passengers do not count. Crewing is the [Dispatcher](#dispatcher)'s alone.
+**A person takes one seat per convoy**: they cannot be in two vehicles on the same convoy. A vehicle needs **at least
+one driver** to depart, and **two drivers** are advised for sustained driving and border compliance; passengers do not
+count ([P9](decisions.md#p9)). Crewing is the [Dispatcher](#dispatcher)'s alone.
 
 There is no primary/secondary distinction. Two drivers are two drivers, and readiness counts them.
 
-The crew can still change after the truck list is published — a driver falls ill — but **any change voids the
-vehicle's [insurance](#vehicle-insurance)**, which names the crew, and it must be recorded again before the vehicle
-departs. Once the convoy has [arrived](#arrival), or the vehicle has [withdrawn](#withdrawal), the crew is history
+The crew can still change after the truck list is published — a driver falls ill — but **adding a driver**
+needs the vehicle's [insurance](#vehicle-insurance) updated before it departs ([O7](decisions.md#o7)); removing one
+does not affect it. Once the convoy has [arrived](#arrival), or the vehicle has [withdrawn](#withdrawal), the crew is history
 and cannot change.
 
 ### Vehicle Insurance
 
-Bought by the Dispatcher for each vehicle on a convoy, and it **names that vehicle's crew**. Recorded per vehicle
+Bought by the Dispatcher for each vehicle on a convoy, and it **covers the drivers named on it**. It is for the
+vehicle to travel on the road; cargo is not insured ([O5](decisions.md#o5)). Recorded per vehicle
 per convoy: insurer, policy number, cover start and end, optional cost, and who recorded it (taken from their login,
 never typed in). Dispatcher and Administrator may record it (`PUT /convoys/{id}/vehicles/{vin}/insurance`).
 
-- **A crew change voids it**, in the same step as the change. Recording it again renews it.
-- **A manifest cannot depart without it** — recorded, not voided, and in cover on the day — and is refused with the
-  reason.
+- **Removing a crew member does not void it.** **Adding a driver** needs it updated with the insurer, which the
+  Dispatcher records ([O7](decisions.md#o7)).
+- **A manifest cannot depart without it** — recorded, in cover on the day, and covering every driver — and is
+  refused with the reason.
 - Taking the vehicle off the convoy, or cancelling the convoy, removes it.
 
 The crew is a property of the vehicle within the convoy. A manifest used to carry its own primary/secondary
@@ -428,7 +426,7 @@ The safety-and-security declaration the EU requires **before** goods arrive, lod
 Control System 2). Mandatory for road carriers since 1 September 2025, at least an hour before the
 vehicle enters the EU.
 
-It is a real declaration, unlike the [ELO](#elo): consignor and consignee with addresses, a
+It is a real declaration, unlike the [ELO](#elo--obligatory-logistics-envelope): consignor and consignee with addresses, a
 plain-language description and a six-digit-minimum commodity code per goods item, package counts and
 types, gross mass, the countries the goods pass through, the mode of transport and the means of
 transport. ICS2 answers an accepted one with an **MRN** — eighteen characters, two digits of year, the
@@ -482,7 +480,7 @@ classification makes that separation explicit and enforceable rather than a matt
 
 The practical consequence: **what is on the manifest is a deliberate decision, not an accident of the data
 model.** Documents that travel show cargo, weights and a region-level destination. Precise delivery detail is
-released to the driver at the point of delivery. See
+given only to the Convoy Leader, never to other drivers ([O1](decisions.md#o1), [X7](decisions.md#x7)). See
 [recommendations §4.4](../recommendations.md#44-treat-ukrainian-delivery-detail-as-the-most-sensitive-data-in-the-system).
 
 The same rule applies to a [Box](#box)'s **QR label**. Its renderer (`BoxLabelRenderer`) takes a box id, a token
@@ -509,6 +507,7 @@ decided feature** — it needs input from someone who has actually stood at the 
 
 ## Notification
 
-Drivers are told of their convoy allocation and given access to their manifest by email or SMS. Notifications
+Drivers are told of their convoy allocation and given access to their manifest **on screen**. Email may be built
+later ([O21](decisions.md#o21)). Notifications
 carry a link to an authenticated page, never a direct document URL — documents are served through short-lived,
 authorised links only.

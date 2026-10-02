@@ -4,7 +4,11 @@ Date: 2026-09-27
 
 ## Status
 
-Accepted.
+Accepted. **Amended on 2026-10-02.** The decision not to submit an ENS stands. Who files it has changed: the
+**Dispatcher** files it, and a Ground Officer may answer questions about destinations
+([decision X1](../domain/decisions.md#x1)), where this ADR had a Ground Officer file it. The ENS is also now one
+of a vehicle's [declarations](0005-declarations-are-per-vehicle-with-derived-staleness.md). See
+[Amendments](#amendments).
 
 ## Context
 
@@ -186,3 +190,35 @@ not a submission. If an ITSP adapter arrives, it is the natural input to it: the
 is this sheet plus the consignee address, which is the one field that would then have to cross the
 `sensitive` boundary — and that decision deserves its own ADR rather than being smuggled in as an
 implementation detail.
+
+## Amendments
+
+Added 2026-10-02. The original text above is kept as it was decided.
+
+### Who files the ENS
+
+The section "Recording the MRN is a Dispatcher's act, not a Ground Officer's" described a **two-person
+hand-off**: the Ground Officer takes the filing sheet, reads the address under their own policy, files, and passes
+back the MRN. **That is replaced.** The Dispatcher files the ENS in the EU Customs Trader Portal and records the
+MRN, and a Ground Officer may work alongside to answer questions about destinations
+([decision X1](../domain/decisions.md#x1)).
+
+What this ADR protects is unchanged **inside Freedom**: the filing sheet still withholds the consignee's address,
+`receivers:detail` is still Ground Officer alone, and `GroundOfficer` is still excluded from every manifest
+policy. What changes is a **human control outside the system**. Previously the person typing an address into the
+portal was the only role allowed to read it. Now the Dispatcher types, or watches, while a Ground Officer supplies
+it. The system cannot enforce that, and it should be treated as an accepted process risk, not a technical one
+([Q-ens-address-handling](../domain/decisions.md#q-ens-address-handling)).
+
+The statement "The filer already holds that address" is no longer true of the filer. `ConsigneeAddressWithheld`
+and `ConsigneeAddressSource` remain, and now tell the Dispatcher **to ask the Ground Officer** and not to look it
+up.
+
+### Declaration shape and submission mode
+
+| Part of this ADR | Now |
+| --- | --- |
+| `ens/{manifestId}.json`, keyed on the manifest | Held as one of the vehicle's declarations ([ADR 0005](0005-declarations-are-per-vehicle-with-derived-staleness.md)). The blob store, the `IfNoneMatch` write-once rule and `IEnsDeclarationStore` as the ITSP seam all stand. |
+| "Correcting a declaration is an explicit supersede" | **Stands, and is generalised.** Invalidate-and-refile is the standard correction when the load changes, and the superseded MRN is kept. |
+| "Approval refuses before it freezes" with `EnsNotFiled` | **Stands**, adjusted: a vehicle needs a current ENS before it can depart ([ADR 0008](0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md)), and approval still refuses when none is recorded where the ELO would otherwise be requested. |
+| The ENS is recorded, never submitted | **Stands.** Manual filing is now the default for every authority ([ADR 0006](0006-filing-is-manual-by-default.md)), so this ADR's reasoning for the ENS is the general rule. |
