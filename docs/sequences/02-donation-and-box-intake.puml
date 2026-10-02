@@ -1,0 +1,73 @@
+@startuml Donation and Box Intake
+
+title A donation arrives, is packed into a box, and is attested
+caption Target design. Decisions O22, D14, D9, D5, D6, O16, D1, D21, D7, D3, D2, O17, O29, D35. ADRs 0011, 0013, 0014.
+
+autonumber
+
+actor Donor as donor
+actor Dispatcher as disp
+actor Loader as loader
+participant "Freedom API" as api
+database "Freedom database" as db
+participant "Offline translator\n(in-process)" as mt
+
+== Optional: the donor announces it ==
+donor -> disp : email: "a box is coming"
+disp -> api : record donor and donation
+api -> db : Donor + DonorDetail (erasable), Donation
+disp -> api : create box (Expected), destination Receiver
+api -> db : check Receiver is **registered**
+alt Receiver not registered (D35)
+  api --> disp : 409, cannot be a destination
+else registered
+  api -> db : Box (Expected)
+end
+note right of disp
+  Entering the box early is optional.
+  It can be created when it arrives.
+end note
+
+== The box arrives at a hub ==
+loader -> api : check in at location, place in bay
+note right of loader
+  A Loader sees only the locations they manage (O14).
+end note
+api -> db : Box location and bay (Arrived)
+
+== The Loader records the items ==
+loop for each item
+  loader -> api : add item: category, quantity, value (GBP) + source,\nexpiry, donation
+  api -> db : category -> customs codes (UK, EU, UA) from the mapping
+  alt category is not carried (gas, lithium batteries, flammables)
+    api --> loader : warning: not carried, take appropriate measures (D21)
+  else expired
+    api --> loader : warning: expired, the box cannot be attested (D1)
+  else short shelf life
+    api --> loader : warning: short remaining shelf life (D25)
+  else sensitive category
+    api --> loader : flagged sensitive; the Dispatcher will be warned (D7)
+  end
+end
+
+== The Loader attests the box ==
+loader -> api : validate box (weight, dimensions)
+note right : The signer is taken from the login, never the request body
+alt an item has expired
+  api --> loader : 409, remove or replace the item first
+else
+  api -> db : ValidatedBy, ValidatedAt (write-once)\ncontents now fixed
+  api --> loader : attested
+end
+
+== The label is printed ==
+loader -> api : issue QR code and print label
+api -> mt : translate item lines to Ukrainian
+mt --> api : Ukrainian text (no network used)
+api --> loader : label: box number, item list and signer,\nin English and Ukrainian
+note right of loader
+  Never a Receiver, region or address on the label.
+  The Ukrainian text is not marked as a translation (O29).
+end note
+
+@enduml

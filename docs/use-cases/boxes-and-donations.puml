@@ -1,0 +1,62 @@
+@startuml Boxes and Donations Use Cases
+
+title Use cases: boxes, donations and stock
+caption Target design. Boxes and donations. Decisions O14, O22, O31, D3, D15, O6. ADRs 0011, 0013, 0014.
+
+left to right direction
+
+actor Donor as donor <<external>>
+actor Loader as loader
+actor Dispatcher as disp
+actor Administrator as admin
+
+rectangle "Freedom" {
+  usecase "Record a donation\nand its donor" as UC1
+  usecase "Create an expected box" as UC2
+  usecase "Check a box in at a hub" as UC3
+  usecase "Place a box in a bay" as UC4
+  usecase "Record items: category,\nvalue, expiry" as UC5
+  usecase "Attest a box" as UC6
+  usecase "Print the bilingual label" as UC7
+  usecase "Replace an attested box" as UC8
+  usecase "Review hub stock" as UC9
+  usecase "Produce a donor status report" as UC10
+  usecase "Maintain categories and\ntheir customs codes" as UC11
+  usecase "Assign Loaders to locations" as UC12
+  usecase "Erase a donor" as UC13
+}
+
+donor ..> disp : emails HQ\n(no system access)
+
+disp --> UC1
+loader --> UC1
+disp --> UC2
+loader --> UC2
+loader --> UC3
+loader --> UC4
+loader --> UC5
+loader --> UC6
+loader --> UC7
+loader --> UC8
+loader --> UC9
+disp --> UC10
+loader --> UC10
+admin --> UC11
+admin --> UC12
+admin --> UC13
+admin --> UC6
+
+UC6 ..> UC7 : <<precedes>>
+UC8 ..> UC6 : <<include>>
+
+note right of UC4
+  Loader only, even narrower
+  than attesting a box.
+end note
+
+note right of UC9
+  A Loader sees only the
+  locations they manage (O14).
+end note
+
+@enduml

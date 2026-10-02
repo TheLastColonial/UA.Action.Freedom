@@ -1,0 +1,68 @@
+@startuml Donation and Box Intake Process
+
+title Process: receiving a donation and attesting a box
+caption Target design. Decisions O22, D14, D5, D6, O16, D1, D21, D7, D25, D2, O17, O29, D35. Plans 04, 05, 06, 16.
+
+|Donor|
+start
+:Email HQ that goods are coming;
+
+|Dispatcher|
+if (Enter it before it arrives?) then (yes)
+  :Record donor and donation;
+  :Create an expected box with a destination Receiver;
+  |Freedom|
+  if (Receiver registered?) then (no)
+    :Refuse the destination;
+    |Dispatcher|
+    :Choose a registered Receiver,\nor ask the Administrator to register one;
+  else (yes)
+  endif
+else (no, enter it on arrival)
+endif
+
+|Loader|
+:Receive the goods at a hub you manage;
+:Check in the box and place it in a bay;
+
+repeat
+  :Record an item: category, quantity,\nvalue in GBP and its source, expiry, donation;
+  |Freedom|
+  :Look up the customs codes for the category;
+  if (Category not carried?) then (yes)
+    :Warn: gas, lithium batteries, flammables;
+  elseif (Expired?) then (yes)
+    :Warn: the box cannot be attested;
+  elseif (Short shelf life?) then (yes)
+    :Warn: short remaining shelf life;
+  elseif (Sensitive category?) then (yes)
+    :Flag: the Dispatcher will be warned;
+  else (no)
+  endif
+  |Loader|
+repeat while (More items?) is (yes)
+->no;
+
+:Weigh and measure the box;
+:Attest the box;
+
+|Freedom|
+if (Any expired item?) then (yes)
+  :Refuse attestation;
+  |Loader|
+  :Remove or replace the item;
+  stop
+else (no)
+  :Record the attestation from the login;
+  :Contents are now fixed;
+endif
+
+|Loader|
+:Issue the QR code and print the label;
+
+|Freedom|
+:Translate item lines to Ukrainian, offline;
+:Label: box number, items and signer,\nin English and Ukrainian, no Receiver or address;
+stop
+
+@enduml

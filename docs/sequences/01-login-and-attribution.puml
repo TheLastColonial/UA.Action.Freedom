@@ -1,0 +1,62 @@
+@startuml Login and Attribution
+
+title Linking a login to a person, and attributing every change
+caption Target design. Decisions O34, O35, O19. ADR 0017. Plans 02 and 03.
+
+autonumber
+
+actor Administrator as admin
+actor "Volunteer\n(any role)" as vol
+participant "Identity provider\n(Entra / Keycloak)" as idp
+participant "Freedom web" as web
+participant "Freedom API" as api
+database "dbo.PersonDetail\n(erasable)" as detail
+database "Entity tables" as tables
+
+== A volunteer signs in for the first time ==
+vol -> idp : sign in
+idp --> vol : token (subject, roles)
+vol -> web : open Freedom
+web -> api : GET /me
+api -> detail : find person by IdentitySubject
+detail --> api : none
+api --> web : subject and roles, **not linked**
+note right of web
+  A login that is not linked can read what its roles allow,
+  but cannot make any change that records who did it.
+end note
+
+== The Administrator links the login ==
+admin -> web : open the volunteer's person record
+web -> api : PUT /people/{id}/login { subject }
+api -> detail : set IdentitySubject (unique)
+alt subject already linked to someone else
+  detail --> api : conflict
+  api --> web : 409
+else linked
+  detail --> api : ok
+  api --> web : 204
+end
+
+== Every change records who made it ==
+vol -> web : change something (for example validate a box)
+web -> api : write request (no person id in the body)
+api -> detail : resolve caller's person from the token subject
+alt not linked, or erased
+  api --> web : **403 login-not-linked**
+  note right : No "unknown" identity is ever written (O35)
+else linked
+  api -> tables : UPDATE ... , LastChangedBy = person, LastChangedAt = now\n(same statement as the change)
+  tables --> api : ok
+  api --> web : 200
+end
+
+== Erasure removes the link with the personal data ==
+admin -> api : DELETE /people/{id}
+api -> detail : delete PersonDetail (subject goes with it)
+api -> tables : identity kept only if a record names it
+note over tables
+  Records that name an erased person read "Former volunteer".
+end note
+
+@enduml

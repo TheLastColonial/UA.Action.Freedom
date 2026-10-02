@@ -5,7 +5,12 @@ Date: 2026-09-27
 ## Status
 
 Accepted. The declaration-identifier gap recorded under Consequences was closed by
-[ADR 0003](0003-ens-declaration-recorded-not-submitted.md); everything else here still stands.
+[ADR 0003](0003-ens-declaration-recorded-not-submitted.md). **Partly superseded on 2026-10-02:** approval
+no longer requests the envelope by default, because filing is manual unless an authority is switched to
+automatic ([ADR 0006](0006-filing-is-manual-by-default.md)), and the envelope becomes one of a vehicle's
+[declarations](0005-declarations-are-per-vehicle-with-derived-staleness.md) rather than a property of the
+manifest. The envelope's design, its queue, its disposition rules and the crossing profile all still stand.
+See [Amendments](#amendments).
 
 ## Context
 
@@ -124,3 +129,16 @@ envelope exists and print its barcode; they cannot yet see that the lorry boarde
 `freedom_gmr_dead_letters_total` is told apart by `reason`; submission duration is not, because
 different authorities with different latencies would blur into one histogram. If a third authority
 ever appears, that is the seam to reconsider.
+
+## Amendments
+
+Added 2026-10-02. The original text above is kept as it was decided.
+
+| Part of this ADR | Now |
+| --- | --- |
+| "The envelope is **per manifest**", addressed as `/manifests/{id}/elo` | The envelope is one of a **vehicle's** declarations ([ADR 0005](0005-declarations-are-per-vehicle-with-derived-staleness.md)). The one-envelope-per-lorry rule stands, and the manifest remains the sign-off for the same vehicle. |
+| "**Approval requests it**, exactly as it requests the GMR", with a third `HandOff("elo", …)` | **Superseded.** Requesting it is an explicit act by default, and approval requests it only where the French authority's submission mode is automatic ([ADR 0006](0006-filing-is-manual-by-default.md)). The "approve refuses before it freezes" check and the failed-hand-off counting still apply when it does. |
+| "There is deliberately **no** `POST /manifests/{id}/elo`" | The reason stands, since a second route would be a second way to get two envelopes. The mechanism changes: the route to request one is the declaration's own filing step, and is single-flight per vehicle. |
+| Its own queue, disposition table, and the worker having no database | **Stands unchanged.** These govern automatic mode. |
+| "The crossing profile is domain, not configuration" | **Stands unchanged.** |
+| A changed load means a new envelope | **New.** An envelope cannot gain or lose a declaration after creation, so a stale one is replaced and the old one is kept as history ([ADR 0005](0005-declarations-are-per-vehicle-with-derived-staleness.md)). |

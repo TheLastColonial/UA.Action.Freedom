@@ -1,140 +1,85 @@
 @startuml Goods Movement Sequence
-title Box Validation → Manifest Approval → GMR/ELO Generation
 
-actor Loader as Loader
-actor Admin
+' TARGET DESIGN (ADRs 0004, 0005, 0006, 0011). The code still implements the earlier approval fork
+' until docs/plans/08 and docs/plans/15 merge; that version of this file is in git history at f659eed.
+
+title Box attestation -> allocation -> load sign-off -> declarations
+caption Target design. ADRs 0004, 0005, 0006, 0011. See docs/process/goods-movements.md.
+
+actor Loader
+actor Dispatcher
+actor Admin as "Administrator"
+actor "Ground Officer" as GO
 participant "Freedom API" as API
-participant "Application Handler" as Handler
-participant "Dapper Repository" as Repo
-participant "SQL Database" as DB
-participant "Customs Worker" as Worker
+database "SQL Database" as DB
 queue "customs-work" as GmrQueue
 queue "elo-envelopes" as EloQueue
-participant "Manifest Worker" as ManifestWorker
-queue "manifest-documents" as DocQueue
+participant "Customs Worker" as Worker
 participant "HMRC GVMS" as HMRC
 participant "French ELO API" as Elo
+participant "EU Customs\nTrader Portal" as EU
 participant "Blob Storage" as Blob
 
-== Box Validation ==
+== Box attestation ==
 
 Loader -> API: POST /boxes/{id}/validate
-API -> Handler: ValidateBoxHandler
-Handler -> Repo: MarkValidatedAsync({ValidatedByPersonId, ValidatedAt})
-Repo -> DB: UPDATE dbo.Box SET ValidatedAt = NOW(), ValidatedByPersonId = @id WHERE Id = @id
-DB --> Repo: OK
-Repo --> Handler: ValidateBoxOutcome.Success
-Handler --> API: 200 OK
-
+API -> DB: UPDATE dbo.Box SET ValidatedAt, ValidatedByPersonId (from the login)\nWHERE Id = @id AND ValidatedAt IS NULL
+API --> Loader: 200
 note right of DB
-  Box is now frozen:
-  - Cannot add/remove items
-  - Cannot change receiver
-  - Cannot invalidate
+  Contents are fixed. A change means
+  replacing the box (POST /boxes/{id}/replace).
 end note
 
-== Manifest Creation & Item Assignment ==
+== Allocation to a vehicle ==
 
-Loader -> API: POST /convoys/{convoyId}/vehicles/{vin}/manifest
-API -> Handler: CreateManifestHandler
-Handler -> Repo: CreateAsync({ConvoyId, Vin})
-Repo -> DB: INSERT INTO dbo.Manifest ... VALUES (Proposed)
-DB --> Repo: ManifestId
-Repo --> Handler: CreateManifestOutcome.Created(ManifestId)
-Handler --> API: 201 Created
+Dispatcher -> API: PUT /convoys/{id}/vehicles/{vin}/boxes/{boxId}
+API -> DB: box must be attested, Receiver registered
+API -> DB: upsert ConvoyVehicleBoxAllocation (one vehicle per box)
+API --> Dispatcher: 200
 
-Loader -> API: PUT /manifests/{id}/boxes/{boxId}
-API -> Handler: AddManifestBoxHandler
-Handler -> Repo: AddBoxAsync({ManifestId, BoxId})
-Repo -> DB: INSERT INTO dbo.ManifestBox (ManifestId, BoxId) VALUES
-Repo -> DB: Box must have ValidatedAt IS NOT NULL
-DB --> Repo: OK
-Repo --> Handler: AddManifestBoxOutcome.Success
-Handler --> API: 200 OK
+== Load sign-off ==
 
-== Ground Officer Files ENS ==
-
-note over Loader, Elo
-  Filed outside Freedom in EU Customs Trader Portal
-  (ICS2 has no API; only recorded in Freedom)
-end note
-
-Loader -> API: PUT /manifests/{id}/ens
-API -> Handler: RecordEnsDeclarationHandler
-Handler -> Blob: SaveAsync({ManifestId, ENS_MRN})
-Blob -> Blob: CREATE BLOB ens/{manifestId}/declaration-*.json
-Blob --> Handler: BlobUri
-Handler --> API: 200 OK
-
-== Manifest Approval ==
-
+Dispatcher -> API: POST /manifests/{id}/propose
 Admin -> API: POST /manifests/{id}/approve
-API -> Handler: ApproveManifestHandler
+API -> DB: UPDATE dbo.Manifest SET Status = Approved WHERE Status = Proposed
+API --> Admin: 200 (nothing filed or enqueued)
 
-Handler -> Repo: Check ENS MRN recorded
-Repo -> DB: SELECT FROM dbo.EnsDeclaration WHERE ManifestId = @id
-DB --> Repo: MRN
+== Declarations (per vehicle) ==
 
-alt No ENS MRN
-  Handler --> API: 409 EnsNotFiled
-else ENS MRN present
-  Handler -> Repo: ConfirmAndFreezeAsync
-  Repo -> DB: UPDATE dbo.Manifest SET Status = Confirmed, GmrSubmittedAt = NOW()
-  DB --> Repo: OK
+Dispatcher -> API: POST .../declarations/{kind}/ready
+API -> DB: store the load snapshot
+
+Dispatcher -> API: GET .../declarations/ens/filing-sheet
+API --> Dispatcher: sheet without the consignee address
+Dispatcher -> EU: file the ENS
+GO -> EU: enter the consignee address
+EU --> Dispatcher: MRN
+Dispatcher -> API: POST .../declarations/ens/record (MRN)
+API -> Blob: declarations/{id}.json (IfNoneMatch: write-once)
+
+alt GMR and ELO in manual mode (default)
+  Dispatcher -> API: POST .../declarations/{gmr|elo}/record (reference)
+  API -> DB: declaration Filed
+else automatic mode
+  Dispatcher -> API: POST .../declarations/elo/file
+  API -> DB: refuse unless ENS Accepted
+  API -> EloQueue: envelope request
+  API -> DB: ELO Filed
+  EloQueue -> Worker: dequeue
+  Worker -> Elo: create envelope (crossing profile + MRN)
+  Elo --> Worker: numeroDossier + barcode
+  Worker -> Blob: elo/...
+  Dispatcher -> API: POST .../declarations/gmr/file
+  API -> GmrQueue: GMR submission
+  GmrQueue -> Worker: dequeue
+  Worker -> HMRC: create GMR
+  Worker -> Blob: gmr/...
 end
 
-== GMR Submission (Customs Worker) ==
+== The load changes after filing ==
 
-Handler -> GmrQueue: Enqueue GMR Job
-GmrQueue --> Worker: Dequeue
-Worker -> HMRC: POST /submissions
-HMRC --> Worker: 200 (submissionId, LRN)
-Worker -> Repo: StoreGmrResponseAsync
-Repo -> DB: INSERT INTO dbo.GmrDocument
-DB --> Repo: OK
-
-== ELO Envelope Creation (Customs Worker) ==
-
-Handler -> EloQueue: Enqueue ELO Job
-EloQueue --> Worker: Dequeue
-Worker -> Blob: ReadAsync (ens/{manifestId})
-Blob --> Worker: ENS MRN, crossing profile
-Worker -> Elo: POST /enveloppe
-Elo --> Worker: 200 (numeroDossier, pdf barcode)
-Worker -> Blob: StoreAsync (elo/{manifestId})
-Worker -> Repo: StoreEloEnvelopeAsync
-Repo -> DB: INSERT INTO dbo.EloEnvelope
-DB --> Repo: OK
-
-== Manifest Document Generation (Manifest Worker) ==
-
-Handler -> DocQueue: Enqueue Manifest Document Job
-DocQueue --> ManifestWorker: Dequeue
-ManifestWorker -> Repo: ReadManifestAsync
-Repo -> DB: SELECT manifest, boxes, crew (no addresses)
-DB --> Repo: Complete manifest data
-ManifestWorker -> ManifestWorker: RenderDocument
-ManifestWorker -> Blob: UploadAsync (manifests/{manifestId})
-Blob --> ManifestWorker: BlobUri
-
-== Approval Complete ==
-
-Handler --> API: 200 OK (manifestId, gmrId, eloNumeroDossier, documentUri)
-
-== Manifest Ready for Departure ==
-
-note over Admin, Elo
-  Manifest can now progress through remaining states:
-  Proposed → Confirmed (frozen) → Ready → InTransit → Delivered
-  
-  Status changes no longer edit, only report what happened.
-end note
-
-Loader -> API: POST /manifests/{id}/ready
-API -> Handler: TransitionManifestHandler
-Handler -> Repo: UpdateStatusAsync({ManifestId, Ready})
-Repo -> DB: UPDATE dbo.Manifest SET Status = Ready WHERE Id = @id AND Status = Confirmed
-DB --> Repo: OK
-Handler --> API: 200 OK
+Dispatcher -> API: move or replace a box
+API -> DB: affected manifests back to Proposed
+API --> Dispatcher: declarations now read Stale; re-declare tasks raised
 
 @enduml

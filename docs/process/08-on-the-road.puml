@@ -1,0 +1,57 @@
+@startuml On the Road Process
+
+title Process: leading the convoy on the road
+caption Target design. Decisions X2, O20, O27, O18, X10, P14, O2, O28, O5, O1. Plans 14 and 18.
+
+|Convoy Leader|
+start
+:Brief the other drivers by radio;
+note right: other drivers get no route or destination details (O1)
+
+repeat
+  :Reach the next route point or accommodation;
+  if (Signal and the checklist page available?) then (yes)
+    :Mark it reached on the page;
+  else (no)
+    :Call or radio HQ, use printed documents;
+    |Dispatcher|
+    :Record the mark on the leader's behalf;
+    |Convoy Leader|
+  endif
+
+  if (Border point?) then (yes)
+    :Mark the border crossed;
+    |Freedom|
+    :Close that authority's declarations;
+    |Convoy Leader|
+  else (no)
+  endif
+
+  if (Customs refuse a box?) then (yes)
+    if (Kept by customs?) then (yes)
+      :Record the box as seized;
+    else (sent back)
+      :Choose a registered hub;
+      :Record the box as returned to that hub;
+    endif
+    |Freedom|
+    :Remove the box from the vehicle's load;
+    :Open declarations go stale; re-declare task raised;
+    |Convoy Leader|
+  else (no)
+  endif
+
+  if (Box damaged or stolen?) then (yes)
+    :Record the box as undeliverable, with reason;
+  else (no)
+  endif
+
+  if (Refuelled?) then (yes)
+    :Enter the fuel cost;
+  else (no)
+  endif
+repeat while (Destination reached?) is (no)
+->yes;
+stop
+
+@enduml

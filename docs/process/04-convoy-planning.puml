@@ -1,0 +1,59 @@
+@startuml Convoy Planning Process
+
+title Process: planning a convoy
+caption Target design. Decisions P15, O12, O13, D17, P14, P9, O7, P1, P2, P8, O4, O30, P11, D35. Plans 01, 04, 07, 10, 11, 12.
+
+|Dispatcher|
+start
+:Create the convoy with its dates;
+:Build the route: ordered points with names;
+:Flag overnight stops and border crossings;
+note right: the service never calculates routes (P15)
+
+|Mechanic|
+:Pass vehicle inspections;
+
+|Dispatcher|
+:Add inspected vehicles to the truck list;
+:Publish the truck list;
+
+fork
+  :Allocate the budget by cost type;
+  note right: optional; an unset budget only warns (O37)
+fork again
+  :Add vehicle equipment to vehicles;
+fork again
+  :Seat crew: one seat per person per convoy;
+  :Nominate the Convoy Leader;
+  :Record insurance covering every driver;
+fork again
+  :Book an outbound ferry per vehicle;
+  :Set each vehicle's handover Receiver;
+  |Freedom|
+  if (Receiver registered?) then (no)
+    :Refuse;
+  else (yes)
+  endif
+  |Dispatcher|
+fork again
+  :Book accommodation per crew member\nat each overnight stop;
+  :Or flag a crew member as arranging their own;
+end fork
+
+if (A driver is added later?) then (yes)
+  :Seat the driver;
+  :Update the insurance with the insurer and record it;
+  note right: until then the driver is uncovered (O7)
+else (no)
+endif
+
+if (A crew member leaves?) then (yes)
+  :Remove the seat; insurance stays for the others;
+  :Cancel or migrate their accommodation (task);
+else (no)
+endif
+
+:Review readiness;
+stop
+
+@enduml

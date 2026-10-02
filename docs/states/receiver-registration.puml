@@ -1,0 +1,30 @@
+@startuml Receiver Registration
+
+title Receiver registration status
+caption Target design. Boxes and donations: Receivers and destinations. Decisions D22, D30, D35, D33. ADR 0012.
+
+state "Pending" as Pending : created by a Ground Officer
+state "Registered" as Registered : may be a box destination\nor a handover Receiver
+state "Suspended" as Suspended
+state "Expired" as Expired
+
+[*] --> Pending
+Pending --> Registered : Administrator registers
+Registered --> Suspended : Administrator suspends
+Registered --> Expired : Administrator marks expired
+Suspended --> Registered : Administrator re-registers
+Expired --> Registered : Administrator re-registers
+
+note right of Registered
+  Only Registered lets a convoy travel and a box
+  take the Receiver as its destination (D35).
+  Leaving Registered makes declarations naming it stale.
+end note
+
+note left of Pending
+  Only the Administrator changes status.
+  The exact transitions are left to implementation.
+  Nothing records what kind of body a Receiver is (D33).
+end note
+
+@enduml

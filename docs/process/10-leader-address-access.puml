@@ -1,0 +1,45 @@
+@startuml Leader Address Access Process
+
+title Process: the Convoy Leader sees destination addresses
+caption Target design. Decisions X7, X9, X11, X12, X13, O26, O1. Plans 17 and 19. Gated by a security review.
+
+|Convoy Leader|
+start
+:Open the checklist page;
+
+|Freedom|
+if (Caller is the current leader of this convoy?) then (no)
+  :Refuse (403);
+  stop
+else (yes)
+endif
+
+if (Within 14 days of planned departure,\nand convoy not arrived?) then (no)
+  :Show route point headers only\n(name and kind);
+  stop
+else (yes)
+endif
+
+|Convoy Leader|
+:Ask to reveal addresses;
+:Re-authenticate;
+
+|Freedom|
+:Audit the read (capacity and convoy)\nin the same transaction;
+:Read the route and all Receiver addresses\non this convoy through the sensitive path;
+:Show them on the page only\n(never printed, logged or stored on the phone);
+
+|Convoy Leader|
+:Lead the convoy to each destination;
+
+|Freedom|
+if (Leader reassigned, or convoy arrived?) then (yes)
+  :Access ends;
+else (no)
+endif
+
+|Ground Officer|
+:Review the access log;
+stop
+
+@enduml

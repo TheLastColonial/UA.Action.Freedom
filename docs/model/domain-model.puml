@@ -1,0 +1,258 @@
+@startuml Domain Model
+
+title Domain model (target design)
+caption Target design after docs/plans 01-19. Business rules: docs/domain. Decisions: docs/domain/decisions.md.
+
+hide empty methods
+hide circle
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+legend top right
+  <<erasable>>   personal data, deleted on an erasure request
+  <<sensitive>>  sensitive schema: Ground Officer, and the Convoy
+                 Leader for their own convoy (ADR 0009) only
+  <<derived>>    computed from other facts, never stored
+endlegend
+
+package "People and access" {
+  class Person {
+    Id : PersonId (Guid)
+    CreatedAt
+    ErasedAt
+  }
+  class PersonDetail <<erasable>> {
+    Names, date of birth, phone
+    IsDriver, Committed
+    IdentitySubject (login link, O34)
+  }
+  class LoaderLocationAssignment {
+    PersonId
+    LocationId
+  }
+}
+
+package "Donations and items" {
+  class Donor {
+    Id : Guid
+    ErasedAt
+  }
+  class DonorDetail <<erasable>> {
+    Name, email, phone
+  }
+  class Donation {
+    Id
+    ReceivedOn
+  }
+  class Item {
+    Description
+    Quantity
+    ValueGbp + ValueSource (Donor | Estimate)
+    ExpiresOn
+    Properties (bag)
+  }
+  class ItemCategory {
+    Name (English, Ukrainian)
+    IsFixed, IsSensitive, IsNotCarried
+    HazardClass, ShelfLifeRule
+  }
+  class CategoryCustomsCode {
+    Authority (UK | EU | UA)
+    Code
+  }
+}
+
+package "Boxes and hubs" {
+  class Box {
+    Id : BoxId (int)
+    WeightKg, dimensions
+    ValidatedBy, ValidatedAt
+    VoidedAt
+    ReplacesBoxId
+  }
+  class BoxQrCode {
+    Token
+    IssuedAt, RevokedAt
+  }
+  class Location {
+    Name
+    IsRegisteredHub
+  }
+  class Bay {
+    Code (unique per location)
+  }
+  class BoxBayAssignment {
+    AssignedBy, AssignedAt, VacatedAt
+  }
+}
+
+package "Receivers" {
+  class Receiver {
+    Ref : ReceiverRef (Guid)
+    Organisation
+    Region
+    Status (Pending | Registered | Suspended | Expired)
+  }
+  class ReceiverDetail <<sensitive>> {
+    Address
+    Contact
+  }
+  class ReceiverDetailAccessLog <<sensitive>> {
+    Reader, capacity, convoy
+    ReadAt
+  }
+}
+
+package "Convoy planning" {
+  class Convoy {
+    Id : ConvoyId (int)
+    Start, ExpectedEnd
+    TruckListPublishedAt
+    DepartedAt, ArrivedAt, ClosedAt
+  }
+  class RoutePoint {
+    Id (stable)
+    Sequence, Name
+    Kind (Stop | Overnight | Border | Hub)
+    Authority (border only)
+    Address
+  }
+  class ConvoyLeaderAssignment {
+    PersonId
+    From, Until
+  }
+  class BudgetLine {
+    CostType
+    PlannedGbp
+  }
+  class ConvoyCost {
+    CostType, AmountGbp
+    Vin (optional)
+  }
+  class Accommodation {
+    Provider, Reference
+    CheckIn, CheckOut, CostGbp
+  }
+  class SelfAccommodation {
+    PersonId
+    RoutePointId
+  }
+}
+
+package "Vehicles and the truck list" {
+  class Vehicle {
+    Vin (natural key)
+    Plate, kerb weight
+    Cargo space, max cargo weight
+    ValueGbp + ValueSource
+    InspectionStatus
+    HandedOverAt
+  }
+  class ConvoyVehicle as "Truck-list entry" {
+    (ConvoyId, Vin)
+    WithdrawnAt, WithdrawnReason
+    DeliveredAt
+  }
+  class CrewSeat {
+    Role (Driver | Passenger)
+  }
+  class VehicleInsurance {
+    Insurer, policy
+    CoverStart, CoverEnd, CostGbp
+    Drivers covered
+  }
+  class FerryBooking {
+    Operator, Reference
+    SailingAt, ticket, CostGbp
+  }
+  class VehicleEquipment {
+    Item, Quantity, CostGbp
+  }
+  class BoxAllocation {
+    BoxId (unique)
+  }
+}
+
+package "Sign-off, declarations and outcomes" {
+  class Manifest {
+    Id : ManifestId
+    Status (Proposed | Approved | Rejected)
+  }
+  class Declaration {
+    Kind (GMR | ENS | ELO | GoodsList)
+    Status
+    Reference, ReasonCode
+    Snapshot (versioned)
+  }
+  class BoxOutcome {
+    Delivered | Accepted | Seized |
+    ReturnedToHub | Undeliverable
+    Reason, hub
+  }
+  class RoutePointMark {
+    Reached | Crossed
+    RecordedBy, OnBehalfOf
+  }
+  class Readiness <<derived>> {
+    Requirements: scope, state,
+    owner, severity, link
+  }
+}
+
+' People
+Person "1" *-- "0..1" PersonDetail
+Person "1" -- "0..*" LoaderLocationAssignment
+LoaderLocationAssignment "0..*" -- "1" Location
+
+' Donations
+Donor "1" *-- "0..1" DonorDetail
+Donor "1" -- "0..*" Donation
+Donation "1" -- "0..*" Item
+Item "0..*" -- "1" ItemCategory
+ItemCategory "1" -- "0..*" CategoryCustomsCode
+
+' Boxes
+Box "1" *-- "0..*" Item
+Box "1" -- "0..*" BoxQrCode
+Box "0..*" -- "0..1" Location : at
+Location "1" *-- "0..*" Bay
+Box "1" -- "0..*" BoxBayAssignment
+BoxBayAssignment "0..*" -- "1" Bay
+Box "0..*" -- "0..1" Receiver : destined for
+Box "0..1" -- "0..1" Box : replaces
+
+' Receivers
+Receiver "1" *-- "0..1" ReceiverDetail
+Receiver "1" -- "0..*" ReceiverDetailAccessLog
+
+' Convoy
+Convoy "1" *-- "1..*" RoutePoint
+Convoy "1" -- "0..*" ConvoyLeaderAssignment
+ConvoyLeaderAssignment "0..*" -- "1" Person
+Convoy "1" *-- "0..*" BudgetLine
+Convoy "1" *-- "0..*" ConvoyCost
+RoutePoint "1" -- "0..*" Accommodation
+Accommodation "0..*" -- "1..*" Person : guests
+RoutePoint "1" -- "0..*" SelfAccommodation
+Convoy "1" *-- "0..*" ConvoyVehicle
+RoutePoint "1" -- "0..*" RoutePointMark
+
+' Truck list
+ConvoyVehicle "0..*" -- "1" Vehicle
+ConvoyVehicle "1" *-- "0..*" CrewSeat
+CrewSeat "0..*" -- "1" Person
+ConvoyVehicle "1" *-- "0..1" VehicleInsurance
+ConvoyVehicle "1" *-- "0..1" FerryBooking
+ConvoyVehicle "1" *-- "0..*" VehicleEquipment
+ConvoyVehicle "1" *-- "0..*" BoxAllocation
+BoxAllocation "0..1" -- "1" Box
+ConvoyVehicle "0..*" -- "0..1" Receiver : handed to
+
+' Sign-off and declarations
+ConvoyVehicle "1" *-- "0..1" Manifest
+ConvoyVehicle "1" *-- "0..*" Declaration
+Declaration "0..*" -- "0..1" Receiver : goods list for
+Box "1" -- "0..*" BoxOutcome
+Convoy ..> Readiness : assessed as
+
+@enduml

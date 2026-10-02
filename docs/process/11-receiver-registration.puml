@@ -1,0 +1,39 @@
+@startuml Receiver Registration Process
+
+title Process: registering and suspending a Receiver
+caption Target design. Decisions D22, D30, D35, D33, P11. Plan 04.
+
+|Ground Officer|
+start
+:Create the Receiver (organisation, region);
+:Record its address and contact\n(sensitive, Ground Officer only);
+
+|Freedom|
+:Status: Pending;
+note right: nothing records what kind of body it is (D33)
+
+|Administrator|
+if (Register it?) then (yes)
+  :Set status Registered;
+  |Dispatcher|
+  :Use it as a box destination\nor a vehicle's handover Receiver;
+else (no)
+  |Freedom|
+  :Refuse it as a destination;
+  stop
+endif
+
+|Administrator|
+if (Later suspend or expire it?) then (yes)
+  :Review where it is used\n(convoys and boxes, no address);
+  :Set status Suspended or Expired;
+  |Freedom|
+  :Its allocations now fail a blocking requirement;
+  :Declarations naming it become stale;
+  |Dispatcher|
+  :Reallocate, or wait for re-registration;
+else (no)
+endif
+stop
+
+@enduml

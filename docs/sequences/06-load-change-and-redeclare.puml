@@ -1,0 +1,65 @@
+@startuml Load Change and Re-declare
+
+title The load changes after filing: re-approval, staleness and the re-declare task
+caption Target design. Decisions D13, D27, X3, D24, D31, D32, O21. ADR 0005.
+
+autonumber
+
+actor Dispatcher as disp
+actor Administrator as admin
+actor "Receiver\n(Ukraine)" as rcv
+participant "Freedom API" as api
+database "Freedom database" as db
+
+== A box moves between vehicles (for example after a breakdown) ==
+disp -> api : move box from vehicle A to vehicle B
+group one transaction
+  api -> db : change the box's allocation
+  api -> db : approved manifests of A and B back to Proposed (X3)
+end
+api --> disp : moved
+
+== Staleness is derived, never set by hand ==
+disp -> api : GET declarations for A and B
+api -> db : compare each declaration's snapshot with the current load
+api --> disp : A and B declarations: **Stale**
+note right of api
+  Stale also follows: a box replaced, refused or undeliverable;
+  a vehicle swapped or withdrawn; a Receiver no longer registered.
+  Not stale: bay moves, label reissues, crew or accommodation changes.
+  A declaration closed at its border crossing is never compared again.
+end note
+
+disp -> api : GET tasks
+api --> disp : re-declare tasks for A and B (shown on screen)
+
+== The convoy cannot depart meanwhile ==
+note over disp, api
+  "Declarations current" is a blocking requirement for departure.
+end note
+
+== Re-approve and re-declare ==
+admin -> api : approve A and B again
+loop for each stale declaration
+  disp -> api : withdraw declaration
+  api -> db : Withdrawn (record and old reference kept)\nnew Draft for the same scope
+  alt GMR
+    disp -> api : update or recreate, then record the reference
+  else ENS
+    disp -> api : invalidate and refile; record the new MRN (old MRN kept)
+  else ELO
+    disp -> api : new envelope against the new MRN
+  else Ukrainian goods list
+    disp -> api : prepare a new goods list
+    disp -> rcv : send it for re-filing
+    rcv --> disp : new unique code
+    disp -> api : record the new reference
+    note right
+      If the goods are already near the border, they are held at a
+      registered hub there until the new filing is accepted (D24, D32).
+    end note
+  end
+end
+api --> disp : tasks cleared
+
+@enduml

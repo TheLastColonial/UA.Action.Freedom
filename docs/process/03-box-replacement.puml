@@ -1,0 +1,37 @@
+@startuml Box Replacement Process
+
+title Process: changing the contents of an attested box
+caption Target design. Decisions D3, X3, D13. Plan 16.
+
+|Loader|
+start
+:Find that an attested box must change\n(expired item, refusal, re-split);
+note right: an attested box is never edited or deleted
+
+:Replace the box;
+
+|Freedom|
+:Void the old box;
+:Revoke its QR code;
+:Create a replacement and copy its items;
+:Move its vehicle allocation, if any;
+note right: all in one transaction
+
+|Loader|
+:Correct the replacement's items;
+:Attest the replacement;
+:Print its new label;
+
+|Freedom|
+if (Box was on an approved vehicle load?) then (yes)
+  :Return the manifest to Proposed;
+  :Vehicle's declarations become stale;
+  |Administrator|
+  :Re-approve the load;
+  |Dispatcher|
+  :Re-declare (06 Load change and re-declare);
+else (no)
+endif
+stop
+
+@enduml

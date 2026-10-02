@@ -4,7 +4,11 @@ Date: 2026-09-20
 
 ## Status
 
-Accepted.
+Accepted. **Partly superseded on 2026-10-02.** Crew are no longer keyed by leg
+([ADR 0007](0007-journey-legs-are-removed-from-the-crew-model.md)), and the manifest is no longer the
+central document or the home of a vehicle's cargo
+([ADR 0004](0004-the-manifest-is-the-load-sign-off.md)). The truck list as a table, withdrawal as a stamp,
+and one manifest per entry all still stand. See [Amendments](#amendments).
 
 ## Context
 
@@ -86,3 +90,15 @@ is bound to one crossing, because its GMR named that convoy's departure.
 
 **Migration.** None. The schema is end-state-only and every stack is rebuilt from scratch; the
 local database was dropped and re-published rather than altered.
+
+## Amendments
+
+Added 2026-10-02. The original text above is kept as it was decided.
+
+| Part of this ADR | Now |
+| --- | --- |
+| `dbo.ConvoyVehicleCrew` "gains a `Leg`", and one seat per person is **per leg** | **Superseded** by [ADR 0007](0007-journey-legs-are-removed-from-the-crew-model.md). A seat is one person on one vehicle on one convoy. |
+| "A crew change **voids** the insurance" | **Superseded** by [ADR 0008](0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md). Only adding a driver needs the insurance updated. |
+| The manifest is "the document *pack* for one `ConvoyVehicle`" carrying the boxes, the GMR, the ferry booking and delivery notes | **Superseded** by [ADR 0004](0004-the-manifest-is-the-load-sign-off.md). It is the load sign-off. Boxes, the ferry booking and delivery attach to the truck-list entry, and customs paperwork becomes [declarations](0005-declarations-are-per-vehicle-with-derived-staleness.md). |
+| "Given up. The primary/secondary driver distinction." | **Stands.** The Convoy Leader is one per convoy ([decision P7](../domain/decisions.md#p7)), not a lead driver per vehicle. |
+| "Which vehicles were on convoy 5?" is answerable after arrival | **Stands.** Closing a convoy ([ADR 0015](0015-box-and-vehicle-outcomes-and-convoy-closing.md)) adds a report and keeps the list. |

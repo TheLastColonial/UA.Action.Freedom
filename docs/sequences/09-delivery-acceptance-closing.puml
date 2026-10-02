@@ -1,0 +1,57 @@
+@startuml Delivery Acceptance and Closing
+
+title Delivery, acceptance by Ukrainian customs, arrival and closing
+caption Target design. Decisions O8, O9, O24, O10, O25, O11, D29. ADR 0015.
+
+autonumber
+
+actor "Convoy Leader" as leader
+actor Dispatcher as disp
+participant "Freedom API" as api
+database "Freedom database" as db
+
+== Delivery ==
+leader -> api : mark vehicle delivered
+api -> db : vehicle delivered; its remaining boxes Delivered
+note right of leader
+  The Convoy Leader or the Dispatcher may mark arrival (O8).
+end note
+
+== Acceptance, once per Ukrainian goods list ==
+leader -> api : goods list for Receiver R on vehicle V **accepted**
+group one transaction
+  api -> db : every Delivered box for R on V -> Accepted
+end
+note right of api
+  A photo to verify acceptance may be added later (O9).
+end note
+
+== Arrival ==
+disp -> api : POST /convoys/{id}/arrive
+api -> db : stamp the convoy row first
+api -> db : every vehicle still travelling must be delivered
+alt a vehicle is still travelling
+  api --> disp : 409, names the vehicles
+else all delivered
+  api -> db : delivered vehicles handed over for good
+  api --> disp : arrived
+end
+
+== Closing ==
+disp -> api : POST /convoys/{id}/close
+api -> db : ClosedAt
+api --> disp : closing report
+note right of disp
+  Report: budget lines against actual costs; per vehicle,
+  boxes by outcome with counts and value; vehicle values.
+  Seized and undeliverable boxes are not delivered value.
+  **No addresses or delivery detail.**
+end note
+
+== Corrections after closing ==
+disp -> api : correct a cost or an outcome
+api -> db : allowed: closing does not lock (O25)
+disp -> api : GET /convoys/{id}/report
+api --> disp : regenerated report
+
+@enduml

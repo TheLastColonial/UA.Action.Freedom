@@ -1,0 +1,41 @@
+@startuml Departure Process
+
+title Process: departing a convoy
+caption Target design. Decisions O36, P4, O3, P9, O7, P11, D35, P8, O4, P17. Plan 13.
+
+|Dispatcher|
+start
+repeat
+  :Review readiness;
+  :Depart the convoy;
+  |Freedom|
+  :Assess every requirement for the convoy\nand each vehicle still travelling;
+  if (Any blocking requirement unmet?) then (yes)
+    :Refuse, listing each unmet requirement\nand where to fix it;
+    note right
+      No override, waiver or "depart anyway"
+      for any role (O3).
+    end note
+    |Dispatcher|
+    :Fix what is listed;
+  else (no)
+    |Freedom|
+    :Record departure (once only);
+    :Show any advisory warnings;
+  endif
+  |Dispatcher|
+repeat while (Departed?) is (no)
+->yes;
+stop
+
+legend right
+  Blocking, per convoy: Convoy Leader assigned;
+  accommodation or self-arranged for every crew member
+  at every overnight stop.
+  Blocking, per vehicle: at least one driver; insurance in
+  cover and covering every driver; ferry booked; handover
+  Receiver registered; every box attested with a registered
+  Receiver; declarations current.
+endlegend
+
+@enduml

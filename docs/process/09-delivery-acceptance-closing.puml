@@ -1,0 +1,45 @@
+@startuml Delivery Acceptance and Closing Process
+
+title Process: delivery, acceptance, arrival and closing
+caption Target design. Decisions O8, O9, O24, O10, O25, O11, D29. Plans 14 and 15.
+
+|Convoy Leader|
+start
+:Hand over each vehicle and its boxes;
+:Mark vehicles and boxes delivered;
+note right: the Dispatcher may mark it instead (O8)
+
+|Receiver|
+:Present the goods to Ukrainian customs;
+
+|Convoy Leader|
+:Record each goods list as accepted;
+|Freedom|
+:Every delivered box on that list becomes accepted;
+
+|Dispatcher|
+:Mark the convoy arrived;
+|Freedom|
+if (Any vehicle still travelling?) then (yes)
+  :Refuse, naming the vehicles;
+  stop
+else (no)
+  :Hand over delivered vehicles for good;
+endif
+
+|Dispatcher|
+:Close the convoy;
+|Freedom|
+:Generate the report: budget against actuals,\nboxes by outcome, value delivered, vehicle values;
+note right: no addresses or delivery detail
+
+|Dispatcher|
+if (Correction needed later?) then (yes)
+  :Correct a cost or an outcome;
+  note right: closing does not lock (O25)
+  :Regenerate the report;
+else (no)
+endif
+stop
+
+@enduml

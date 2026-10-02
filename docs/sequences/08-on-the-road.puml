@@ -1,0 +1,71 @@
+@startuml On the Road
+
+title On the road: progress marks, crossings, fuel and border refusals
+caption Target design. Decisions X2, O20, O27, O18, X10, P14, O2, O28, O5, O1. ADRs 0016, 0015, 0005, 0010.
+
+autonumber
+
+actor "Convoy Leader" as leader
+actor "Other drivers" as drivers
+actor Dispatcher as disp
+participant "Checklist page\n(phone, nothing stored)" as page
+participant "Freedom API" as api
+database "Freedom database" as db
+
+leader -> drivers : directions by radio
+note right of drivers
+  Other drivers are not given route or destination details (O1).
+end note
+
+== Reaching a route point or accommodation ==
+leader -> page : mark "reached"
+page -> api : POST /convoys/{id}/route/{point}/reached
+api -> db : check caller leads **this** convoy now
+api -> db : RoutePointMark (recorded by, entered time)
+note right of api
+  No GPS, no live tracking.
+  HQ sees progress only from these marks (O20).
+end note
+
+== Crossing a border ==
+leader -> page : mark border "crossed"
+page -> api : POST /convoys/{id}/route/{point}/crossed
+group one transaction
+  api -> db : RoutePointMark (Crossed)
+  api -> db : that authority's accepted declarations -> **Closed**
+end
+note right of api
+  A closed declaration is frozen: later load changes
+  no longer make it stale.
+end note
+
+== No signal: the Dispatcher records it on the leader's behalf ==
+leader -> disp : phone or radio report: "we crossed"
+disp -> api : POST .../crossed
+api -> db : mark recorded by the Dispatcher, named (O27)
+note right of disp
+  If the page is unavailable, the leader calls HQ
+  and works from printed documents (O18).
+end note
+
+== Fuel ==
+leader -> page : enter fuel spent
+page -> api : POST /convoys/{id}/costs (Fuel)
+api -> db : actual cost under the leader's name (P14)
+
+== Customs refuse a box ==
+alt customs keep it
+  leader -> api : box outcome **Seized**
+else customs send it back
+  leader -> api : box outcome **Returned to hub** (leader picks a registered hub)
+  api -> db : box back to Arrived at that hub, label and contents unchanged
+else damaged or stolen
+  leader -> api : box outcome **Undeliverable**, with reason
+end
+api -> db : box leaves the vehicle's load
+note right of api
+  The vehicle's still-open declarations go stale,
+  raising a re-declare task for the Dispatcher.
+end note
+
+@enduml
