@@ -65,8 +65,6 @@ public sealed class AssignCrewRequestValidator : AbstractValidator<AssignCrewReq
 {
     public AssignCrewRequestValidator()
     {
-        RuleFor(r => r.Leg).IsInEnum()
-            .WithMessage("'Leg' must be 'Uk' (UK to Europe) or 'Border' (Europe to Ukraine).");
         RuleFor(r => r.Role).IsInEnum().When(r => r.Role is not null);
     }
 }

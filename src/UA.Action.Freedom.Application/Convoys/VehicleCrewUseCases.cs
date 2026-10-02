@@ -5,7 +5,7 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Application.Convoys;
 
 /// <summary>
-/// Put a volunteer on a vehicle's crew for one leg of the journey. A driver must be registered to
+/// Put a volunteer on a vehicle's crew. A person has one seat per convoy. A driver must be registered to
 /// drive; a passenger can be any volunteer.
 /// </summary>
 /// <remarks>
@@ -14,7 +14,7 @@ namespace UA.Action.Freedom.Application.Convoys;
 /// nothing at all — so the printed document could name a crew the insurance had never heard of.
 /// </remarks>
 public sealed record AssignCrewToVehicleCommand(
-    int ConvoyId, string Vin, Guid PersonId, JourneyLeg Leg, CrewRole Role = CrewRole.Driver);
+    int ConvoyId, string Vin, Guid PersonId, CrewRole Role = CrewRole.Driver);
 
 public enum AssignCrewOutcome
 {
@@ -73,7 +73,7 @@ public sealed class AssignCrewToVehicleHandler(
         }
 
         return await truckList.AssignCrewAsync(
-            command.ConvoyId, command.Vin, command.PersonId, command.Leg, command.Role, cancellationToken) switch
+            command.ConvoyId, command.Vin, command.PersonId, command.Role, cancellationToken) switch
         {
             AssignCrewResult.Assigned => AssignCrewOutcome.Assigned,
             AssignCrewResult.AlreadyAssigned => AssignCrewOutcome.AlreadyAssigned,
@@ -83,8 +83,8 @@ public sealed class AssignCrewToVehicleHandler(
     }
 }
 
-/// <summary>Take a volunteer off a vehicle's crew for one leg.</summary>
-public sealed record UnassignCrewFromVehicleCommand(int ConvoyId, string Vin, Guid PersonId, JourneyLeg Leg);
+/// <summary>Take a volunteer off a vehicle's crew.</summary>
+public sealed record UnassignCrewFromVehicleCommand(int ConvoyId, string Vin, Guid PersonId);
 
 public enum UnassignCrewOutcome
 {
@@ -118,22 +118,22 @@ public sealed class UnassignCrewFromVehicleHandler(IConvoyRepository convoys, IC
         }
 
         return await truckList.UnassignCrewAsync(
-            command.ConvoyId, command.Vin, command.PersonId, command.Leg, cancellationToken)
+            command.ConvoyId, command.Vin, command.PersonId, cancellationToken)
             ? UnassignCrewOutcome.Unassigned
             : UnassignCrewOutcome.NotAssigned;
     }
 }
 
 /// <summary>
-/// The crew of a vehicle on a convoy, optionally for one leg only. Null when that vehicle is not
+/// The crew of a vehicle on a convoy. Null when that vehicle is not
 /// on this convoy.
 /// </summary>
-public sealed record ListVehicleCrewQuery(int ConvoyId, string Vin, JourneyLeg? Leg = null);
+public sealed record ListVehicleCrewQuery(int ConvoyId, string Vin);
 
 public sealed class ListVehicleCrewHandler(IConvoyVehicleRepository truckList)
     : IQueryHandler<ListVehicleCrewQuery, IReadOnlyList<VehicleCrewReadModel>?>
 {
     public Task<IReadOnlyList<VehicleCrewReadModel>?> HandleAsync(
         ListVehicleCrewQuery query, CancellationToken cancellationToken) =>
-        truckList.ListCrewAsync(query.ConvoyId, query.Vin, query.Leg, cancellationToken);
+        truckList.ListCrewAsync(query.ConvoyId, query.Vin, cancellationToken);
 }

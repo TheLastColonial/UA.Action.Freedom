@@ -5,9 +5,11 @@ namespace UA.Action.Freedom.Domain;
 /// crew named on it when it was bought.
 /// </summary>
 /// <remarks>
-/// Because the policy names the crew, changing the crew afterwards voids it
-/// (<see cref="VoidedAt"/>) and it has to be recorded again. A manifest cannot depart unless its
-/// vehicle's insurance is recorded, not voided, and in cover on the day.
+/// The policy names the drivers it covers. Removing a driver leaves it in cover for the rest; a
+/// driver added afterwards is uncovered until the Dispatcher records it again
+/// (<see cref="CoversAllDrivers"/>). <see cref="VoidedAt"/> is an explicit void, not set by crew
+/// changes. A manifest cannot depart unless its vehicle's insurance is recorded, not voided, in
+/// cover on the day and names every driver.
 /// </remarks>
 public sealed class VehicleInsurance
 {
@@ -30,7 +32,7 @@ public sealed class VehicleInsurance
 
     public DateTime RecordedAt { get; init; }
 
-    /// <summary>Set when the crew changed after the insurance was recorded.</summary>
+    /// <summary>Set when the policy was explicitly voided.</summary>
     public DateTime? VoidedAt { get; init; }
 
     public bool CoversOn(DateTime day) => InCover(CoverStart, CoverEnd, VoidedAt, day);
@@ -38,4 +40,8 @@ public sealed class VehicleInsurance
     /// <summary>The one statement of when a policy covers a vehicle — shared with the read side.</summary>
     public static bool InCover(DateTime coverStart, DateTime coverEnd, DateTime? voidedAt, DateTime day) =>
         voidedAt is null && coverStart.Date <= day.Date && day.Date <= coverEnd.Date;
+
+    /// <summary>Whether every driver on the crew is named on the policy. Extra covered names do not matter.</summary>
+    public static bool CoversAllDrivers(IReadOnlyCollection<Guid> drivers, IReadOnlyCollection<Guid> covered) =>
+        drivers.All(covered.Contains);
 }

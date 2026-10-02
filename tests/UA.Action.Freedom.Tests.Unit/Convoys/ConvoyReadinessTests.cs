@@ -7,92 +7,82 @@ namespace UA.Action.Freedom.Tests.Unit.Convoys;
 
 /// <summary>
 /// Whether a convoy is ready to travel. Advisory only — nothing is blocked by it. A vehicle is
-/// ready with two drivers <em>on each leg</em> and insurance in cover for the departure date; a
-/// convoy is ready when it has a route and every vehicle still travelling with it is ready.
+/// ready with at least one driver (two are advised) and insurance in cover for the departure date
+/// that names every driver; a convoy is ready when it has a route and every vehicle still
+/// travelling with it is ready.
 /// </summary>
-/// <remarks>
-/// Crew is per leg because a handover at the European border is a real event, so "two drivers" has
-/// to be asked twice — a vehicle fully crewed out of the UK with nobody to take it into Ukraine is
-/// not ready, and the old single count could not say so.
-/// </remarks>
 public class ConvoyReadinessTests
 {
     private static readonly DateTime Departs = ConvoyTestData.Start;
 
     private static ConvoyVehicleReadModel AVehicle(
         string vin = "VIN-1",
-        int ukDrivers = 2,
-        int borderDrivers = 2,
+        int drivers = 2,
         int passengers = 0,
         DateTime? withdrawnAt = null) =>
-        new(vin, "PL-" + vin[^1], 1_800, ukDrivers, passengers, borderDrivers, passengers, withdrawnAt,
+        new(vin, "PL-" + vin[^1], 1_800, drivers, passengers, withdrawnAt,
             withdrawnAt is null ? null : "Gearbox failure");
 
     private static VehicleInsuranceReadModel APolicy(
-        string vin = "VIN-1", int startOffset = -7, int endOffset = 30, DateTime? voidedAt = null) => new(
+        string vin = "VIN-1",
+        int startOffset = -7,
+        int endOffset = 30,
+        DateTime? voidedAt = null,
+        params Guid[] uncoveredDrivers) => new(
         ConvoyTestData.Id, vin, "Ukraine Aid Mutual", "POL-1",
-        Departs.Date.AddDays(startOffset), Departs.Date.AddDays(endOffset), null, "sub", Departs.AddDays(-10), voidedAt);
+        Departs.Date.AddDays(startOffset), Departs.Date.AddDays(endOffset), null, "sub", Departs.AddDays(-10), voidedAt)
+    {
+        UncoveredDrivers = uncoveredDrivers,
+    };
 
     private static ConvoyReadinessReadModel Assess(
         bool routePlanned, params (ConvoyVehicleReadModel Vehicle, VehicleInsuranceReadModel? Policy)[] vehicles) =>
         ConvoyReadiness.Assess(Departs, routePlanned, vehicles);
 
     [Fact]
-    public void A_convoy_with_a_route_and_every_vehicle_crewed_on_both_legs_and_insured_is_ready()
+    public void A_convoy_with_a_route_and_every_vehicle_crewed_and_insured_is_ready()
     {
         var readiness = Assess(routePlanned: true, (AVehicle(), APolicy()));
 
         readiness.Ready.Should().BeTrue();
         readiness.Reasons.Should().BeEmpty();
         readiness.Vehicles.Single().Ready.Should().BeTrue();
+        readiness.Vehicles.Single().Advisories.Should().BeEmpty();
     }
 
     [Fact]
-    public void Passengers_do_not_count_towards_the_two_drivers()
+    public void Passengers_do_not_count_as_drivers()
     {
-        var readiness = Assess(routePlanned: true, (AVehicle(ukDrivers: 1, passengers: 3), APolicy()));
-
-        var vehicle = readiness.Vehicles.Single();
-        vehicle.Ready.Should().BeFalse();
-        vehicle.Reasons.Should().Equal("Fewer than two drivers on the UK to Europe leg");
-        readiness.Ready.Should().BeFalse();
-    }
-
-    [Fact]
-    public void A_vehicle_crewed_out_of_the_UK_but_not_into_Ukraine_is_not_ready()
-    {
-        // The case the old single crew count could not express: fully crewed to the border and
-        // nobody booked to take it on.
-        var vehicle = Assess(routePlanned: true, (AVehicle(borderDrivers: 0), APolicy())).Vehicles.Single();
+        var vehicle = Assess(routePlanned: true, (AVehicle(drivers: 0, passengers: 3), APolicy())).Vehicles.Single();
 
         vehicle.Ready.Should().BeFalse();
-        vehicle.Reasons.Should().Equal("Fewer than two drivers on the Europe to Ukraine leg");
+        vehicle.Reasons.Should().Equal("No driver assigned");
     }
 
     [Fact]
-    public void Each_leg_reports_its_own_driver_count()
+    public void One_driver_is_ready_with_the_advice_to_add_a_second()
     {
-        var vehicle = Assess(routePlanned: true, (AVehicle(ukDrivers: 2, borderDrivers: 1), APolicy())).Vehicles.Single();
+        var vehicle = Assess(routePlanned: true, (AVehicle(drivers: 1), APolicy())).Vehicles.Single();
 
-        vehicle.Legs.Should().SatisfyRespectively(
-            uk =>
-            {
-                uk.Leg.Should().Be(JourneyLeg.Uk);
-                uk.Drivers.Should().Be(2);
-                uk.Ready.Should().BeTrue();
-            },
-            border =>
-            {
-                border.Leg.Should().Be(JourneyLeg.Border);
-                border.Drivers.Should().Be(1);
-                border.Ready.Should().BeFalse();
-            });
+        vehicle.Ready.Should().BeTrue();
+        vehicle.Reasons.Should().BeEmpty();
+        vehicle.Advisories.Should().Equal("Only one driver; two are advised");
+    }
+
+    [Fact]
+    public void A_driver_the_insurance_does_not_name_makes_the_vehicle_not_ready()
+    {
+        var vehicle = Assess(
+            routePlanned: true, (AVehicle(), APolicy(uncoveredDrivers: Guid.NewGuid()))).Vehicles.Single();
+
+        vehicle.Insured.Should().BeFalse();
+        vehicle.Reasons.Should().Equal("Insurance does not cover every driver");
     }
 
     public static TheoryData<string, VehicleInsuranceReadModel?> UninsuredCases => new()
     {
         { "Insurance not recorded", null },
-        { "Insurance voided by a crew change", APolicy(voidedAt: Departs.AddDays(-1)) },
+        { "Insurance voided", APolicy(voidedAt: Departs.AddDays(-1)) },
         { "Insurance does not cover the departure date", APolicy(startOffset: 1) },
         { "Insurance does not cover the departure date", APolicy(endOffset: -1) },
     };
@@ -111,12 +101,9 @@ public class ConvoyReadinessTests
     [Fact]
     public void Every_reason_a_vehicle_is_not_ready_is_listed()
     {
-        var vehicle = Assess(routePlanned: true, (AVehicle(ukDrivers: 0, borderDrivers: 0), null)).Vehicles.Single();
+        var vehicle = Assess(routePlanned: true, (AVehicle(drivers: 0), null)).Vehicles.Single();
 
-        vehicle.Reasons.Should().Equal(
-            "Fewer than two drivers on the UK to Europe leg",
-            "Fewer than two drivers on the Europe to Ukraine leg",
-            "Insurance not recorded");
+        vehicle.Reasons.Should().Equal("No driver assigned", "Insurance not recorded");
     }
 
     [Fact]
@@ -143,7 +130,7 @@ public class ConvoyReadinessTests
         var readiness = Assess(
             routePlanned: true,
             (AVehicle("VIN-1"), APolicy("VIN-1")),
-            (AVehicle("VIN-2", ukDrivers: 1), APolicy("VIN-2")));
+            (AVehicle("VIN-2", drivers: 0), APolicy("VIN-2")));
 
         readiness.Ready.Should().BeFalse();
         readiness.Reasons.Should().Equal("1 vehicle not ready");
@@ -157,7 +144,7 @@ public class ConvoyReadinessTests
         var readiness = Assess(
             routePlanned: true,
             (AVehicle("VIN-1"), APolicy("VIN-1")),
-            (AVehicle("VIN-2", ukDrivers: 0, borderDrivers: 0, withdrawnAt: Departs.AddDays(2)), null));
+            (AVehicle("VIN-2", drivers: 0, withdrawnAt: Departs.AddDays(2)), null));
 
         readiness.Ready.Should().BeTrue();
         readiness.Reasons.Should().BeEmpty();

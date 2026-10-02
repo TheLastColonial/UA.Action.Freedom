@@ -331,14 +331,14 @@ public class ConvoyRepositoryTests
         {
             await AddVehicleAsync(vin);
             await truckList.AddAsync(cancelled, vin, cancellationToken);
-            await truckList.AssignCrewAsync(cancelled, vin, driver, JourneyLeg.Uk, CrewRole.Driver, cancellationToken);
+            await truckList.AssignCrewAsync(cancelled, vin, driver, CrewRole.Driver, cancellationToken);
 
             await convoys.DeleteAsync(cancelled, cancellationToken);
             await truckList.AddAsync(next, vin, cancellationToken);
 
-            (await truckList.ListCrewAsync(next, vin, leg: null, cancellationToken)).Should().BeEmpty();
+            (await truckList.ListCrewAsync(next, vin, cancellationToken)).Should().BeEmpty();
             (await truckList.ListAsync(next, cancellationToken)).Should().ContainSingle()
-                .Which.UkDriverCount.Should().Be(0);
+                .Which.DriverCount.Should().Be(0);
         }
         finally
         {

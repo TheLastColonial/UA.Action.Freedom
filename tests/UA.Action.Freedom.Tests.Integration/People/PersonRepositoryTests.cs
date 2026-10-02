@@ -129,7 +129,7 @@ public class PersonRepositoryTests
         DECLARE @convoyId int = CAST(SCOPE_IDENTITY() AS int);
         INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg, InspectionStatus) VALUES (@vin, 'IT12ABC', 2015, 1800, 2);
         INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin) VALUES (@convoyId, @vin);
-        INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, Leg) VALUES (@convoyId, @vin, @id, 0);
+        INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId) VALUES (@convoyId, @vin, @id);
         SELECT @convoyId;
         """,
         ("@vin", vin),

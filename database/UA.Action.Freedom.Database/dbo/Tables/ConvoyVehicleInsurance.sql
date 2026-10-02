@@ -1,8 +1,9 @@
 /*
-    Bought per vehicle per convoy by the Dispatcher, and it names the crew. So a crew change after
-    it was recorded sets VoidedAt (in the same transaction as the crew write, in
-    ConvoyVehicleRepository), and recording it again clears it. A manifest cannot depart unless its
-    vehicle's insurance is recorded, not voided, and in cover on the day.
+    Bought per vehicle per convoy by the Dispatcher, and it names the drivers it covers
+    (dbo.ConvoyVehicleInsuranceDriver). Removing a driver does not void it; a driver added after it
+    was recorded is uncovered until it is recorded again. VoidedAt is an explicit void and no crew
+    change sets it. A manifest cannot depart unless its vehicle's insurance is recorded, not voided,
+    in cover on the day and names every driver.
 
     Was dbo.VehicleInsurance. It now hangs off the truck-list entry rather than repeating
     (ConvoyId, Vin) as two unrelated foreign keys, so the row cannot describe a vehicle that is not

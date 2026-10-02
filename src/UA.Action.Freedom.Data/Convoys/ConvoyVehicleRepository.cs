@@ -24,11 +24,11 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
     private const int UniqueIndexViolation = 2601;
 
     /// <summary>
-    /// The truck-list row with its vehicle, and the crew counted per leg and role in one pass.
+    /// The truck-list row with its vehicle, and the crew counted per role in one pass.
     /// </summary>
     /// <remarks>
-    /// Conditional aggregates rather than four correlated subqueries: the four counts come from
-    /// one scan of the crew rows for the convoy, and the shape lines up with
+    /// Conditional aggregates rather than two correlated subqueries: the counts come from
+    /// one scan of the crew rows for the vehicle, and the shape lines up with
     /// <see cref="ConvoyVehicleReadModel"/>'s primary constructor for Dapper to hydrate.
     /// </remarks>
     private const string ListSelect =
@@ -37,30 +37,24 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             cv.Vin,
             v.Plate,
             v.WeightKg,
-            COALESCE(c.UkDrivers, 0)        AS UkDriverCount,
-            COALESCE(c.UkPassengers, 0)     AS UkPassengerCount,
-            COALESCE(c.BorderDrivers, 0)    AS BorderDriverCount,
-            COALESCE(c.BorderPassengers, 0) AS BorderPassengerCount,
+            COALESCE(c.Drivers, 0)    AS DriverCount,
+            COALESCE(c.Passengers, 0) AS PassengerCount,
             cv.WithdrawnAt,
             cv.WithdrawnReason
         FROM dbo.ConvoyVehicle AS cv
         INNER JOIN dbo.Vehicle AS v ON v.Vin = cv.Vin
         OUTER APPLY (
             SELECT
-                SUM(CASE WHEN crew.Leg = @uk     AND crew.[Role] = @driver    THEN 1 ELSE 0 END) AS UkDrivers,
-                SUM(CASE WHEN crew.Leg = @uk     AND crew.[Role] = @passenger THEN 1 ELSE 0 END) AS UkPassengers,
-                SUM(CASE WHEN crew.Leg = @border AND crew.[Role] = @driver    THEN 1 ELSE 0 END) AS BorderDrivers,
-                SUM(CASE WHEN crew.Leg = @border AND crew.[Role] = @passenger THEN 1 ELSE 0 END) AS BorderPassengers
+                SUM(CASE WHEN crew.[Role] = @driver    THEN 1 ELSE 0 END) AS Drivers,
+                SUM(CASE WHEN crew.[Role] = @passenger THEN 1 ELSE 0 END) AS Passengers
             FROM dbo.ConvoyVehicleCrew AS crew
             WHERE crew.ConvoyId = cv.ConvoyId AND crew.Vin = cv.Vin
         ) AS c
         """;
 
-    private static object CrewRoleAndLegParameters(int convoyId) => new
+    private static object CrewRoleParameters(int convoyId) => new
     {
         convoyId,
-        uk = (int)JourneyLeg.Uk,
-        border = (int)JourneyLeg.Border,
         driver = (int)CrewRole.Driver,
         passenger = (int)CrewRole.Passenger,
     };
@@ -73,7 +67,7 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
         // of what is still moving, and each row says which it is.
         var rows = await connection.QueryAsync<ConvoyVehicleReadModel>(new CommandDefinition(
             $"{ListSelect} WHERE cv.ConvoyId = @convoyId ORDER BY cv.Vin",
-            CrewRoleAndLegParameters(convoyId),
+            CrewRoleParameters(convoyId),
             cancellationToken: cancellationToken));
 
         return rows.ToList();
@@ -83,7 +77,7 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
     {
         await using var connection = connectionFactory.Create();
 
-        var parameters = new DynamicParameters(CrewRoleAndLegParameters(convoyId));
+        var parameters = new DynamicParameters(CrewRoleParameters(convoyId));
         parameters.Add("vin", SqlKey.Of(vin));
 
         return await connection.QuerySingleOrDefaultAsync<ConvoyVehicleReadModel>(new CommandDefinition(
@@ -196,7 +190,7 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
     }
 
     public async Task<IReadOnlyList<VehicleCrewReadModel>?> ListCrewAsync(
-        int convoyId, string vin, JourneyLeg? leg, CancellationToken cancellationToken)
+        int convoyId, string vin, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
@@ -219,53 +213,45 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
                 crew.PersonId,
                 COALESCE(d.FirstName, N'Former') AS FirstName,
                 COALESCE(d.LastName, N'volunteer') AS LastName,
-                crew.Leg,
                 crew.[Role]
             FROM dbo.ConvoyVehicleCrew AS crew
             -- LEFT: an erased volunteer keeps their seat in the history, but not their name.
             LEFT JOIN dbo.PersonDetail AS d ON d.PersonId = crew.PersonId
             WHERE crew.ConvoyId = @convoyId AND crew.Vin = @vin
-              AND (@leg IS NULL OR crew.Leg = @leg)
-            ORDER BY crew.Leg, crew.[Role], LastName, FirstName
+            ORDER BY crew.[Role], LastName, FirstName
             """,
-            new { convoyId, vin = SqlKey.Of(vin), leg = (int?)leg },
+            new { convoyId, vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
 
         return rows.ToList();
     }
 
     public async Task<AssignCrewResult> AssignCrewAsync(
-        int convoyId, string vin, Guid personId, JourneyLeg leg, CrewRole role, CancellationToken cancellationToken)
+        int convoyId, string vin, Guid personId, CrewRole role, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
-        await connection.OpenAsync(cancellationToken);
 
         // One conditional INSERT rather than check-then-insert: the vehicle has to be on this
-        // convoy and still travelling with it, and the person in no other seat on this leg, at the
-        // moment the row is written. UQ_ConvoyVehicleCrew_Convoy_Person_Leg settles a race the
-        // WHERE cannot see. The crew and the insurance that names it change together, so the void
-        // is in the same transaction.
+        // convoy and still travelling with it, and the person in no other seat on this convoy, at
+        // the moment the row is written. UQ_ConvoyVehicleCrew_Convoy_Person settles a race the
+        // WHERE cannot see. The insurance is untouched: a driver added here is uncovered until the
+        // policy is recorded again, which is derived from their having no covered-driver row.
         try
         {
-            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-
             var inserted = await connection.ExecuteAsync(new CommandDefinition(
                 """
-                INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, Leg, [Role])
-                SELECT @convoyId, @vin, @personId, @leg, @role
+                INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, [Role])
+                SELECT @convoyId, @vin, @personId, @role
                 WHERE EXISTS (SELECT 1 FROM dbo.ConvoyVehicle
                               WHERE ConvoyId = @convoyId AND Vin = @vin AND WithdrawnAt IS NULL)
                   AND NOT EXISTS (SELECT 1 FROM dbo.ConvoyVehicleCrew
-                                  WHERE ConvoyId = @convoyId AND PersonId = @personId AND Leg = @leg)
+                                  WHERE ConvoyId = @convoyId AND PersonId = @personId)
                 """,
-                new { convoyId, vin = SqlKey.Of(vin), personId, leg = (int)leg, role = (int)role },
-                transaction,
+                new { convoyId, vin = SqlKey.Of(vin), personId, role = (int)role },
                 cancellationToken: cancellationToken));
 
             if (inserted > 0)
             {
-                await VoidInsuranceAsync(connection, transaction, convoyId, vin, cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
                 return AssignCrewResult.Assigned;
             }
         }
@@ -274,30 +260,15 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             // Lost a race with a second dispatcher; the read below says which seat won.
         }
 
-        return await WhyNotSeatedAsync(connection, convoyId, vin, personId, leg, cancellationToken);
+        return await WhyNotSeatedAsync(connection, convoyId, vin, personId, cancellationToken);
     }
 
-    /// <summary>
-    /// The insurance names the crew, so any change to the crew voids it and it has to be recorded
-    /// again before the vehicle departs.
-    /// </summary>
-    private static Task VoidInsuranceAsync(
-        DbConnection connection, DbTransaction transaction, int convoyId, string vin, CancellationToken cancellationToken) =>
-        connection.ExecuteAsync(new CommandDefinition(
-            """
-            UPDATE dbo.ConvoyVehicleInsurance SET VoidedAt = SYSUTCDATETIME()
-            WHERE ConvoyId = @convoyId AND Vin = @vin AND VoidedAt IS NULL
-            """,
-            new { convoyId, vin = SqlKey.Of(vin) },
-            transaction,
-            cancellationToken: cancellationToken));
-
     private static async Task<AssignCrewResult> WhyNotSeatedAsync(
-        DbConnection connection, int convoyId, string vin, Guid personId, JourneyLeg leg, CancellationToken cancellationToken)
+        DbConnection connection, int convoyId, string vin, Guid personId, CancellationToken cancellationToken)
     {
         var seatedIn = await connection.QuerySingleOrDefaultAsync<string?>(new CommandDefinition(
-            "SELECT Vin FROM dbo.ConvoyVehicleCrew WHERE ConvoyId = @convoyId AND PersonId = @personId AND Leg = @leg",
-            new { convoyId, personId, leg = (int)leg },
+            "SELECT Vin FROM dbo.ConvoyVehicleCrew WHERE ConvoyId = @convoyId AND PersonId = @personId",
+            new { convoyId, personId },
             cancellationToken: cancellationToken));
 
         if (seatedIn is not null)
@@ -311,7 +282,7 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
     }
 
     public async Task<bool> UnassignCrewAsync(
-        int convoyId, string vin, Guid personId, JourneyLeg leg, CancellationToken cancellationToken)
+        int convoyId, string vin, Guid personId, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
         await connection.OpenAsync(cancellationToken);
@@ -320,15 +291,23 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             """
             DELETE FROM dbo.ConvoyVehicleCrew
-            WHERE ConvoyId = @convoyId AND Vin = @vin AND PersonId = @personId AND Leg = @leg
+            WHERE ConvoyId = @convoyId AND Vin = @vin AND PersonId = @personId
             """,
-            new { convoyId, vin = SqlKey.Of(vin), personId, leg = (int)leg },
+            new { convoyId, vin = SqlKey.Of(vin), personId },
             transaction,
             cancellationToken: cancellationToken));
 
+        // The policy stays in cover for everybody else; only this person stops being named on it.
         if (affected > 0)
         {
-            await VoidInsuranceAsync(connection, transaction, convoyId, vin, cancellationToken);
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                DELETE FROM dbo.ConvoyVehicleInsuranceDriver
+                WHERE ConvoyId = @convoyId AND Vin = @vin AND PersonId = @personId
+                """,
+                new { convoyId, vin = SqlKey.Of(vin), personId },
+                transaction,
+                cancellationToken: cancellationToken));
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -339,7 +318,7 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
     {
         await using var connection = connectionFactory.Create();
 
-        return await connection.QuerySingleOrDefaultAsync<VehicleInsuranceReadModel>(new CommandDefinition(
+        var policy = await connection.QuerySingleOrDefaultAsync<VehicleInsuranceReadModel>(new CommandDefinition(
             """
             SELECT ConvoyId, Vin, Insurer, PolicyNumber, CoverStart, CoverEnd, CostGbp,
                    RecordedBySub AS RecordedBy, RecordedAt, VoidedAt
@@ -348,15 +327,39 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             """,
             new { convoyId, vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
+
+        if (policy is null)
+        {
+            return null;
+        }
+
+        // A driver on the crew with no row on the policy was added after it was recorded.
+        var uncovered = await connection.QueryAsync<Guid>(new CommandDefinition(
+            """
+            SELECT crew.PersonId
+            FROM dbo.ConvoyVehicleCrew AS crew
+            WHERE crew.ConvoyId = @convoyId AND crew.Vin = @vin AND crew.[Role] = @driver
+              AND NOT EXISTS (SELECT 1 FROM dbo.ConvoyVehicleInsuranceDriver AS covered
+                              WHERE covered.ConvoyId = crew.ConvoyId AND covered.Vin = crew.Vin
+                                AND covered.PersonId = crew.PersonId)
+            ORDER BY crew.PersonId
+            """,
+            new { convoyId, vin = SqlKey.Of(vin), driver = (int)CrewRole.Driver },
+            cancellationToken: cancellationToken));
+
+        return policy with { UncoveredDrivers = uncovered.ToList() };
     }
 
     public async Task<bool> RecordInsuranceAsync(VehicleInsuranceRecord insurance, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
-        // Replace rather than accumulate: the latest policy is the one that covers the crew. The
+        // Replace rather than accumulate: the latest policy is the one that covers the drivers. The
         // vehicle has to be travelling with the convoy at the moment it is written — insuring one
         // that has broken down and left is buying cover for a journey it is not making.
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             """
             MERGE dbo.ConvoyVehicleInsurance WITH (HOLDLOCK) AS target
@@ -375,8 +378,28 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
                 VALUES (@ConvoyId, @Vin, @Insurer, @PolicyNumber, @CoverStart, @CoverEnd, @CostGbp, @RecordedBy);
             """,
             insurance,
+            transaction,
             cancellationToken: cancellationToken));
 
+        if (affected > 0)
+        {
+            // Recording names every driver the vehicle has right now.
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                DELETE FROM dbo.ConvoyVehicleInsuranceDriver
+                WHERE ConvoyId = @ConvoyId AND Vin = CAST(@Vin AS varchar(32));
+
+                INSERT INTO dbo.ConvoyVehicleInsuranceDriver (ConvoyId, Vin, PersonId)
+                SELECT ConvoyId, Vin, PersonId
+                FROM dbo.ConvoyVehicleCrew
+                WHERE ConvoyId = @ConvoyId AND Vin = CAST(@Vin AS varchar(32)) AND [Role] = @driver;
+                """,
+                new { insurance.ConvoyId, insurance.Vin, driver = (int)CrewRole.Driver },
+                transaction,
+                cancellationToken: cancellationToken));
+        }
+
+        await transaction.CommitAsync(cancellationToken);
         return affected > 0;
     }
 

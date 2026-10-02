@@ -69,12 +69,10 @@ public sealed record ReplaceConvoyRouteRequest(IReadOnlyList<RouteStopRequest> S
 /// Body of <c>PUT /convoys/{id}/vehicles/{vin}/crew/{personId}</c>.
 /// </summary>
 /// <remarks>
-/// The leg is required: a vehicle is crewed twice, once out of the UK and once into Ukraine, and
-/// guessing which half somebody is driving is exactly the ambiguity this consolidation removes.
-/// The role is optional and defaults to <see cref="CrewRole.Driver"/>, which is what most crewing
+/// A seat is one person on one vehicle on one convoy, so there is no leg to say. The role is optional and defaults to <see cref="CrewRole.Driver"/>, which is what most crewing
 /// is.
 /// </remarks>
-public sealed record AssignCrewRequest(JourneyLeg Leg, CrewRole? Role = null);
+public sealed record AssignCrewRequest(CrewRole? Role = null);
 
 /// <summary>
 /// Body of <c>POST /convoys/{id}/vehicles/{vin}/manifest</c>. The convoy and the vehicle come from

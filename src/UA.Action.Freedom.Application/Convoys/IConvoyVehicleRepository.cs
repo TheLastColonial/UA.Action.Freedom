@@ -41,7 +41,7 @@ public enum AssignCrewResult
 /// </remarks>
 public interface IConvoyVehicleRepository
 {
-    /// <summary>The whole truck list, withdrawn vehicles included, with crew counts per leg.</summary>
+    /// <summary>The whole truck list, withdrawn vehicles included, with its driver and passenger counts.</summary>
     Task<IReadOnlyList<ConvoyVehicleReadModel>> ListAsync(int convoyId, CancellationToken cancellationToken);
 
     /// <summary>One entry, or null when that vehicle is not on this convoy at all.</summary>
@@ -77,28 +77,28 @@ public interface IConvoyVehicleRepository
 
     /// <summary>The crew of a vehicle on this convoy, or null when it is not on this convoy.</summary>
     Task<IReadOnlyList<VehicleCrewReadModel>?> ListCrewAsync(
-        int convoyId, string vin, JourneyLeg? leg, CancellationToken cancellationToken);
+        int convoyId, string vin, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Puts a person on a vehicle's crew for one leg, provided the vehicle is on this convoy and
-    /// the person is not already crewing another vehicle on that leg — one seat per person per leg.
-    /// Voids the vehicle's insurance in the same transaction, because the policy names the crew.
+    /// Puts a person on a vehicle's crew, provided the vehicle is on this convoy and the person is
+    /// not already crewing a vehicle on it — one seat per person per convoy. A driver added after the
+    /// insurance was recorded is uncovered until it is recorded again.
     /// </summary>
     Task<AssignCrewResult> AssignCrewAsync(
-        int convoyId, string vin, Guid personId, JourneyLeg leg, CrewRole role, CancellationToken cancellationToken);
+        int convoyId, string vin, Guid personId, CrewRole role, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Takes a person off a vehicle's crew for one leg, voiding the insurance in the same
-    /// transaction. Returns false when they were not crewing it.
+    /// Takes a person off a vehicle's crew, and off the insurance's covered drivers in the same
+    /// transaction; the policy stays in cover for the rest. Returns false when they were not crewing it.
     /// </summary>
     Task<bool> UnassignCrewAsync(
-        int convoyId, string vin, Guid personId, JourneyLeg leg, CancellationToken cancellationToken);
+        int convoyId, string vin, Guid personId, CancellationToken cancellationToken);
 
     Task<VehicleInsuranceReadModel?> GetInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Records or replaces the insurance, clearing any void. Returns false when the vehicle is not
-    /// on this convoy. Crew changes void it — see <see cref="AssignCrewAsync"/>.
+    /// Records or replaces the insurance, clearing any void, and covers every driver the vehicle has
+    /// at that moment. Returns false when the vehicle is not on this convoy.
     /// </summary>
     Task<bool> RecordInsuranceAsync(VehicleInsuranceRecord insurance, CancellationToken cancellationToken);
 

@@ -9,14 +9,14 @@ namespace UA.Action.Freedom.Tests.Integration.Convoys;
 
 /// <summary>
 /// The Dapper <see cref="ConvoyVehicleRepository"/> against a real database: the truck list, the
-/// crew of each vehicle on it, and the insurance that names that crew.
+/// crew of each vehicle on it, and the insurance that names its drivers.
 /// </summary>
 /// <remarks>
 /// These are the constraints that make the consolidation hold, and none of them can be tested
 /// without a database: the composite key that ties a manifest to a truck-list entry, the unique
-/// index that gives a person one seat per leg, the conditional insert that keeps a vehicle off two
-/// convoys at once, and the transaction that voids the insurance in the same breath as a crew
-/// change.
+/// index that gives a person one seat per convoy, the conditional insert that keeps a vehicle off
+/// two convoys at once, and the transaction that takes a driver off the insurance in the same
+/// breath as off the crew.
 /// </remarks>
 [Trait("Category", "Integration")]
 public class ConvoyVehicleRepositoryTests
@@ -82,7 +82,7 @@ public class ConvoyVehicleRepositoryTests
         {
             await AddVehicleAsync(vin);
             await truckList.AddAsync(id, vin, cancellationToken);
-            await truckList.AssignCrewAsync(id, vin, driver, JourneyLeg.Uk, CrewRole.Driver, cancellationToken);
+            await truckList.AssignCrewAsync(id, vin, driver, CrewRole.Driver, cancellationToken);
             await truckList.RecordInsuranceAsync(AnInsurance(id, vin), cancellationToken);
             await AddManifestAsync(id, vin, ManifestStatus.InTransit);
 
@@ -95,7 +95,7 @@ public class ConvoyVehicleRepositoryTests
             (await WithdrawnAtAsync(id, vin)).Should().Be(withdrawnAt);
 
             // The record of who went and under what cover survives, and so does the manifest.
-            (await truckList.ListCrewAsync(id, vin, leg: null, cancellationToken)).Should().ContainSingle();
+            (await truckList.ListCrewAsync(id, vin, cancellationToken)).Should().ContainSingle();
             (await truckList.GetInsuranceAsync(id, vin, cancellationToken)).Should().NotBeNull();
             (await ScalarAsync(
                 "SELECT COUNT(1) FROM dbo.Manifest WHERE ConvoyId = @id AND Vin = @vin", ("@id", id), ("@vin", vin)))
@@ -132,7 +132,7 @@ public class ConvoyVehicleRepositoryTests
             await truckList.AddAsync(id, vin, cancellationToken);
             await truckList.WithdrawAsync(id, vin, "Accident", DateTime.UtcNow, cancellationToken);
 
-            (await truckList.AssignCrewAsync(id, vin, driver, JourneyLeg.Uk, CrewRole.Driver, cancellationToken))
+            (await truckList.AssignCrewAsync(id, vin, driver, CrewRole.Driver, cancellationToken))
                 .Should().Be(AssignCrewResult.VehicleNotOnConvoy);
             (await truckList.RecordInsuranceAsync(AnInsurance(id, vin), cancellationToken)).Should().BeFalse();
         }
@@ -235,34 +235,23 @@ public class ConvoyVehicleRepositoryTests
             await AddVehicleAsync(vin);
             await truckList.AddAsync(id, vin, cancellationToken);
 
-            foreach (var leg in new[] { JourneyLeg.Uk, JourneyLeg.Border })
-            {
-                (await truckList.AssignCrewAsync(id, vin, zelenko, leg, CrewRole.Driver, cancellationToken))
-                    .Should().Be(AssignCrewResult.Assigned);
-                (await truckList.AssignCrewAsync(id, vin, bondar, leg, CrewRole.Driver, cancellationToken))
-                    .Should().Be(AssignCrewResult.Assigned);
-            }
+            (await truckList.AssignCrewAsync(id, vin, zelenko, CrewRole.Driver, cancellationToken))
+                .Should().Be(AssignCrewResult.Assigned);
+            (await truckList.AssignCrewAsync(id, vin, bondar, CrewRole.Driver, cancellationToken))
+                .Should().Be(AssignCrewResult.Assigned);
 
-            // The same seat twice on the same leg is settled by the unique index.
-            (await truckList.AssignCrewAsync(id, vin, bondar, JourneyLeg.Uk, CrewRole.Driver, cancellationToken))
+            // The same seat twice is settled by the unique index.
+            (await truckList.AssignCrewAsync(id, vin, bondar, CrewRole.Driver, cancellationToken))
                 .Should().Be(AssignCrewResult.AlreadyAssigned);
 
-            var crew = await truckList.ListCrewAsync(id, vin, leg: null, cancellationToken);
-            crew!.Select(member => (member.Leg, member.LastName)).Should().Equal(
-                (JourneyLeg.Uk, "Bondar"), (JourneyLeg.Uk, "Zelenko"),
-                (JourneyLeg.Border, "Bondar"), (JourneyLeg.Border, "Zelenko"));
+            var crew = await truckList.ListCrewAsync(id, vin, cancellationToken);
+            crew!.Select(member => member.LastName).Should().Equal("Bondar", "Zelenko");
 
-            (await truckList.ListCrewAsync(id, vin, JourneyLeg.Border, cancellationToken))!.Should().HaveCount(2);
+            (await truckList.ListAsync(id, cancellationToken)).Single().DriverCount.Should().Be(2);
 
-            var onConvoy = (await truckList.ListAsync(id, cancellationToken)).Single();
-            onConvoy.UkDriverCount.Should().Be(2);
-            onConvoy.BorderDriverCount.Should().Be(2);
-
-            // Standing somebody down is per leg too: they still crew the other one.
-            (await truckList.UnassignCrewAsync(id, vin, zelenko, JourneyLeg.Uk, cancellationToken)).Should().BeTrue();
-            (await truckList.UnassignCrewAsync(id, vin, zelenko, JourneyLeg.Uk, cancellationToken)).Should().BeFalse();
-            (await truckList.ListCrewAsync(id, vin, JourneyLeg.Uk, cancellationToken))!.Should().ContainSingle();
-            (await truckList.ListCrewAsync(id, vin, JourneyLeg.Border, cancellationToken))!.Should().HaveCount(2);
+            (await truckList.UnassignCrewAsync(id, vin, zelenko, cancellationToken)).Should().BeTrue();
+            (await truckList.UnassignCrewAsync(id, vin, zelenko, cancellationToken)).Should().BeFalse();
+            (await truckList.ListCrewAsync(id, vin, cancellationToken))!.Should().ContainSingle();
         }
         finally
         {
@@ -287,17 +276,16 @@ public class ConvoyVehicleRepositoryTests
             await AddVehicleAsync(vin);
             await truckList.AddAsync(id, vin, cancellationToken);
 
-            await truckList.AssignCrewAsync(id, vin, driver, JourneyLeg.Uk, CrewRole.Driver, cancellationToken);
-            await truckList.AssignCrewAsync(id, vin, passenger, JourneyLeg.Uk, CrewRole.Passenger, cancellationToken);
+            await truckList.AssignCrewAsync(id, vin, driver, CrewRole.Driver, cancellationToken);
+            await truckList.AssignCrewAsync(id, vin, passenger, CrewRole.Passenger, cancellationToken);
 
-            var crew = await truckList.ListCrewAsync(id, vin, leg: null, cancellationToken);
+            var crew = await truckList.ListCrewAsync(id, vin, cancellationToken);
             crew!.Select(member => (member.LastName, member.Role))
                 .Should().Equal(("Bondar", CrewRole.Driver), ("Shevchuk", CrewRole.Passenger));
 
             var onConvoy = (await truckList.ListAsync(id, cancellationToken)).Single();
-            onConvoy.UkDriverCount.Should().Be(1);
-            onConvoy.UkPassengerCount.Should().Be(1);
-            onConvoy.BorderDriverCount.Should().Be(0);
+            onConvoy.DriverCount.Should().Be(1);
+            onConvoy.PassengerCount.Should().Be(1);
         }
         finally
         {
@@ -308,10 +296,8 @@ public class ConvoyVehicleRepositoryTests
     }
 
     [Fact]
-    public async Task A_person_takes_one_seat_per_leg_and_may_change_vehicle_at_the_border()
+    public async Task A_person_takes_one_seat_per_convoy()
     {
-        // The rule that replaced "one seat per convoy". A crew handover at the European border is
-        // a real event, and it is the reason the crew row carries a leg at all.
         var cancellationToken = TestContext.Current.CancellationToken;
         var (convoys, truckList) = await ConnectOrSkipAsync(cancellationToken);
         var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
@@ -330,20 +316,16 @@ public class ConvoyVehicleRepositoryTests
             await truckList.AddAsync(id, second, cancellationToken);
             await truckList.AddAsync(next, third, cancellationToken);
 
-            (await truckList.AssignCrewAsync(id, first, driver, JourneyLeg.Uk, CrewRole.Driver, cancellationToken))
+            (await truckList.AssignCrewAsync(id, first, driver, CrewRole.Driver, cancellationToken))
                 .Should().Be(AssignCrewResult.Assigned);
 
-            // Two vehicles on the same leg of the same journey: refused.
-            (await truckList.AssignCrewAsync(id, second, driver, JourneyLeg.Uk, CrewRole.Passenger, cancellationToken))
+            // Two vehicles on the same convoy: refused.
+            (await truckList.AssignCrewAsync(id, second, driver, CrewRole.Passenger, cancellationToken))
                 .Should().Be(AssignCrewResult.OnAnotherVehicle);
-            (await truckList.ListCrewAsync(id, second, leg: null, cancellationToken)).Should().BeEmpty();
-
-            // A different leg is a different half of the journey: they may swap vehicles.
-            (await truckList.AssignCrewAsync(id, second, driver, JourneyLeg.Border, CrewRole.Driver, cancellationToken))
-                .Should().Be(AssignCrewResult.Assigned);
+            (await truckList.ListCrewAsync(id, second, cancellationToken)).Should().BeEmpty();
 
             // A different convoy is a different journey entirely.
-            (await truckList.AssignCrewAsync(next, third, driver, JourneyLeg.Uk, CrewRole.Driver, cancellationToken))
+            (await truckList.AssignCrewAsync(next, third, driver, CrewRole.Driver, cancellationToken))
                 .Should().Be(AssignCrewResult.Assigned);
         }
         finally
@@ -370,11 +352,11 @@ public class ConvoyVehicleRepositoryTests
         {
             await AddVehicleAsync(vin);
 
-            (await truckList.AssignCrewAsync(id, vin, driver, JourneyLeg.Uk, CrewRole.Driver, cancellationToken))
+            (await truckList.AssignCrewAsync(id, vin, driver, CrewRole.Driver, cancellationToken))
                 .Should().Be(AssignCrewResult.VehicleNotOnConvoy);
 
             // null, not [] — "no such vehicle here" and "nobody crewing it" are different answers.
-            (await truckList.ListCrewAsync(id, vin, leg: null, cancellationToken)).Should().BeNull();
+            (await truckList.ListCrewAsync(id, vin, cancellationToken)).Should().BeNull();
         }
         finally
         {
@@ -398,10 +380,10 @@ public class ConvoyVehicleRepositoryTests
         {
             await AddVehicleAsync(vin);
             await truckList.AddAsync(id, vin, cancellationToken);
-            await truckList.AssignCrewAsync(id, vin, driver, JourneyLeg.Uk, CrewRole.Driver, cancellationToken);
+            await truckList.AssignCrewAsync(id, vin, driver, CrewRole.Driver, cancellationToken);
 
-            (await truckList.UnassignCrewAsync(other, vin, driver, JourneyLeg.Uk, cancellationToken)).Should().BeFalse();
-            (await truckList.ListCrewAsync(id, vin, leg: null, cancellationToken))!.Should().ContainSingle();
+            (await truckList.UnassignCrewAsync(other, vin, driver, cancellationToken)).Should().BeFalse();
+            (await truckList.ListCrewAsync(id, vin, cancellationToken))!.Should().ContainSingle();
         }
         finally
         {
@@ -425,13 +407,13 @@ public class ConvoyVehicleRepositoryTests
         {
             await AddVehicleAsync(vin);
             await truckList.AddAsync(id, vin, cancellationToken);
-            await truckList.AssignCrewAsync(id, vin, driver, JourneyLeg.Uk, CrewRole.Driver, cancellationToken);
+            await truckList.AssignCrewAsync(id, vin, driver, CrewRole.Driver, cancellationToken);
 
             // The crew cascades from the truck-list row rather than being cleared by hand.
             await truckList.RemoveAsync(id, vin, cancellationToken);
             await truckList.AddAsync(id, vin, cancellationToken);
 
-            (await truckList.ListCrewAsync(id, vin, leg: null, cancellationToken)).Should().BeEmpty();
+            (await truckList.ListCrewAsync(id, vin, cancellationToken)).Should().BeEmpty();
         }
         finally
         {
@@ -478,38 +460,76 @@ public class ConvoyVehicleRepositoryTests
     }
 
     [Fact]
-    public async Task Changing_the_crew_on_either_leg_voids_the_insurance_and_recording_it_again_restores_it()
+    public async Task Adding_a_driver_leaves_them_uncovered_and_recording_again_covers_everyone()
     {
-        // Insurance is bought for the named crew of that vehicle; a different crew is not covered,
-        // whichever half of the journey they were going to drive.
         var cancellationToken = TestContext.Current.CancellationToken;
         var (convoys, truckList) = await ConnectOrSkipAsync(cancellationToken);
         var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
         var vin = NewVin();
-        var driver = await AddDriverAsync("Olena", "Bondar");
+        var first = await AddDriverAsync("Olena", "Bondar");
+        var second = await AddDriverAsync("Taras", "Zelenko");
 
         try
         {
             await AddVehicleAsync(vin);
             await truckList.AddAsync(id, vin, cancellationToken);
+            await truckList.AssignCrewAsync(id, vin, first, CrewRole.Driver, cancellationToken);
             await truckList.RecordInsuranceAsync(AnInsurance(id, vin), cancellationToken);
+            (await truckList.GetInsuranceAsync(id, vin, cancellationToken))!.UncoveredDrivers.Should().BeEmpty();
 
-            await truckList.AssignCrewAsync(id, vin, driver, JourneyLeg.Border, CrewRole.Driver, cancellationToken);
-            (await truckList.GetInsuranceAsync(id, vin, cancellationToken))!.VoidedAt.Should().NotBeNull();
+            await truckList.AssignCrewAsync(id, vin, second, CrewRole.Driver, cancellationToken);
+            var afterAdding = await truckList.GetInsuranceAsync(id, vin, cancellationToken);
+            afterAdding!.VoidedAt.Should().BeNull();
+            afterAdding.UncoveredDrivers.Should().Equal(second);
 
             await truckList.RecordInsuranceAsync(AnInsurance(id, vin, "POL-2"), cancellationToken);
             var renewed = await truckList.GetInsuranceAsync(id, vin, cancellationToken);
-            renewed!.VoidedAt.Should().BeNull();
-            renewed.PolicyNumber.Should().Be("POL-2");
-
-            await truckList.UnassignCrewAsync(id, vin, driver, JourneyLeg.Border, cancellationToken);
-            (await truckList.GetInsuranceAsync(id, vin, cancellationToken))!.VoidedAt.Should().NotBeNull();
+            renewed!.PolicyNumber.Should().Be("POL-2");
+            renewed.UncoveredDrivers.Should().BeEmpty();
         }
         finally
         {
             await RemoveVehicleAsync(vin);
             await RemoveConvoyAsync(id);
-            await RemovePeopleAsync(driver);
+            await RemovePeopleAsync(first, second);
+        }
+    }
+
+    [Fact]
+    public async Task Removing_a_driver_keeps_the_policy_in_cover_for_the_others()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, truckList) = await ConnectOrSkipAsync(cancellationToken);
+        var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var vin = NewVin();
+        var leaving = await AddDriverAsync("Olena", "Bondar");
+        var staying = await AddDriverAsync("Taras", "Zelenko");
+
+        try
+        {
+            await AddVehicleAsync(vin);
+            await truckList.AddAsync(id, vin, cancellationToken);
+            await truckList.AssignCrewAsync(id, vin, leaving, CrewRole.Driver, cancellationToken);
+            await truckList.AssignCrewAsync(id, vin, staying, CrewRole.Driver, cancellationToken);
+            await truckList.RecordInsuranceAsync(AnInsurance(id, vin), cancellationToken);
+
+            await truckList.UnassignCrewAsync(id, vin, leaving, cancellationToken);
+
+            var policy = await truckList.GetInsuranceAsync(id, vin, cancellationToken);
+            policy!.VoidedAt.Should().BeNull();
+            policy.UncoveredDrivers.Should().BeEmpty();
+            (await ScalarAsync(
+                "SELECT COUNT(1) FROM dbo.ConvoyVehicleInsuranceDriver WHERE Vin = @vin", ("@vin", vin))).Should().Be(1);
+
+            // They come back: not named on the policy any more, so uncovered until it is recorded.
+            await truckList.AssignCrewAsync(id, vin, leaving, CrewRole.Driver, cancellationToken);
+            (await truckList.GetInsuranceAsync(id, vin, cancellationToken))!.UncoveredDrivers.Should().Equal(leaving);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(id);
+            await RemovePeopleAsync(leaving, staying);
         }
     }
 
