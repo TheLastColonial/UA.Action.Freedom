@@ -323,6 +323,13 @@ being in two bays at once.
 The destination of a box's contents: a responsible individual, an organisation, and an [Address](#address) in
 Ukraine.
 
+A Receiver has a **registration status**: pending, registered, suspended or expired. A new one is pending, only an
+Administrator changes it, and **only a registered Receiver can be a box destination or a vehicle's handover Receiver**.
+The status says that an Administrator has authorised sending to the Receiver, and nothing about what kind of body it is:
+that is deliberately not recorded ([D33](decisions.md#d33)). A **distribution hub** is a `Location` an Administrator has
+registered, with no status of its own ([D36](decisions.md#d36)). Suspending a Receiver leaves what already names it in
+place; the Administrator can see which boxes and live convoys it touches before deciding.
+
 > **Naming:** the domain type was spelled `Reciever` and has been renamed to `Receiver` across the solution,
 > along with `ResponsibleIndiviual` → `ResponsibleIndividual`.
 

@@ -288,7 +288,12 @@ Each holds if the others are removed by mistake:
 3. **The database `DENY`.**
 
 `DELETE /receivers/{ref}` sits behind `receivers:detail` rather than `receivers:write`, because
-removing a receiver removes its address.
+removing a receiver removes its address. That is *not* `receivers:register`: registration (`PUT /receivers/{ref}/status`) is the Administrator's
+act of authorisation, while deletion reaches into the `sensitive` schema and so is the Ground Officer's. The two policies differ on purpose.
+
+Deleting a receiver that a box (`FK_Box_Receiver`) or a vehicle (`FK_ConvoyVehicle_HandoverReceiver`) still names fails on the foreign key *after* its
+address has been removed, and answers 500 rather than 409. It predates registration for boxes, and registration adds a second way to reach it; the
+receiver's `GET /receivers/{ref}/usage` is how to see what names one first.
 
 ### Redaction is structural, not a rule
 
