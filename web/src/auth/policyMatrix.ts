@@ -14,6 +14,7 @@ export const POLICY_MATRIX = {
   'convoys:assign-drivers': ['Dispatcher'],
   'receivers:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader', 'GroundOfficer'],
   'receivers:write': ['Administrator', 'GroundOfficer'],
+  'receivers:register': ['Administrator'],
   'receivers:detail': ['GroundOfficer'],
   'boxes:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
   'boxes:write': ['Administrator', 'Dispatcher', 'Loader'],

@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented.
+Accepted. Implemented by [plan 04](../plans/04-receiver-registration.md), apart from what departure does with it ([plan 13](../plans/13-readiness-departure.md)) and the declaration staleness it causes ([plan 09](../plans/09-declaration-staleness.md)).
 
 ## Context
 
@@ -81,3 +81,21 @@ on their vehicles, which is the intended effect, and the Administrator should se
 
 **`ReceiverReadModel` stays small.** A status is not sensitive and sits beside the reference, organisation and
 region, so a handler holding a Receiver still has nothing sensitive to leak.
+
+## Implementation notes
+
+Added with [plan 04](../plans/04-receiver-registration.md).
+
+- **Registration is `receivers:register`, Administrator only**, a new policy rather than a narrowing of `receivers:write`. `PUT /receivers/{ref}/status`
+  and `GET /receivers/{ref}/usage` sit behind it. Any status may follow any other: the Administrator is the only actor, and a lapsed registration is
+  renewed by registering it again. Whether `expired` is set by hand or derived from a date stays open.
+- **Only `SetStatusAsync` writes the status.** The receiver `INSERT` and `UPDATE` omit it, so an ordinary edit cannot register a receiver, and a new one is
+  pending whatever the caller builds.
+- **One check, `ReceiverEligibilityCheck`**, behind both places a receiver is named: a box's destination, and a vehicle's handover receiver
+  (`dbo.ConvoyVehicle.HandoverReceiverRef`). Not found is `422 receiver-not-found`; not registered is `409 receiver-not-registered`.
+- **Only a *new* allocation is gated.** A box that already names a receiver which has since been suspended can still be moved, otherwise a suspension
+  would make its boxes impossible to relocate. The suspension surfaces as a blocking requirement on the vehicle instead ([plan 13](../plans/13-readiness-departure.md)).
+- **The usage read answers "which convoys does a change touch"**: box ids addressed to the receiver, and the live (not yet arrived) convoys that carry such a
+  box on a manifest or hand a vehicle over to it. Identifiers and counts only.
+- **Nothing describes the nature of a Receiver.** The status column and its CHECK carry only the four values; a reflection test pins the read model's fields.
+- **A hub is a flag**, `dbo.Location.IsRegisteredHub`, set under `locations:write`.

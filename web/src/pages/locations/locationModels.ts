@@ -16,10 +16,19 @@ export interface LocationFormValues {
   city: string;
   country: string;
   postcode: string;
+  isRegisteredHub: boolean;
 }
 
 export function emptyLocationForm(): LocationFormValues {
-  return { name: '', house: '', street: '', city: '', country: '', postcode: '' };
+  return {
+    name: '',
+    house: '',
+    street: '',
+    city: '',
+    country: '',
+    postcode: '',
+    isRegisteredHub: false,
+  };
 }
 
 export function locationToFormValues(location: LocationReadModel): LocationFormValues {
@@ -30,6 +39,7 @@ export function locationToFormValues(location: LocationReadModel): LocationFormV
     city: location.city ?? '',
     country: location.country ?? '',
     postcode: location.postcode ?? '',
+    isRegisteredHub: location.isRegisteredHub,
   };
 }
 
@@ -39,7 +49,11 @@ function trimmed(value: string): string | undefined {
 }
 
 export function locationFormToRequest(values: LocationFormValues): CreateLocationRequest {
-  const request: CreateLocationRequest = { name: values.name.trim() };
+  // Always sent: an edit replaces the whole location, so leaving it out would unregister the hub.
+  const request: CreateLocationRequest = {
+    name: values.name.trim(),
+    isRegisteredHub: values.isRegisteredHub,
+  };
   const house = trimmed(values.house);
   if (house !== undefined) request.house = house;
   const street = trimmed(values.street);
@@ -68,6 +82,7 @@ export const locationFormSchema = z.object({
   city: z.string().max(100, 'City must be 100 characters or fewer'),
   country: z.string().max(100, 'Country must be 100 characters or fewer'),
   postcode: z.string().max(20, 'Postcode must be 20 characters or fewer'),
+  isRegisteredHub: z.boolean(),
 });
 
 // ---- Add a bay --------------------------------------------------------------

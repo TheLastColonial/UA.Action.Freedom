@@ -228,6 +228,7 @@ token lacking the role is **403**.
 | `manifests:declare` | ✓ | ✓ | | | | |
 | `receivers:read` | ✓ | ✓ | ✓ | ✓ | | ✓ |
 | `receivers:write` | ✓ | | | | | ✓ |
+| `receivers:register` | ✓ | | | | | |
 | `receivers:detail` | | | | | | ✓ |
 
 A few rows are worth understanding rather than memorising:
@@ -261,6 +262,9 @@ A few rows are worth understanding rather than memorising:
 - **`boxes:allocate-bay` is Loader alone** — narrower even than `boxes:validate`, since Administrator
   is excluded too. Placing a box in a bay is the on-site, physical act of shelving it, not a
   coordination task, so it belongs to whoever is standing in the warehouse.
+- **`receivers:register` is narrower than `receivers:write`.** The Ground Officer records a receiver and its address but cannot register it:
+  registration is an act of authorisation, as approving a volunteer is, so it is the Administrator's. Registering is what lets a box or a
+  vehicle name the receiver (ADR 0012).
 - **`receivers:detail` is the narrowest policy in the API** and the only one an Administrator is
   excluded from. `DELETE /receivers/{ref}` sits behind it too, because removing a receiver removes
   its address. See [`gotchas-and-open-questions.md`](gotchas-and-open-questions.md) §3.

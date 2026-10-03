@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Receivers;
 
 namespace UA.Action.Freedom.Application.Convoys;
 
@@ -159,6 +160,74 @@ public sealed class UnassignVehicleFromConvoyHandler(IConvoyRepository convoys, 
             command.ConvoyId, command.Vin, command.Reason, DateTime.UtcNow, cancellationToken)
             ? UnassignVehicleOutcome.Withdrawn
             : UnassignVehicleOutcome.AlreadyWithdrawn;
+    }
+}
+
+/// <summary>
+/// Name the Receiver a vehicle is handed over to in Ukraine. The Receiver has to be registered
+/// (ADR 0012, decision P5).
+/// </summary>
+/// <remarks>
+/// Departure does not check this yet: that arrives with the readiness requirements (plan 13).
+/// </remarks>
+public sealed record SetHandoverReceiverCommand(int ConvoyId, string Vin, Guid ReceiverRef);
+
+public enum SetHandoverReceiverOutcome
+{
+    Set,
+    ConvoyNotFound,
+    ConvoyArrived,
+    NotOnThisConvoy,
+    VehicleWithdrawn,
+    ReceiverNotFound,
+    ReceiverNotRegistered
+}
+
+public sealed class SetHandoverReceiverHandler(
+    IConvoyRepository convoys, IConvoyVehicleRepository truckList, IReceiverRepository receivers)
+    : ICommandHandler<SetHandoverReceiverCommand, SetHandoverReceiverOutcome>
+{
+    public async Task<SetHandoverReceiverOutcome> HandleAsync(
+        SetHandoverReceiverCommand command, CancellationToken cancellationToken)
+    {
+        var convoy = await convoys.GetByIdAsync(command.ConvoyId, cancellationToken);
+
+        if (convoy is null)
+        {
+            return SetHandoverReceiverOutcome.ConvoyNotFound;
+        }
+
+        // The journey is over and its truck list is the record of who went and to whom.
+        if (convoy.Arrived)
+        {
+            return SetHandoverReceiverOutcome.ConvoyArrived;
+        }
+
+        var entry = await truckList.GetAsync(command.ConvoyId, command.Vin, cancellationToken);
+
+        if (entry is null)
+        {
+            return SetHandoverReceiverOutcome.NotOnThisConvoy;
+        }
+
+        // A vehicle that has left the convoy is not being handed over by it.
+        if (entry.Withdrawn)
+        {
+            return SetHandoverReceiverOutcome.VehicleWithdrawn;
+        }
+
+        switch (await ReceiverEligibilityCheck.CheckAsync(receivers, command.ReceiverRef, cancellationToken))
+        {
+            case ReceiverEligibility.NotFound:
+                return SetHandoverReceiverOutcome.ReceiverNotFound;
+            case ReceiverEligibility.NotRegistered:
+                return SetHandoverReceiverOutcome.ReceiverNotRegistered;
+        }
+
+        return await truckList.SetHandoverReceiverAsync(
+            command.ConvoyId, command.Vin, command.ReceiverRef, cancellationToken)
+            ? SetHandoverReceiverOutcome.Set
+            : SetHandoverReceiverOutcome.NotOnThisConvoy;
     }
 }
 

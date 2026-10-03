@@ -1,6 +1,8 @@
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Receivers;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Unit.Boxes;
 
@@ -39,7 +41,7 @@ public class BoxHandlerTests
         // Zero rather than an estimate: an unverified weight on a border document would be a
         // guess presented as a fact.
         var repository = Substitute.For<IBoxRepository>();
-        var handler = new CreateBoxHandler(repository);
+        var handler = new CreateBoxHandler(repository, Substitute.For<IReceiverRepository>());
 
         await handler.HandleAsync(
             new CreateBoxCommand(null, LocationId),
@@ -48,6 +50,126 @@ public class BoxHandlerTests
         await repository.Received(1).AddAsync(
             Arg.Is<BoxReadModel>(box => box.WeightKg == 0 && !box.Validated),
             Arg.Any<CancellationToken>());
+    }
+
+    private static IReceiverRepository AReceiverRepository(Guid receiverRef, ReceiverStatus? status)
+    {
+        var receivers = Substitute.For<IReceiverRepository>();
+        receivers.GetByRefAsync(receiverRef, Arg.Any<CancellationToken>()).Returns(
+            status is { } found ? new ReceiverReadModel(receiverRef, "Kharkiv Regional Hospital", "Kharkiv oblast", found) : null);
+        return receivers;
+    }
+
+    [Fact]
+    public async Task A_box_can_be_created_for_a_registered_receiver()
+    {
+        var receiverRef = Guid.NewGuid();
+        var repository = Substitute.For<IBoxRepository>();
+        repository.AddAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(7);
+        var handler = new CreateBoxHandler(repository, AReceiverRepository(receiverRef, ReceiverStatus.Registered));
+
+        var result = await handler.HandleAsync(new CreateBoxCommand(receiverRef, LocationId), CancellationToken.None);
+
+        result.Should().Be(new CreateBoxResult(CreateBoxOutcome.Created, 7));
+    }
+
+    [Theory]
+    [InlineData(ReceiverStatus.Pending)]
+    [InlineData(ReceiverStatus.Suspended)]
+    [InlineData(ReceiverStatus.Expired)]
+    public async Task A_box_cannot_be_created_for_a_receiver_that_is_not_registered(ReceiverStatus status)
+    {
+        var receiverRef = Guid.NewGuid();
+        var repository = Substitute.For<IBoxRepository>();
+        var handler = new CreateBoxHandler(repository, AReceiverRepository(receiverRef, status));
+
+        var result = await handler.HandleAsync(new CreateBoxCommand(receiverRef, LocationId), CancellationToken.None);
+
+        result.Outcome.Should().Be(CreateBoxOutcome.ReceiverNotRegistered);
+        await repository.DidNotReceive().AddAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_box_cannot_be_created_for_a_receiver_that_does_not_exist()
+    {
+        var receiverRef = Guid.NewGuid();
+        var repository = Substitute.For<IBoxRepository>();
+        var handler = new CreateBoxHandler(repository, AReceiverRepository(receiverRef, status: null));
+
+        var result = await handler.HandleAsync(new CreateBoxCommand(receiverRef, LocationId), CancellationToken.None);
+
+        result.Outcome.Should().Be(CreateBoxOutcome.ReceiverNotFound);
+        await repository.DidNotReceive().AddAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_box_with_no_destination_yet_needs_no_receiver()
+    {
+        var receivers = Substitute.For<IReceiverRepository>();
+        var repository = Substitute.For<IBoxRepository>();
+        repository.AddAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(3);
+        var handler = new CreateBoxHandler(repository, receivers);
+
+        var result = await handler.HandleAsync(new CreateBoxCommand(null, LocationId), CancellationToken.None);
+
+        result.Outcome.Should().Be(CreateBoxOutcome.Created);
+        await receivers.DidNotReceive().GetByRefAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task An_open_box_can_be_pointed_at_a_registered_receiver()
+    {
+        var receiverRef = Guid.NewGuid();
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        repository.UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
+        var handler = new UpdateBoxHandler(repository, AReceiverRepository(receiverRef, ReceiverStatus.Registered));
+
+        var outcome = await handler.HandleAsync(new UpdateBoxCommand(BoxId, receiverRef, LocationId), CancellationToken.None);
+
+        outcome.Should().Be(UpdateBoxOutcome.Updated);
+    }
+
+    [Fact]
+    public async Task An_open_box_cannot_be_pointed_at_a_receiver_that_is_not_registered()
+    {
+        var receiverRef = Guid.NewGuid();
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        var handler = new UpdateBoxHandler(repository, AReceiverRepository(receiverRef, ReceiverStatus.Pending));
+
+        var outcome = await handler.HandleAsync(new UpdateBoxCommand(BoxId, receiverRef, LocationId), CancellationToken.None);
+
+        outcome.Should().Be(UpdateBoxOutcome.ReceiverNotRegistered);
+        await repository.DidNotReceive().UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task An_open_box_cannot_be_pointed_at_a_receiver_that_does_not_exist()
+    {
+        var receiverRef = Guid.NewGuid();
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        var handler = new UpdateBoxHandler(repository, AReceiverRepository(receiverRef, status: null));
+
+        var outcome = await handler.HandleAsync(new UpdateBoxCommand(BoxId, receiverRef, LocationId), CancellationToken.None);
+
+        outcome.Should().Be(UpdateBoxOutcome.ReceiverNotFound);
+    }
+
+    [Fact]
+    public async Task A_box_can_still_be_moved_when_its_receiver_has_since_been_suspended()
+    {
+        // Not a new allocation: the receiver is unchanged, so only the location is being edited.
+        var receiverRef = Guid.NewGuid();
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox() with { ReceiverRef = receiverRef });
+        repository.UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
+        var handler = new UpdateBoxHandler(repository, AReceiverRepository(receiverRef, ReceiverStatus.Suspended));
+
+        var outcome = await handler.HandleAsync(new UpdateBoxCommand(BoxId, receiverRef, 9), CancellationToken.None);
+
+        outcome.Should().Be(UpdateBoxOutcome.Updated);
     }
 
     [Fact]
@@ -177,7 +299,7 @@ public class BoxHandlerTests
         // The Loader signed for this box going to this receiver.
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
-        var handler = new UpdateBoxHandler(repository);
+        var handler = new UpdateBoxHandler(repository, Substitute.For<IReceiverRepository>());
 
         var outcome = await handler.HandleAsync(
             new UpdateBoxCommand(BoxId, Guid.NewGuid(), LocationId),
@@ -195,7 +317,7 @@ public class BoxHandlerTests
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
         repository.UpdateAsync(Arg.Any<BoxReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
-        var handler = new UpdateBoxHandler(repository);
+        var handler = new UpdateBoxHandler(repository, Substitute.For<IReceiverRepository>());
 
         const int newLocationId = 9;
 

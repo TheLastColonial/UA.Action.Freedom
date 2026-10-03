@@ -90,10 +90,20 @@ internal static class ConvoyFixtures
     internal static Task<Guid> AddDriverAsync(string firstName, string lastName) =>
         AddVolunteerAsync(firstName, lastName, isDriver: true);
 
-    internal static Task RemovePeopleAsync(params Guid[] ids) => Task.WhenAll(ids.Select(id =>
-        ExecuteAsync(
-            "DELETE FROM dbo.ConvoyVehicleCrew WHERE PersonId = @id; DELETE FROM dbo.Person WHERE Id = @id",
-            ("@id", id))));
+    /// <summary>
+    /// One at a time, on purpose. Every entity table now has a foreign key from <c>LastChangedBy</c> to
+    /// <c>dbo.Person</c>, so each <c>DELETE</c> checks them all; two running at once take locks in
+    /// different orders and one is chosen as a deadlock victim.
+    /// </summary>
+    internal static async Task RemovePeopleAsync(params Guid[] ids)
+    {
+        foreach (var id in ids)
+        {
+            await ExecuteAsync(
+                "DELETE FROM dbo.ConvoyVehicleCrew WHERE PersonId = @id; DELETE FROM dbo.Person WHERE Id = @id",
+                ("@id", id));
+        }
+    }
 
     /// <summary>
     /// A manifest against a truck-list entry. Both keys are NOT NULL and are a composite foreign

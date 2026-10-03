@@ -1,6 +1,7 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Component;
 
@@ -30,9 +31,21 @@ internal sealed class InMemoryReceiverRepository : IReceiverRepository, IRecords
         }
     }
 
+    private readonly Dictionary<Guid, ReceiverUsageReadModel> usage = [];
+
     public int Count => store.Count;
 
     public bool Contains(Guid receiverRef) => store.ContainsKey(receiverRef);
+
+    /// <summary>The raw stored receiver, for a test that wants to see the status without a request.</summary>
+    public ReceiverReadModel? Receiver(Guid receiverRef) => store.GetValueOrDefault(receiverRef);
+
+    /// <summary>What names this receiver, standing in for the boxes and convoys the SQL joins to.</summary>
+    public InMemoryReceiverRepository WithUsage(Guid receiverRef, int[] boxIds, int[] convoyIds)
+    {
+        usage[receiverRef] = new ReceiverUsageReadModel(boxIds, convoyIds);
+        return this;
+    }
 
     public Task<ReceiverReadModel?> GetByRefAsync(Guid receiverRef, CancellationToken cancellationToken) =>
         Task.FromResult(store.TryGetValue(receiverRef, out var receiver) ? Read(receiver) : null);
@@ -51,19 +64,22 @@ internal sealed class InMemoryReceiverRepository : IReceiverRepository, IRecords
 
     public Task AddAsync(ReceiverReadModel receiver, CancellationToken cancellationToken)
     {
-        store[receiver.Ref] = receiver;
+        // Mirrors the SQL, whose INSERT leaves Status to its default: a receiver is pending until an
+        // Administrator registers it, whatever the caller built.
+        store[receiver.Ref] = receiver with { Status = ReceiverRegistration.Initial };
         changes.Stamp(receiver.Ref);
         return Task.CompletedTask;
     }
 
     public Task<bool> UpdateAsync(ReceiverReadModel receiver, CancellationToken cancellationToken)
     {
-        if (!store.ContainsKey(receiver.Ref))
+        if (!store.TryGetValue(receiver.Ref, out var existing))
         {
             return Task.FromResult(false);
         }
 
-        store[receiver.Ref] = receiver;
+        // Mirrors the SQL, whose UPDATE leaves Status out: an edit cannot register a receiver.
+        store[receiver.Ref] = receiver with { Status = existing.Status };
         changes.Stamp(receiver.Ref);
         return Task.FromResult(true);
     }
@@ -73,6 +89,21 @@ internal sealed class InMemoryReceiverRepository : IReceiverRepository, IRecords
         changes.Forget(receiverRef);
         return Task.FromResult(store.Remove(receiverRef));
     }
+
+    public Task<bool> SetStatusAsync(Guid receiverRef, ReceiverStatus status, CancellationToken cancellationToken)
+    {
+        if (!store.TryGetValue(receiverRef, out var existing))
+        {
+            return Task.FromResult(false);
+        }
+
+        store[receiverRef] = existing with { Status = status };
+        changes.Stamp(receiverRef);
+        return Task.FromResult(true);
+    }
+
+    public Task<ReceiverUsageReadModel> GetUsageAsync(Guid receiverRef, CancellationToken cancellationToken) =>
+        Task.FromResult(usage.GetValueOrDefault(receiverRef) ?? new ReceiverUsageReadModel([], []));
 }
 
 /// <summary>

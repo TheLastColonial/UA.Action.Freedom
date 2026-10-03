@@ -1,3 +1,5 @@
+using UA.Action.Freedom.Domain;
+
 namespace UA.Action.Freedom.Application.Receivers;
 
 /// <summary>
@@ -17,6 +19,26 @@ public interface IReceiverRepository
     Task<bool> UpdateAsync(ReceiverReadModel receiver, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(Guid receiverRef, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records the registration status. Returns false when there is no such receiver. Nothing else
+    /// writes it: an ordinary update cannot set or clear it.
+    /// </summary>
+    Task<bool> SetStatusAsync(Guid receiverRef, ReceiverStatus status, CancellationToken cancellationToken);
+
+    /// <summary>The boxes and convoys that currently name this receiver. Identifiers only.</summary>
+    Task<ReceiverUsageReadModel> GetUsageAsync(Guid receiverRef, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// What a status change touches: the boxes whose destination is this receiver, and the convoys that
+/// carry those boxes or hand a vehicle over to it. Identifiers and counts only — never an address.
+/// </summary>
+public sealed record ReceiverUsageReadModel(IReadOnlyList<int> BoxIds, IReadOnlyList<int> ConvoyIds)
+{
+    public int BoxCount => BoxIds.Count;
+
+    public int ConvoyCount => ConvoyIds.Count;
 }
 
 /// <summary>

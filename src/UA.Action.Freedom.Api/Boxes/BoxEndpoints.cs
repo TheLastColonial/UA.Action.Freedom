@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Api.Receivers;
 using UA.Action.Freedom.Application.Boxes;
 
 namespace UA.Action.Freedom.Api.Boxes;
@@ -54,11 +55,17 @@ public static class BoxEndpoints
 
         boxes.MapPost("/", async (
             CreateBoxRequest request,
-            ICommandHandler<CreateBoxCommand, int> handler,
+            ICommandHandler<CreateBoxCommand, CreateBoxResult> handler,
             CancellationToken cancellationToken) =>
         {
-            var id = await handler.HandleAsync(request.ToCommand(), cancellationToken);
-            return Results.Created($"/boxes/{id}", null);
+            var result = await handler.HandleAsync(request.ToCommand(), cancellationToken);
+
+            return result.Outcome switch
+            {
+                CreateBoxOutcome.Created => Results.Created($"/boxes/{result.BoxId}", null),
+                CreateBoxOutcome.ReceiverNotFound => ReceiverProblems.NotFound(),
+                _ => ReceiverProblems.NotRegistered(),
+            };
         })
         .AddEndpointFilter<ValidationFilter<CreateBoxRequest>>()
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
@@ -75,6 +82,8 @@ public static class BoxEndpoints
             {
                 UpdateBoxOutcome.Updated => Results.NoContent(),
                 UpdateBoxOutcome.NotFound => Results.NotFound(),
+                UpdateBoxOutcome.ReceiverNotFound => ReceiverProblems.NotFound(),
+                UpdateBoxOutcome.ReceiverNotRegistered => ReceiverProblems.NotRegistered(),
                 _ => Results.Problem(detail: ValidatedProblem, statusCode: StatusCodes.Status409Conflict),
             };
         })

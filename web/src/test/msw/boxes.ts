@@ -10,6 +10,7 @@ import type {
   CreateBoxRequest,
   ValidateBoxRequest,
 } from '../../api/schemas/boxes';
+import type { ReceiverStatus } from '../../api/schemas/receivers';
 import { problem } from './problem';
 
 interface ActiveQrCode {
@@ -34,6 +35,11 @@ export function boxApi(
   seed: readonly BoxReadModel[] = [],
   /** The volunteer the API resolves the caller's login to; what an attestation is signed as. */
   signedBy = 'caller-person-id',
+  /**
+   * The status of each receiver a box may be addressed to. When given, only a Registered one is
+   * accepted — an unknown one is a 422 and any other status a 409, as the API answers.
+   */
+  receiverStatuses?: ReadonlyMap<string, ReceiverStatus>,
 ): BoxApi {
   const db = new Map<number, BoxReadModel>(seed.map((b) => [b.id, b]));
   const items = new Map<number, BoxItemReadModel[]>();
@@ -41,6 +47,19 @@ export function boxApi(
   const bayHistory = new Map<number, BoxBayAssignmentReadModel[]>();
   const idFrom = (raw: string | readonly string[] | undefined) => Number(String(raw));
   const activeBay = (id: number) => (bayHistory.get(id) ?? []).find((a) => a.active);
+
+  const receiverGuard = (receiverRef: string | null | undefined) => {
+    if (!receiverStatuses || !receiverRef) {
+      return null;
+    }
+    const status = receiverStatuses.get(receiverRef);
+    if (status === undefined) {
+      return problem(422, 'The receiver named does not exist.');
+    }
+    return status === 'Registered'
+      ? null
+      : problem(409, 'Only a registered receiver can be a destination.');
+  };
 
   const validatedGuard = (box: BoxReadModel | undefined) =>
     box?.validated
@@ -58,6 +77,10 @@ export function boxApi(
     http.post('/boxes', async ({ request }) => {
       mintedBox += 1;
       const body = (await request.json()) as CreateBoxRequest;
+      const refused = receiverGuard(body.receiverRef);
+      if (refused) {
+        return refused;
+      }
       db.set(mintedBox, {
         id: mintedBox,
         lastChangedByName: null,
@@ -89,6 +112,12 @@ export function boxApi(
         return frozen;
       }
       const body = (await request.json()) as CreateBoxRequest;
+      if (body.receiverRef !== box.receiverRef) {
+        const refused = receiverGuard(body.receiverRef);
+        if (refused) {
+          return refused;
+        }
+      }
       db.set(id, {
         ...box,
         receiverRef: body.receiverRef ?? null,

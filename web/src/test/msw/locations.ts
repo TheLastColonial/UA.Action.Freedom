@@ -47,6 +47,7 @@ export function locationApi(
         city: body.city ?? null,
         country: body.country ?? null,
         postcode: body.postcode ?? null,
+        isRegisteredHub: body.isRegisteredHub ?? false,
       });
       return new HttpResponse(null, {
         status: 201,
@@ -70,6 +71,7 @@ export function locationApi(
         city: body.city ?? null,
         country: body.country ?? null,
         postcode: body.postcode ?? null,
+        isRegisteredHub: body.isRegisteredHub ?? false,
       });
       return new HttpResponse(null, { status: 204 });
     }),

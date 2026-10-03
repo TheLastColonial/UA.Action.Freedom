@@ -247,6 +247,7 @@ Core resource endpoints:
   - `PUT /people/{id}/login` — Link the login (token subject) a volunteer signs in with — **Administrator only** (`people:write`); 204, 404, or 409 when the login already belongs to another volunteer. An Administrator may link their own login, so the first link can be made
 - `GET /me` — Who the caller is: subject and roles, plus person id and display name once their login is linked. Any authenticated caller, Ground Officer included. **Every write** is signed as the caller's linked volunteer and refused with `403` / `login-not-linked` from a login nobody has linked — there is no body field to forge it with. The only writes an unlinked login may make are `POST /people` and `PUT /people/{id}/login`, which are how a login becomes linked
 - `GET|POST /convoys` — Convoy groups with routes
+  - `PUT /convoys/{id}/vehicles/{vin}/handover-receiver` — The registered Receiver a vehicle is handed over to in Ukraine (`convoys:write`; 409 not registered, 422 unknown). Shown as `handoverReceiverRef` on the truck list; departure does not require it yet
   - `PUT|GET /convoys/{id}/route` — Ordered stop list
   - `GET /convoys/{id}/vehicles` — The truck list, withdrawn vehicles included (each entry says which it is)
   - `PUT /convoys/{id}/vehicles/{vin}` — Put a vehicle on the truck list; only one that has **Passed** its inspection, has not been handed over, and is not travelling with another convoy may join (409 otherwise)
@@ -257,7 +258,8 @@ Core resource endpoints:
   - `GET /convoys/{id}/readiness` — Advisory readiness: **one driver per vehicle required, two advised**, insurance naming every driver, and a route. Withdrawn vehicles are skipped (`convoys:read`)
   - `POST /convoys/{id}/arrive` — Mark arrived once every vehicle still travelling has a finished manifest; Delivered/Lost vehicles are handed over for good (`convoys:write`)
   - `POST /convoys/{id}/publish-truck-list` — Close the truck list to additions
-- `GET|POST /receivers` — Delivery contacts (reference/org/region)
+- `GET|POST /receivers` — Delivery contacts (reference/org/region/**status**). A new receiver is `Pending`; only `Registered` can be a box destination or a vehicle's handover receiver
+  - `PUT /receivers/{ref}/status` — Register, suspend or expire a receiver — **Administrator only** (`receivers:register`); narrower than `receivers:write`, so the Ground Officer who records a receiver cannot grant its registration. `GET /receivers/{ref}/usage` (same policy) lists the box and live-convoy ids a change touches, never an address
   - `GET|PUT /receivers/{ref}/detail` — **GroundOfficer only**: delivery address + contact
 - `GET|POST /boxes` — Packing containers
   - `GET|POST|DELETE /boxes/{id}/items` — Item inventory
@@ -308,7 +310,7 @@ a label, shows it inline and prints it (a print stylesheet reveals the label alo
 - Sign-in is **Authorization Code + PKCE** against the public Keycloak client `freedom-spa`
   (`iac/tofu/keycloak.tf`); the resulting JWT is sent as `Authorization: Bearer`. The API is
   unchanged — still a pure JWT resource server.
-- Nav and actions are gated by the same 21-policy matrix the API enforces
+- Nav and actions are gated by the same 22-policy matrix the API enforces
   (`docs/local-authentication.md`); the API remains the enforcement point. Receiver street
   addresses are never rendered on any print/verification view.
 

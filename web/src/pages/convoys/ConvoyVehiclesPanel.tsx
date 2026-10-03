@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { JSX } from 'react';
 
 import { useAssignVehicle, useConvoyVehicles, useUnassignVehicle } from '../../api/convoys';
@@ -8,6 +9,7 @@ import type { Column } from '../../components/DataTable';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import type { ConvoyVehicleReadModel } from '../../api/schemas/convoys';
 import { VehicleSearchDropdown } from '../../components/form/VehicleSearchDropdown';
+import { HandoverReceiverCell } from './HandoverReceiverCell';
 
 interface ConvoyVehiclesPanelProps {
   convoyId: number;
@@ -18,6 +20,7 @@ export function ConvoyVehiclesPanel({ convoyId, disabled }: ConvoyVehiclesPanelP
   const query = useConvoyVehicles(convoyId);
   const assign = useAssignVehicle(convoyId);
   const unassign = useUnassignVehicle(convoyId);
+  const [handoverError, setHandoverError] = useState<string | undefined>(undefined);
 
   if (query.isPending) {
     return <PageSkeleton />;
@@ -31,7 +34,7 @@ export function ConvoyVehiclesPanel({ convoyId, disabled }: ConvoyVehiclesPanelP
 
   const problemMessage = (error: unknown) =>
     error instanceof ApiDomainProblem ? (error.detail ?? error.message) : undefined;
-  const message = problemMessage(assign.error) ?? problemMessage(unassign.error);
+  const message = problemMessage(assign.error) ?? problemMessage(unassign.error) ?? handoverError;
 
   const columns: readonly Column<ConvoyVehicleReadModel>[] = [
     { header: 'VIN', cell: (v) => v.vin },
@@ -40,6 +43,12 @@ export function ConvoyVehiclesPanel({ convoyId, disabled }: ConvoyVehiclesPanelP
     {
       header: 'Status',
       cell: (v) => (v.withdrawn ? (v.withdrawnReason ?? 'Withdrawn') : 'Travelling'),
+    },
+    {
+      header: 'Handover receiver',
+      cell: (v) => (
+        <HandoverReceiverCell convoyId={convoyId} vehicle={v} onError={setHandoverError} />
+      ),
     },
     {
       header: '',

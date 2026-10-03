@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Api.Configuration;
+using UA.Action.Freedom.Api.Receivers;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Manifests;
@@ -187,6 +188,35 @@ public static class ConvoyEndpoints
                     statusCode: StatusCodes.Status409Conflict),
             };
         })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
+        // The Receiver this vehicle is handed over to in Ukraine. It has to be registered, which only an
+        // Administrator can make it (ADR 0012); departure does not check it yet (plan 13).
+        convoys.MapPut("/{id:int}/vehicles/{vin}/handover-receiver", async (
+            int id,
+            string vin,
+            SetHandoverReceiverRequest request,
+            ICommandHandler<SetHandoverReceiverCommand, SetHandoverReceiverOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(request.ToCommand(id, vin), cancellationToken);
+
+            return outcome switch
+            {
+                SetHandoverReceiverOutcome.Set => Results.NoContent(),
+                SetHandoverReceiverOutcome.ConvoyNotFound => Results.NotFound(),
+                SetHandoverReceiverOutcome.NotOnThisConvoy => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+                SetHandoverReceiverOutcome.ConvoyArrived => ConvoyArrived(),
+                SetHandoverReceiverOutcome.VehicleWithdrawn => Results.Problem(
+                    detail: $"Vehicle '{vin}' has been withdrawn from this convoy.",
+                    statusCode: StatusCodes.Status409Conflict),
+                SetHandoverReceiverOutcome.ReceiverNotFound => ReceiverProblems.NotFound(),
+                _ => ReceiverProblems.NotRegistered(),
+            };
+        })
+        .AddEndpointFilter<ValidationFilter<SetHandoverReceiverRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
         // A manifest is opened against a truck-list entry, which is why it is created here rather

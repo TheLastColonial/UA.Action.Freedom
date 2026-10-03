@@ -11,7 +11,7 @@ public sealed class LocationRepository(IDbConnectionFactory connectionFactory, I
     : ILocationRepository
 {
     private static readonly string Columns =
-        $"l.Id, l.Name, l.House, l.Street, l.City, l.Country, l.Postcode, {ChangeStamp.ReadColumns("l")}";
+        $"l.Id, l.Name, l.House, l.Street, l.City, l.Country, l.Postcode, l.IsRegisteredHub, {ChangeStamp.ReadColumns("l")}";
 
     private static readonly string From = $"dbo.Location AS l {ChangeStamp.ReadJoin("l")}";
 
@@ -59,8 +59,8 @@ public sealed class LocationRepository(IDbConnectionFactory connectionFactory, I
 
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """
-            INSERT INTO dbo.Location (Name, House, Street, City, Country, Postcode, LastChangedBy, LastChangedAt)
-            VALUES (@Name, @House, @Street, @City, @Country, @Postcode, @changedBy, SYSUTCDATETIME());
+            INSERT INTO dbo.Location (Name, House, Street, City, Country, Postcode, IsRegisteredHub, LastChangedBy, LastChangedAt)
+            VALUES (@Name, @House, @Street, @City, @Country, @Postcode, @IsRegisteredHub, @changedBy, SYSUTCDATETIME());
             SELECT CAST(SCOPE_IDENTITY() AS int);
             """,
             attribution.With(location),
@@ -80,6 +80,7 @@ public sealed class LocationRepository(IDbConnectionFactory connectionFactory, I
                 City = @City,
                 Country = @Country,
                 Postcode = @Postcode,
+                IsRegisteredHub = @IsRegisteredHub,
                 UpdatedAt = SYSUTCDATETIME(),
                 LastChangedBy = @changedBy,
                 LastChangedAt = SYSUTCDATETIME()

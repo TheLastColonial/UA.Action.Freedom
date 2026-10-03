@@ -1,4 +1,5 @@
 using FluentValidation;
+using UA.Action.Freedom.Domain;
 using UA.Action.Freedom.Application.Receivers;
 
 namespace UA.Action.Freedom.Api.Receivers;
@@ -13,6 +14,23 @@ public sealed record CreateReceiverRequest(string Organisation, string Region)
 public sealed record UpdateReceiverRequest(string Organisation, string Region)
 {
     public UpdateReceiverCommand ToCommand(Guid receiverRef) => new(receiverRef, Organisation, Region);
+}
+
+/// <summary>
+/// Body of <c>PUT /receivers/{ref}/status</c>. Administrator only; the status is one of Pending, Registered,
+/// Suspended or Expired, by name.
+/// </summary>
+public sealed record SetReceiverStatusRequest(ReceiverStatus Status)
+{
+    public SetReceiverStatusCommand ToCommand(Guid receiverRef) => new(receiverRef, Status);
+}
+
+public sealed class SetReceiverStatusRequestValidator : AbstractValidator<SetReceiverStatusRequest>
+{
+    public SetReceiverStatusRequestValidator()
+    {
+        RuleFor(r => r.Status).IsInEnum();
+    }
 }
 
 /// <summary>

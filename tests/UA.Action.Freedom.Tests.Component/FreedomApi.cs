@@ -98,6 +98,20 @@ internal static class FreedomApi
             services.Replace(manifests ?? new InMemoryManifestRepository());
         });
 
+    /// <summary>As above, with the receivers a vehicle handover is checked against.</summary>
+    internal static WebApplicationFactory<Program> WithConvoys(
+        InMemoryConvoyRepository repository,
+        IReceiverRepository receivers,
+        bool authenticated = true,
+        params string[] roles) =>
+        WithFakes(authenticated, roles, services =>
+        {
+            services.Replace<IConvoyRepository>(repository);
+            services.Replace<IConvoyVehicleRepository>(repository);
+            services.Replace(receivers);
+            services.Replace(new InMemoryManifestRepository());
+        });
+
     /// <summary>
     /// The application with both halves of receiver persistence swapped out. Both are replaced
     /// together because the endpoints that matter here span them — deleting a receiver touches
@@ -140,6 +154,18 @@ internal static class FreedomApi
             services.Replace(boxes);
             services.Replace(people);
             services.Replace(bays ?? new InMemoryBayRepository());
+        });
+
+    /// <summary>As above, with the receivers a box destination is checked against.</summary>
+    internal static WebApplicationFactory<Program> WithBoxes(
+        IBoxRepository boxes,
+        IReceiverRepository receivers,
+        bool authenticated = true,
+        params string[] roles) =>
+        WithFakes(authenticated, roles, services =>
+        {
+            services.Replace(boxes);
+            services.Replace(receivers);
         });
 
     /// <summary>The application with location and bay persistence swapped out.</summary>
@@ -233,6 +259,7 @@ internal static class FreedomApi
             {
                 swapFakes(services);
                 EnsureCallerIsOnFile(services);
+                EnsureReceiversAreFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -259,6 +286,21 @@ internal static class FreedomApi
 
             return instance;
         });
+    }
+
+    /// <summary>
+    /// Naming a receiver, for a box or a vehicle, checks it is registered, so a test that did not supply
+    /// a receiver store gets an empty one rather than a route to a real database.
+    /// </summary>
+    private static void EnsureReceiversAreFaked(IServiceCollection services)
+    {
+        var fake = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IReceiverRepository) && descriptor.ImplementationFactory is not null);
+
+        if (!fake)
+        {
+            services.Replace<IReceiverRepository>(new InMemoryReceiverRepository());
+        }
     }
 
     /// <summary>

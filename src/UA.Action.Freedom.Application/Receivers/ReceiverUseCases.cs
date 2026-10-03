@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Receivers;
 
@@ -40,6 +41,53 @@ public sealed class UpdateReceiverHandler(IReceiverRepository repository)
             new ReceiverReadModel(command.Ref, command.Organisation, command.Region), cancellationToken);
 
         return updated ? UpdateReceiverOutcome.Updated : UpdateReceiverOutcome.NotFound;
+    }
+}
+
+/// <summary>
+/// Record whether a receiver may be sent to. Administrator only (ADR 0012).
+/// </summary>
+/// <remarks>
+/// Any status may follow any other: the Administrator is the only actor and decides, and a lapsed
+/// registration is renewed by registering it again. Suspending a receiver does not unpick what already
+/// names it — those boxes and vehicles become blocking requirements, which is the intended effect, and
+/// <see cref="GetReceiverUsageQuery"/> shows which ones.
+/// </remarks>
+public sealed record SetReceiverStatusCommand(Guid Ref, ReceiverStatus Status);
+
+public enum SetReceiverStatusOutcome
+{
+    Set,
+    NotFound
+}
+
+public sealed class SetReceiverStatusHandler(IReceiverRepository repository)
+    : ICommandHandler<SetReceiverStatusCommand, SetReceiverStatusOutcome>
+{
+    public async Task<SetReceiverStatusOutcome> HandleAsync(
+        SetReceiverStatusCommand command, CancellationToken cancellationToken)
+    {
+        var set = await repository.SetStatusAsync(command.Ref, command.Status, cancellationToken);
+
+        return set ? SetReceiverStatusOutcome.Set : SetReceiverStatusOutcome.NotFound;
+    }
+}
+
+/// <summary>The boxes and convoys that name a receiver, so a status change can be weighed. No addresses.</summary>
+public sealed record GetReceiverUsageQuery(Guid Ref);
+
+public sealed class GetReceiverUsageHandler(IReceiverRepository repository)
+    : IQueryHandler<GetReceiverUsageQuery, ReceiverUsageReadModel?>
+{
+    public async Task<ReceiverUsageReadModel?> HandleAsync(
+        GetReceiverUsageQuery query, CancellationToken cancellationToken)
+    {
+        if (!await repository.ExistsAsync(query.Ref, cancellationToken))
+        {
+            return null;
+        }
+
+        return await repository.GetUsageAsync(query.Ref, cancellationToken);
     }
 }
 

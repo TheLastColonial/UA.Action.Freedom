@@ -1,3 +1,4 @@
+using FluentValidation;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
@@ -63,6 +64,23 @@ public sealed record ReplaceConvoyRouteRequest(IReadOnlyList<RouteStopRequest> S
         [.. Stops.Select((stop, index) => new RouteStopReadModel(
             index + 1, stop.House, stop.Street, stop.City, stop.Country, stop.Postcode,
             stop.CountryCode))]);
+}
+
+/// <summary>
+/// Body of <c>PUT /convoys/{id}/vehicles/{vin}/handover-receiver</c>: the registered Receiver the vehicle is
+/// handed over to in Ukraine.
+/// </summary>
+public sealed record SetHandoverReceiverRequest(Guid ReceiverRef)
+{
+    public SetHandoverReceiverCommand ToCommand(int convoyId, string vin) => new(convoyId, vin, ReceiverRef);
+}
+
+public sealed class SetHandoverReceiverRequestValidator : AbstractValidator<SetHandoverReceiverRequest>
+{
+    public SetHandoverReceiverRequestValidator()
+    {
+        RuleFor(r => r.ReceiverRef).NotEmpty();
+    }
 }
 
 /// <summary>

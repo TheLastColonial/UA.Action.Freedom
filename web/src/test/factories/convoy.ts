@@ -47,6 +47,7 @@ export function makeConvoyVehicle(
     passengerCount: 0,
     withdrawnAt: null,
     withdrawnReason: null,
+    handoverReceiverRef: null,
     travelling: true,
     withdrawn: false,
     ...overrides,

@@ -75,7 +75,8 @@ public sealed record ConvoyVehicleReadModel(
     int DriverCount,
     int PassengerCount,
     DateTime? WithdrawnAt = null,
-    string? WithdrawnReason = null)
+    string? WithdrawnReason = null,
+    Guid? HandoverReceiverRef = null)
 {
     /// <summary>Whether the vehicle is still travelling with the convoy.</summary>
     public bool Travelling => ConvoyVehicle.IsTravelling(this.WithdrawnAt);
