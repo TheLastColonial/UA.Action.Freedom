@@ -10,6 +10,7 @@ import type {
   CreateBoxRequest,
   ValidateBoxRequest,
 } from '../../api/schemas/boxes';
+import type { ItemCategoryReadModel } from '../../api/schemas/categories';
 import type { ReceiverStatus } from '../../api/schemas/receivers';
 import { problem } from './problem';
 
@@ -31,6 +32,24 @@ let mintedItem = 0;
 let mintedToken = 0;
 let mintedBayAssignment = 0;
 
+function shelfLifeOf(
+  expiresOn: string | null,
+  warnWithinDays: number | null,
+): BoxItemReadModel['shelfLife'] {
+  if (expiresOn === null) {
+    return 'Fine';
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (expiresOn < today) {
+    return 'Expired';
+  }
+  if (warnWithinDays === null) {
+    return 'Fine';
+  }
+  const limit = new Date(Date.now() + warnWithinDays * 86_400_000).toISOString().slice(0, 10);
+  return expiresOn <= limit ? 'Short' : 'Fine';
+}
+
 export function boxApi(
   seed: readonly BoxReadModel[] = [],
   /** The volunteer the API resolves the caller's login to; what an attestation is signed as. */
@@ -40,6 +59,8 @@ export function boxApi(
    * accepted — an unknown one is a 422 and any other status a 409, as the API answers.
    */
   receiverStatuses?: ReadonlyMap<string, ReceiverStatus>,
+  /** The categories an item may be packed under; an item names one, as the API requires. */
+  categories: readonly ItemCategoryReadModel[] = [],
 ): BoxApi {
   const db = new Map<number, BoxReadModel>(seed.map((b) => [b.id, b]));
   const items = new Map<number, BoxItemReadModel[]>();
@@ -150,16 +171,36 @@ export function boxApi(
       if (frozen) {
         return frozen;
       }
-      mintedItem += 1;
       const body = (await request.json()) as AddBoxItemRequest;
+      const category = categories.find((c) => c.id === body.categoryId);
+      if (!category) {
+        return problem(422, 'The category named does not exist.', { type: 'category-not-found' });
+      }
+      mintedItem += 1;
+      const itemId = `bbbbbbbb-0000-0000-0000-${String(mintedItem).padStart(12, '0')}`;
+      const shelfLife = shelfLifeOf(body.expiresOn ?? null, category.warnWithinDays);
       const list = items.get(id) ?? [];
       list.push({
-        id: `bbbbbbbb-0000-0000-0000-${String(mintedItem).padStart(12, '0')}`,
+        id: itemId,
         description: body.description,
         properties: body.properties,
+        categoryId: body.categoryId,
+        commodityCode: body.commodityCode ?? null,
+        quantity: body.quantity ?? null,
+        valueGbp: body.valueGbp ?? null,
+        valueSource: body.valueSource ?? null,
+        expiresOn: body.expiresOn ?? null,
+        categoryNameEn: category.nameEn,
+        isNotCarried: category.isNotCarried,
+        shelfLife,
       });
       items.set(id, list);
-      return new HttpResponse(null, { status: 204 });
+      const warnings = [
+        ...(category.isNotCarried ? ['NotCarried'] : []),
+        ...(shelfLife === 'Expired' ? ['Expired'] : []),
+        ...(shelfLife === 'Short' ? ['ShortShelfLife'] : []),
+      ];
+      return HttpResponse.json({ itemId, warnings });
     }),
 
     http.delete('/boxes/:id/items/:itemId', ({ params }) => {
@@ -190,6 +231,11 @@ export function boxApi(
       }
       if (box.validated) {
         return problem(409, 'This box has already been validated.');
+      }
+      if ((items.get(id) ?? []).some((item) => item.shelfLife === 'Expired')) {
+        return problem(409, 'Take the expired item out of the box before it is validated.', {
+          type: 'box-has-expired-items',
+        });
       }
       const body = (await request.json()) as ValidateBoxRequest;
       db.set(id, {

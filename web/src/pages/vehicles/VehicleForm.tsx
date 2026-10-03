@@ -14,6 +14,12 @@ import type { VehicleFormValues } from './vehicleFormModel';
 
 const toOptions = (values: readonly string[]) => values.map((value) => ({ value, label: value }));
 
+const VALUE_SOURCE_OPTIONS = [
+  { value: '', label: 'Choose…' },
+  { value: 'Purchased', label: 'Price paid' },
+  { value: 'Estimate', label: 'Estimate' },
+] as const;
+
 const FORM_FIELDS = new Set<string>([
   'vin',
   'plate',
@@ -33,6 +39,8 @@ const FORM_FIELDS = new Set<string>([
   'cargoWidthCm',
   'cargoDepthCm',
   'cargoHeightCm',
+  'valueGbp',
+  'valueSource',
 ]);
 
 interface VehicleFormProps {
@@ -187,6 +195,22 @@ export function VehicleForm({
           type="date"
           error={errors.purchaseDate?.message}
           {...register('purchaseDate')}
+        />
+      </FormCard>
+
+      <FormCard title="Value">
+        <TextField
+          label="Value (£)"
+          inputMode="decimal"
+          hint="The price paid, or an estimate for a donated vehicle."
+          error={errors.valueGbp?.message}
+          {...register('valueGbp')}
+        />
+        <SelectField
+          label="Value source"
+          options={VALUE_SOURCE_OPTIONS}
+          error={errors.valueSource?.message}
+          {...register('valueSource')}
         />
       </FormCard>
 

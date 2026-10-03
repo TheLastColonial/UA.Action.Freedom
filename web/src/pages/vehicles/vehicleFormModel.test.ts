@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
+import { makeVehicle } from '../../test/factories/vehicle';
 import {
   emptyVehicleForm,
   vehicleFormSchema,
@@ -117,6 +118,8 @@ describe('vehicleToFormValues', () => {
       inspectionStatus: 'Pending',
       inspectionNotes: null,
       handedOverAt: null,
+      valueGbp: null,
+      valueSource: null,
       lastChangedByName: null,
       lastChangedAt: null,
     };
@@ -182,5 +185,44 @@ describe('vehicleFormSchema', () => {
   it('rejects a negative cargo capacity value', () => {
     const result = vehicleFormSchema.safeParse({ ...filledForm, cargoHeightCm: '-10' });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('vehicle value', () => {
+  it('sends the value with its source, and neither when blank', () => {
+    expect(
+      vehicleFormToRequest({ ...filledForm, valueGbp: '4250.50', valueSource: 'Purchased' }),
+    ).toMatchObject({ valueGbp: 4250.5, valueSource: 'Purchased' });
+
+    const blank = vehicleFormToRequest(filledForm);
+    expect('valueGbp' in blank).toBe(false);
+    expect('valueSource' in blank).toBe(false);
+  });
+
+  it('reads a stored value back into the form', () => {
+    const values = vehicleToFormValues({
+      ...makeVehicle(),
+      valueGbp: 1800,
+      valueSource: 'Estimate',
+    });
+
+    expect(values.valueGbp).toBe('1800');
+    expect(values.valueSource).toBe('Estimate');
+  });
+
+  it('asks for the source of a value, and the value of a source', () => {
+    const noSource = vehicleFormSchema.safeParse({ ...filledForm, valueGbp: '100' });
+    expect(noSource.error?.issues.map((i) => i.path.join('.'))).toContain('valueSource');
+
+    const noValue = vehicleFormSchema.safeParse({ ...filledForm, valueSource: 'Estimate' });
+    expect(noValue.error?.issues.map((i) => i.path.join('.'))).toContain('valueGbp');
+  });
+
+  it('rejects a negative value or more than two decimal places', () => {
+    for (const valueGbp of ['-5', '10.555']) {
+      expect(
+        vehicleFormSchema.safeParse({ ...filledForm, valueGbp, valueSource: 'Purchased' }).success,
+      ).toBe(false);
+    }
   });
 });

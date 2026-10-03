@@ -69,3 +69,8 @@ export function getText(path: string): Promise<string> {
 export function post204(path: string, body: unknown): Promise<void> {
   return request({ method: 'POST', path, expect: 'nocontent', body });
 }
+
+/** `POST` an action with a body that the API answers with 200 and a JSON body (add-item). */
+export function postJson<T>(path: string, body: unknown, schema: ZodType<T>): Promise<T> {
+  return request({ method: 'POST', path, expect: 'json', body, schema });
+}

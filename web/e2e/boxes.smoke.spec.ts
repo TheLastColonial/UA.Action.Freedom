@@ -8,6 +8,19 @@ test.beforeEach(async () => {
 });
 
 test('@smoke loader packs a box, adds an item and validates it', async ({ page }) => {
+  // An item names its category, which only an Administrator can add, so one is made first in its own
+  // session rather than leaning on seed data the stack may not have.
+  await signIn(page, 'admin');
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('link', { name: 'Categories' })
+    .click();
+  await page.getByRole('link', { name: 'New category' }).click();
+  const category = `Bedding${String(Date.now())}`;
+  await page.getByLabel('Name', { exact: true }).fill(category);
+  await page.getByRole('button', { name: 'Create category' }).click();
+  await expect(page.getByRole('heading', { name: `Edit ${category}` })).toBeVisible();
+
   // The operator login carries Loader (pack + validate). The box is signed as the volunteer the
   // login is linked to (auth.setup.ts links the seed logins), so there is nobody to pick.
   await signIn(page, 'operator');
@@ -18,6 +31,8 @@ test('@smoke loader packs a box, adds an item and validates it', async ({ page }
   await expect(page.getByRole('heading', { name: /Box #/ })).toBeVisible();
 
   await page.getByLabel('Description').fill('Sleeping bags');
+  await page.getByLabel('Category').selectOption({ label: category });
+  await page.getByLabel('Quantity').fill('12');
   await page.getByRole('button', { name: 'Add item' }).click();
   await expect(page.getByText('Sleeping bags')).toBeVisible();
 

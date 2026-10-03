@@ -6,6 +6,11 @@ import { fuelTypeSchema, lastChangedShape, transmissionSchema } from './common';
 export const inspectionStatusSchema = z.enum(['Pending', 'Inspecting', 'Passed', 'Failed']);
 export type InspectionStatus = z.infer<typeof inspectionStatusSchema>;
 
+// src/UA.Action.Freedom.Domain/ItemCategory.cs — ValueSource. A vehicle is bought or valued by estimate; there is
+// no donor-stated source for one.
+export const vehicleValueSourceSchema = z.enum(['Purchased', 'Estimate']);
+export type VehicleValueSource = z.infer<typeof vehicleValueSourceSchema>;
+
 // Response shape — src/UA.Action.Freedom.Application/Vehicles/VehicleReadModel.cs. Optional
 // scalars come back as JSON null (System.Text.Json does not omit them).
 export const vehicleReadModelSchema = z.object({
@@ -33,6 +38,10 @@ export const vehicleReadModelSchema = z.object({
   inspectionNotes: z.string().nullable(),
   // Set when the convoy it travelled on arrived and it stayed in Ukraine. Never offered again.
   handedOverAt: z.string().nullable(),
+  // What it is worth in pounds, with no conversion (O11, O33): the price paid, or an estimate for a
+  // donated vehicle. Both or neither.
+  valueGbp: z.number().nullable(),
+  valueSource: vehicleValueSourceSchema.nullable(),
 });
 
 export type VehicleReadModel = z.infer<typeof vehicleReadModelSchema>;
@@ -60,6 +69,8 @@ export interface CreateVehicleRequest {
   cargoWidthCm?: number;
   cargoDepthCm?: number;
   cargoHeightCm?: number;
+  valueGbp?: number;
+  valueSource?: VehicleValueSource;
 }
 
 export type UpdateVehicleRequest = Omit<CreateVehicleRequest, 'vin'>;

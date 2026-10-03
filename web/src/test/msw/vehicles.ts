@@ -54,6 +54,8 @@ function toReadModel(
     inspectionStatus: kept.inspectionStatus,
     inspectionNotes: kept.inspectionNotes,
     handedOverAt: kept.handedOverAt,
+    valueGbp: body.valueGbp ?? null,
+    valueSource: body.valueSource ?? null,
     lastChangedByName: null,
     lastChangedAt: null,
   };

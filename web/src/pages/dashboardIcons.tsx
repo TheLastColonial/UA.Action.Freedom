@@ -120,3 +120,13 @@ export function WarehouseIcon({ className }: IconProps): JSX.Element {
     </Icon>
   );
 }
+
+/** Item categories: a luggage tag with a yellow eyelet. */
+export function TagIcon({ className }: IconProps): JSX.Element {
+  return (
+    <Icon className={className}>
+      <circle cx="8" cy="8" r="1.75" fill={ACCENT} stroke="none" />
+      <path d="M3 4.5V11l9.5 9.5a1.5 1.5 0 0 0 2.1 0l5.9-5.9a1.5 1.5 0 0 0 0-2.1L11 3H4.5A1.5 1.5 0 0 0 3 4.5z" />
+    </Icon>
+  );
+}

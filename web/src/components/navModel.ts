@@ -19,6 +19,7 @@ export const NAV_SECTIONS: readonly NavEntry[] = [
   { label: 'Manifests', to: '/manifests', policy: 'manifests:read' },
   { label: 'Receivers', to: '/receivers', policy: 'receivers:read' },
   { label: 'Locations', to: '/locations', policy: 'locations:read' },
+  { label: 'Categories', to: '/categories', policy: 'categories:read' },
 ];
 
 /** Every destination, flat — the home first. */
