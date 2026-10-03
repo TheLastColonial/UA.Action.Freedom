@@ -22,7 +22,9 @@ public sealed record CreateVehicleCommand(
     decimal? MaxCargoWeightKg,
     decimal? CargoWidthCm,
     decimal? CargoDepthCm,
-    decimal? CargoHeightCm);
+    decimal? CargoHeightCm,
+    decimal? ValueGbp = null,
+    ValueSource? ValueSource = null);
 
 public enum CreateVehicleOutcome
 {
@@ -60,7 +62,9 @@ public sealed class CreateVehicleHandler(IVehicleRepository repository)
                 command.MaxCargoWeightKg,
                 command.CargoWidthCm,
                 command.CargoDepthCm,
-                command.CargoHeightCm),
+                command.CargoHeightCm,
+                ValueGbp: command.ValueGbp,
+                ValueSource: command.ValueSource),
             cancellationToken);
 
         return CreateVehicleOutcome.Created;

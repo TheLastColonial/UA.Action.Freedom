@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Vehicles;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Unit.Vehicles;
 
@@ -22,6 +23,22 @@ public class UpdateVehicleHandlerTests
         outcome.Should().Be(UpdateVehicleOutcome.Updated);
         await repository.Received(1).UpdateAsync(
             Arg.Is<VehicleReadModel>(v => v.Vin == "WVWZZZ1JZXW000001" && v.Plate == "ZZ99ZZZ"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Passes_the_value_and_its_source_to_the_repository()
+    {
+        var repository = Substitute.For<IVehicleRepository>();
+        repository.UpdateAsync(Arg.Any<VehicleReadModel>(), Arg.Any<CancellationToken>()).Returns(true);
+        var handler = new UpdateVehicleHandler(repository);
+
+        await handler.HandleAsync(
+            VehicleTestData.AnUpdateCommand() with { ValueGbp = 1_800m, ValueSource = ValueSource.Estimate },
+            CancellationToken.None);
+
+        await repository.Received(1).UpdateAsync(
+            Arg.Is<VehicleReadModel>(v => v.ValueGbp == 1_800m && v.ValueSource == ValueSource.Estimate),
             Arg.Any<CancellationToken>());
     }
 

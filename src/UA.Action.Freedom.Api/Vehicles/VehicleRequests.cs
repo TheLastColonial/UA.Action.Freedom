@@ -25,12 +25,14 @@ public sealed record CreateVehicleRequest(
     decimal? MaxCargoWeightKg = null,
     decimal? CargoWidthCm = null,
     decimal? CargoDepthCm = null,
-    decimal? CargoHeightCm = null)
+    decimal? CargoHeightCm = null,
+    decimal? ValueGbp = null,
+    ValueSource? ValueSource = null)
 {
     public CreateVehicleCommand ToCommand() => new(
         Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing,
         Year, Fuel, PurchaserName, PurchaseDate, WeightKg,
-        MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm);
+        MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm, ValueGbp, ValueSource);
 }
 
 /// <summary>Body of <c>PUT /vehicles/{vin}/inspection</c>. The route supplies the VIN.</summary>
@@ -57,10 +59,12 @@ public sealed record UpdateVehicleRequest(
     decimal? MaxCargoWeightKg = null,
     decimal? CargoWidthCm = null,
     decimal? CargoDepthCm = null,
-    decimal? CargoHeightCm = null)
+    decimal? CargoHeightCm = null,
+    decimal? ValueGbp = null,
+    ValueSource? ValueSource = null)
 {
     public UpdateVehicleCommand ToCommand(string vin) => new(
         vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing,
         Year, Fuel, PurchaserName, PurchaseDate, WeightKg,
-        MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm);
+        MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm, ValueGbp, ValueSource);
 }

@@ -33,7 +33,7 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory, IC
         """;
 
     private static readonly string Columns =
-        $"v.Vin, v.Plate, v.Brand, v.Model, v.Colour, v.Transmission, v.Notes, v.Mileage, v.Servicing, v.[Year], v.Fuel, {CurrentConvoy}, v.PurchaserName, v.PurchaseDate, v.WeightKg, v.MaxCargoWeightKg, v.CargoWidthCm, v.CargoDepthCm, v.CargoHeightCm, v.InspectionStatus, v.InspectionNotes, v.HandedOverAt, {ChangeStamp.ReadColumns("v")}";
+        $"v.Vin, v.Plate, v.Brand, v.Model, v.Colour, v.Transmission, v.Notes, v.Mileage, v.Servicing, v.[Year], v.Fuel, {CurrentConvoy}, v.PurchaserName, v.PurchaseDate, v.WeightKg, v.MaxCargoWeightKg, v.CargoWidthCm, v.CargoDepthCm, v.CargoHeightCm, v.InspectionStatus, v.InspectionNotes, v.HandedOverAt, v.ValueGbp, v.ValueSource, {ChangeStamp.ReadColumns("v")}";
 
     public async Task<VehicleReadModel?> GetByVinAsync(string vin, CancellationToken cancellationToken)
     {
@@ -76,9 +76,9 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory, IC
         await connection.ExecuteAsync(new CommandDefinition(
             """
             INSERT INTO dbo.Vehicle
-                (Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm, LastChangedBy, LastChangedAt)
+                (Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm, ValueGbp, ValueSource, LastChangedBy, LastChangedAt)
             VALUES
-                (@Vin, @Plate, @Brand, @Model, @Colour, @Transmission, @Notes, @Mileage, @Servicing, @Year, @Fuel, @PurchaserName, @PurchaseDate, @WeightKg, @MaxCargoWeightKg, @CargoWidthCm, @CargoDepthCm, @CargoHeightCm, @changedBy, SYSUTCDATETIME())
+                (@Vin, @Plate, @Brand, @Model, @Colour, @Transmission, @Notes, @Mileage, @Servicing, @Year, @Fuel, @PurchaserName, @PurchaseDate, @WeightKg, @MaxCargoWeightKg, @CargoWidthCm, @CargoDepthCm, @CargoHeightCm, @ValueGbp, @ValueSource, @changedBy, SYSUTCDATETIME())
             """,
             attribution.With(vehicle),
             cancellationToken: cancellationToken));
@@ -108,6 +108,8 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory, IC
                 CargoWidthCm = @CargoWidthCm,
                 CargoDepthCm = @CargoDepthCm,
                 CargoHeightCm = @CargoHeightCm,
+                ValueGbp = @ValueGbp,
+                ValueSource = @ValueSource,
                 UpdatedAt = SYSUTCDATETIME(),
                 LastChangedBy = @changedBy,
                 LastChangedAt = SYSUTCDATETIME()
