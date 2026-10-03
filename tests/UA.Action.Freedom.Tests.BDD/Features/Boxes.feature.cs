@@ -125,7 +125,7 @@ namespace UA.Action.Freedom.Tests.BDD.Features
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Boxes.feature.ndjson", 18);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Boxes.feature.ndjson", 23);
         }
         
         async System.Threading.Tasks.ValueTask Xunit.IAsyncLifetime.InitializeAsync()
@@ -301,43 +301,46 @@ await this.FeatureBackgroundAsync();
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
 #line 41
+    await testRunner.AndAsync("a category exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 42
     await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 45
+#line 46
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 46
-    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" with body:", "{ \"description\": \"Blankets\", \"properties\": { \"size\": \"double\", \"condition\": \"new\"" +
-                        " } }", ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 50
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 47
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" with body:", "{ \"description\": \"Blankets\", \"categoryId\": {category}, \"properties\": { \"size\": \"d" +
+                        "ouble\", \"condition\": \"new\" } }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 51
-    await testRunner.WhenAsync("I GET \"/boxes/{id}/items\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 52
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
+#line 52
+    await testRunner.WhenAsync("I GET \"/boxes/{id}/items\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
 #line 53
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 54
     await testRunner.AndAsync("the response body is a list of 1 or more", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="An item with no description is rejected")]
+        [global::Xunit.FactAttribute(DisplayName="An item with no category is rejected")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
-        [global::Xunit.TraitAttribute("Description", "An item with no description is rejected")]
-        public async global::System.Threading.Tasks.Task AnItemWithNoDescriptionIsRejected()
+        [global::Xunit.TraitAttribute("Description", "An item with no category is rejected")]
+        public async global::System.Threading.Tasks.Task AnItemWithNoCategoryIsRejected()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "4";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An item with no description is rejected", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An item with no category is rejected", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 55
+#line 56
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -350,22 +353,68 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 15
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 56
+#line 57
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 57
+#line 58
     await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 61
+#line 62
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 62
-    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" with body:", "{ \"description\": \"\" }", ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 66
-    await testRunner.ThenAsync("the response status is 400", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 63
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" with body:", "{ \"description\": \"Blankets\" }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 67
+    await testRunner.ThenAsync("the response status is 400", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 68
+    await testRunner.AndAsync("the response body names \"CategoryId\" as invalid", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.FactAttribute(DisplayName="An item with no description is rejected")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
+        [global::Xunit.TraitAttribute("Description", "An item with no description is rejected")]
+        public async global::System.Threading.Tasks.Task AnItemWithNoDescriptionIsRejected()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "5";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An item with no description is rejected", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 70
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 15
+await this.FeatureBackgroundAsync();
+#line hidden
+#line 71
+    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 72
+    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 76
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 77
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" with body:", "{ \"description\": \"\" }", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 81
+    await testRunner.ThenAsync("the response status is 400", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 82
     await testRunner.AndAsync("the response body names \"Description\" as invalid", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
@@ -379,11 +428,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "5";
+            string pickleIndex = "6";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A box with no contents yet has an empty list, not a missing one", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 69
+#line 84
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -396,22 +445,22 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 15
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 70
+#line 85
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 71
+#line 86
     await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 75
+#line 90
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 76
+#line 91
     await testRunner.WhenAsync("I GET \"/boxes/{id}/items\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 77
+#line 92
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 78
+#line 93
     await testRunner.AndAsync("the response body is a list of 0 or more", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
@@ -425,11 +474,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "6";
+            string pickleIndex = "7";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A loader validates a box and the weight becomes authoritative", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 80
+#line 95
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -442,31 +491,31 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 15
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 81
+#line 96
     await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 82
+#line 97
     await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 86
+#line 101
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 87
+#line 102
     await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 88
+#line 103
     await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" on the remembered box weighing 24", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 89
+#line 104
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 90
+#line 105
     await testRunner.WhenAsync("I GET \"/boxes/{id}\" on the remembered box", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 91
+#line 106
     await testRunner.ThenAsync("the response body field \"validated\" is \"True\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 92
+#line 107
     await testRunner.AndAsync("the response body field \"weightKg\" is \"24\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
@@ -480,11 +529,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "7";
+            string pickleIndex = "8";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A validated box will not take another item", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 94
+#line 109
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -497,60 +546,11 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 15
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 95
-    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
-#line hidden
-#line 96
-    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 100
-    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 101
-    await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
-#line hidden
-#line 102
-    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" on the remembered box weighing 18", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 103
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 104
-    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" on the remembered box with body:", "{ \"description\": \"Blankets\" }", ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 108
-    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Xunit.FactAttribute(DisplayName="A box cannot be validated twice")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
-        [global::Xunit.TraitAttribute("Description", "A box cannot be validated twice")]
-        public async global::System.Threading.Tasks.Task ABoxCannotBeValidatedTwice()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "8";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A box cannot be validated twice", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = null;
 #line 110
-this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 15
-await this.FeatureBackgroundAsync();
+    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
 #line 111
-    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+    await testRunner.AndAsync("a category exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
 #line 112
     await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
@@ -568,15 +568,67 @@ await this.FeatureBackgroundAsync();
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 120
-    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" on the remembered box weighing 25", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" on the remembered box with body:", "{ \"description\": \"Blankets\", \"categoryId\": {category} }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 121
+#line 124
     await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 122
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.FactAttribute(DisplayName="A box cannot be validated twice")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
+        [global::Xunit.TraitAttribute("Description", "A box cannot be validated twice")]
+        public async global::System.Threading.Tasks.Task ABoxCannotBeValidatedTwice()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "9";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A box cannot be validated twice", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 126
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 15
+await this.FeatureBackgroundAsync();
+#line hidden
+#line 127
+    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 128
+    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 132
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 133
+    await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 134
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" on the remembered box weighing 18", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 135
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 136
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" on the remembered box weighing 25", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 137
+    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 138
     await testRunner.WhenAsync("I GET \"/boxes/{id}\" on the remembered box", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 123
+#line 139
     await testRunner.ThenAsync("the response body field \"weightKg\" is \"18\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -590,60 +642,8 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "9";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A validated box cannot be moved or re-pointed", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = null;
-#line 125
-this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 15
-await this.FeatureBackgroundAsync();
-#line hidden
-#line 126
-    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
-#line hidden
-#line 127
-    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 131
-    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 132
-    await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
-#line hidden
-#line 133
-    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" on the remembered box weighing 18", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 134
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 135
-    await testRunner.WhenAsync("I PUT \"/boxes/{id}\" on the remembered box with body:", "{ \"receiverRef\": null }", ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 139
-    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Xunit.FactAttribute(DisplayName="A validator named in the body is ignored, the caller signs")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
-        [global::Xunit.TraitAttribute("Description", "A validator named in the body is ignored, the caller signs")]
-        public async global::System.Threading.Tasks.Task AValidatorNamedInTheBodyIsIgnoredTheCallerSigns()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "10";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A validator named in the body is ignored, the caller signs", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A validated box cannot be moved or re-pointed", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 141
@@ -660,7 +660,7 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 await this.FeatureBackgroundAsync();
 #line hidden
 #line 142
-    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
 #line 143
     await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
@@ -669,34 +669,33 @@ await this.FeatureBackgroundAsync();
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 148
-    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" with body:", "{ \"validatedByPersonId\": \"6f9619ff-8b86-d011-b42d-00cf4fc964ff\", \"weightKg\": 20 }" +
-                        "", ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 152
+#line 149
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" on the remembered box weighing 18", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 150
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 153
-    await testRunner.WhenAsync("I GET \"/boxes/{id}\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 154
-    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 151
+    await testRunner.WhenAsync("I PUT \"/boxes/{id}\" on the remembered box with body:", "{ \"receiverRef\": null }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 155
-    await testRunner.AndAsync("the response body does not mention \"6f9619ff-8b86-d011-b42d-00cf4fc964ff\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="A box validated at an implausible weight is rejected")]
+        [global::Xunit.FactAttribute(DisplayName="A validator named in the body is ignored, the caller signs")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
-        [global::Xunit.TraitAttribute("Description", "A box validated at an implausible weight is rejected")]
-        public async global::System.Threading.Tasks.Task ABoxValidatedAtAnImplausibleWeightIsRejected()
+        [global::Xunit.TraitAttribute("Description", "A validator named in the body is ignored, the caller signs")]
+        public async global::System.Threading.Tasks.Task AValidatorNamedInTheBodyIsIgnoredTheCallerSigns()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "11";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A box validated at an implausible weight is rejected", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A validator named in the body is ignored, the caller signs", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 157
@@ -722,9 +721,62 @@ await this.FeatureBackgroundAsync();
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 164
-    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" with body:", "{ \"weightKg\": 9999 }", ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" with body:", "{ \"validatedByPersonId\": \"6f9619ff-8b86-d011-b42d-00cf4fc964ff\", \"weightKg\": 20 }" +
+                        "", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 168
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 169
+    await testRunner.WhenAsync("I GET \"/boxes/{id}\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 170
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 171
+    await testRunner.AndAsync("the response body does not mention \"6f9619ff-8b86-d011-b42d-00cf4fc964ff\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.FactAttribute(DisplayName="A box validated at an implausible weight is rejected")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
+        [global::Xunit.TraitAttribute("Description", "A box validated at an implausible weight is rejected")]
+        public async global::System.Threading.Tasks.Task ABoxValidatedAtAnImplausibleWeightIsRejected()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "12";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A box validated at an implausible weight is rejected", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 173
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 15
+await this.FeatureBackgroundAsync();
+#line hidden
+#line 174
+    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 175
+    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 179
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 180
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" with body:", "{ \"weightKg\": 9999 }", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 184
     await testRunner.ThenAsync("the response status is 400", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -738,11 +790,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "12";
+            string pickleIndex = "13";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A loader places a box in a bay and can find it there again", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 170
+#line 186
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -755,40 +807,40 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 15
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 171
+#line 187
     await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 172
+#line 188
     await testRunner.AndAsync("a location exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 173
+#line 189
     await testRunner.AndAsync("a bay exists at the location", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 174
+#line 190
     await testRunner.WhenAsync("I POST \"/boxes\" at the remembered location", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 175
+#line 191
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 176
+#line 192
     await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 177
+#line 193
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 178
+#line 194
     await testRunner.WhenAsync("I PUT \"/boxes/{id}/bay\" on the remembered box with the remembered bay", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 179
+#line 195
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 180
+#line 196
     await testRunner.WhenAsync("I GET \"/boxes/{id}/bay\" on the remembered box", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 181
+#line 197
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 182
+#line 198
     await testRunner.AndAsync("the response body field \"bayId\" is the remembered bay", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
@@ -802,11 +854,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "13";
+            string pickleIndex = "14";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An administrator cannot place a box in a bay", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 184
+#line 200
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -819,28 +871,28 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 15
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 185
+#line 201
     await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 186
+#line 202
     await testRunner.AndAsync("a location exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 187
+#line 203
     await testRunner.AndAsync("a bay exists at the location", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 188
+#line 204
     await testRunner.WhenAsync("I POST \"/boxes\" at the remembered location", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 189
+#line 205
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 190
+#line 206
     await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 191
+#line 207
     await testRunner.WhenAsync("I PUT \"/boxes/{id}/bay\" on the remembered box with the remembered bay", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 192
+#line 208
     await testRunner.ThenAsync("the response status is 403", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -854,11 +906,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "14";
+            string pickleIndex = "15";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A loader vacates a box from its bay", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 194
+#line 210
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -871,43 +923,43 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 15
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 195
+#line 211
     await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 196
+#line 212
     await testRunner.AndAsync("a location exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 197
+#line 213
     await testRunner.AndAsync("a bay exists at the location", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 198
+#line 214
     await testRunner.WhenAsync("I POST \"/boxes\" at the remembered location", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 199
+#line 215
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 200
+#line 216
     await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 201
+#line 217
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 202
+#line 218
     await testRunner.WhenAsync("I PUT \"/boxes/{id}/bay\" on the remembered box with the remembered bay", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 203
+#line 219
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 204
+#line 220
     await testRunner.WhenAsync("I DELETE \"/boxes/{id}/bay\" on the remembered box", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 205
+#line 221
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 206
+#line 222
     await testRunner.WhenAsync("I GET \"/boxes/{id}/bay\" on the remembered box", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 207
+#line 223
     await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -921,11 +973,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "15";
+            string pickleIndex = "16";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Fetching an unknown box is a 404", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 209
+#line 225
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -938,14 +990,242 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 15
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 210
+#line 226
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 211
+#line 227
     await testRunner.WhenAsync("I GET \"/boxes/99999999\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 212
+#line 228
     await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.FactAttribute(DisplayName="An item is packed with its category, quantity, value and expiry, and reads back w" +
+            "ith them")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
+        [global::Xunit.TraitAttribute("Description", "An item is packed with its category, quantity, value and expiry, and reads back w" +
+            "ith them")]
+        public async global::System.Threading.Tasks.Task AnItemIsPackedWithItsCategoryQuantityValueAndExpiryAndReadsBackWithThem()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "17";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An item is packed with its category, quantity, value and expiry, and reads back w" +
+                    "ith them", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 230
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 15
+await this.FeatureBackgroundAsync();
+#line hidden
+#line 231
+    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 232
+    await testRunner.AndAsync("a category exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 233
+    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 237
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 238
+    await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 239
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" on the remembered box with body:", "{ \"description\": \"Paracetamol\", \"categoryId\": {category}, \"quantity\": 40, \"valueG" +
+                        "bp\": 62.5, \"valueSource\": \"Estimate\", \"expiresOn\": \"2999-12-31\" }", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 243
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 244
+    await testRunner.WhenAsync("I GET \"/boxes/{id}/items\" on the remembered box", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 245
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 246
+    await testRunner.AndAsync("the response body mentions \"BDD Category\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 247
+    await testRunner.AndAsync("the response body mentions \"2999-12-31\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 248
+    await testRunner.AndAsync("the response body mentions \"Estimate\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.FactAttribute(DisplayName="An item whose value has no source is rejected")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
+        [global::Xunit.TraitAttribute("Description", "An item whose value has no source is rejected")]
+        public async global::System.Threading.Tasks.Task AnItemWhoseValueHasNoSourceIsRejected()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "18";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An item whose value has no source is rejected", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 250
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 15
+await this.FeatureBackgroundAsync();
+#line hidden
+#line 251
+    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 252
+    await testRunner.AndAsync("a category exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 253
+    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 257
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 258
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" with body:", "{ \"description\": \"Blankets\", \"categoryId\": {category}, \"valueGbp\": 10 }", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 262
+    await testRunner.ThenAsync("the response status is 400", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.FactAttribute(DisplayName="Packing an item the convoy will not carry is accepted with a warning")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
+        [global::Xunit.TraitAttribute("Description", "Packing an item the convoy will not carry is accepted with a warning")]
+        public async global::System.Threading.Tasks.Task PackingAnItemTheConvoyWillNotCarryIsAcceptedWithAWarning()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "19";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Packing an item the convoy will not carry is accepted with a warning", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 264
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 15
+await this.FeatureBackgroundAsync();
+#line hidden
+#line 265
+    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 266
+    await testRunner.AndAsync("a category exists that the convoy will not carry", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 267
+    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 271
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 272
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" with body:", "{ \"description\": \"Camping gas\", \"categoryId\": {category} }", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 276
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 277
+    await testRunner.AndAsync("the response body mentions \"NotCarried\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.FactAttribute(DisplayName="A box holding an item that has already expired cannot be validated")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Boxes API")]
+        [global::Xunit.TraitAttribute("Description", "A box holding an item that has already expired cannot be validated")]
+        public async global::System.Threading.Tasks.Task ABoxHoldingAnItemThatHasAlreadyExpiredCannotBeValidated()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "20";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A box holding an item that has already expired cannot be validated", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 279
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 15
+await this.FeatureBackgroundAsync();
+#line hidden
+#line 280
+    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 281
+    await testRunner.AndAsync("a category exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 282
+    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{}", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 286
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 287
+    await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 288
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/items\" on the remembered box with body:", "{ \"description\": \"Paracetamol\", \"categoryId\": {category}, \"expiresOn\": \"{yesterda" +
+                        "y}\" }", ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 292
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 293
+    await testRunner.AndAsync("the response body mentions \"Expired\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 294
+    await testRunner.WhenAsync("I POST \"/boxes/{id}/validate\" on the remembered box weighing 12", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 295
+    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 296
+    await testRunner.WhenAsync("I GET \"/boxes/{id}\" on the remembered box", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 297
+    await testRunner.ThenAsync("the response body field \"validated\" is \"False\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

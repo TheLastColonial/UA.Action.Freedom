@@ -39,6 +39,25 @@ Scenario: A purchaser records a new vehicle
     Then the response status is 201
     And the "Location" header ends with "/vehicles/WDB9066331S0BDD01"
 
+Scenario: A purchaser records the price paid for a vehicle
+    Given I am authenticated as "operator"
+    When I POST "/vehicles" with body:
+        """
+        { "vin": "WDB9066331S0BDD01", "plate": "UA10ACT", "year": 2014, "fuel": "Diesel", "transmission": "Manual", "weightKg": 2200, "valueGbp": 4250.5, "valueSource": "Purchased" }
+        """
+    Then the response status is 201
+    When I GET "/vehicles/WDB9066331S0BDD01"
+    Then the response body field "valueGbp" is "4250.50"
+    And the response body field "valueSource" is "Purchased"
+
+Scenario: A vehicle's value needs its source
+    Given I am authenticated as "operator"
+    When I POST "/vehicles" with body:
+        """
+        { "vin": "WDB9066331S0BDD01", "plate": "UA10ACT", "year": 2014, "fuel": "Diesel", "transmission": "Manual", "weightKg": 2200, "valueGbp": 100 }
+        """
+    Then the response status is 400
+
 Scenario: A recorded vehicle can be fetched by VIN
     Given I am authenticated as "operator"
     And a vehicle exists with VIN "WDB9066331S0BDD01"

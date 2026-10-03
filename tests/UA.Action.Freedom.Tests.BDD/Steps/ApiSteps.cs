@@ -77,7 +77,7 @@ public sealed class ApiSteps(FreedomApiClient api, ScenarioState state)
     /// or in a body (a box names its receiver in the body).
     /// </summary>
     private string Resolve(string path) =>
-        path.Replace("{id}", state.LastCreatedKey ?? "missing-id", StringComparison.Ordinal);
+        CategoriesSteps.Expand(state, path.Replace("{id}", state.LastCreatedKey ?? "missing-id", StringComparison.Ordinal));
 
     [Then("the response status is (\\d+)")]
     public void ThenTheResponseStatusIs(int expected) =>

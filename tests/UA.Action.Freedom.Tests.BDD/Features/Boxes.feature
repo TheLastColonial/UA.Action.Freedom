@@ -38,6 +38,7 @@ Scenario: A loader packs a box, which starts with no confirmed weight
 
 Scenario: Items packed into an open box keep their open-ended properties
     Given I am authenticated as "operator"
+    And a category exists
     When I POST "/boxes" with body:
         """
         {}
@@ -45,12 +46,26 @@ Scenario: Items packed into an open box keep their open-ended properties
     Then the response status is 201
     When I POST "/boxes/{id}/items" with body:
         """
-        { "description": "Blankets", "properties": { "size": "double", "condition": "new" } }
+        { "description": "Blankets", "categoryId": {category}, "properties": { "size": "double", "condition": "new" } }
         """
-    Then the response status is 204
+    Then the response status is 200
     When I GET "/boxes/{id}/items"
     Then the response status is 200
     And the response body is a list of 1 or more
+
+Scenario: An item with no category is rejected
+    Given I am authenticated as "operator"
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    When I POST "/boxes/{id}/items" with body:
+        """
+        { "description": "Blankets" }
+        """
+    Then the response status is 400
+    And the response body names "CategoryId" as invalid
 
 Scenario: An item with no description is rejected
     Given I am authenticated as "operator"
@@ -93,6 +108,7 @@ Scenario: A loader validates a box and the weight becomes authoritative
 
 Scenario: A validated box will not take another item
     Given I am authenticated as "admin"
+    And a category exists
     When I POST "/boxes" with body:
         """
         {}
@@ -103,7 +119,7 @@ Scenario: A validated box will not take another item
     Then the response status is 204
     When I POST "/boxes/{id}/items" on the remembered box with body:
         """
-        { "description": "Blankets" }
+        { "description": "Blankets", "categoryId": {category} }
         """
     Then the response status is 409
 
@@ -210,3 +226,72 @@ Scenario: Fetching an unknown box is a 404
     Given I am authenticated as "operator"
     When I GET "/boxes/99999999"
     Then the response status is 404
+
+Scenario: An item is packed with its category, quantity, value and expiry, and reads back with them
+    Given I am authenticated as "operator"
+    And a category exists
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    Given I remember the box
+    When I POST "/boxes/{id}/items" on the remembered box with body:
+        """
+        { "description": "Paracetamol", "categoryId": {category}, "quantity": 40, "valueGbp": 62.5, "valueSource": "Estimate", "expiresOn": "2999-12-31" }
+        """
+    Then the response status is 200
+    When I GET "/boxes/{id}/items" on the remembered box
+    Then the response status is 200
+    And the response body mentions "BDD Category"
+    And the response body mentions "2999-12-31"
+    And the response body mentions "Estimate"
+
+Scenario: An item whose value has no source is rejected
+    Given I am authenticated as "operator"
+    And a category exists
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    When I POST "/boxes/{id}/items" with body:
+        """
+        { "description": "Blankets", "categoryId": {category}, "valueGbp": 10 }
+        """
+    Then the response status is 400
+
+Scenario: Packing an item the convoy will not carry is accepted with a warning
+    Given I am authenticated as "operator"
+    And a category exists that the convoy will not carry
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    When I POST "/boxes/{id}/items" with body:
+        """
+        { "description": "Camping gas", "categoryId": {category} }
+        """
+    Then the response status is 200
+    And the response body mentions "NotCarried"
+
+Scenario: A box holding an item that has already expired cannot be validated
+    Given I am authenticated as "admin"
+    And a category exists
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    Given I remember the box
+    When I POST "/boxes/{id}/items" on the remembered box with body:
+        """
+        { "description": "Paracetamol", "categoryId": {category}, "expiresOn": "{yesterday}" }
+        """
+    Then the response status is 200
+    And the response body mentions "Expired"
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 12
+    Then the response status is 409
+    When I GET "/boxes/{id}" on the remembered box
+    Then the response body field "validated" is "False"
