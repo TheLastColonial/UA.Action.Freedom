@@ -32,8 +32,16 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
     private static BoxItemReadModel ToItem(BoxItemRow row) => new(
         row.Id,
         row.Description,
-        JsonSerializer.Deserialize<Dictionary<string, string>>(row.PropertiesJson) ?? [],
+        ReadProperties(row.PropertiesJson),
         row.CommodityCode);
+
+    private static Dictionary<string, string> ReadProperties(string json) =>
+        (JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) ?? [])
+            .ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value.ValueKind == JsonValueKind.String
+                    ? entry.Value.GetString() ?? string.Empty
+                    : entry.Value.GetRawText());
 
     public async Task<BoxReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {

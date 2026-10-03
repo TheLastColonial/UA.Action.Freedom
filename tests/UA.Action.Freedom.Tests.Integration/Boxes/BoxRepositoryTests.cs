@@ -167,6 +167,29 @@ public class BoxRepositoryTests
     }
 
     [Fact]
+    public async Task Reads_an_item_whose_stored_properties_hold_a_JSON_number()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(ANewBox(), cancellationToken);
+
+        try
+        {
+            await ExecuteAsync(
+                "INSERT INTO dbo.BoxItem (Id, BoxId, Description, PropertiesJson) VALUES (NEWID(), @id, 'Seeded', '{\"quantity\":10}')",
+                ("@id", id));
+
+            var packed = await repository.ListItemsAsync(id, cancellationToken);
+
+            packed.Should().ContainSingle().Which.Properties.Should().ContainKey("quantity");
+        }
+        finally
+        {
+            await RemoveBoxAsync(id);
+        }
+    }
+
+    [Fact]
     public async Task An_item_with_no_properties_reads_back_as_an_empty_bag_not_a_null()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
