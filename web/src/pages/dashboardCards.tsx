@@ -7,6 +7,7 @@ import {
   MapPinIcon,
   PeopleIcon,
   RouteIcon,
+  TagIcon,
   VehicleIcon,
   WarehouseIcon,
 } from './dashboardIcons';
@@ -62,5 +63,11 @@ export const DASHBOARD_CARD_ENTRIES: readonly DashboardCardEntry[] = [
     to: '/locations',
     policy: 'locations:read',
     icon: WarehouseIcon,
+  },
+  {
+    label: 'Categories',
+    to: '/categories',
+    policy: 'categories:read',
+    icon: TagIcon,
   },
 ];

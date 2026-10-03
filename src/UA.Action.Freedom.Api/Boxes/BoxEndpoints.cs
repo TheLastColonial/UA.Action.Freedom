@@ -121,6 +121,11 @@ public static class BoxEndpoints
             {
                 ValidateBoxOutcome.Validated => Results.NoContent(),
                 ValidateBoxOutcome.NotFound => Results.NotFound(),
+                ValidateBoxOutcome.HasExpiredItems => Results.Problem(
+                    type: "box-has-expired-items",
+                    title: "This box holds an item that has expired.",
+                    detail: "Take the expired item out of the box before it is validated.",
+                    statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Problem(
                     detail: "This box has already been validated.",
                     statusCode: StatusCodes.Status409Conflict),
@@ -143,15 +148,20 @@ public static class BoxEndpoints
         boxes.MapPost("/{id:int}/items", async (
             int id,
             AddBoxItemRequest request,
-            ICommandHandler<AddBoxItemCommand, AddBoxItemOutcome> handler,
+            ICommandHandler<AddBoxItemCommand, AddBoxItemResult> handler,
             CancellationToken cancellationToken) =>
         {
-            var outcome = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
+            var result = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
 
-            return outcome switch
+            return result.Outcome switch
             {
-                AddBoxItemOutcome.Added => Results.NoContent(),
+                AddBoxItemOutcome.Added => Results.Ok(new { result.ItemId, result.Warnings }),
                 AddBoxItemOutcome.BoxNotFound => Results.NotFound(),
+                AddBoxItemOutcome.CategoryNotFound => Results.Problem(
+                    type: "category-not-found",
+                    title: "There is no such category.",
+                    detail: "The category named does not exist.",
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
                 _ => Results.Problem(detail: ValidatedProblem, statusCode: StatusCodes.Status409Conflict),
             };
         })

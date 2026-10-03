@@ -172,7 +172,7 @@ tofu apply
 # Verify all services are healthy
 curl http://localhost:8080/health/ready
 
-# (Optional) Load fictional seed data: depots, volunteers, a convoy, vehicles, boxes
+# (Optional) Load fictional seed data: depots, volunteers, a convoy, vehicles, boxes, the fixed item categories
 cd ../local && docker compose up db-seed
 ```
 
@@ -241,7 +241,7 @@ Fetch it with `oras pull ghcr.io/thelastcolonial/ua-action-freedom-database:<tag
 ### API Endpoints
 
 Core resource endpoints:
-- `GET|POST /vehicles` — Vehicle inventory (natural key: VIN), including optional cargo capacity (max weight, dimensions); writes are Administrator, Purchaser and Mechanic (`vehicles:write`)
+- `GET|POST /vehicles` — Vehicle inventory (natural key: VIN), including optional cargo capacity (max weight, dimensions) and a value in pounds with its source (`Purchased` for the price paid, `Estimate` for a donated vehicle); writes are Administrator, Purchaser and Mechanic (`vehicles:write`)
   - `PUT /vehicles/{vin}/inspection` — Record the servicing inspection (`Pending`/`Inspecting`/`Passed`/`Failed` + notes) — **Administrator and Mechanic only** (`vehicles:service`). The ordinary `PUT /vehicles/{vin}` cannot change it — nor which convoy the vehicle is on, which only `/convoys/{id}/vehicles/{vin}` changes
 - `GET|POST /people` — Volunteers & drivers; `DELETE /people/{id}` **erases** a volunteer (their personal data is deleted; past records show "Former volunteer"), refused with 409 while they are crewing a convoy that has not arrived or a vehicle whose load is not yet finished
   - `PUT /people/{id}/login` — Link the login (token subject) a volunteer signs in with — **Administrator only** (`people:write`); 204, 404, or 409 when the login already belongs to another volunteer. An Administrator may link their own login, so the first link can be made
@@ -262,8 +262,8 @@ Core resource endpoints:
   - `PUT /receivers/{ref}/status` — Register, suspend or expire a receiver — **Administrator only** (`receivers:register`); narrower than `receivers:write`, so the Ground Officer who records a receiver cannot grant its registration. `GET /receivers/{ref}/usage` (same policy) lists the box and live-convoy ids a change touches, never an address
   - `GET|PUT /receivers/{ref}/detail` — **GroundOfficer only**: delivery address + contact
 - `GET|POST /boxes` — Packing containers
-  - `GET|POST|DELETE /boxes/{id}/items` — Item inventory
-  - `POST /boxes/{id}/validate` — Lock box weight and optional dimensions
+  - `GET|POST|DELETE /boxes/{id}/items` — Item inventory. An item names its **category** and may carry a quantity, a value in pounds with its source (`Donor` or `Estimate`), an expiry date and a commodity code of its own. `POST` answers `200` with `{ itemId, warnings }`: a not-carried or already-expired item is accepted and warned about, and a short-dated one warns. Reads carry the category name, `isNotCarried` and `shelfLife` (`Fine`, `Short`, `Expired`)
+  - `POST /boxes/{id}/validate` — Lock box weight and optional dimensions. **Refused with `409 box-has-expired-items`** while an item that has already expired is in the box
   - `POST|GET|DELETE /boxes/{id}/qr-code` — Issue / read / revoke the box's QR label (`boxes:write` to issue and revoke, `boxes:read` to read)
   - `GET /boxes/{id}/qr-code/image` (`?format=svg\|png`) — The QR image alone (`boxes:read`)
   - `GET /boxes/{id}/label` — Printable SVG label: QR + box number, no receiver detail (`boxes:read`)
@@ -274,9 +274,12 @@ Core resource endpoints:
   - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo assignment
   - `GET /manifests/{id}/elo` — The French logistics envelope for this vehicle: its `jeton`, `numeroDossier` and `statut`. **Read-only** — an envelope is requested by approving the manifest, never by a `POST` here — and `404` until the Customs Worker has obtained one (`manifests:read`)
   - `GET /manifests/{id}/elo/document` — The barcode PDF a driver presents at the French Smart Border, streamed through the authenticated API rather than as a blob URL (`manifests:read`)
-  - `GET /manifests/{id}/ens/filing-sheet` — Everything an **ICS2 Entry Summary Declaration** asks for that Freedom can know, plus a `missing` list of what it cannot. Deliberately carries **no delivery address**: the filer is a Ground Officer and holds it already (`manifests:read`)
+  - `GET /manifests/{id}/ens/filing-sheet` — Everything an **ICS2 Entry Summary Declaration** asks for that Freedom can know, plus a `missing` list of what it cannot. An item is declared under its own commodity code, or else the EU code of its category; a gap names the category to fix. Deliberately carries **no delivery address**: the filer is a Ground Officer and holds it already (`manifests:read`)
   - `GET|PUT|DELETE /manifests/{id}/ens` — The ENS MRN this crossing was accepted under. **Recorded, not submitted** — Freedom does not talk to ICS2 — and **write-once**: `DELETE` withdraws it (keeping it) so a refiled declaration can be recorded. `PUT`/`DELETE` are `manifests:declare`, Administrator and Dispatcher
   - `POST /manifests/{id}/{transition}` — State transitions: `propose`, `approve`, `reject`, `prepare`, `ready`, `depart`, `deliver`, `lose`, `return`. **`approve` is Administrator-only and hands off three things at once**: the UK Goods Movement Reference, the document that travels with the vehicle, and the French logistics envelope. It is **refused with 409 unless an ENS MRN has been recorded**, and refused *before* anything is frozen
+- `GET|POST /categories` — The categories donated items are sorted into, each with its hazard class, whether it is sensitive or not carried, how close to expiry an item counts as short-dated, and the customs code it maps to per authority (`ukCode`, `euCode`, `uaCode`). Reads are `categories:read` (every operational role); writes are **Administrator only** (`categories:write`)
+  - `GET|PUT /categories/{id}` — Read a category, or change its names, flags and shelf-life rule. A built-in category stays built in
+  - `PUT /categories/{id}/codes/{UK|EU|UA}` — Map a category to the code an authority wants; a `null` code clears it. Six to ten digits
 - `GET|POST /locations` — Distribution hubs (garages/warehouses); writes are **Administrator only**
   - `PUT|DELETE /locations/{id}` — Rename or remove a location
   - `GET|POST /locations/{id}/bays` — Bays within a location (code unique per location, not globally)
@@ -286,7 +289,7 @@ Core resource endpoints:
 
 See `docs/local-authentication.md` for the full role/policy matrix.
 
-The **operator UI (`web/`) covers every endpoint above** — all seven slices, every sub-resource
+The **operator UI (`web/`) covers every endpoint above** — all eight slices (the Administrator page for item categories and their customs codes included), every sub-resource
 (convoy route/truck list/crew/insurance, box items/validate/bay, box QR label issue/print/revoke,
 location bays, manifest crew/boxes/weight, the ICS2 declaration a manifest's approval now requires),
 all nine manifest transitions, and the reason-gated receiver-detail flow — with nav and actions
@@ -310,7 +313,7 @@ a label, shows it inline and prints it (a print stylesheet reveals the label alo
 - Sign-in is **Authorization Code + PKCE** against the public Keycloak client `freedom-spa`
   (`iac/tofu/keycloak.tf`); the resulting JWT is sent as `Authorization: Bearer`. The API is
   unchanged — still a pure JWT resource server.
-- Nav and actions are gated by the same 22-policy matrix the API enforces
+- Nav and actions are gated by the same 24-policy matrix the API enforces
   (`docs/local-authentication.md`); the API remains the enforcement point. Receiver street
   addresses are never rendered on any print/verification view.
 

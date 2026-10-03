@@ -11,6 +11,8 @@ import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { INSPECTION_STATUS_LABELS } from './inspection';
 
+const poundsFormat = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+
 export function VehicleDetailPage(): JSX.Element {
   const { vin = '' } = useParams();
   const navigate = useNavigate();
@@ -138,6 +140,17 @@ export function VehicleDetailPage(): JSX.Element {
           <dd>{vehicle.purchaserName ?? '—'}</dd>
           <dt>Purchase date</dt>
           <dd>{vehicle.purchaseDate ? vehicle.purchaseDate.slice(0, 10) : '—'}</dd>
+        </dl>
+      </DetailCard>
+
+      <DetailCard title="Value">
+        <dl>
+          <dt>Value</dt>
+          <dd>
+            {vehicle.valueGbp === null
+              ? '—'
+              : `${poundsFormat.format(vehicle.valueGbp)} (${vehicle.valueSource === 'Purchased' ? 'price paid' : 'estimate'})`}
+          </dd>
         </dl>
       </DetailCard>
 

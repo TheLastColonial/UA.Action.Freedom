@@ -31,6 +31,8 @@ Background:
 Scenario: A validated box travels on an approved manifest and is delivered
     Given I am authenticated as "operator"
     And a convoy exists with an insured vehicle on its published truck list
+    And a category exists
+    And the category maps to the EU code "300490"
     And a manifest reference that is not yet used
 
     # Packed, filled and weighed. Validation is the trust boundary: afterwards the box is
@@ -43,9 +45,9 @@ Scenario: A validated box travels on an approved manifest and is delivered
     Given I remember the box
     When I POST "/boxes/{id}/items" on the remembered box with body:
         """
-        { "description": "Blankets", "properties": { "size": "double" } }
+        { "description": "Blankets", "categoryId": {category}, "properties": { "size": "double" } }
         """
-    Then the response status is 204
+    Then the response status is 200
     When I POST "/boxes/{id}/validate" on the remembered box weighing 12
     Then the response status is 204
 
@@ -68,6 +70,9 @@ Scenario: A validated box travels on an approved manifest and is delivered
     When I GET the filing sheet for the remembered manifest
     Then the response status is 200
     And the filing sheet declares a mode of transport and a gross mass
+
+    # The item carries no code of its own, so the category supplies it (ADR 0014).
+    And the filing sheet declares commodity code "300490" for "Blankets"
     And the filing sheet withholds the delivery address and says where to get it
 
     # Approving before the declaration exists is refused, and nothing is frozen — the one check

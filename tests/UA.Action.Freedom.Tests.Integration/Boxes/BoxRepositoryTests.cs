@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Data.Boxes;
+using UA.Action.Freedom.Domain;
 using static UA.Action.Freedom.Tests.Integration.SqlTestDatabase;
 
 namespace UA.Action.Freedom.Tests.Integration.Boxes;
@@ -144,13 +145,15 @@ public class BoxRepositoryTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var id = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
 
         try
         {
             var item = new BoxItemReadModel(
                 Guid.NewGuid(),
                 "Blankets",
-                new Dictionary<string, string> { ["size"] = "double", ["condition"] = "new" });
+                new Dictionary<string, string> { ["size"] = "double", ["condition"] = "new" },
+                category);
 
             await repository.AddItemAsync(id, item, cancellationToken);
 
@@ -163,6 +166,112 @@ public class BoxRepositoryTests
         finally
         {
             await RemoveBoxAsync(id);
+            await RemoveCategoryAsync(category);
+        }
+    }
+
+    [Fact]
+    public async Task Round_trips_an_items_category_quantity_value_expiry_and_code()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
+
+        try
+        {
+            var item = new BoxItemReadModel(
+                Guid.NewGuid(), "Paracetamol", new Dictionary<string, string>(), category,
+                CommodityCode: "30049000", Quantity: 40, ValueGbp: 62.50m, ValueSource: ValueSource.Estimate,
+                ExpiresOn: new DateOnly(2027, 3, 31));
+
+            await repository.AddItemAsync(id, item, cancellationToken);
+
+            (await repository.ListItemsAsync(id, cancellationToken)).Should().ContainSingle().Which.Should().BeEquivalentTo(item);
+        }
+        finally
+        {
+            await RemoveBoxAsync(id);
+            await RemoveCategoryAsync(category);
+        }
+    }
+
+    [Fact]
+    public async Task An_item_with_no_value_quantity_expiry_or_code_reads_back_with_them_empty()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
+
+        try
+        {
+            await repository.AddItemAsync(
+                id, new BoxItemReadModel(Guid.NewGuid(), "Bandages", new Dictionary<string, string>(), category),
+                cancellationToken);
+
+            var stored = (await repository.ListItemsAsync(id, cancellationToken)).Should().ContainSingle().Subject;
+            stored.Quantity.Should().BeNull();
+            stored.ValueGbp.Should().BeNull();
+            stored.ValueSource.Should().BeNull();
+            stored.ExpiresOn.Should().BeNull();
+            stored.CommodityCode.Should().BeNull();
+        }
+        finally
+        {
+            await RemoveBoxAsync(id);
+            await RemoveCategoryAsync(category);
+        }
+    }
+
+    [Fact]
+    public async Task A_value_without_its_source_is_refused_by_the_table()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
+
+        try
+        {
+            var act = () => repository.AddItemAsync(
+                id,
+                new BoxItemReadModel(
+                    Guid.NewGuid(), "Bandages", new Dictionary<string, string>(), category, ValueGbp: 5m),
+                cancellationToken);
+
+            await act.Should().ThrowAsync<Microsoft.Data.SqlClient.SqlException>();
+        }
+        finally
+        {
+            await RemoveBoxAsync(id);
+            await RemoveCategoryAsync(category);
+        }
+    }
+
+    [Fact]
+    public async Task Reads_an_item_whose_stored_properties_hold_a_JSON_number()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
+
+        try
+        {
+            await ExecuteAsync(
+                "INSERT INTO dbo.BoxItem (Id, BoxId, CategoryId, Description, PropertiesJson) VALUES (NEWID(), @id, @category, 'Seeded', '{\"quantity\":10}')",
+                ("@id", id),
+                ("@category", category));
+
+            var packed = await repository.ListItemsAsync(id, cancellationToken);
+
+            packed.Should().ContainSingle().Which.Properties.Should().ContainKey("quantity");
+        }
+        finally
+        {
+            await RemoveBoxAsync(id);
+            await RemoveCategoryAsync(category);
         }
     }
 
@@ -172,11 +281,13 @@ public class BoxRepositoryTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var id = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
 
         try
         {
             await repository.AddItemAsync(
-                id, new BoxItemReadModel(Guid.NewGuid(), "Bandages", new Dictionary<string, string>()), cancellationToken);
+                id, new BoxItemReadModel(Guid.NewGuid(), "Bandages", new Dictionary<string, string>(), category),
+                cancellationToken);
 
             var packed = await repository.ListItemsAsync(id, cancellationToken);
 
@@ -185,6 +296,7 @@ public class BoxRepositoryTests
         finally
         {
             await RemoveBoxAsync(id);
+            await RemoveCategoryAsync(category);
         }
     }
 
@@ -195,10 +307,11 @@ public class BoxRepositoryTests
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var first = await repository.AddAsync(ANewBox(), cancellationToken);
         var second = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
 
         try
         {
-            var item = new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>());
+            var item = new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>(), category);
             await repository.AddItemAsync(first, item, cancellationToken);
 
             // Naming the wrong box must not empty it, nor report success.
@@ -212,6 +325,7 @@ public class BoxRepositoryTests
         {
             await RemoveBoxAsync(first);
             await RemoveBoxAsync(second);
+            await RemoveCategoryAsync(category);
         }
     }
 
@@ -221,13 +335,47 @@ public class BoxRepositoryTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var id = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
 
-        await repository.AddItemAsync(
-            id, new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>()), cancellationToken);
+        try
+        {
+            await repository.AddItemAsync(
+                id, new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>(), category),
+                cancellationToken);
 
-        (await repository.DeleteAsync(id, cancellationToken)).Should().BeTrue();
+            (await repository.DeleteAsync(id, cancellationToken)).Should().BeTrue();
 
-        // The cascade is what stops unpacked items outliving the box they were in.
-        (await repository.ListItemsAsync(id, cancellationToken)).Should().BeEmpty();
+            // The cascade is what stops unpacked items outliving the box they were in.
+            (await repository.ListItemsAsync(id, cancellationToken)).Should().BeEmpty();
+        }
+        finally
+        {
+            await RemoveCategoryAsync(category);
+        }
+    }
+
+    [Fact]
+    public async Task A_category_that_still_has_items_cannot_be_deleted()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
+
+        try
+        {
+            await repository.AddItemAsync(
+                id, new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>(), category),
+                cancellationToken);
+
+            var act = () => RemoveCategoryAsync(category);
+
+            await act.Should().ThrowAsync<Microsoft.Data.SqlClient.SqlException>();
+        }
+        finally
+        {
+            await RemoveBoxAsync(id);
+            await RemoveCategoryAsync(category);
+        }
     }
 }

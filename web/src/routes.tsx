@@ -6,6 +6,7 @@ import { RequireAuth } from './components/RequireAuth';
 import { RouteError } from './components/RouteError';
 import { Dashboard } from './pages/Dashboard';
 import { boxRoutes } from './pages/boxes/routes';
+import { categoryRoutes } from './pages/categories/routes';
 import { convoyRoutes } from './pages/convoys/routes';
 import { locationRoutes } from './pages/locations/routes';
 import { manifestRoutes } from './pages/manifests/routes';
@@ -30,6 +31,7 @@ export const routes: RouteObject[] = [
           { path: 'manifests', children: manifestRoutes },
           { path: 'receivers', children: receiverRoutes },
           { path: 'locations', children: locationRoutes },
+          { path: 'categories', children: categoryRoutes },
           { path: '*', element: <NotFound /> },
         ],
       },

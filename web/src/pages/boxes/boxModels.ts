@@ -5,6 +5,7 @@ import type {
   AssignBoxBayRequest,
   BoxReadModel,
   CreateBoxRequest,
+  ItemValueSource,
   UpdateBoxRequest,
   ValidateBoxRequest,
 } from '../../api/schemas/boxes';
@@ -59,11 +60,26 @@ export interface ItemPropertyRow {
 
 export interface AddItemFormValues {
   description: string;
+  categoryId: string;
+  quantity: string;
+  valueGbp: string;
+  valueSource: '' | ItemValueSource;
+  expiresOn: string;
+  commodityCode: string;
   properties: ItemPropertyRow[];
 }
 
 export function emptyAddItemForm(): AddItemFormValues {
-  return { description: '', properties: [] };
+  return {
+    description: '',
+    categoryId: '',
+    quantity: '',
+    valueGbp: '',
+    valueSource: '',
+    expiresOn: '',
+    commodityCode: '',
+    properties: [],
+  };
 }
 
 export function addItemFormToRequest(values: AddItemFormValues): AddBoxItemRequest {
@@ -74,24 +90,82 @@ export function addItemFormToRequest(values: AddItemFormValues): AddBoxItemReque
       properties[key] = row.value.trim();
     }
   }
-  return { description: values.description.trim(), properties };
+
+  const request: AddBoxItemRequest = {
+    description: values.description.trim(),
+    properties,
+    categoryId: Number(values.categoryId),
+  };
+
+  const quantity = trimmed(values.quantity);
+  if (quantity !== undefined) request.quantity = Number(quantity);
+  const valueGbp = trimmed(values.valueGbp);
+  if (valueGbp !== undefined && values.valueSource !== '') {
+    request.valueGbp = Number(valueGbp);
+    request.valueSource = values.valueSource;
+  }
+  const expiresOn = trimmed(values.expiresOn);
+  if (expiresOn !== undefined) request.expiresOn = expiresOn;
+  const commodityCode = trimmed(values.commodityCode);
+  if (commodityCode !== undefined) request.commodityCode = commodityCode;
+
+  return request;
 }
 
-export const addItemFormSchema = z.object({
-  description: z
-    .string()
-    .trim()
-    .min(1, 'Describe the item')
-    .max(400, 'Description must be 400 characters or fewer'),
-  properties: z
-    .array(
-      z.object({
-        key: z.string().max(100, 'Property names must be 100 characters or fewer'),
-        value: z.string(),
-      }),
-    )
-    .max(50, 'An item may carry at most 50 properties'),
-});
+export const addItemFormSchema = z
+  .object({
+    description: z
+      .string()
+      .trim()
+      .min(1, 'Describe the item')
+      .max(400, 'Description must be 400 characters or fewer'),
+    categoryId: z.string().min(1, 'Choose a category'),
+    quantity: z
+      .string()
+      .refine(
+        (raw) => raw.trim().length === 0 || (/^\d+$/.test(raw.trim()) && Number(raw.trim()) >= 1),
+        'Quantity must be a whole number of 1 or more',
+      ),
+    valueGbp: z
+      .string()
+      .refine(
+        (raw) => raw.trim().length === 0 || /^\d+(\.\d{1,2})?$/.test(raw.trim()),
+        'Value must be an amount in pounds, with up to 2 decimal places',
+      ),
+    valueSource: z.enum(['', 'Donor', 'Estimate']),
+    expiresOn: z.string(),
+    commodityCode: z
+      .string()
+      .refine(
+        (raw) => raw.trim().length === 0 || /^\d{6,10}$/.test(raw.trim()),
+        'Commodity code must be 6 to 10 digits',
+      ),
+    properties: z
+      .array(
+        z.object({
+          key: z.string().max(100, 'Property names must be 100 characters or fewer'),
+          value: z.string(),
+        }),
+      )
+      .max(50, 'An item may carry at most 50 properties'),
+  })
+  .superRefine((values, context) => {
+    const hasValue = values.valueGbp.trim().length > 0;
+    if (hasValue && values.valueSource === '') {
+      context.addIssue({
+        code: 'custom',
+        path: ['valueSource'],
+        message: 'Say whether the donor gave the value or it is an estimate',
+      });
+    }
+    if (!hasValue && values.valueSource !== '') {
+      context.addIssue({
+        code: 'custom',
+        path: ['valueGbp'],
+        message: 'Enter the value this source describes',
+      });
+    }
+  });
 
 // ---- Validate a box ----------------------------------------------------
 

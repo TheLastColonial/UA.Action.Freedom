@@ -43,6 +43,7 @@ public class BoxEndpointTests
     {
         description = "Blankets",
         properties = new Dictionary<string, string> { ["size"] = "double" },
+        categoryId = InMemoryItemCategoryRepository.OtherId,
     };
 
     [Fact]
@@ -112,7 +113,7 @@ public class BoxEndpointTests
         using var client = api.CreateClient();
 
         (await client.PostAsJsonAsync($"/boxes/{BoxId}/items", AnItemBody(), TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+            .StatusCode.Should().Be(HttpStatusCode.OK);
 
         var validate = await client.PostAsJsonAsync(
             $"/boxes/{BoxId}/validate",
@@ -263,7 +264,8 @@ public class BoxEndpointTests
     [Fact]
     public async Task Nothing_can_be_unpacked_from_a_validated_box()
     {
-        var item = new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>());
+        var item = new BoxItemReadModel(
+            Guid.NewGuid(), "Blankets", new Dictionary<string, string>(), InMemoryItemCategoryRepository.OtherId);
         var boxes = new InMemoryBoxRepository(ABox(validated: true)).WithItem(BoxId, item);
         await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
         using var client = api.CreateClient();
@@ -508,5 +510,188 @@ public class BoxEndpointTests
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         problem.GetProperty("status").GetInt32().Should().Be(400);
         problem.GetProperty("detail").GetString().Should().Contain("GUID");
+    }
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+
+    [Fact]
+    public async Task Packing_an_item_returns_its_identifier_and_no_warnings_for_ordinary_goods()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/items", AnItemBody(), TestContext.Current.CancellationToken);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        body.GetProperty("itemId").GetGuid().Should().Be(boxes.Items(BoxId).Single().Id);
+        body.GetProperty("warnings").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task An_item_keeps_its_category_quantity_value_expiry_and_code_and_reads_back_with_them()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+        var expiresOn = Today.AddDays(400).ToString("yyyy-MM-dd");
+
+        var added = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/items",
+            new
+            {
+                description = "Paracetamol",
+                categoryId = InMemoryItemCategoryRepository.MedicineId,
+                quantity = 40,
+                valueGbp = 62.5m,
+                valueSource = "Estimate",
+                expiresOn,
+                commodityCode = "30049000",
+            },
+            TestContext.Current.CancellationToken);
+        added.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var items = await client.GetFromJsonAsync<JsonElement>(
+            $"/boxes/{BoxId}/items", TestContext.Current.CancellationToken);
+
+        var packed = items.EnumerateArray().Should().ContainSingle().Subject;
+        packed.GetProperty("categoryId").GetInt32().Should().Be(InMemoryItemCategoryRepository.MedicineId);
+        packed.GetProperty("categoryNameEn").GetString().Should().Be("Medicine");
+        packed.GetProperty("quantity").GetInt32().Should().Be(40);
+        packed.GetProperty("valueGbp").GetDecimal().Should().Be(62.5m);
+        packed.GetProperty("valueSource").GetString().Should().Be("Estimate");
+        packed.GetProperty("expiresOn").GetString().Should().Be(expiresOn);
+        packed.GetProperty("commodityCode").GetString().Should().Be("30049000");
+        packed.GetProperty("shelfLife").GetString().Should().Be("Fine");
+        packed.GetProperty("isNotCarried").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_item_within_its_category_short_dated_window_reads_back_as_short()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/items",
+            new
+            {
+                description = "Paracetamol",
+                categoryId = InMemoryItemCategoryRepository.MedicineId,
+                expiresOn = Today.AddDays(30).ToString("yyyy-MM-dd"),
+            },
+            TestContext.Current.CancellationToken);
+
+        var items = await client.GetFromJsonAsync<JsonElement>(
+            $"/boxes/{BoxId}/items", TestContext.Current.CancellationToken);
+
+        items[0].GetProperty("shelfLife").GetString().Should().Be("Short");
+    }
+
+    [Fact]
+    public async Task Packing_an_item_the_convoy_will_not_carry_is_accepted_with_a_warning()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/items",
+            new { description = "Camping gas", categoryId = InMemoryItemCategoryRepository.GasId },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        body.GetProperty("warnings").EnumerateArray().Select(w => w.GetString()).Should().Equal("NotCarried");
+        boxes.Items(BoxId).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Packing_an_item_that_has_already_expired_is_accepted_with_a_warning()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/items",
+            new
+            {
+                description = "Paracetamol",
+                categoryId = InMemoryItemCategoryRepository.MedicineId,
+                expiresOn = Today.AddDays(-1).ToString("yyyy-MM-dd"),
+            },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        body.GetProperty("warnings").EnumerateArray().Select(w => w.GetString()).Should().Equal("Expired");
+    }
+
+    [Fact]
+    public async Task An_item_under_a_category_that_does_not_exist_is_unprocessable()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/items",
+            new { description = "Mystery", categoryId = 999 },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        boxes.Items(BoxId).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("{\"description\":\"Blankets\"}")]
+    [InlineData("{\"description\":\"Blankets\",\"categoryId\":1,\"valueGbp\":10}")]
+    [InlineData("{\"description\":\"Blankets\",\"categoryId\":1,\"valueSource\":\"Donor\"}")]
+    [InlineData("{\"description\":\"Blankets\",\"categoryId\":1,\"valueGbp\":10,\"valueSource\":\"Purchased\"}")]
+    [InlineData("{\"description\":\"Blankets\",\"categoryId\":1,\"valueGbp\":-1,\"valueSource\":\"Donor\"}")]
+    [InlineData("{\"description\":\"Blankets\",\"categoryId\":1,\"quantity\":0}")]
+    [InlineData("{\"description\":\"Blankets\",\"categoryId\":1,\"commodityCode\":\"1234\"}")]
+    public async Task An_item_without_a_category_or_with_a_malformed_value_quantity_or_code_is_rejected(string body)
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsync(
+            $"/boxes/{BoxId}/items",
+            new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        boxes.Items(BoxId).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_box_with_an_expired_item_cannot_be_validated_until_it_comes_out()
+    {
+        var expired = new BoxItemReadModel(
+            Guid.NewGuid(), "Paracetamol", new Dictionary<string, string>(),
+            InMemoryItemCategoryRepository.MedicineId, ExpiresOn: Today.AddDays(-1));
+        var boxes = new InMemoryBoxRepository(ABox()).WithItem(BoxId, expired);
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var refused = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/validate", new { weightKg = 24 }, TestContext.Current.CancellationToken);
+
+        refused.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var problem = await refused.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("type").GetString().Should().Be("box-has-expired-items");
+        boxes.Box(BoxId)!.Validated.Should().BeFalse();
+
+        (await client.DeleteAsync($"/boxes/{BoxId}/items/{expired.Id}", TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        (await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/validate", new { weightKg = 24 }, TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 }

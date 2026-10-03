@@ -46,5 +46,6 @@ test('the sections are nested under the Dashboard, one level down', async () => 
     'Manifests',
     'Receivers',
     'Locations',
+    'Categories',
   ]);
 });

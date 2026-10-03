@@ -11,12 +11,14 @@ import {
   post201,
   post204,
   postCreate,
+  postJson,
   put204,
 } from './http';
 import { ApiNotFound } from './problem';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
 import {
+  addBoxItemResultSchema,
   boxBayAssignmentReadModelSchema,
   boxItemReadModelSchema,
   boxQrCodeReadModelSchema,
@@ -24,6 +26,7 @@ import {
 } from './schemas/boxes';
 import type {
   AddBoxItemRequest,
+  AddBoxItemResult,
   AssignBoxBayRequest,
   BoxBayAssignmentReadModel,
   BoxItemReadModel,
@@ -64,8 +67,8 @@ export function fetchBoxItems(id: number): Promise<readonly BoxItemReadModel[] |
   return getCollection(`${idPath(id)}/items`, boxItemReadModelSchema);
 }
 
-export function addBoxItem(id: number, body: AddBoxItemRequest): Promise<void> {
-  return post204(`${idPath(id)}/items`, body);
+export function addBoxItem(id: number, body: AddBoxItemRequest): Promise<AddBoxItemResult> {
+  return postJson(`${idPath(id)}/items`, body, addBoxItemResultSchema);
 }
 
 export function removeBoxItem(id: number, itemId: string): Promise<void> {
@@ -168,7 +171,9 @@ export function useDeleteBox(): UseMutationResult<void, Error, number> {
   });
 }
 
-export function useAddBoxItem(id: number): UseMutationResult<void, Error, AddBoxItemRequest> {
+export function useAddBoxItem(
+  id: number,
+): UseMutationResult<AddBoxItemResult, Error, AddBoxItemRequest> {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: AddBoxItemRequest) => addBoxItem(id, body),

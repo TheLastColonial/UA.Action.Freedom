@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Domain;
 
@@ -21,6 +22,8 @@ public class BoxHandlerTests
     private const int BoxId = 7;
 
     private const int LocationId = 3;
+
+    private const int CategoryId = 4;
 
     private static readonly Guid Loader = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
 
@@ -50,6 +53,19 @@ public class BoxHandlerTests
         await repository.Received(1).AddAsync(
             Arg.Is<BoxReadModel>(box => box.WeightKg == 0 && !box.Validated),
             Arg.Any<CancellationToken>());
+    }
+
+    private static ItemCategoryReadModel ACategory(
+        bool isNotCarried = false, int? warnWithinDays = null) => new(
+        CategoryId, "Medicine", "", IsFixed: true, HazardClass: null, IsSensitive: false, isNotCarried, warnWithinDays);
+
+    private static IItemCategoryRepository ACategoryRepository(ItemCategoryReadModel? category = null)
+    {
+        var categories = Substitute.For<IItemCategoryRepository>();
+        var known = category ?? ACategory();
+        categories.GetByIdAsync(known.Id, Arg.Any<CancellationToken>()).Returns(known);
+        categories.ListAsync(Arg.Any<CancellationToken>()).Returns(new List<ItemCategoryReadModel> { known });
+        return categories;
     }
 
     private static IReceiverRepository AReceiverRepository(Guid receiverRef, ReceiverStatus? status)
@@ -247,12 +263,12 @@ public class BoxHandlerTests
     {
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
-        var handler = new AddBoxItemHandler(repository);
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository());
 
-        var outcome = await handler.HandleAsync(
-            new AddBoxItemCommand(BoxId, "Blankets", new Dictionary<string, string>()), CancellationToken.None);
+        var result = await handler.HandleAsync(
+            new AddBoxItemCommand(BoxId, "Blankets", new Dictionary<string, string>(), CategoryId), CancellationToken.None);
 
-        outcome.Should().Be(AddBoxItemOutcome.AlreadyValidated);
+        result.Outcome.Should().Be(AddBoxItemOutcome.AlreadyValidated);
         await repository.DidNotReceive().AddItemAsync(
             Arg.Any<int>(), Arg.Any<BoxItemReadModel>(), Arg.Any<CancellationToken>());
     }
@@ -277,13 +293,13 @@ public class BoxHandlerTests
     {
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
-        var handler = new AddBoxItemHandler(repository);
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository());
 
-        var outcome = await handler.HandleAsync(
-            new AddBoxItemCommand(BoxId, "Blankets", new Dictionary<string, string> { ["size"] = "double" }),
+        var result = await handler.HandleAsync(
+            new AddBoxItemCommand(BoxId, "Blankets", new Dictionary<string, string> { ["size"] = "double" }, CategoryId),
             CancellationToken.None);
 
-        outcome.Should().Be(AddBoxItemOutcome.Added);
+        result.Outcome.Should().Be(AddBoxItemOutcome.Added);
         await repository.Received(1).AddItemAsync(
             BoxId,
             Arg.Is<BoxItemReadModel>(item =>
@@ -335,7 +351,7 @@ public class BoxHandlerTests
     {
         var repository = Substitute.For<IBoxRepository>();
         repository.ExistsAsync(BoxId, Arg.Any<CancellationToken>()).Returns(false);
-        var handler = new ListBoxItemsHandler(repository);
+        var handler = new ListBoxItemsHandler(repository, ACategoryRepository());
 
         var items = await handler.HandleAsync(new ListBoxItemsQuery(BoxId), CancellationToken.None);
 
@@ -353,5 +369,144 @@ public class BoxHandlerTests
         await handler.HandleAsync(new ListBoxesQuery(Page: 0, PageSize: 100_000), CancellationToken.None);
 
         await repository.Received(1).ListAsync(1, 50, Arg.Any<CancellationToken>());
+    }
+
+    private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    private static BoxItemReadModel AnItem(DateOnly? expiresOn = null) => new(
+        Guid.NewGuid(), "Paracetamol", new Dictionary<string, string>(), CategoryId, ExpiresOn: expiresOn);
+
+    [Fact]
+    public async Task An_item_cannot_be_packed_under_a_category_that_does_not_exist()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        var categories = Substitute.For<IItemCategoryRepository>();
+        var handler = new AddBoxItemHandler(repository, categories);
+
+        var result = await handler.HandleAsync(
+            new AddBoxItemCommand(BoxId, "Gas canister", new Dictionary<string, string>(), CategoryId),
+            CancellationToken.None);
+
+        result.Outcome.Should().Be(AddBoxItemOutcome.CategoryNotFound);
+        await repository.DidNotReceive().AddItemAsync(
+            Arg.Any<int>(), Arg.Any<BoxItemReadModel>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task An_item_the_convoy_will_not_carry_is_packed_with_a_warning()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(ACategory(isNotCarried: true)));
+
+        var result = await handler.HandleAsync(
+            new AddBoxItemCommand(BoxId, "Gas canister", new Dictionary<string, string>(), CategoryId),
+            CancellationToken.None);
+
+        result.Outcome.Should().Be(AddBoxItemOutcome.Added);
+        result.Warnings.Should().Equal(ItemWarning.NotCarried);
+        await repository.Received(1).AddItemAsync(
+            BoxId, Arg.Is<BoxItemReadModel>(item => item.Id == result.ItemId), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task An_already_expired_item_is_packed_so_the_loader_can_see_it_but_it_warns()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(ACategory(warnWithinDays: 180)));
+
+        var result = await handler.HandleAsync(
+            new AddBoxItemCommand(
+                BoxId, "Paracetamol", new Dictionary<string, string>(), CategoryId, ExpiresOn: Today.AddDays(-1)),
+            CancellationToken.None);
+
+        result.Outcome.Should().Be(AddBoxItemOutcome.Added);
+        result.Warnings.Should().Equal(ItemWarning.Expired);
+    }
+
+    [Fact]
+    public async Task A_short_dated_item_warns_by_its_categorys_own_threshold()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(ACategory(warnWithinDays: 180)));
+
+        var short_ = await handler.HandleAsync(
+            new AddBoxItemCommand(
+                BoxId, "Paracetamol", new Dictionary<string, string>(), CategoryId, ExpiresOn: Today.AddDays(100)),
+            CancellationToken.None);
+        var fine = await handler.HandleAsync(
+            new AddBoxItemCommand(
+                BoxId, "Paracetamol", new Dictionary<string, string>(), CategoryId, ExpiresOn: Today.AddDays(400)),
+            CancellationToken.None);
+
+        short_.Warnings.Should().Equal(ItemWarning.ShortShelfLife);
+        fine.Warnings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_box_holding_an_expired_item_cannot_be_validated()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        repository.ListItemsAsync(BoxId, Arg.Any<CancellationToken>())
+            .Returns(new List<BoxItemReadModel> { AnItem(Today.AddDays(30)), AnItem(Today.AddDays(-1)) });
+        var handler = new ValidateBoxHandler(repository);
+
+        var outcome = await handler.HandleAsync(new ValidateBoxCommand(BoxId, Loader, 24), CancellationToken.None);
+
+        outcome.Should().Be(ValidateBoxOutcome.HasExpiredItems);
+        await repository.DidNotReceive().ValidateAsync(
+            Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(),
+            Arg.Any<decimal?>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task An_item_that_expires_today_does_not_block_validation()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.ListItemsAsync(BoxId, Arg.Any<CancellationToken>())
+            .Returns(new List<BoxItemReadModel> { AnItem(Today), AnItem() });
+        repository.ValidateAsync(
+                BoxId, Loader, 24, Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(),
+                Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        var handler = new ValidateBoxHandler(repository);
+
+        var outcome = await handler.HandleAsync(new ValidateBoxCommand(BoxId, Loader, 24), CancellationToken.None);
+
+        outcome.Should().Be(ValidateBoxOutcome.Validated);
+    }
+
+    [Fact]
+    public async Task A_box_already_validated_says_so_even_if_an_item_has_since_expired()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
+        repository.ListItemsAsync(BoxId, Arg.Any<CancellationToken>())
+            .Returns(new List<BoxItemReadModel> { AnItem(Today.AddDays(-1)) });
+        var handler = new ValidateBoxHandler(repository);
+
+        var outcome = await handler.HandleAsync(new ValidateBoxCommand(BoxId, Loader, 24), CancellationToken.None);
+
+        outcome.Should().Be(ValidateBoxOutcome.AlreadyValidated);
+    }
+
+    [Fact]
+    public async Task Listing_the_contents_reads_each_item_with_what_its_category_says_about_it()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.ExistsAsync(BoxId, Arg.Any<CancellationToken>()).Returns(true);
+        repository.ListItemsAsync(BoxId, Arg.Any<CancellationToken>())
+            .Returns(new List<BoxItemReadModel> { AnItem(Today.AddDays(-2)), AnItem(Today.AddDays(30)), AnItem() });
+        var handler = new ListBoxItemsHandler(repository, ACategoryRepository(ACategory(warnWithinDays: 180, isNotCarried: true)));
+
+        var items = await handler.HandleAsync(new ListBoxItemsQuery(BoxId), CancellationToken.None);
+
+        items!.Select(item => item.ShelfLife).Should().Equal(
+            ShelfLifeStatus.Expired, ShelfLifeStatus.Short, ShelfLifeStatus.Fine);
+        items.Should().OnlyContain(item => item.CategoryNameEn == "Medicine" && item.IsNotCarried);
     }
 }

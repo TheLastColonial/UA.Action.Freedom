@@ -4,6 +4,7 @@ import {
   addItemFormSchema,
   addItemFormToRequest,
   boxFormToRequest,
+  emptyAddItemForm,
   validateFormSchema,
   validateFormToRequest,
 } from './boxModels';
@@ -19,10 +20,16 @@ describe('boxFormToRequest', () => {
   });
 });
 
+const filledItem = {
+  ...emptyAddItemForm(),
+  description: '  Blankets ',
+  categoryId: '4',
+};
+
 describe('addItemFormToRequest', () => {
   it('folds property rows into an object and drops rows with a blank key', () => {
     const request = addItemFormToRequest({
-      description: '  Blankets ',
+      ...filledItem,
       properties: [
         { key: 'size', value: 'large' },
         { key: '  ', value: 'ignored' },
@@ -31,13 +38,44 @@ describe('addItemFormToRequest', () => {
     expect(request.description).toBe('Blankets');
     expect(request.properties).toEqual({ size: 'large' });
   });
+
+  it('sends the category as a number and omits every empty optional field', () => {
+    const request = addItemFormToRequest(filledItem);
+
+    expect(request).toEqual({ description: 'Blankets', properties: {}, categoryId: 4 });
+  });
+
+  it('coerces the quantity and value and keeps the expiry and the code', () => {
+    const request = addItemFormToRequest({
+      ...filledItem,
+      quantity: ' 40 ',
+      valueGbp: '62.50',
+      valueSource: 'Estimate',
+      expiresOn: '2027-03-31',
+      commodityCode: ' 30049000 ',
+    });
+
+    expect(request).toMatchObject({
+      quantity: 40,
+      valueGbp: 62.5,
+      valueSource: 'Estimate',
+      expiresOn: '2027-03-31',
+      commodityCode: '30049000',
+    });
+  });
 });
 
 describe('addItemFormSchema', () => {
   it('requires a description', () => {
-    const result = addItemFormSchema.safeParse({ description: '   ', properties: [] });
+    const result = addItemFormSchema.safeParse({ ...filledItem, description: '   ' });
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((i) => i.message)).toContain('Describe the item');
+  });
+
+  it('requires a category', () => {
+    const result = addItemFormSchema.safeParse({ ...filledItem, categoryId: '' });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.message)).toContain('Choose a category');
   });
 
   it('rejects more than 50 properties', () => {
@@ -45,11 +83,48 @@ describe('addItemFormSchema', () => {
       key: `k${String(i)}`,
       value: 'v',
     }));
-    const result = addItemFormSchema.safeParse({ description: 'x', properties });
+    const result = addItemFormSchema.safeParse({ ...filledItem, properties });
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((i) => i.message)).toContain(
       'An item may carry at most 50 properties',
     );
+  });
+
+  it('asks for the source of a value, and the value of a source', () => {
+    const noSource = addItemFormSchema.safeParse({ ...filledItem, valueGbp: '10' });
+    expect(noSource.error?.issues.map((i) => i.path.join('.'))).toContain('valueSource');
+
+    const noValue = addItemFormSchema.safeParse({ ...filledItem, valueSource: 'Donor' });
+    expect(noValue.error?.issues.map((i) => i.path.join('.'))).toContain('valueGbp');
+  });
+
+  it.each(['0', '1.5', 'abc', '-3'])('rejects a quantity of %s', (quantity) => {
+    expect(addItemFormSchema.safeParse({ ...filledItem, quantity }).success).toBe(false);
+  });
+
+  it.each(['10.555', '-1', 'ten'])('rejects a value of %s', (valueGbp) => {
+    const result = addItemFormSchema.safeParse({
+      ...filledItem,
+      valueGbp,
+      valueSource: 'Donor',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it.each(['1234', '12345678901', '30049A'])('rejects a commodity code of %s', (commodityCode) => {
+    expect(addItemFormSchema.safeParse({ ...filledItem, commodityCode }).success).toBe(false);
+  });
+
+  it('accepts a complete item', () => {
+    const result = addItemFormSchema.safeParse({
+      ...filledItem,
+      quantity: '40',
+      valueGbp: '62.5',
+      valueSource: 'Donor',
+      expiresOn: '2027-03-31',
+      commodityCode: '30049000',
+    });
+    expect(result.success).toBe(true);
   });
 });
 

@@ -35,5 +35,7 @@ public sealed record VehicleReadModel(
     InspectionStatus InspectionStatus = InspectionStatus.Pending,
     string? InspectionNotes = null,
     DateTime? HandedOverAt = null,
+    decimal? ValueGbp = null,
+    ValueSource? ValueSource = null,
     string? LastChangedByName = null,
     DateTime? LastChangedAt = null);

@@ -14,6 +14,7 @@ test('an administrator sees a card linking to every operational section', async 
     Manifests: '/manifests',
     Receivers: '/receivers',
     Locations: '/locations',
+    Categories: '/categories',
   };
 
   for (const [name, href] of Object.entries(expected)) {
@@ -31,6 +32,7 @@ test('a ground officer, who can only read receivers, sees only the Receivers car
   await expect.element(screen.getByRole('link', { name: 'Boxes' })).not.toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'Manifests' })).not.toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'Locations' })).not.toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: 'Categories' })).not.toBeInTheDocument();
 });
 
 test('a signed-in user with no roles sees no section cards', async () => {
@@ -44,6 +46,7 @@ test('a signed-in user with no roles sees no section cards', async () => {
     'Manifests',
     'Receivers',
     'Locations',
+    'Categories',
   ]) {
     await expect.element(screen.getByRole('link', { name })).not.toBeInTheDocument();
   }

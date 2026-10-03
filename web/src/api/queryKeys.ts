@@ -49,6 +49,11 @@ export const qk = {
     bay: (id: number) => ['boxes', id, 'bay'] as const,
     bayHistory: (id: number) => ['boxes', id, 'bay', 'history'] as const,
   },
+  categories: {
+    all: ['categories'] as const,
+    list: ['categories', 'list'] as const,
+    detail: (id: number) => ['categories', 'detail', id] as const,
+  },
   locations: {
     all: ['locations'] as const,
     list: (params: PageParams) => ['locations', 'list', params] as const,

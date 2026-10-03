@@ -1,4 +1,5 @@
 using FluentValidation;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Vehicles;
 
@@ -27,6 +28,18 @@ public sealed class CreateVehicleRequestValidator : AbstractValidator<CreateVehi
         RuleFor(r => r.CargoHeightCm).GreaterThanOrEqualTo(0).When(r => r.CargoHeightCm is not null);
         RuleFor(r => r.Transmission).IsInEnum();
         RuleFor(r => r.Fuel).IsInEnum();
+        RuleFor(r => r.ValueGbp).GreaterThanOrEqualTo(0).PrecisionScale(12, 2, ignoreTrailingZeros: true)
+            .When(r => r.ValueGbp is not null);
+        RuleFor(r => r.ValueSource).NotNull()
+            .WithMessage("A value needs its source: Purchased or Estimate.")
+            .When(r => r.ValueGbp is not null);
+        RuleFor(r => r.ValueGbp).NotNull()
+            .WithMessage("A value source needs the value it describes.")
+            .When(r => r.ValueSource is not null);
+        RuleFor(r => r.ValueSource)
+            .Must(source => source is ValueSource.Purchased or ValueSource.Estimate)
+            .WithMessage("A vehicle's value is the price Purchased or an Estimate.")
+            .When(r => r.ValueSource is not null);
     }
 }
 
@@ -58,5 +71,17 @@ public sealed class UpdateVehicleRequestValidator : AbstractValidator<UpdateVehi
         RuleFor(r => r.CargoHeightCm).GreaterThanOrEqualTo(0).When(r => r.CargoHeightCm is not null);
         RuleFor(r => r.Transmission).IsInEnum();
         RuleFor(r => r.Fuel).IsInEnum();
+        RuleFor(r => r.ValueGbp).GreaterThanOrEqualTo(0).PrecisionScale(12, 2, ignoreTrailingZeros: true)
+            .When(r => r.ValueGbp is not null);
+        RuleFor(r => r.ValueSource).NotNull()
+            .WithMessage("A value needs its source: Purchased or Estimate.")
+            .When(r => r.ValueGbp is not null);
+        RuleFor(r => r.ValueGbp).NotNull()
+            .WithMessage("A value source needs the value it describes.")
+            .When(r => r.ValueSource is not null);
+        RuleFor(r => r.ValueSource)
+            .Must(source => source is ValueSource.Purchased or ValueSource.Estimate)
+            .WithMessage("A vehicle's value is the price Purchased or an Estimate.")
+            .When(r => r.ValueSource is not null);
     }
 }

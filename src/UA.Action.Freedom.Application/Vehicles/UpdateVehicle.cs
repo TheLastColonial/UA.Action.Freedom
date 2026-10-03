@@ -22,7 +22,9 @@ public sealed record UpdateVehicleCommand(
     decimal? MaxCargoWeightKg,
     decimal? CargoWidthCm,
     decimal? CargoDepthCm,
-    decimal? CargoHeightCm);
+    decimal? CargoHeightCm,
+    decimal? ValueGbp = null,
+    ValueSource? ValueSource = null);
 
 public enum UpdateVehicleOutcome
 {
@@ -55,7 +57,9 @@ public sealed class UpdateVehicleHandler(IVehicleRepository repository)
                 command.MaxCargoWeightKg,
                 command.CargoWidthCm,
                 command.CargoDepthCm,
-                command.CargoHeightCm),
+                command.CargoHeightCm,
+                ValueGbp: command.ValueGbp,
+                ValueSource: command.ValueSource),
             cancellationToken);
 
         return updated ? UpdateVehicleOutcome.Updated : UpdateVehicleOutcome.NotFound;

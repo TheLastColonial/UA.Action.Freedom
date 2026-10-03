@@ -1,6 +1,7 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Boxes;
 
@@ -182,7 +183,8 @@ public enum ValidateBoxOutcome
 {
     Validated,
     NotFound,
-    AlreadyValidated
+    AlreadyValidated,
+    HasExpiredItems
 }
 
 public sealed class ValidateBoxHandler(IBoxRepository repository)
@@ -190,6 +192,17 @@ public sealed class ValidateBoxHandler(IBoxRepository repository)
 {
     public async Task<ValidateBoxOutcome> HandleAsync(ValidateBoxCommand command, CancellationToken cancellationToken)
     {
+        // A Loader cannot vouch for a box with something already past its date in it: it comes out first (D1).
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var items = await repository.ListItemsAsync(command.Id, cancellationToken);
+
+        if (items.Any(item => ShelfLife.Assess(item.ExpiresOn, ShelfLifeRule.None, today) == ShelfLifeStatus.Expired))
+        {
+            // An already-validated box answers as one: an item that expired since is not a reason to hide that.
+            var existing = await repository.GetByIdAsync(command.Id, cancellationToken);
+            return existing is { Validated: true } ? ValidateBoxOutcome.AlreadyValidated : ValidateBoxOutcome.HasExpiredItems;
+        }
+
         // The validator is the caller's linked person, resolved at the edge from their login — a
         // volunteer on file by construction, so there is nothing here to look up.
         // Conditional on the box not already being validated, so two Loaders checking the same

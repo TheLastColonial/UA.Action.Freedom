@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented.
+Accepted. Implemented by [plan 05](../plans/05-item-classification-value.md), apart from the donor ([plan 06](../plans/06-donors-donations.md)), the value report ([plan 14](../plans/14-outcomes-closing.md)) and the Ukrainian name on the label ([plan 16](../plans/16-box-replacement-label.md)).
 
 ## Context
 
@@ -89,3 +89,29 @@ double-counts ([ADR 0011](0011-attested-boxes-are-replaced-not-edited.md)).
 **The category list is data, and also a vocabulary.** The names are what appear on the label in English and
 Ukrainian ([O17](../domain/decisions.md#o17)), so a translated name is part of a category's definition
 ([Q-label-ukrainian-text](../domain/decisions.md#q-label-ukrainian-text)).
+
+## Implementation notes
+
+Added with [plan 05](../plans/05-item-classification-value.md).
+
+- **A category is two tables.** `dbo.ItemCategory` carries the names (the Ukrainian one starts empty), `IsFixed`, the hazard class, `IsSensitive`,
+  `IsNotCarried` and `WarnWithinDays`; `dbo.CategoryCustomsCode` holds at most one code per authority (UK, EU, UA). The `IsFixed` flag is written only
+  by the seed: no request can make a category built in, and an update cannot change it. The read model is flat, with `ukCode`, `euCode` and `uaCode`.
+- **Reading is for every operational role (`categories:read`); writing is Administrator only (`categories:write`).** The mapping decides what is
+  declared at a border ([O31](../domain/decisions.md#o31)). A Ground Officer and a Mechanic read nothing here.
+- **The shelf-life rule is a number of days, not a fraction.** `ShelfLife.Assess` says `Expired` once the date has passed, `Short` within the
+  category's `WarnWithinDays`, otherwise `Fine`. There is no manufacture date to take a fraction of, so the "one third" and "half or six months"
+  guesses became a window in days per category. **The thresholds are unverified ([D25](../domain/decisions.md#d25))** and live in the data, so an
+  Administrator can change them without a release. The seeded values (medicine 180, food 90) are placeholders.
+- **An item stores what somebody entered; the reading adds what the category says.** `BoxItemReadModel` gains `categoryId`, `quantity`, `valueGbp` with
+  `valueSource`, `expiresOn` and its own `commodityCode`. `ListBoxItemsHandler` adds the category name, `isNotCarried` and the `shelfLife` status at
+  read time, so none of it can go stale in a column. Value and source are both present or both absent, in a `CHECK` and in the validator. An item's
+  source is `Donor` or `Estimate`; a vehicle's is `Purchased` or `Estimate`, because a vehicle is bought and an item is given.
+- **An expired or not-carried item is accepted with a warning; validation is where an expired one stops.** `POST /boxes/{id}/items` answers `200`
+  with `{ itemId, warnings }` (it was `204`). `ValidateBoxHandler` refuses with `409 box-has-expired-items` while one is in the box, unless the box is
+  already validated, which still answers as one. Expiry on the day itself is fine.
+- **The filing sheet declares the item's code, else its category's EU code.** `ManifestRepository.GetEnsGoodsLinesAsync` takes
+  `COALESCE(i.CommodityCode, eu.Code)`, and a gap names the category to fix. The UK and Ukrainian codes are stored but nothing reads them yet.
+- **The fixed list is seed data, not part of the dacpac.** The ten categories are in `database/seed/dev-seed.sql` and are therefore absent from a
+  database that was never seeded; an Administrator must add categories there before anything can be packed. Making the list part of every deployment
+  is open and belongs with the production database work.

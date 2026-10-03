@@ -47,6 +47,31 @@ VALUES (@aidHospital,   N'Example Aid Hospital',    N'Example oblast', 1),
        (@reliefCharity, N'Sample Relief Charity',   N'Sample oblast',  1),
        (NEWID(),        N'Test Clinic (pending)',   N'Test oblast',    0);
 
+-- Item categories (ADR 0014). The fixed list a Loader picks from. IsFixed = 1 is only ever set here: no request can make
+-- a category built in. HazardClass is the ADR class; IsNotCarried marks goods the convoy will not take (gas, lithium
+-- batteries, flammables, D21); WarnWithinDays is how close to expiry an item counts as short-dated. Those thresholds are
+-- UNVERIFIED (D25) and the codes below are ILLUSTRATIVE six-digit headings, not a classification anyone has checked --
+-- an Administrator maintains both through the API (categories:write). 99190000 is goods for humanitarian relief (#24).
+INSERT INTO dbo.ItemCategory (NameEn, IsFixed, HazardClass, IsSensitive, IsNotCarried, WarnWithinDays)
+VALUES (N'Medicine',        1, NULL, 1, 0, 180),
+       (N'Food',            1, NULL, 0, 0, 90),
+       (N'Clothing',        1, NULL, 0, 0, NULL),
+       (N'Hygiene',         1, NULL, 0, 0, NULL),
+       (N'Medical devices', 1, NULL, 0, 0, NULL),
+       (N'Tools',           1, NULL, 0, 0, NULL),
+       (N'Batteries',       1, 9,    0, 1, NULL),
+       (N'Gas',             1, 2,    0, 1, NULL),
+       (N'Flammables',      1, 3,    0, 1, NULL),
+       (N'Other',           1, NULL, 0, 0, NULL);
+
+-- Authority 1 is the EU, 0 the UK, 2 Ukraine. Only the EU is mapped here, because the ENS filing sheet is what reads it.
+INSERT INTO dbo.CategoryCustomsCode (CategoryId, Authority, Code)
+SELECT c.Id, 1, m.Code
+FROM dbo.ItemCategory AS c
+INNER JOIN (VALUES (N'Medicine', '300490'), (N'Food', '210690'), (N'Clothing', '630900'),
+                   (N'Hygiene', '340111'), (N'Medical devices', '901890'), (N'Tools', '820559'),
+                   (N'Batteries', '850780'), (N'Other', '99190000')) AS m (NameEn, Code) ON m.NameEn = c.NameEn;
+
 -- Volunteers: identity and personal data are separate rows (dbo.Person, dbo.PersonDetail).
 DECLARE @people TABLE (Id uniqueidentifier, FirstName nvarchar(100), LastName nvarchar(100), IsDriver bit, Committed bit);
 INSERT INTO @people VALUES
@@ -87,10 +112,11 @@ VALUES (@convoy, 1, N'Coventry', N'United Kingdom', N'CV1 0AA',  'GB'),
 
 -- Vehicles. Transmission: 1 Manual, 2 Automatic. Fuel: 2 Diesel. InspectionStatus: 0 Pending,
 -- 2 Passed — only a Passed vehicle may join a convoy.
-INSERT INTO dbo.Vehicle (Vin, Plate, Brand, Model, Colour, Transmission, [Year], Fuel, WeightKg, InspectionStatus)
-VALUES ('SEEDVIN0000000001', N'AB12 CDE', N'Ford',       N'Transit',  N'White', 1, 2015, 2, 2000, 2),
-       ('SEEDVIN0000000002', N'FG34 HIJ', N'Volkswagen', N'Crafter',  N'Blue',  1, 2016, 2, 2100, 2),
-       ('SEEDVIN0000000003', N'KL56 MNO', N'Toyota',     N'Hilux',    N'Grey',  2, 2014, 2, 1900, 0);
+-- ValueSource 2 is Purchased (the price paid) and 1 is Estimate (a figure for a donated vehicle); the Hilux has none yet.
+INSERT INTO dbo.Vehicle (Vin, Plate, Brand, Model, Colour, Transmission, [Year], Fuel, WeightKg, InspectionStatus, ValueGbp, ValueSource)
+VALUES ('SEEDVIN0000000001', N'AB12 CDE', N'Ford',       N'Transit',  N'White', 1, 2015, 2, 2000, 2, 4500.00, 2),
+       ('SEEDVIN0000000002', N'FG34 HIJ', N'Volkswagen', N'Crafter',  N'Blue',  1, 2016, 2, 2100, 2, 3800.00, 1),
+       ('SEEDVIN0000000003', N'KL56 MNO', N'Toyota',     N'Hilux',    N'Grey',  2, 2014, 2, 1900, 0, NULL,    NULL);
 
 -- The truck list. The Hilux is left off it: it has not passed inspection, so it is the vehicle to
 -- try assigning when you want to see the 409.
@@ -107,15 +133,15 @@ FROM (SELECT TOP 2 Id FROM @people WHERE IsDriver = 1 ORDER BY LastName) AS p;
 INSERT INTO dbo.Box (WeightKg, LocationId, ReceiverRef)
 VALUES (12, @coventry, @aidHospital), (8, @coventry, @aidHospital), (15, @london, @reliefCharity);
 
--- CommodityCode 99190000 is goods for humanitarian relief (issue #24), which is what an ICS2 ENS
--- declares this cargo under. Seeded so a filing sheet from local data reports nothing missing --
--- an unclassified item is reported by description, and it is worth seeing that path deliberately
--- rather than on every box.
-INSERT INTO dbo.BoxItem (Id, BoxId, Description, PropertiesJson, CommodityCode)
-SELECT NEWID(), b.Id, i.Description, i.PropertiesJson, i.CommodityCode
+-- Items name a category, which supplies the customs code unless the item has one of its own (the blankets do, to
+-- show the item winning over its category). Value is pounds with its source, 0 Donor / 1 Estimate; ExpiresOn is a typed
+-- date. PropertiesJson keeps only the open-ended rest, as strings -- a JSON number there would not read back as one.
+INSERT INTO dbo.BoxItem (Id, BoxId, CategoryId, Description, Quantity, ValueGbp, ValueSource, ExpiresOn, CommodityCode, PropertiesJson)
+SELECT NEWID(), b.Id, c.Id, i.Description, i.Quantity, i.ValueGbp, i.ValueSource, i.ExpiresOn, i.CommodityCode, i.PropertiesJson
 FROM dbo.Box AS b
-CROSS APPLY (VALUES (N'First aid kits',   N'{"quantity":10}', '99190000'),
-                    (N'Thermal blankets', N'{"quantity":20}', '99190000')) AS i (Description, PropertiesJson, CommodityCode);
+CROSS APPLY (VALUES (N'First aid kits',   N'Medical devices', 10, CAST(120.00 AS decimal(12,2)), 0, DATEADD(DAY, 400, CAST(SYSUTCDATETIME() AS date)), CAST(NULL AS varchar(10)), N'{"size":"small"}'),
+                    (N'Thermal blankets', N'Other',           20, CAST(60.00 AS decimal(12,2)),  1, CAST(NULL AS date),                                    CAST('99190000' AS varchar(10)), N'{}')) AS i (Description, CategoryName, Quantity, ValueGbp, ValueSource, ExpiresOn, CommodityCode, PropertiesJson)
+INNER JOIN dbo.ItemCategory AS c ON c.NameEn = i.CategoryName;
 
 COMMIT;
 

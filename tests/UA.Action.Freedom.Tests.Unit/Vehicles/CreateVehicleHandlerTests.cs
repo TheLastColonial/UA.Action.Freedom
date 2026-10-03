@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Vehicles;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Unit.Vehicles;
 
@@ -39,6 +40,22 @@ public class CreateVehicleHandlerTests
         await repository.Received(1).AddAsync(
             Arg.Is<VehicleReadModel>(v =>
                 v.MaxCargoWeightKg == 900.25m && v.CargoWidthCm == 100m && v.CargoDepthCm == 200m && v.CargoHeightCm == 150m),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Persists_the_price_paid_or_the_estimate_with_its_source()
+    {
+        var repository = Substitute.For<IVehicleRepository>();
+        repository.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        var handler = new CreateVehicleHandler(repository);
+
+        await handler.HandleAsync(
+            VehicleTestData.ACreateCommand() with { ValueGbp = 4_250m, ValueSource = ValueSource.Purchased },
+            CancellationToken.None);
+
+        await repository.Received(1).AddAsync(
+            Arg.Is<VehicleReadModel>(v => v.ValueGbp == 4_250m && v.ValueSource == ValueSource.Purchased),
             Arg.Any<CancellationToken>());
     }
 

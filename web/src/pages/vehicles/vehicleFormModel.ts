@@ -4,6 +4,7 @@ import type {
   CreateVehicleRequest,
   UpdateVehicleRequest,
   VehicleReadModel,
+  VehicleValueSource,
 } from '../../api/schemas/vehicles';
 import { fuelTypeSchema, transmissionSchema } from '../../api/schemas/common';
 
@@ -29,6 +30,8 @@ export interface VehicleFormValues {
   cargoWidthCm: string;
   cargoDepthCm: string;
   cargoHeightCm: string;
+  valueGbp: string;
+  valueSource: '' | VehicleValueSource;
 }
 
 export function emptyVehicleForm(): VehicleFormValues {
@@ -51,6 +54,8 @@ export function emptyVehicleForm(): VehicleFormValues {
     cargoWidthCm: '',
     cargoDepthCm: '',
     cargoHeightCm: '',
+    valueGbp: '',
+    valueSource: '',
   };
 }
 
@@ -74,6 +79,8 @@ export function vehicleToFormValues(vehicle: VehicleReadModel): VehicleFormValue
     cargoWidthCm: vehicle.cargoWidthCm === null ? '' : String(vehicle.cargoWidthCm),
     cargoDepthCm: vehicle.cargoDepthCm === null ? '' : String(vehicle.cargoDepthCm),
     cargoHeightCm: vehicle.cargoHeightCm === null ? '' : String(vehicle.cargoHeightCm),
+    valueGbp: vehicle.valueGbp === null ? '' : String(vehicle.valueGbp),
+    valueSource: vehicle.valueSource ?? '',
   };
 }
 
@@ -128,6 +135,12 @@ export function vehicleFormToRequest(values: VehicleFormValues): CreateVehicleRe
   const cargoHeightCm = decimalNumber(values.cargoHeightCm);
   if (cargoHeightCm !== undefined) request.cargoHeightCm = cargoHeightCm;
 
+  const valueGbp = decimalNumber(values.valueGbp);
+  if (valueGbp !== undefined && values.valueSource !== '') {
+    request.valueGbp = valueGbp;
+    request.valueSource = values.valueSource;
+  }
+
   return request;
 }
 
@@ -160,35 +173,57 @@ const optionalNonNegativeDecimal = (message: string) =>
 
 // Validation only — the resolver output type equals its input type (no transform), so
 // react-hook-form keeps working with VehicleFormValues.
-export const vehicleFormSchema = z.object({
-  vin: z.string().trim().min(1, 'VIN is required').max(32, 'VIN must be 32 characters or fewer'),
-  plate: z
-    .string()
-    .trim()
-    .min(1, 'Number plate is required')
-    .max(16, 'Number plate must be 16 characters or fewer'),
-  brand: z.string().max(64, 'Make must be 64 characters or fewer'),
-  model: z.string().max(64, 'Model must be 64 characters or fewer'),
-  colour: z.string().max(32, 'Colour must be 32 characters or fewer'),
-  transmission: transmissionSchema,
-  notes: z.string().max(1000, 'Notes must be 1000 characters or fewer'),
-  mileage: optionalNonNegativeInteger('Mileage must be a whole number of 0 or more'),
-  servicing: z.boolean(),
-  year: integerInRange(1950, 2100, 'Year must be a whole number between 1950 and 2100'),
-  fuel: fuelTypeSchema,
-  purchaserName: z.string().max(200, 'Purchaser must be 200 characters or fewer'),
-  purchaseDate: z.string(),
-  weightKg: integerInRange(0, 1_000_000, 'Weight must be a whole number of 0 or more'),
-  maxCargoWeightKg: optionalNonNegativeDecimal(
-    'Maximum weight must be a number of 0 or more, with up to 2 decimal places',
-  ),
-  cargoWidthCm: optionalNonNegativeDecimal(
-    'Width must be a number of 0 or more, with up to 2 decimal places',
-  ),
-  cargoDepthCm: optionalNonNegativeDecimal(
-    'Depth must be a number of 0 or more, with up to 2 decimal places',
-  ),
-  cargoHeightCm: optionalNonNegativeDecimal(
-    'Height must be a number of 0 or more, with up to 2 decimal places',
-  ),
-});
+export const vehicleFormSchema = z
+  .object({
+    vin: z.string().trim().min(1, 'VIN is required').max(32, 'VIN must be 32 characters or fewer'),
+    plate: z
+      .string()
+      .trim()
+      .min(1, 'Number plate is required')
+      .max(16, 'Number plate must be 16 characters or fewer'),
+    brand: z.string().max(64, 'Make must be 64 characters or fewer'),
+    model: z.string().max(64, 'Model must be 64 characters or fewer'),
+    colour: z.string().max(32, 'Colour must be 32 characters or fewer'),
+    transmission: transmissionSchema,
+    notes: z.string().max(1000, 'Notes must be 1000 characters or fewer'),
+    mileage: optionalNonNegativeInteger('Mileage must be a whole number of 0 or more'),
+    servicing: z.boolean(),
+    year: integerInRange(1950, 2100, 'Year must be a whole number between 1950 and 2100'),
+    fuel: fuelTypeSchema,
+    purchaserName: z.string().max(200, 'Purchaser must be 200 characters or fewer'),
+    purchaseDate: z.string(),
+    weightKg: integerInRange(0, 1_000_000, 'Weight must be a whole number of 0 or more'),
+    maxCargoWeightKg: optionalNonNegativeDecimal(
+      'Maximum weight must be a number of 0 or more, with up to 2 decimal places',
+    ),
+    cargoWidthCm: optionalNonNegativeDecimal(
+      'Width must be a number of 0 or more, with up to 2 decimal places',
+    ),
+    cargoDepthCm: optionalNonNegativeDecimal(
+      'Depth must be a number of 0 or more, with up to 2 decimal places',
+    ),
+    cargoHeightCm: optionalNonNegativeDecimal(
+      'Height must be a number of 0 or more, with up to 2 decimal places',
+    ),
+    valueGbp: optionalNonNegativeDecimal(
+      'Value must be an amount in pounds, with up to 2 decimal places',
+    ),
+    valueSource: z.enum(['', 'Purchased', 'Estimate']),
+  })
+  .superRefine((values, context) => {
+    const hasValue = values.valueGbp.trim().length > 0;
+    if (hasValue && values.valueSource === '') {
+      context.addIssue({
+        code: 'custom',
+        path: ['valueSource'],
+        message: 'Say whether this is the price paid or an estimate',
+      });
+    }
+    if (!hasValue && values.valueSource !== '') {
+      context.addIssue({
+        code: 'custom',
+        path: ['valueGbp'],
+        message: 'Enter the value this source describes',
+      });
+    }
+  });

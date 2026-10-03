@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
@@ -147,6 +148,7 @@ internal static class FreedomApi
         IBoxRepository boxes,
         IPersonRepository people,
         IBayRepository? bays = null,
+        IItemCategoryRepository? categories = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
@@ -154,6 +156,11 @@ internal static class FreedomApi
             services.Replace(boxes);
             services.Replace(people);
             services.Replace(bays ?? new InMemoryBayRepository());
+            if (categories is not null)
+            {
+                services.Replace(categories);
+            }
+
         });
 
     /// <summary>As above, with the receivers a box destination is checked against.</summary>
@@ -167,6 +174,13 @@ internal static class FreedomApi
             services.Replace(boxes);
             services.Replace(receivers);
         });
+
+    /// <summary>The application with its item category persistence swapped for <paramref name="categories"/>.</summary>
+    internal static WebApplicationFactory<Program> WithCategories(
+        IItemCategoryRepository categories,
+        bool authenticated = true,
+        params string[] roles) =>
+        WithFakes(authenticated, roles, services => services.Replace(categories));
 
     /// <summary>The application with location and bay persistence swapped out.</summary>
     internal static WebApplicationFactory<Program> WithLocations(
@@ -260,6 +274,7 @@ internal static class FreedomApi
                 swapFakes(services);
                 EnsureCallerIsOnFile(services);
                 EnsureReceiversAreFaked(services);
+                EnsureCategoriesAreFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -300,6 +315,21 @@ internal static class FreedomApi
         if (!fake)
         {
             services.Replace<IReceiverRepository>(new InMemoryReceiverRepository());
+        }
+    }
+
+    /// <summary>
+    /// Packing an item names its category, so a test that did not supply a category store gets a small fixed
+    /// list rather than a route to a real database.
+    /// </summary>
+    private static void EnsureCategoriesAreFaked(IServiceCollection services)
+    {
+        var fake = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IItemCategoryRepository) && descriptor.ImplementationFactory is not null);
+
+        if (!fake)
+        {
+            services.Replace<IItemCategoryRepository>(InMemoryItemCategoryRepository.WithDefaults());
         }
     }
 

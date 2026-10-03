@@ -115,7 +115,8 @@ public sealed record EnsGoodsLineReadModel(
     string? ReceiverOrganisation,
     string? ReceiverRegion,
     string ItemDescription,
-    string? CommodityCode);
+    string? CommodityCode,
+    string? CategoryName = null);
 
 /// <summary>What would be filed for this manifest, or <c>null</c> if there is no such manifest.</summary>
 public sealed record GetEnsFilingSheetQuery(string Id);
@@ -248,11 +249,13 @@ public sealed class GetEnsFilingSheetHandler(
                     index + 1, line.ItemDescription, line.CommodityCode))
                 .ToList();
 
-            foreach (var item in items.Where(item => string.IsNullOrWhiteSpace(item.CommodityCode)))
+            foreach (var line in group.Where(line => string.IsNullOrWhiteSpace(line.CommodityCode)))
             {
+                var category = line.CategoryName is { } name ? $" nor its category \"{name}\"" : string.Empty;
+
                 missing.Add(
-                    $"A commodity code for \"{item.Description}\". ICS2 requires at least six digits "
-                    + $"per goods item; {EnsCommodity.HumanitarianAid} covers humanitarian aid.");
+                    $"A commodity code for \"{line.ItemDescription}\": neither the item{category} has an EU code. "
+                    + $"ICS2 requires at least six digits per goods item; {EnsCommodity.HumanitarianAid} covers humanitarian aid.");
             }
 
             // A box is the package, so the package count is how many distinct boxes this consignee's

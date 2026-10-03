@@ -49,6 +49,58 @@ public class VehicleRepositoryTests
         ExecuteAsync("DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
 
     [Fact]
+    public async Task Round_trips_the_value_and_its_source_and_clears_them_on_update()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var vin = NewVin();
+
+        try
+        {
+            await repository.AddAsync(
+                AVehicle(vin) with { ValueGbp = 4_250.50m, ValueSource = ValueSource.Purchased }, cancellationToken);
+
+            var stored = await repository.GetByVinAsync(vin, cancellationToken);
+            stored!.ValueGbp.Should().Be(4_250.50m);
+            stored.ValueSource.Should().Be(ValueSource.Purchased);
+
+            await repository.UpdateAsync(AVehicle(vin) with { ValueGbp = null, ValueSource = null }, cancellationToken);
+
+            var cleared = await repository.GetByVinAsync(vin, cancellationToken);
+            cleared!.ValueGbp.Should().BeNull();
+            cleared.ValueSource.Should().BeNull();
+        }
+        finally
+        {
+            await RemoveAsync(vin);
+        }
+    }
+
+    [Theory]
+    [InlineData(100, null)]
+    [InlineData(null, ValueSource.Estimate)]
+    [InlineData(100, ValueSource.Donor)]
+    public async Task A_value_without_a_source_or_a_donor_stated_vehicle_is_refused_by_the_table(
+        int? value, ValueSource? source)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var vin = NewVin();
+
+        try
+        {
+            var act = () => repository.AddAsync(
+                AVehicle(vin) with { ValueGbp = value, ValueSource = source }, cancellationToken);
+
+            await act.Should().ThrowAsync<Microsoft.Data.SqlClient.SqlException>();
+        }
+        finally
+        {
+            await RemoveAsync(vin);
+        }
+    }
+
+    [Fact]
     public async Task Round_trips_every_field_through_the_database()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

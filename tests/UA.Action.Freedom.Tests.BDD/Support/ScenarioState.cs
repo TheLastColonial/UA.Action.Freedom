@@ -44,6 +44,9 @@ public sealed class ScenarioState
             ? value
             : throw new InvalidOperationException($"No '{name}' has been remembered.");
 
+    /// <summary>Reads back a value stored by <see cref="Pin"/>, or <see langword="null"/> if nothing was.</summary>
+    public string? TryPinned(string name) => remembered.GetValueOrDefault(name);
+
     /// <summary>Substitutes <c>{id}</c> in <paramref name="template"/> with a remembered key.</summary>
     public string Recall(string name, string template) =>
         template.Replace(

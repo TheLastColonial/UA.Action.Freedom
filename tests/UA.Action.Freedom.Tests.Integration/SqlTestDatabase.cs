@@ -108,6 +108,24 @@ internal static class SqlTestDatabase
         return id;
     }
 
+    /// <summary>
+    /// A category to pack an item under, since <c>dbo.BoxItem.CategoryId</c> is a real foreign key. Remove it with
+    /// <see cref="RemoveCategoryAsync"/> once the boxes that hold items under it are gone; its codes go with it.
+    /// </summary>
+    internal static Task<int> AddCategoryAsync(string? euCode = null, int? warnWithinDays = null) => ScalarAsync(
+        """
+        INSERT INTO dbo.ItemCategory (NameEn, WarnWithinDays) VALUES (@name, @warn);
+        DECLARE @id int = CAST(SCOPE_IDENTITY() AS int);
+        IF @eu IS NOT NULL INSERT INTO dbo.CategoryCustomsCode (CategoryId, Authority, Code) VALUES (@id, 1, @eu);
+        SELECT @id;
+        """,
+        ("@name", $"Integration {Guid.NewGuid():N}"),
+        ("@warn", (object?)warnWithinDays ?? DBNull.Value),
+        ("@eu", (object?)euCode ?? DBNull.Value));
+
+    internal static Task RemoveCategoryAsync(int id) =>
+        ExecuteAsync("DELETE FROM dbo.ItemCategory WHERE Id = @id", ("@id", id));
+
     private static async Task<T> RunAsync<T>(
         string sql, (string Name, object Value)[] parameters, Func<SqlCommand, Task<T>> run)
     {

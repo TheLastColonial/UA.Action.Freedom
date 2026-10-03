@@ -92,6 +92,85 @@ public class VehicleEndpointTests
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
+
+    [Fact]
+    public async Task A_purchaser_records_the_price_paid_and_it_reads_back_with_its_source()
+    {
+        var repository = new InMemoryVehicleRepository();
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Purchaser");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/vehicles",
+            new
+            {
+                vin = Vin,
+                plate = "AB12CDE",
+                year = 2016,
+                fuel = "Diesel",
+                transmission = "Manual",
+                weightKg = 1_400,
+                valueGbp = 4_250.50m,
+                valueSource = "Purchased",
+            },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var read = await client.GetFromJsonAsync<JsonElement>($"/vehicles/{Vin}", TestContext.Current.CancellationToken);
+        read.GetProperty("valueGbp").GetDecimal().Should().Be(4_250.50m);
+        read.GetProperty("valueSource").GetString().Should().Be("Purchased");
+    }
+
+    [Fact]
+    public async Task A_donated_vehicle_is_valued_by_estimate_and_a_put_replaces_the_value()
+    {
+        var repository = new InMemoryVehicleRepository(AStoredVehicle() with { ValueGbp = 100m, ValueSource = ValueSource.Purchased });
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Purchaser");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/vehicles/{Vin}",
+            new
+            {
+                plate = "AB12CDE",
+                year = 2016,
+                fuel = "Diesel",
+                transmission = "Manual",
+                weightKg = 1_400,
+                valueGbp = 1_800m,
+                valueSource = "Estimate",
+            },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var stored = await repository.GetByVinAsync(Vin, CancellationToken.None);
+        stored!.ValueGbp.Should().Be(1_800m);
+        stored.ValueSource.Should().Be(ValueSource.Estimate);
+    }
+
+    [Theory]
+    [InlineData(", \"valueGbp\": 100")]
+    [InlineData(", \"valueSource\": \"Estimate\"")]
+    [InlineData(", \"valueGbp\": 100, \"valueSource\": \"Donor\"")]
+    [InlineData(", \"valueGbp\": -5, \"valueSource\": \"Estimate\"")]
+    public async Task A_value_needs_its_source_a_vehicle_has_no_donor_and_a_value_is_not_negative(string valueFields)
+    {
+        var repository = new InMemoryVehicleRepository();
+        await using var api = FreedomApi.WithVehicles(repository, roles: "Purchaser");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsync(
+            "/vehicles",
+            new StringContent(
+                $"{{\"vin\":\"{Vin}\",\"plate\":\"AB12CDE\",\"year\":2016,\"fuel\":\"Diesel\",\"transmission\":\"Manual\",\"weightKg\":1400{valueFields}}}",
+                System.Text.Encoding.UTF8,
+                "application/json"),
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await repository.ExistsAsync(Vin, CancellationToken.None)).Should().BeFalse();
+    }
+
     [Fact]
     public async Task A_purchaser_creates_a_vehicle_with_cargo_capacity()
     {

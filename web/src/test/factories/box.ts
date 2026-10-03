@@ -51,6 +51,15 @@ export function makeBoxItem(overrides: Partial<BoxItemReadModel> = {}): BoxItemR
     id: `aaaaaaaa-0000-0000-0000-${String(itemSeq).padStart(12, '0')}`,
     description: `Item ${String(itemSeq)}`,
     properties: {},
+    categoryId: 1,
+    commodityCode: null,
+    quantity: null,
+    valueGbp: null,
+    valueSource: null,
+    expiresOn: null,
+    categoryNameEn: null,
+    isNotCarried: false,
+    shelfLife: 'Fine',
     ...overrides,
   };
 }

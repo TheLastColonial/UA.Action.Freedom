@@ -48,12 +48,21 @@ CREATE TABLE [dbo].[Vehicle] (
     [InspectionNotes]  nvarchar(2000) NULL,
     [HandedOverAt]     datetime2(0)   NULL,
 
+    -- What the vehicle is worth, in pounds with no conversion (O11, O33). ValueSource says where the figure
+    -- came from (Domain ValueSource): 2 Purchased is the price paid, 1 Estimate is a figure for a donated
+    -- vehicle. Both or neither; there is no donor-stated source for a vehicle.
+    [ValueGbp]         decimal(12,2)  NULL,
+    [ValueSource]      int            NULL,
+
     [CreatedAt]        datetime2(0)   NOT NULL CONSTRAINT [DF_Vehicle_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]        datetime2(0)   NOT NULL CONSTRAINT [DF_Vehicle_UpdatedAt] DEFAULT SYSUTCDATETIME(),
     [LastChangedBy] uniqueidentifier NULL,
     [LastChangedAt] datetime2(0)     NULL,
 
     CONSTRAINT [CK_Vehicle_InspectionStatus] CHECK ([InspectionStatus] >= 0 AND [InspectionStatus] <= 3),
+    CONSTRAINT [CK_Vehicle_ValueGbp] CHECK ([ValueGbp] >= 0),
+    CONSTRAINT [CK_Vehicle_ValueSource] CHECK ([ValueSource] >= 1 AND [ValueSource] <= 2),
+    CONSTRAINT [CK_Vehicle_ValueAndSource] CHECK (([ValueGbp] IS NULL AND [ValueSource] IS NULL) OR ([ValueGbp] IS NOT NULL AND [ValueSource] IS NOT NULL)),
     CONSTRAINT [FK_Vehicle_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO

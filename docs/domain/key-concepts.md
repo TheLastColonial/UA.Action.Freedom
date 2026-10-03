@@ -184,6 +184,10 @@ is distinct from the kerb weight above (the vehicle's own weight) and exists to 
 convoy leaves, whether the [Boxes](#box) assigned to a [Manifest](#manifest) are too heavy or too large for the
 vehicle carrying them — see the note under Manifest.
 
+A vehicle also records what it is **worth in pounds**, with the source of the figure: `Purchased` is the price paid and
+`Estimate` is a figure for a vehicle that was given. Both or neither, and like an item's value nothing is converted. There is
+no donor-stated source, because a vehicle is something the charity buys or is handed rather than something packed by a donor.
+
 #### Inspection Status
 
 Every vehicle carries an **inspection status**, recorded by a [Mechanic](#mechanic), that tracks its mechanical
@@ -256,8 +260,31 @@ Ukrainian delivery address is not. See [Data Sensitivity](#data-sensitivity).
 
 ### Item
 
-A single donated thing, with a description and open-ended properties. Items are not tracked individually in
-transit — they are tracked as the contents of a [Box](#box).
+*Diagrams: [Domain model (class)](../model/domain-model.puml).*
+
+A single donated thing. Items are not tracked individually in transit — they are tracked as the contents of a
+[Box](#box). An item says:
+
+- **What it is**: a description, and a **category** from a list (medicine, food, clothing, hygiene, medical devices,
+  tools, batteries, gas, flammables, other) that an Administrator maintains. A category carries the ADR hazard
+  class, whether it is sensitive, whether the convoy does not carry it at all, how close to expiry an item counts
+  as short-dated, and the customs code it is declared under for the UK, the EU and Ukraine. The Ukrainian name
+  starts empty and is filled by the label work.
+- **How many and how much**: an optional quantity, and an optional value in pounds with its source — `Donor` if the
+  donor stated it, `Estimate` if a volunteer did. Nothing is converted from another currency; whoever enters the
+  value converts it. A value always comes with its source, and a source with its value.
+- **When it expires**: an optional date. An item whose date has passed is accepted into a box, so the Loader can
+  see it, and warned about, but its [Box](#box) cannot be validated until it comes out. One within its category's
+  window warns that it is short-dated. Those windows are unverified placeholders.
+- **What it is declared under**: an optional commodity code of its own, which wins; otherwise the code of its
+  category for the authority being filed with. An item with neither is reported on the ENS filing sheet by name,
+  with its category.
+- **Anything else**, as open-ended string properties (size, condition).
+
+Adding an item of a category the convoy does not carry (gas, lithium batteries, flammables) is accepted and warns at
+once — the Loader needs to see it to take it out. An item's category, quantity, value and expiry are all read back
+with the item, along with whether it is expired, short-dated or not carried, worked out when it is read so that it
+cannot go stale.
 
 ### Box
 
@@ -275,6 +302,9 @@ Loader gets round to placing it in a specific bay.
 
 Validation is the trust boundary between the donor and Ukrainian Action, and the weight it produces is what the
 border check relies on. Both facts make the validation record an audit artefact, not just a status flag.
+
+A box **holding an item that has already expired cannot be validated** (`409 box-has-expired-items`): a Loader cannot vouch for
+contents that are past their date. Taking the item out, or correcting its date by taking it out and packing it again, clears it.
 
 A box may also carry optional **dimensions** (width, depth, height), set at the same moment as the confirmed
 weight — a Loader is physically looking at the box then. Like the weight, dimensions start unset and are only

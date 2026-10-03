@@ -62,7 +62,7 @@ public sealed class BoxesSteps(FreedomApiClient api, ScenarioState state)
 
     [When("I POST \"(.*)\" on the remembered box with body:")]
     public Task WhenIPostOnTheRememberedBoxWithBody(string template, string body) =>
-        api.SendAsync(HttpMethod.Post, state.Recall("box", template), state.CurrentToken, body);
+        api.SendAsync(HttpMethod.Post, state.Recall("box", template), state.CurrentToken, CategoriesSteps.Expand(state, body));
 
     [When("I POST \"(.*)\" on the remembered box")]
     public Task WhenIPostOnTheRememberedBox(string template) =>

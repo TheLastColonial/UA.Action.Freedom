@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
@@ -7,6 +8,7 @@ using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Vehicles;
 using UA.Action.Freedom.Data.Boxes;
+using UA.Action.Freedom.Data.Categories;
 using UA.Action.Freedom.Data.Convoys;
 using UA.Action.Freedom.Data.Locations;
 using UA.Action.Freedom.Data.Manifests;
@@ -31,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IConvoyVehicleRepository, ConvoyVehicleRepository>();
         services.AddScoped<IReceiverRepository, ReceiverRepository>();
         services.AddScoped<IBoxRepository, BoxRepository>();
+        services.AddScoped<IItemCategoryRepository, ItemCategoryRepository>();
         services.AddScoped<IManifestRepository, ManifestRepository>();
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<IBayRepository, BayRepository>();

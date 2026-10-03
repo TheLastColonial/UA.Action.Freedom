@@ -306,8 +306,8 @@ the Convoy Leader sees destinations have been brought into line. These sections 
 | Section | Change |
 |---|---|
 | [Roles](key-concepts.md#roles) | Add the Convoy Leader. Add what a Dispatcher and Administrator do with Receiver status. |
-| [Vehicle](key-concepts.md#vehicle) | Cargo capacity is required, not optional ([D18](#d18)). Price paid ([O11](#o11)). |
-| [Item](key-concepts.md#item) and [Box](key-concepts.md#box) | Value and source, category and its code mapping, donor, expiry, replace-not-edit, label contents and languages, delivery and refusal outcomes ([D2](#d2), [D3](#d3), [D5](#d5), [D6](#d6), [D14](#d14), [O2](#o2), [O5](#o5), [O9](#o9), [O16](#o16), [O17](#o17)). |
+| [Vehicle](key-concepts.md#vehicle) | Cargo capacity is required, not optional ([D18](#d18)). |
+| [Item](key-concepts.md#item) and [Box](key-concepts.md#box) | Donor, replace-not-edit, label contents and languages, delivery and refusal outcomes ([D2](#d2), [D3](#d3), [D14](#d14), [O2](#o2), [O5](#o5), [O9](#o9), [O17](#o17)). Value and source, category and its code mapping and expiry are in ([D5](#d5), [D6](#d6), [O16](#o16)). |
 | [Arrival](key-concepts.md#arrival) | Closing a convoy and its report ([O10](#o10)). |
 | [Donor](key-concepts.md#donor-external) | Becomes an entity with erasable details, no longer only external ([D14](#d14), [D15](#d15)). |
 | [Receiver](key-concepts.md#receiver) | Registration status ([D30](#d30), [D35](#d35)). |

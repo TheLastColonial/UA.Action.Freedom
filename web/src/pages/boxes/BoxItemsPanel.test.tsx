@@ -1,13 +1,30 @@
 import { expect, test } from 'vitest';
 
 import { makeBox, makeBoxItem } from '../../test/factories/box';
+import { makeCategory } from '../../test/factories/category';
 import { boxApi } from '../../test/msw/boxes';
+import { categoryApi } from '../../test/msw/categories';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { BoxItemsPanel } from './BoxItemsPanel';
 
+const blankets = makeCategory({ id: 11, nameEn: 'Bedding' });
+const gas = makeCategory({ id: 12, nameEn: 'Gas', isNotCarried: true });
+const medicine = makeCategory({ id: 13, nameEn: 'Medicine', warnWithinDays: 180 });
+const categories = [blankets, gas, medicine];
+
+function daysFromNow(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+function serve(box = makeBox({ id: 8 })) {
+  const api = boxApi([box], 'caller-person-id', undefined, categories);
+  worker.use(...api.handlers, ...categoryApi(categories).handlers);
+  return api;
+}
+
 test('adds an item with a property, then removes it', async () => {
-  worker.use(...boxApi([makeBox({ id: 8 })]).handlers);
+  serve();
 
   const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
     roles: ['Loader'],
@@ -16,6 +33,7 @@ test('adds an item with a property, then removes it', async () => {
   await expect.element(screen.getByText('Nothing packed yet.')).toBeInTheDocument();
 
   await screen.getByLabelText('Description').fill('Winter coats');
+  await screen.getByLabelText('Category').selectOptions('Bedding');
   await screen.getByRole('button', { name: 'Add property' }).click();
   await screen.getByLabelText('Property 1 name').fill('size');
   await screen.getByLabelText('Property 1 value').fill('L');
@@ -28,8 +46,8 @@ test('adds an item with a property, then removes it', async () => {
   await expect.element(screen.getByText('Nothing packed yet.')).toBeInTheDocument();
 });
 
-test('requires a description', async () => {
-  worker.use(...boxApi([makeBox({ id: 8 })]).handlers);
+test('requires a description and a category', async () => {
+  serve();
 
   const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
     roles: ['Loader'],
@@ -37,12 +55,98 @@ test('requires a description', async () => {
 
   await screen.getByRole('button', { name: 'Add item' }).click();
   await expect.element(screen.getByText('Describe the item')).toBeInTheDocument();
+  await expect.element(screen.getByText('Choose a category')).toBeInTheDocument();
+});
+
+test('shows the category, quantity, value and expiry the item was packed with', async () => {
+  serve();
+
+  const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
+    roles: ['Loader'],
+  });
+
+  await screen.getByLabelText('Description').fill('Paracetamol');
+  await screen.getByLabelText('Category').selectOptions('Medicine');
+  await screen.getByLabelText('Quantity').fill('40');
+  await screen.getByLabelText('Value (£)').fill('62.50');
+  await screen.getByLabelText('Value source').selectOptions('Estimate');
+  await screen.getByLabelText('Expires on').fill(daysFromNow(400));
+  await screen.getByLabelText('Commodity code').fill('30049000');
+  await screen.getByRole('button', { name: 'Add item' }).click();
+
+  await expect.element(screen.getByText(/Medicine, quantity 40/)).toBeInTheDocument();
+  await expect.element(screen.getByText(/£62\.50 \(estimate\)/)).toBeInTheDocument();
+  await expect.element(screen.getByText(/code 30049000/)).toBeInTheDocument();
+});
+
+test('asks for the source of a value before it is sent', async () => {
+  serve();
+
+  const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
+    roles: ['Loader'],
+  });
+
+  await screen.getByLabelText('Description').fill('Paracetamol');
+  await screen.getByLabelText('Category').selectOptions('Medicine');
+  await screen.getByLabelText('Value (£)').fill('10');
+  await screen.getByRole('button', { name: 'Add item' }).click();
+
+  await expect
+    .element(screen.getByText('Say whether the donor gave the value or it is an estimate'))
+    .toBeInTheDocument();
+});
+
+test('warns, and badges the item, when it is a kind the convoy will not carry', async () => {
+  serve();
+
+  const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
+    roles: ['Loader'],
+  });
+
+  await screen.getByLabelText('Description').fill('Camping gas');
+  await screen.getByLabelText('Category').selectOptions('Gas');
+  await screen.getByRole('button', { name: 'Add item' }).click();
+
+  await expect
+    .element(screen.getByText(/The convoy does not carry this kind of goods/))
+    .toBeInTheDocument();
+  await expect.element(screen.getByText('Not carried')).toBeInTheDocument();
+});
+
+test('warns, and badges the item, when it has already expired', async () => {
+  serve();
+
+  const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
+    roles: ['Loader'],
+  });
+
+  await screen.getByLabelText('Description').fill('Paracetamol');
+  await screen.getByLabelText('Category').selectOptions('Medicine');
+  await screen.getByLabelText('Expires on').fill(daysFromNow(-3));
+  await screen.getByRole('button', { name: 'Add item' }).click();
+
+  await expect.element(screen.getByText(/This item has already expired/)).toBeInTheDocument();
+  await expect.element(screen.getByText('Expired', { exact: true })).toBeInTheDocument();
+});
+
+test('badges a short shelf life by the thresholds of the category', async () => {
+  serve();
+
+  const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
+    roles: ['Loader'],
+  });
+
+  await screen.getByLabelText('Description').fill('Paracetamol');
+  await screen.getByLabelText('Category').selectOptions('Medicine');
+  await screen.getByLabelText('Expires on').fill(daysFromNow(30));
+  await screen.getByRole('button', { name: 'Add item' }).click();
+
+  await expect.element(screen.getByText('Short shelf life')).toBeInTheDocument();
 });
 
 test('is read-only when the box is frozen', async () => {
-  const api = boxApi([makeBox({ id: 8, validated: true })]);
+  const api = serve(makeBox({ id: 8, validated: true }));
   api.items.set(8, [makeBoxItem({ description: 'Sealed contents' })]);
-  worker.use(...api.handlers);
 
   const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen />, {
     roles: ['Loader'],

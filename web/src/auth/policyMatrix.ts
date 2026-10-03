@@ -20,6 +20,8 @@ export const POLICY_MATRIX = {
   'boxes:write': ['Administrator', 'Dispatcher', 'Loader'],
   'boxes:validate': ['Administrator', 'Loader'],
   'boxes:allocate-bay': ['Loader'],
+  'categories:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
+  'categories:write': ['Administrator'],
   'locations:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
   'locations:write': ['Administrator'],
   'manifests:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],

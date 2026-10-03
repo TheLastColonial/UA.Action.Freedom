@@ -2,6 +2,7 @@ using System.Text.Json;
 using Dapper;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Data.Boxes;
 
@@ -27,13 +28,27 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
     /// the application works with.
     /// </summary>
     private sealed record BoxItemRow(
-        Guid Id, string Description, string PropertiesJson, string? CommodityCode);
+        Guid Id, string Description, string PropertiesJson, int CategoryId, string? CommodityCode,
+        int? Quantity, decimal? ValueGbp, int? ValueSource, DateTime? ExpiresOn);
 
     private static BoxItemReadModel ToItem(BoxItemRow row) => new(
         row.Id,
         row.Description,
-        JsonSerializer.Deserialize<Dictionary<string, string>>(row.PropertiesJson) ?? [],
-        row.CommodityCode);
+        ReadProperties(row.PropertiesJson),
+        row.CategoryId,
+        row.CommodityCode,
+        row.Quantity,
+        row.ValueGbp,
+        row.ValueSource is { } source ? (ValueSource)source : null,
+        row.ExpiresOn is { } expiresOn ? DateOnly.FromDateTime(expiresOn) : null);
+
+    private static Dictionary<string, string> ReadProperties(string json) =>
+        (JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) ?? [])
+            .ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value.ValueKind == JsonValueKind.String
+                    ? entry.Value.GetString() ?? string.Empty
+                    : entry.Value.GetRawText());
 
     public async Task<BoxReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
@@ -158,8 +173,8 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
         await using var connection = connectionFactory.Create();
 
         var rows = await connection.QueryAsync<BoxItemRow>(new CommandDefinition(
-            "SELECT Id, Description, PropertiesJson, CommodityCode FROM dbo.BoxItem "
-            + "WHERE BoxId = @boxId ORDER BY Description, Id",
+            "SELECT Id, Description, PropertiesJson, CategoryId, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn "
+            + "FROM dbo.BoxItem WHERE BoxId = @boxId ORDER BY Description, Id",
             new { boxId },
             cancellationToken: cancellationToken));
 
@@ -172,16 +187,23 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO dbo.BoxItem (Id, BoxId, Description, PropertiesJson, CommodityCode, LastChangedBy, LastChangedAt)
-            VALUES (@id, @boxId, @description, @propertiesJson, @commodityCode, @changedBy, SYSUTCDATETIME())
+            INSERT INTO dbo.BoxItem
+                (Id, BoxId, CategoryId, Description, PropertiesJson, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn, LastChangedBy, LastChangedAt)
+            VALUES
+                (@id, @boxId, @categoryId, @description, @propertiesJson, @commodityCode, @quantity, @valueGbp, @valueSource, @expiresOn, @changedBy, SYSUTCDATETIME())
             """,
             attribution.With(new
             {
                 id = item.Id,
                 boxId,
+                categoryId = item.CategoryId,
                 description = item.Description,
                 propertiesJson = JsonSerializer.Serialize(item.Properties),
                 commodityCode = item.CommodityCode,
+                quantity = item.Quantity,
+                valueGbp = item.ValueGbp,
+                valueSource = item.ValueSource is { } source ? (int?)source : null,
+                expiresOn = item.ExpiresOn?.ToDateTime(TimeOnly.MinValue),
             }),
             cancellationToken: cancellationToken));
     }

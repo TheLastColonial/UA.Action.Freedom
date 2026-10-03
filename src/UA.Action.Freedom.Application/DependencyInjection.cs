@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
@@ -72,7 +73,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListBoxesQuery, IReadOnlyList<BoxReadModel>>, ListBoxesHandler>();
         services.AddScoped<ICommandHandler<ValidateBoxCommand, ValidateBoxOutcome>, ValidateBoxHandler>();
         services.AddScoped<IQueryHandler<ListBoxItemsQuery, IReadOnlyList<BoxItemReadModel>?>, ListBoxItemsHandler>();
-        services.AddScoped<ICommandHandler<AddBoxItemCommand, AddBoxItemOutcome>, AddBoxItemHandler>();
+        services.AddScoped<ICommandHandler<AddBoxItemCommand, AddBoxItemResult>, AddBoxItemHandler>();
         services.AddScoped<ICommandHandler<RemoveBoxItemCommand, RemoveBoxItemOutcome>, RemoveBoxItemHandler>();
         services.AddScoped<ICommandHandler<IssueBoxQrCodeCommand, BoxQrCodeReadModel?>, IssueBoxQrCodeHandler>();
         services.AddScoped<ICommandHandler<RevokeBoxQrCodeCommand, RevokeBoxQrCodeOutcome>, RevokeBoxQrCodeHandler>();
@@ -82,6 +83,12 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<VacateBoxBayCommand, VacateBoxBayOutcome>, VacateBoxBayHandler>();
         services.AddScoped<IQueryHandler<GetBoxBayQuery, BoxBayAssignmentReadModel?>, GetBoxBayHandler>();
         services.AddScoped<IQueryHandler<GetBoxBayHistoryQuery, IReadOnlyList<BoxBayAssignmentReadModel>>, GetBoxBayHistoryHandler>();
+
+        services.AddScoped<ICommandHandler<CreateCategoryCommand, CreateCategoryResult>, CreateCategoryHandler>();
+        services.AddScoped<ICommandHandler<UpdateCategoryCommand, UpdateCategoryOutcome>, UpdateCategoryHandler>();
+        services.AddScoped<ICommandHandler<SetCategoryCodeCommand, SetCategoryCodeOutcome>, SetCategoryCodeHandler>();
+        services.AddScoped<IQueryHandler<GetCategoryByIdQuery, ItemCategoryReadModel?>, GetCategoryByIdHandler>();
+        services.AddScoped<IQueryHandler<ListCategoriesQuery, IReadOnlyList<ItemCategoryReadModel>>, ListCategoriesHandler>();
 
         services.AddScoped<ICommandHandler<CreateLocationCommand, int>, CreateLocationHandler>();
         services.AddScoped<ICommandHandler<UpdateLocationCommand, UpdateLocationOutcome>, UpdateLocationHandler>();
