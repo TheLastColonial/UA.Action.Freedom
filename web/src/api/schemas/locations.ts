@@ -12,6 +12,8 @@ export const locationReadModelSchema = z.object({
   city: z.string().nullable(),
   country: z.string().nullable(),
   postcode: z.string().nullable(),
+  // A distribution hub is a location an Administrator has registered (decision D36).
+  isRegisteredHub: z.boolean(),
 });
 export type LocationReadModel = z.infer<typeof locationReadModelSchema>;
 
@@ -30,6 +32,7 @@ export interface CreateLocationRequest {
   city?: string;
   country?: string;
   postcode?: string;
+  isRegisteredHub?: boolean;
 }
 export type UpdateLocationRequest = CreateLocationRequest;
 

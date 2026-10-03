@@ -60,6 +60,13 @@ export function LocationDetailPage(): JSX.Element {
 
       {remove.isError ? <p role="alert">The location could not be removed.</p> : null}
 
+      <DetailCard title="Hub registration">
+        <dl>
+          <dt>Registered hub</dt>
+          <dd>{location.isRegisteredHub ? 'Yes' : 'No'}</dd>
+        </dl>
+      </DetailCard>
+
       <DetailCard title="Address">
         <dl>
           <dt>Address</dt>

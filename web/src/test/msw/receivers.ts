@@ -2,7 +2,12 @@ import { HttpResponse, http } from 'msw';
 import type { RequestHandler } from 'msw';
 
 import type { ReceiverDetailReadModel, SetReceiverDetailRequest } from '../../api/receiverDetail';
-import type { CreateReceiverRequest, ReceiverReadModel } from '../../api/schemas/receivers';
+import type {
+  CreateReceiverRequest,
+  ReceiverReadModel,
+  ReceiverUsage,
+  SetReceiverStatusRequest,
+} from '../../api/schemas/receivers';
 
 export interface ReceiverAccess {
   ref: string;
@@ -13,6 +18,8 @@ export interface ReceiverApi {
   db: Map<string, ReceiverReadModel>;
   details: Map<string, ReceiverDetailReadModel>;
   accessLog: ReceiverAccess[];
+  /** What each receiver is named by, which a status change touches. Empty unless a test sets it. */
+  usage: Map<string, ReceiverUsage>;
   handlers: RequestHandler[];
 }
 
@@ -25,6 +32,7 @@ export function receiverApi(
   const db = new Map<string, ReceiverReadModel>(seed.map((r) => [r.ref, r]));
   const details = new Map<string, ReceiverDetailReadModel>(seedDetails.map((d) => [d.ref, d]));
   const accessLog: ReceiverAccess[] = [];
+  const usage = new Map<string, ReceiverUsage>();
   const refOf = (raw: string | readonly string[] | undefined) => decodeURIComponent(String(raw));
 
   const handlers: RequestHandler[] = [
@@ -39,10 +47,12 @@ export function receiverApi(
       minted += 1;
       const ref = `dddddddd-0000-0000-0000-${String(minted).padStart(12, '0')}`;
       const body = (await request.json()) as CreateReceiverRequest;
+      // A new receiver is pending until an Administrator registers it.
       db.set(ref, {
         ref,
         organisation: body.organisation,
         region: body.region,
+        status: 'Pending',
         lastChangedByName: null,
         lastChangedAt: null,
       });
@@ -55,14 +65,37 @@ export function receiverApi(
         return new HttpResponse(null, { status: 404 });
       }
       const body = (await request.json()) as CreateReceiverRequest;
+      // An ordinary edit leaves the status alone, as the API does.
       db.set(ref, {
         ref,
         organisation: body.organisation,
         region: body.region,
+        status: db.get(ref)?.status ?? 'Pending',
         lastChangedByName: null,
         lastChangedAt: null,
       });
       return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.put('/receivers/:ref/status', async ({ params, request }) => {
+      const ref = refOf(params['ref']);
+      const receiver = db.get(ref);
+      if (!receiver) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const body = (await request.json()) as SetReceiverStatusRequest;
+      db.set(ref, { ...receiver, status: body.status });
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.get('/receivers/:ref/usage', ({ params }) => {
+      const ref = refOf(params['ref']);
+      if (!db.has(ref)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      return HttpResponse.json(
+        usage.get(ref) ?? { boxIds: [], convoyIds: [], boxCount: 0, convoyCount: 0 },
+      );
     }),
 
     http.delete('/receivers/:ref', ({ params }) => {
@@ -103,5 +136,5 @@ export function receiverApi(
     }),
   ];
 
-  return { db, details, accessLog, handlers };
+  return { db, details, accessLog, usage, handlers };
 }

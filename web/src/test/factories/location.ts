@@ -13,6 +13,7 @@ export function makeLocation(overrides: Partial<LocationReadModel> = {}): Locati
     city: null,
     country: null,
     postcode: null,
+    isRegisteredHub: false,
     lastChangedByName: null,
     lastChangedAt: null,
     ...overrides,

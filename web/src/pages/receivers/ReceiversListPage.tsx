@@ -9,6 +9,7 @@ import type { Column } from '../../components/DataTable';
 import { Gate } from '../../components/Gate';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { Pagination } from '../../components/Pagination';
+import { ReceiverStatusBadge } from './ReceiverStatusBadge';
 
 const PAGE_SIZE = 50;
 
@@ -18,6 +19,7 @@ const columns: readonly Column<ReceiverReadModel>[] = [
     cell: (r) => <Link to={`/receivers/${encodeURIComponent(r.ref)}`}>{r.organisation}</Link>,
   },
   { header: 'Region', cell: (r) => r.region },
+  { header: 'Registration', cell: (r) => <ReceiverStatusBadge status={r.status} /> },
 ];
 
 export function ReceiversListPage(): JSX.Element {

@@ -112,3 +112,51 @@ test('a location says who last changed it and when', async () => {
     .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
     .toBeInTheDocument();
 });
+
+test('says a registered hub is one', async () => {
+  worker.use(
+    ...locationApi([makeLocation({ id: 3, name: 'Przemysl Hub', isRegisteredHub: true })]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/locations/3',
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByRole('region', { name: 'Hub registration' }))
+    .toHaveTextContent('Yes');
+});
+
+test('says an ordinary depot is not a registered hub', async () => {
+  worker.use(...locationApi([makeLocation({ id: 4, name: 'Coventry Depot' })]).handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/locations/4',
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByRole('region', { name: 'Hub registration' }))
+    .toHaveTextContent('No');
+});
+
+test('an Administrator registers a location as a hub', async () => {
+  const api = locationApi([]);
+  worker.use(...api.handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/locations/new',
+    roles: ['Administrator'],
+  });
+
+  await screen.getByLabelText('Name').fill('Przemysl Hub');
+  await screen.getByLabelText('Registered distribution hub').click();
+  await screen.getByRole('button', { name: /Create|Save/ }).click();
+
+  await expect.element(screen.getByRole('heading', { name: 'Przemysl Hub' })).toBeInTheDocument();
+  expect([...api.db.values()].map((location) => location.isRegisteredHub)).toEqual([true]);
+});

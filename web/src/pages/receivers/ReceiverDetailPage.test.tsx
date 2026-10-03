@@ -1,5 +1,5 @@
 import type { RouteObject } from 'react-router-dom';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import { makeReceiver, makeReceiverDetail } from '../../test/factories/receiver';
 import { receiverApi } from '../../test/msw/receivers';
@@ -110,4 +110,74 @@ test('a receiver says who last changed it and when', async () => {
   await expect
     .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
     .toBeInTheDocument();
+});
+
+test('shows the registration status to anyone who can read a receiver', async () => {
+  worker.use(
+    ...receiverApi([makeReceiver({ ref: 'r1', organisation: 'Kyiv Aid', status: 'Pending' })])
+      .handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/receivers/r1',
+    roles: ['Dispatcher'],
+  });
+
+  await expect.element(screen.getByText('Pending registration')).toBeInTheDocument();
+  await expect
+    .element(screen.getByRole('region', { name: 'Registration' }))
+    .not.toBeInTheDocument();
+});
+
+test('an Administrator registers a pending receiver', async () => {
+  const api = receiverApi([
+    makeReceiver({ ref: 'r1', organisation: 'Kyiv Aid', status: 'Pending' }),
+  ]);
+  worker.use(...api.handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/receivers/r1',
+    roles: ['Administrator'],
+  });
+
+  await screen.getByLabelText('Registration status').selectOptions('Registered');
+  await screen.getByRole('button', { name: 'Save status' }).click();
+
+  await vi.waitFor(() => {
+    expect(api.db.get('r1')?.status).toBe('Registered');
+  });
+  await expect.element(screen.getByRole('button', { name: 'Save status' })).toBeDisabled();
+});
+
+test('a Ground Officer, who writes receivers, cannot register one', async () => {
+  worker.use(
+    ...receiverApi([makeReceiver({ ref: 'r1', organisation: 'Kyiv Aid', status: 'Pending' })])
+      .handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/receivers/r1',
+    roles: ['GroundOfficer'],
+  });
+
+  await expect.element(screen.getByRole('heading', { name: 'Kyiv Aid' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Save status' })).not.toBeInTheDocument();
+});
+
+test('says which boxes and convoys a status change touches, by count and number', async () => {
+  const api = receiverApi([makeReceiver({ ref: 'r1', organisation: 'Kyiv Aid' })]);
+  api.usage.set('r1', { boxIds: [4, 9], convoyIds: [2], boxCount: 2, convoyCount: 1 });
+  worker.use(...api.handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/receivers/r1',
+    roles: ['Administrator'],
+  });
+
+  await expect.element(screen.getByText(/Named by 2 boxes and 1 live convoy/)).toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: '#2' })).toBeInTheDocument();
 });

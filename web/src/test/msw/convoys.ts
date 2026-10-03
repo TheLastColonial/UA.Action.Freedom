@@ -13,6 +13,7 @@ import type {
 } from '../../api/schemas/convoys';
 import type { ManifestStatus } from '../../api/schemas/common';
 import type { PersonReadModel } from '../../api/schemas/people';
+import type { ReceiverStatus } from '../../api/schemas/receivers';
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
 import { crewRoleSchema } from '../../api/schemas/convoys';
 import { problem, validationProblem } from './problem';
@@ -43,6 +44,11 @@ export interface ConvoyApiLookups {
   people?: ReadonlyMap<string, PersonReadModel>;
   /** The status of each vehicle's manifest on its convoy, which is what arrival checks. */
   manifestStatusByVin?: ReadonlyMap<string, ManifestStatus>;
+  /**
+   * The status of each receiver a vehicle may be handed over to. Only a Registered one is accepted, as
+   * the API refuses any other (409) and an unknown one (422).
+   */
+  receiverStatuses?: ReadonlyMap<string, ReceiverStatus>;
 }
 
 export interface ConvoyApi {
@@ -59,7 +65,12 @@ let minted = 100;
 
 export function convoyApi(
   seed: readonly ConvoyReadModel[] = [],
-  { fleet = new Map(), people = new Map(), manifestStatusByVin = new Map() }: ConvoyApiLookups = {},
+  {
+    fleet = new Map(),
+    people = new Map(),
+    manifestStatusByVin = new Map(),
+    receiverStatuses = new Map(),
+  }: ConvoyApiLookups = {},
 ): ConvoyApi {
   const db = new Map<number, ConvoyReadModel>(seed.map((c) => [c.id, c]));
   const routes = new Map<number, RouteStopReadModel[]>();
@@ -194,6 +205,37 @@ export function convoyApi(
       return HttpResponse.json(vehicles.get(id) ?? []);
     }),
 
+    http.put('/convoys/:id/vehicles/:vin/handover-receiver', async ({ params, request }) => {
+      const id = idFrom(params['id']);
+      const convoy = db.get(id);
+      if (!convoy) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      if (convoy.arrived) {
+        return problem(409, 'This convoy has already arrived.');
+      }
+      const vin = decodeURIComponent(String(params['vin']));
+      const entry = entryFor(id, vin);
+      if (!entry) {
+        return problem(404, `There is no vehicle with VIN '${vin}' on this convoy.`);
+      }
+      const body = (await request.json()) as { receiverRef: string };
+      const status = receiverStatuses.get(body.receiverRef);
+      if (status === undefined) {
+        return problem(422, 'The receiver named does not exist.');
+      }
+      if (status !== 'Registered') {
+        return problem(409, 'Only a registered receiver can be a destination.');
+      }
+      vehicles.set(
+        id,
+        (vehicles.get(id) ?? []).map((v) =>
+          v.vin === vin ? { ...v, handoverReceiverRef: body.receiverRef } : v,
+        ),
+      );
+      return new HttpResponse(null, { status: 204 });
+    }),
+
     http.put('/convoys/:id/vehicles/:vin', ({ params }) => {
       const id = idFrom(params['id']);
       const convoy = db.get(id);
@@ -238,6 +280,7 @@ export function convoyApi(
             passengerCount: 0,
             withdrawnAt: null,
             withdrawnReason: null,
+            handoverReceiverRef: null,
             travelling: true,
             withdrawn: false,
           },

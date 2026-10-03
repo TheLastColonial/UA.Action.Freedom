@@ -77,6 +77,12 @@ export function assignVehicle(id: number, vin: string): Promise<void> {
   return put204(vinPath(id, vin));
 }
 
+// The registered receiver a vehicle is handed over to in Ukraine. The API refuses one that is not
+// registered (409) or does not exist (422).
+export function setHandoverReceiver(id: number, vin: string, receiverRef: string): Promise<void> {
+  return put204(`${vinPath(id, vin)}/handover-receiver`, { receiverRef });
+}
+
 // Before the truck list is published this takes the vehicle off it; afterwards it records that
 // the vehicle left the convoy, keeping the entry, its crew, its insurance and its manifest.
 export function unassignVehicle(id: number, vin: string, reason?: string): Promise<void> {
@@ -222,6 +228,22 @@ export function useAssignVehicle(id: number): UseMutationResult<void, Error, str
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vin: string) => assignVehicle(id, vin),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) }),
+  });
+}
+
+export interface HandoverReceiverChoice {
+  vin: string;
+  receiverRef: string;
+}
+
+export function useSetHandoverReceiver(
+  id: number,
+): UseMutationResult<void, Error, HandoverReceiverChoice> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ vin, receiverRef }: HandoverReceiverChoice) =>
+      setHandoverReceiver(id, vin, receiverRef),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) }),
   });
 }

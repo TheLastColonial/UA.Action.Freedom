@@ -36,6 +36,7 @@ export const qk = {
     all: ['receivers'] as const,
     list: (params: PageParams) => ['receivers', 'list', params] as const,
     detail: (ref: string) => ['receivers', 'detail', ref] as const,
+    usage: (ref: string) => ['receivers', ref, 'usage'] as const,
     sensitive: (ref: string) => ['receivers', ref, 'sensitive-detail'] as const,
   },
   boxes: {

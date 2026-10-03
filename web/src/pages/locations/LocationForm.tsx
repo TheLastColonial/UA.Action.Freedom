@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 
 import { Button } from '../../components/Button';
 import { FormCard } from '../../components/form/FormCard';
-import { TextField } from '../../components/form/fields';
+import { CheckboxField, TextField } from '../../components/form/fields';
 import { locationFormSchema } from './locationModels';
 import type { LocationFormValues } from './locationModels';
 
@@ -47,6 +47,11 @@ export function LocationForm({
 
       <FormCard title="Distribution hub">
         <TextField label="Name" error={errors.name?.message} {...register('name')} />
+        <CheckboxField
+          label="Registered distribution hub"
+          error={errors.isRegisteredHub?.message}
+          {...register('isRegisteredHub')}
+        />
       </FormCard>
 
       <FormCard title="Address">

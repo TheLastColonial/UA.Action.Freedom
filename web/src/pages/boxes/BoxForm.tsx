@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form';
 import { useLocations } from '../../api/locations';
 import { Button } from '../../components/Button';
 import { FormCard } from '../../components/form/FormCard';
-import { SelectField, TextField } from '../../components/form/fields';
+import { SelectField } from '../../components/form/fields';
+import { useReceiverOptions } from '../receivers/useRegisteredReceivers';
 import { boxFormSchema } from './boxModels';
 import type { BoxFormValues } from './boxModels';
 
@@ -25,6 +26,7 @@ export function BoxForm({
   onSubmit,
 }: BoxFormProps): JSX.Element {
   const locations = useLocations({ page: 1, pageSize: 200 });
+  const receivers = useReceiverOptions(initialValues.receiverRef);
 
   const {
     register,
@@ -57,9 +59,10 @@ export function BoxForm({
       ) : null}
 
       <FormCard title="Receiver">
-        <TextField
-          label="Receiver reference"
-          hint="The receiver's opaque reference, if known."
+        <SelectField
+          label="Receiver"
+          hint="Only a registered receiver can be a destination. An Administrator registers a receiver."
+          options={[{ value: '', label: 'No destination yet' }, ...receivers.options]}
           error={errors.receiverRef?.message}
           {...register('receiverRef')}
         />

@@ -17,6 +17,7 @@ const EXPECTED: Record<Policy, readonly Role[]> = {
   'convoys:assign-drivers': ['Dispatcher'],
   'receivers:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader', 'GroundOfficer'],
   'receivers:write': ['Administrator', 'GroundOfficer'],
+  'receivers:register': ['Administrator'],
   'receivers:detail': ['GroundOfficer'],
   'boxes:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
   'boxes:write': ['Administrator', 'Dispatcher', 'Loader'],
@@ -40,7 +41,7 @@ const ALL_ROLES: readonly Role[] = [
 ];
 
 describe('policySatisfiedBy', () => {
-  it('covers exactly the 21 documented policies', () => {
+  it('covers exactly the 22 documented policies', () => {
     expect([...ALL_POLICIES].sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 

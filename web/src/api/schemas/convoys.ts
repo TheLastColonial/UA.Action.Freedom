@@ -43,6 +43,8 @@ export const convoyVehicleReadModelSchema = z.object({
   passengerCount: z.number().int(),
   withdrawnAt: z.string().nullable(),
   withdrawnReason: z.string().nullable(),
+  // The registered receiver this vehicle is handed over to in Ukraine, once chosen.
+  handoverReceiverRef: z.string().nullable(),
   travelling: z.boolean(),
   withdrawn: z.boolean(),
 });

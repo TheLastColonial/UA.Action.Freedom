@@ -9,7 +9,9 @@ import { Gate } from '../../components/Gate';
 import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
+import { ReceiverRegistrationPanel } from './ReceiverRegistrationPanel';
 import { ReceiverSensitivePanel } from './ReceiverSensitivePanel';
+import { ReceiverStatusBadge } from './ReceiverStatusBadge';
 
 export function ReceiverDetailPage(): JSX.Element {
   const { ref = '' } = useParams();
@@ -48,8 +50,16 @@ export function ReceiverDetailPage(): JSX.Element {
         <dl>
           <dt>Region</dt>
           <dd>{receiver.region}</dd>
+          <dt>Registration</dt>
+          <dd>
+            <ReceiverStatusBadge status={receiver.status} />
+          </dd>
         </dl>
       </DetailCard>
+
+      <Gate policy="receivers:register">
+        <ReceiverRegistrationPanel receiverRef={receiver.ref} status={receiver.status} />
+      </Gate>
 
       <Gate
         policy="receivers:detail"
