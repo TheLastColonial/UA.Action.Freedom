@@ -317,6 +317,9 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
         // the sheet groups by consignee and tells the filer which receiver to look the address up
         // against. The address itself is in the sensitive schema this connection is DENY'd on (§4.4).
         //
+        // An item's own code wins; otherwise the code its category maps to for the EU (Authority 1, ADR 0014).
+        // The category name comes along so a gap can be reported by the category to fix, not only the item.
+        //
         // ORDER BY is not cosmetic: the goods item number is non-amendable in ICS2, so it has to come
         // from a stable order rather than whatever the database felt like returning.
         var rows = await connection.QueryAsync<EnsGoodsLineReadModel>(new CommandDefinition(
@@ -328,10 +331,13 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
                    r.Organisation   AS ReceiverOrganisation,
                    r.Region         AS ReceiverRegion,
                    i.Description    AS ItemDescription,
-                   i.CommodityCode
+                   COALESCE(i.CommodityCode, eu.Code) AS CommodityCode,
+                   c.NameEn         AS CategoryName
             FROM dbo.ManifestBox AS mb
             INNER JOIN dbo.Box AS b ON b.Id = mb.BoxId
             INNER JOIN dbo.BoxItem AS i ON i.BoxId = b.Id
+            INNER JOIN dbo.ItemCategory AS c ON c.Id = i.CategoryId
+            LEFT JOIN dbo.CategoryCustomsCode AS eu ON eu.CategoryId = c.Id AND eu.Authority = 1
             LEFT JOIN dbo.Receiver AS r ON r.ReceiverRef = b.ReceiverRef
             WHERE mb.ManifestId = @id
             ORDER BY b.Id, i.Description, i.Id

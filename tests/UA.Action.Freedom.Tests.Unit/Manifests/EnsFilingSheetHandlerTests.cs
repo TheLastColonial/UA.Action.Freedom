@@ -284,6 +284,18 @@ public class EnsFilingSheetHandlerTests
     }
 
     [Fact]
+    public async Task Names_the_category_to_fix_when_neither_the_item_nor_its_category_has_an_EU_code()
+    {
+        var repository = ARepository(
+            AGoodsLine(boxId: 2, description: "Assorted donations", commodityCode: null) with { CategoryName = "Clothing" });
+
+        var sheet = await Sheet(AHandler(manifests: repository));
+
+        sheet!.Missing.Should().ContainSingle(missing =>
+            missing.Contains("Assorted donations") && missing.Contains("category \"Clothing\""));
+    }
+
+    [Fact]
     public async Task Reports_a_route_stop_with_no_country_code_as_missing()
     {
         var convoys = AConvoyRepository(
