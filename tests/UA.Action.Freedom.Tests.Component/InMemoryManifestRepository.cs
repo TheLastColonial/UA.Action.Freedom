@@ -1,4 +1,6 @@
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Manifests;
+using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Component;
@@ -6,8 +8,19 @@ namespace UA.Action.Freedom.Tests.Component;
 /// <summary>
 /// Dictionary-backed manifest persistence so the endpoint tests run without a database.
 /// </summary>
-internal sealed class InMemoryManifestRepository : IManifestRepository
+internal sealed class InMemoryManifestRepository : IManifestRepository, IRecordsWhoChanged
 {
+    private readonly ChangeLedger<string> changes = new(StringComparer.OrdinalIgnoreCase);
+
+    public void Attach(IChangeAttribution attribution, IPersonRepository people) =>
+        changes.Attach(attribution, people);
+
+    private ManifestReadModel Read(ManifestReadModel manifest)
+    {
+        var (name, at) = changes.Of(manifest.Id);
+        return manifest with { LastChangedByName = name, LastChangedAt = at };
+    }
+
     private readonly Dictionary<string, ManifestReadModel> manifests = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<ManifestBoxReadModel>> boxes = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<int> knownBoxes = [];
@@ -63,7 +76,7 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
     public IReadOnlyList<ManifestBoxReadModel> Boxes(string id) => boxes.GetValueOrDefault(id, []);
 
     public Task<ManifestReadModel?> GetByIdAsync(string id, CancellationToken cancellationToken) =>
-        Task.FromResult(manifests.GetValueOrDefault(id));
+        Task.FromResult(manifests.TryGetValue(id, out var manifest) ? Read(manifest) : null);
 
     public Task<IReadOnlyList<ManifestReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<ManifestReadModel>>(
@@ -71,6 +84,7 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
                 .OrderBy(manifest => manifest.Id, StringComparer.Ordinal)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .Select(Read)
                 .ToList());
 
     public Task<bool> ExistsAsync(string id, CancellationToken cancellationToken) =>
@@ -78,12 +92,16 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
 
     /// <summary>Mirrors <c>UQ_Manifest_ConvoyVehicle</c>: one manifest per vehicle per convoy.</summary>
     public Task<ManifestReadModel?> GetForVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken) =>
-        Task.FromResult(manifests.Values.FirstOrDefault(manifest =>
-            manifest.ConvoyId == convoyId && string.Equals(manifest.Vin, vin, StringComparison.OrdinalIgnoreCase)));
+        Task.FromResult(manifests.Values
+            .FirstOrDefault(manifest =>
+                manifest.ConvoyId == convoyId && string.Equals(manifest.Vin, vin, StringComparison.OrdinalIgnoreCase)) is { } found
+            ? Read(found)
+            : null);
 
     public Task AddAsync(ManifestReadModel manifest, CancellationToken cancellationToken)
     {
         manifests[manifest.Id] = manifest;
+        changes.Stamp(manifest.Id);
         return Task.CompletedTask;
     }
 
@@ -102,6 +120,7 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
             DeliveryNotes = manifest.DeliveryNotes,
             FerryBookingComplete = manifest.FerryBookingComplete,
         };
+        changes.Stamp(manifest.Id);
 
         return Task.FromResult(true);
     }
@@ -109,6 +128,7 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
     public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken)
     {
         boxes.Remove(id);
+        changes.Forget(id);
         return Task.FromResult(manifests.Remove(id));
     }
 
@@ -121,6 +141,7 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
         }
 
         manifests[id] = manifest with { Status = to };
+        changes.Stamp(id);
         return Task.FromResult(true);
     }
 
@@ -133,6 +154,7 @@ internal sealed class InMemoryManifestRepository : IManifestRepository
 
         var stamped = new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc);
         manifests[id] = manifest with { Status = ManifestStatus.Confirmed, GmrSubmittedAt = stamped };
+        changes.Stamp(id);
 
         return Task.FromResult<DateTime?>(stamped);
     }

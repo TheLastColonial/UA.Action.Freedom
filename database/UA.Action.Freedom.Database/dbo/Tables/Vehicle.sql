@@ -50,7 +50,10 @@ CREATE TABLE [dbo].[Vehicle] (
 
     [CreatedAt]        datetime2(0)   NOT NULL CONSTRAINT [DF_Vehicle_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]        datetime2(0)   NOT NULL CONSTRAINT [DF_Vehicle_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
 
-    CONSTRAINT [CK_Vehicle_InspectionStatus] CHECK ([InspectionStatus] >= 0 AND [InspectionStatus] <= 3)
+    CONSTRAINT [CK_Vehicle_InspectionStatus] CHECK ([InspectionStatus] >= 0 AND [InspectionStatus] <= 3),
+    CONSTRAINT [FK_Vehicle_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO

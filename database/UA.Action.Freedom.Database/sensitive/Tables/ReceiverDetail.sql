@@ -13,5 +13,8 @@ CREATE TABLE [sensitive].[ReceiverDetail] (
     [City]         nvarchar(100)    NOT NULL,
     [PostCode]     nvarchar(20)     NULL,
     -- 4.4.5: delete this row a defined period after delivery is confirmed.
-    [DeleteAfter]  datetime2(0)     NULL
+    [DeleteAfter]  datetime2(0)     NULL,
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
+    CONSTRAINT [FK_ReceiverDetail_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );

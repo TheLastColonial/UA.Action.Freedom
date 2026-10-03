@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Dapper;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
 
 namespace UA.Action.Freedom.Data.Boxes;
@@ -8,10 +9,12 @@ namespace UA.Action.Freedom.Data.Boxes;
 /// Dapper-backed <see cref="IBoxRepository"/> over <c>dbo.Box</c>, <c>dbo.BoxItem</c> and
 /// <c>dbo.BoxQrCode</c>.
 /// </summary>
-public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBoxRepository
+public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IBoxRepository
 {
-    private const string Columns =
-        "Id, WeightKg, WidthCm, DepthCm, HeightCm, ReceiverRef, LocationId, ValidatedByPersonId, ValidatedAt";
+    private static readonly string Columns =
+        $"b.Id, b.WeightKg, b.WidthCm, b.DepthCm, b.HeightCm, b.ReceiverRef, b.LocationId, b.ValidatedByPersonId, b.ValidatedAt, {ChangeStamp.ReadColumns("b")}";
+
+    private static readonly string From = $"dbo.Box AS b {ChangeStamp.ReadJoin("b")}";
 
     private const string QrCodeColumns = "Token, BoxId, IssuedAt, RevokedAt";
 
@@ -37,7 +40,7 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
         await using var connection = connectionFactory.Create();
 
         return await connection.QuerySingleOrDefaultAsync<BoxReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Box WHERE Id = @id",
+            $"SELECT {Columns} FROM {From} WHERE b.Id = @id",
             new { id },
             cancellationToken: cancellationToken));
     }
@@ -48,8 +51,8 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
 
         var rows = await connection.QueryAsync<BoxReadModel>(new CommandDefinition(
             $"""
-             SELECT {Columns} FROM dbo.Box
-             ORDER BY Id
+             SELECT {Columns} FROM {From}
+             ORDER BY b.Id
              OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY
              """,
             new { skip = (page - 1) * pageSize, take = pageSize },
@@ -78,11 +81,11 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
         // nothing, and the only way past that is ValidateAsync.
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """
-            INSERT INTO dbo.Box (ReceiverRef, LocationId)
-            VALUES (@ReceiverRef, @LocationId);
+            INSERT INTO dbo.Box (ReceiverRef, LocationId, LastChangedBy, LastChangedAt)
+            VALUES (@ReceiverRef, @LocationId, @changedBy, SYSUTCDATETIME());
             SELECT CAST(SCOPE_IDENTITY() AS int);
             """,
-            box,
+            attribution.With(box),
             cancellationToken: cancellationToken));
     }
 
@@ -97,10 +100,12 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
             UPDATE dbo.Box SET
                 ReceiverRef = @ReceiverRef,
                 LocationId = @LocationId,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Id = @Id
             """,
-            box,
+            attribution.With(box),
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -137,10 +142,12 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
                 HeightCm = @heightCm,
                 ValidatedByPersonId = @validatedByPersonId,
                 ValidatedAt = @validatedAt,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Id = @id AND ValidatedAt IS NULL
             """,
-            new { id, validatedByPersonId, weightKg, widthCm, depthCm, heightCm, validatedAt },
+            attribution.With(new { id, validatedByPersonId, weightKg, widthCm, depthCm, heightCm, validatedAt }),
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -165,17 +172,17 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO dbo.BoxItem (Id, BoxId, Description, PropertiesJson, CommodityCode)
-            VALUES (@id, @boxId, @description, @propertiesJson, @commodityCode)
+            INSERT INTO dbo.BoxItem (Id, BoxId, Description, PropertiesJson, CommodityCode, LastChangedBy, LastChangedAt)
+            VALUES (@id, @boxId, @description, @propertiesJson, @commodityCode, @changedBy, SYSUTCDATETIME())
             """,
-            new
+            attribution.With(new
             {
                 id = item.Id,
                 boxId,
                 description = item.Description,
                 propertiesJson = JsonSerializer.Serialize(item.Properties),
                 commodityCode = item.CommodityCode,
-            },
+            }),
             cancellationToken: cancellationToken));
     }
 
@@ -228,14 +235,20 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         await connection.ExecuteAsync(new CommandDefinition(
-            "UPDATE dbo.BoxQrCode SET RevokedAt = @issuedAt WHERE BoxId = @boxId AND RevokedAt IS NULL",
-            new { boxId, issuedAt },
+            """
+            UPDATE dbo.BoxQrCode SET RevokedAt = @issuedAt, LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
+            WHERE BoxId = @boxId AND RevokedAt IS NULL
+            """,
+            attribution.With(new { boxId, issuedAt }),
             transaction,
             cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(new CommandDefinition(
-            "INSERT INTO dbo.BoxQrCode (Token, BoxId, IssuedAt) VALUES (@token, @boxId, @issuedAt)",
-            new { token, boxId, issuedAt },
+            """
+            INSERT INTO dbo.BoxQrCode (Token, BoxId, IssuedAt, LastChangedBy, LastChangedAt)
+            VALUES (@token, @boxId, @issuedAt, @changedBy, SYSUTCDATETIME())
+            """,
+            attribution.With(new { token, boxId, issuedAt }),
             transaction,
             cancellationToken: cancellationToken));
 
@@ -249,8 +262,11 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory) : IBox
         await using var connection = connectionFactory.Create();
 
         var affected = await connection.ExecuteAsync(new CommandDefinition(
-            "UPDATE dbo.BoxQrCode SET RevokedAt = SYSUTCDATETIME() WHERE BoxId = @boxId AND RevokedAt IS NULL",
-            new { boxId },
+            """
+            UPDATE dbo.BoxQrCode SET RevokedAt = SYSUTCDATETIME(), LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
+            WHERE BoxId = @boxId AND RevokedAt IS NULL
+            """,
+            attribution.With(new { boxId }),
             cancellationToken: cancellationToken));
 
         return affected > 0;

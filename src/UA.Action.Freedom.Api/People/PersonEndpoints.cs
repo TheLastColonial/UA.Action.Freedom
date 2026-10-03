@@ -50,7 +50,8 @@ public static class PersonEndpoints
             return Results.Created($"/people/{id}", null);
         })
         .AddEndpointFilter<ValidationFilter<CreatePersonRequest>>()
-        .RequireAuthorization(AuthenticationExtensions.PeopleWrite);
+        .RequireAuthorization(AuthenticationExtensions.PeopleWrite)
+        .AllowUnlinkedLogin();
 
         people.MapPut("/{id:guid}", async (
             Guid id,
@@ -101,7 +102,8 @@ public static class PersonEndpoints
             };
         })
         .AddEndpointFilter<ValidationFilter<LinkLoginRequest>>()
-        .RequireAuthorization(AuthenticationExtensions.PeopleWrite);
+        .RequireAuthorization(AuthenticationExtensions.PeopleWrite)
+        .AllowUnlinkedLogin();
 
         return app;
     }

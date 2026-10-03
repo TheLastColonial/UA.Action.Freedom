@@ -18,7 +18,8 @@ namespace UA.Action.Freedom.Data.Convoys;
 /// <c>nvarchar(4000)</c>, and under the database's collation that converts the <em>column</em>, so
 /// an unmarked <c>WHERE Vin = @vin</c> scans and locks every row it reads.
 /// </remarks>
-public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFactory) : IConvoyVehicleRepository
+public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution)
+    : IConvoyVehicleRepository
 {
     private const int PrimaryKeyViolation = 2627;
     private const int UniqueIndexViolation = 2601;
@@ -96,8 +97,8 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
         // vehicle that broke down and left is free to be put on the next one.
         var inserted = await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin)
-            SELECT @convoyId, v.Vin
+            INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin, LastChangedBy, LastChangedAt)
+            SELECT @convoyId, v.Vin, @changedBy, SYSUTCDATETIME()
             FROM dbo.Vehicle AS v
             WHERE v.Vin = @vin
               AND v.InspectionStatus = @passed
@@ -111,7 +112,7 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
               AND NOT EXISTS (SELECT 1 FROM dbo.ConvoyVehicle AS mine
                               WHERE mine.ConvoyId = @convoyId AND mine.Vin = v.Vin)
             """,
-            new { convoyId, vin = SqlKey.Of(vin), passed = (int)InspectionStatus.Passed },
+            attribution.With(new { convoyId, vin = SqlKey.Of(vin), passed = (int)InspectionStatus.Passed }),
             cancellationToken: cancellationToken));
 
         return inserted > 0
@@ -180,10 +181,10 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
         // the same breakdown resolve to one withdrawal with one timestamp.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             """
-            UPDATE dbo.ConvoyVehicle SET WithdrawnAt = @withdrawnAt, WithdrawnReason = @reason
+            UPDATE dbo.ConvoyVehicle SET WithdrawnAt = @withdrawnAt, WithdrawnReason = @reason, LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
             WHERE ConvoyId = @convoyId AND Vin = @vin AND WithdrawnAt IS NULL
             """,
-            new { convoyId, vin = SqlKey.Of(vin), reason, withdrawnAt },
+            attribution.With(new { convoyId, vin = SqlKey.Of(vin), reason, withdrawnAt }),
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -211,12 +212,12 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             """
             SELECT
                 crew.PersonId,
-                COALESCE(d.FirstName, N'Former') AS FirstName,
-                COALESCE(d.LastName, N'volunteer') AS LastName,
+                person.FirstName,
+                person.LastName,
                 crew.[Role]
             FROM dbo.ConvoyVehicleCrew AS crew
-            -- LEFT: an erased volunteer keeps their seat in the history, but not their name.
-            LEFT JOIN dbo.PersonDetail AS d ON d.PersonId = crew.PersonId
+            -- An erased volunteer keeps their seat in the history, but not their name: the view says "Former volunteer".
+            INNER JOIN dbo.PersonDisplay AS person ON person.PersonId = crew.PersonId
             WHERE crew.ConvoyId = @convoyId AND crew.Vin = @vin
             ORDER BY crew.[Role], LastName, FirstName
             """,
@@ -240,14 +241,14 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
         {
             var inserted = await connection.ExecuteAsync(new CommandDefinition(
                 """
-                INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, [Role])
-                SELECT @convoyId, @vin, @personId, @role
+                INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, [Role], LastChangedBy, LastChangedAt)
+                SELECT @convoyId, @vin, @personId, @role, @changedBy, SYSUTCDATETIME()
                 WHERE EXISTS (SELECT 1 FROM dbo.ConvoyVehicle
                               WHERE ConvoyId = @convoyId AND Vin = @vin AND WithdrawnAt IS NULL)
                   AND NOT EXISTS (SELECT 1 FROM dbo.ConvoyVehicleCrew
                                   WHERE ConvoyId = @convoyId AND PersonId = @personId)
                 """,
-                new { convoyId, vin = SqlKey.Of(vin), personId, role = (int)role },
+                attribution.With(new { convoyId, vin = SqlKey.Of(vin), personId, role = (int)role }),
                 cancellationToken: cancellationToken));
 
             if (inserted > 0)

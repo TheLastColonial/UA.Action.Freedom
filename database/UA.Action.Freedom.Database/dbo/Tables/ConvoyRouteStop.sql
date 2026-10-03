@@ -16,9 +16,12 @@ CREATE TABLE [dbo].[ConvoyRouteStop] (
     -- from it at filing time. NULL means nobody has supplied one, and the filing sheet says so.
     [CountryCode] char(2)    NULL,
     [Postcode] nvarchar(20)  NOT NULL CONSTRAINT [DF_ConvoyRouteStop_Postcode] DEFAULT '',
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
 
     CONSTRAINT [PK_ConvoyRouteStop] PRIMARY KEY ([ConvoyId], [Sequence]),
     -- The route has no life of its own: deleting the convoy takes it with it, which is also
     -- what stops a cancelled convoy leaving orphan stops behind.
-    CONSTRAINT [FK_ConvoyRouteStop_Convoy] FOREIGN KEY ([ConvoyId]) REFERENCES [dbo].[Convoy] ([Id]) ON DELETE CASCADE
+    CONSTRAINT [FK_ConvoyRouteStop_Convoy] FOREIGN KEY ([ConvoyId]) REFERENCES [dbo].[Convoy] ([Id]) ON DELETE CASCADE,
+    CONSTRAINT [FK_ConvoyRouteStop_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );

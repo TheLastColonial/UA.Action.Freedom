@@ -17,7 +17,9 @@ public sealed record ConvoyReadModel(
     DateTime? TruckListPublishedAt,
     DateTime? ArrivedAt = null,
     ChannelCrossing CrossingMode = ChannelCrossing.Ferry,
-    string? VesselImo = null)
+    string? VesselImo = null,
+    string? LastChangedByName = null,
+    DateTime? LastChangedAt = null)
 {
     /// <summary>
     /// Whether the convoy has arrived. After that nothing about it changes — its vehicles are

@@ -11,5 +11,8 @@ CREATE TABLE [dbo].[Location] (
     [Country]   nvarchar(100) NULL,
     [Postcode]  nvarchar(20)  NULL,
     [CreatedAt] datetime2(0)  NOT NULL CONSTRAINT [DF_Location_CreatedAt] DEFAULT SYSUTCDATETIME(),
-    [UpdatedAt] datetime2(0)  NOT NULL CONSTRAINT [DF_Location_UpdatedAt] DEFAULT SYSUTCDATETIME()
+    [UpdatedAt] datetime2(0)  NOT NULL CONSTRAINT [DF_Location_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
+    CONSTRAINT [FK_Location_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );

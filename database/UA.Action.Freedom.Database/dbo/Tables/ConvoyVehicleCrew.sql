@@ -23,6 +23,8 @@ CREATE TABLE [dbo].[ConvoyVehicleCrew] (
     [PersonId]  uniqueidentifier NOT NULL,
     [Role]      int              NOT NULL CONSTRAINT [DF_ConvoyVehicleCrew_Role] DEFAULT 0,
     [CreatedAt] datetime2(0)     NOT NULL CONSTRAINT [DF_ConvoyVehicleCrew_CreatedAt] DEFAULT SYSUTCDATETIME(),
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
 
     CONSTRAINT [PK_ConvoyVehicleCrew] PRIMARY KEY ([ConvoyId], [Vin], [PersonId]),
 
@@ -33,7 +35,8 @@ CREATE TABLE [dbo].[ConvoyVehicleCrew] (
     CONSTRAINT [FK_ConvoyVehicleCrew_Person] FOREIGN KEY ([PersonId]) REFERENCES [dbo].[Person] ([Id]),
 
     CONSTRAINT [CK_ConvoyVehicleCrew_Role] CHECK ([Role] = 0 OR [Role] = 1),
-    CONSTRAINT [UQ_ConvoyVehicleCrew_Convoy_Person] UNIQUE ([ConvoyId], [PersonId])
+    CONSTRAINT [UQ_ConvoyVehicleCrew_Convoy_Person] UNIQUE ([ConvoyId], [PersonId]),
+    CONSTRAINT [FK_ConvoyVehicleCrew_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
 

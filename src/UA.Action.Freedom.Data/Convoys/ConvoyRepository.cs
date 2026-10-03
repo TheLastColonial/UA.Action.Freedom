@@ -15,10 +15,12 @@ namespace UA.Action.Freedom.Data.Convoys;
 /// Every statement is parameterised; the write methods return the affected-row count as a bool so
 /// the handlers can tell "no such row" from "done".
 /// </remarks>
-public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : IConvoyRepository
+public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IConvoyRepository
 {
-    private const string Columns =
-        "Id, Start, ExpectedEnd, TruckListPublishedAt, ArrivedAt, CrossingMode, VesselImo";
+    private static readonly string Columns =
+        $"c.Id, c.Start, c.ExpectedEnd, c.TruckListPublishedAt, c.ArrivedAt, c.CrossingMode, c.VesselImo, {ChangeStamp.ReadColumns("c")}";
+
+    private static readonly string From = $"dbo.Convoy AS c {ChangeStamp.ReadJoin("c")}";
 
     /// <summary>A manifest in one of these says what became of its vehicle; the journey is over for it.</summary>
     private static readonly string FinishedStatuses =
@@ -32,7 +34,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         await using var connection = connectionFactory.Create();
 
         return await connection.QuerySingleOrDefaultAsync<ConvoyReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Convoy WHERE Id = @id",
+            $"SELECT {Columns} FROM {From} WHERE c.Id = @id",
             new { id },
             cancellationToken: cancellationToken));
     }
@@ -45,8 +47,8 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         // one, and convoys run about once a month so the list is short and mostly historical.
         var rows = await connection.QueryAsync<ConvoyReadModel>(new CommandDefinition(
             $"""
-             SELECT {Columns} FROM dbo.Convoy
-             ORDER BY Start DESC, Id DESC
+             SELECT {Columns} FROM {From}
+             ORDER BY c.Start DESC, c.Id DESC
              OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY
              """,
             new { skip = (page - 1) * pageSize, take = pageSize },
@@ -80,11 +82,11 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         // a trigger on this table instead of the row just inserted.
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """
-            INSERT INTO dbo.Convoy (Start, ExpectedEnd, CrossingMode, VesselImo)
-            VALUES (@start, @expectedEnd, @crossingMode, @vesselImo);
+            INSERT INTO dbo.Convoy (Start, ExpectedEnd, CrossingMode, VesselImo, LastChangedBy, LastChangedAt)
+            VALUES (@start, @expectedEnd, @crossingMode, @vesselImo, @changedBy, SYSUTCDATETIME());
             SELECT CAST(SCOPE_IDENTITY() AS int);
             """,
-            new { start, expectedEnd, crossingMode = (int)crossingMode, vesselImo },
+            attribution.With(new { start, expectedEnd, crossingMode = (int)crossingMode, vesselImo }),
             cancellationToken: cancellationToken));
     }
 
@@ -101,17 +103,19 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
                 ExpectedEnd = @ExpectedEnd,
                 CrossingMode = @CrossingMode,
                 VesselImo = @VesselImo,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Id = @Id
             """,
-            new
+            attribution.With(new
             {
                 convoy.Id,
                 convoy.Start,
                 convoy.ExpectedEnd,
                 CrossingMode = (int)convoy.CrossingMode,
                 convoy.VesselImo,
-            },
+            }),
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -189,10 +193,10 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         {
             await connection.ExecuteAsync(new CommandDefinition(
                 $"""
-                 INSERT INTO dbo.ConvoyRouteStop (ConvoyId, {StopColumns})
-                 VALUES (@ConvoyId, @Sequence, @House, @Street, @City, @Country, @Postcode, @CountryCode)
+                 INSERT INTO dbo.ConvoyRouteStop (ConvoyId, {StopColumns}, LastChangedBy, LastChangedAt)
+                 VALUES (@ConvoyId, @Sequence, @House, @Street, @City, @Country, @Postcode, @CountryCode, @changedBy, SYSUTCDATETIME())
                  """,
-                stops.Select(stop => new
+                stops.Select(stop => attribution.With(new
                 {
                     ConvoyId = convoyId,
                     stop.Sequence,
@@ -202,7 +206,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
                     stop.Country,
                     stop.CountryCode,
                     stop.Postcode,
-                }).ToList(),
+                })).ToList(),
                 transaction,
                 cancellationToken: cancellationToken));
         }
@@ -220,10 +224,12 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
             """
             UPDATE dbo.Convoy SET
                 TruckListPublishedAt = @publishedAt,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Id = @convoyId AND TruckListPublishedAt IS NULL
             """,
-            new { convoyId, publishedAt },
+            attribution.With(new { convoyId, publishedAt }),
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -251,10 +257,14 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
 
         var arrived = await connection.ExecuteAsync(new CommandDefinition(
             """
-            UPDATE dbo.Convoy SET ArrivedAt = @arrivedAt, UpdatedAt = SYSUTCDATETIME()
+            UPDATE dbo.Convoy SET
+                ArrivedAt = @arrivedAt,
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Id = @convoyId AND ArrivedAt IS NULL AND TruckListPublishedAt IS NOT NULL
             """,
-            new { convoyId, arrivedAt },
+            attribution.With(new { convoyId, arrivedAt }),
             transaction,
             cancellationToken: cancellationToken));
 
@@ -287,7 +297,11 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
         // left, so whatever happened to it did not happen here.
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            UPDATE v SET HandedOverAt = @arrivedAt, UpdatedAt = SYSUTCDATETIME()
+            UPDATE v SET
+                HandedOverAt = @arrivedAt,
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             FROM dbo.Vehicle AS v
             INNER JOIN dbo.ConvoyVehicle AS cv ON cv.Vin = v.Vin AND cv.ConvoyId = @convoyId
             WHERE cv.WithdrawnAt IS NULL
@@ -295,13 +309,13 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory) : I
               AND EXISTS (SELECT 1 FROM dbo.Manifest AS m
                           WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN (@delivered, @lost));
             """,
-            new
+            attribution.With(new
             {
                 convoyId,
                 arrivedAt,
                 delivered = (int)ManifestStatus.Delivered,
                 lost = (int)ManifestStatus.Lost,
-            },
+            }),
             transaction,
             cancellationToken: cancellationToken));
 

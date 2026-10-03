@@ -30,7 +30,7 @@ public class ConvoyRepositoryTests
         CancellationToken cancellationToken)
     {
         await SkipUnlessReachableAsync(Probe, cancellationToken);
-        return (new ConvoyRepository(ConnectionFactory()), new ConvoyVehicleRepository(ConnectionFactory()));
+        return (new ConvoyRepository(ConnectionFactory(), Unattributed), new ConvoyVehicleRepository(ConnectionFactory(), Unattributed));
     }
 
     private static RouteStopReadModel AStop(int sequence, string city, string postcode) =>
@@ -50,7 +50,7 @@ public class ConvoyRepositoryTests
 
             var stored = await convoys.GetByIdAsync(id, cancellationToken);
 
-            stored.Should().Be(new ConvoyReadModel(id, Start, ExpectedEnd, TruckListPublishedAt: null));
+            stored.Should().Be(new ConvoyReadModel(id, Start, ExpectedEnd, TruckListPublishedAt: null, LastChangedAt: stored!.LastChangedAt));
             stored!.TruckListPublished.Should().BeFalse();
             stored.Arrived.Should().BeFalse();
         }

@@ -10,7 +10,9 @@ public sealed record LocationReadModel(
     string? Street,
     string? City,
     string? Country,
-    string? Postcode);
+    string? Postcode,
+    string? LastChangedByName = null,
+    DateTime? LastChangedAt = null);
 
 /// <summary>
 /// A 1m by 1m storage bay within a location, as this slice persists and returns it.

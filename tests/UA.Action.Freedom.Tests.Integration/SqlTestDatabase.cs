@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Data;
 
 namespace UA.Action.Freedom.Tests.Integration;
@@ -29,6 +30,16 @@ internal static class SqlTestDatabase
     internal static string ConnectionString =>
         Environment.GetEnvironmentVariable("ConnectionStrings__Freedom") ?? DefaultLocalConnectionString;
 
+    private const string DefaultSensitiveConnectionString =
+        "Server=localhost,1433;Database=Freedom;User Id=freedom_sensitive;Password=Local_Freedom_Sensitive_1;TrustServerCertificate=True;Encrypt=False;Connect Timeout=3";
+
+    /// <summary>
+    /// The Ground Officer's identity. Only used where a test must see the <c>sensitive</c> schema,
+    /// which <c>freedom_app</c> is denied — down to its metadata.
+    /// </summary>
+    internal static string SensitiveConnectionString =>
+        Environment.GetEnvironmentVariable("ConnectionStrings__FreedomSensitive") ?? DefaultSensitiveConnectionString;
+
     private static bool Required =>
         string.Equals(Environment.GetEnvironmentVariable("FREEDOM_REQUIRE_INTEGRATION"), "true", StringComparison.OrdinalIgnoreCase);
 
@@ -52,6 +63,14 @@ internal static class SqlTestDatabase
             Assert.Skip($"Freedom database is not reachable or not provisioned ({probeSql}): {exception.Message}");
         }
     }
+
+    /// <summary>A change made by nobody in particular: <c>LastChangedBy</c> is stored as NULL.</summary>
+    internal static IChangeAttribution Unattributed { get; } = new FixedAttribution(null);
+
+    /// <summary>A change made by <paramref name="personId"/>, as the API would stamp it from the login.</summary>
+    internal static IChangeAttribution AttributedTo(Guid personId) => new FixedAttribution(personId);
+
+    private sealed record FixedAttribution(Guid? PersonId) : IChangeAttribution;
 
     internal static SqlConnectionFactory ConnectionFactory() =>
         new(new ConfigurationBuilder()

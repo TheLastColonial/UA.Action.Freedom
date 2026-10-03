@@ -33,7 +33,7 @@ public class ManifestRepositoryTests
         await SkipUnlessReachableAsync(
             "SELECT COUNT(1) FROM dbo.Manifest; SELECT COUNT(1) FROM dbo.ManifestBox; SELECT COUNT(1) FROM dbo.ConvoyVehicle;",
             cancellationToken);
-        return new ManifestRepository(ConnectionFactory());
+        return new ManifestRepository(ConnectionFactory(), Unattributed);
     }
 
     private static string NewId() => "IT" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
@@ -143,7 +143,7 @@ public class ManifestRepositoryTests
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
 
-            stored.Should().Be(AManifest(id, entry));
+            stored.Should().Be(AManifest(id, entry) with { LastChangedAt = stored!.LastChangedAt });
             stored!.Frozen.Should().BeFalse();
 
             // The pair is also reachable from the truck-list side: one manifest per vehicle per convoy.

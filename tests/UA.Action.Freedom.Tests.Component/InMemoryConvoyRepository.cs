@@ -1,5 +1,6 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Component;
@@ -22,8 +23,19 @@ namespace UA.Action.Freedom.Tests.Component;
 /// this one returned <c>[]</c> where the SQL returned <c>null</c> once already.
 /// </para>
 /// </remarks>
-internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehicleRepository
+internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehicleRepository, IRecordsWhoChanged
 {
+    private readonly ChangeLedger<int> changes = new();
+
+    public void Attach(IChangeAttribution attribution, IPersonRepository people) =>
+        changes.Attach(attribution, people);
+
+    private ConvoyReadModel Read(ConvoyReadModel convoy)
+    {
+        var (name, at) = changes.Of(convoy.Id);
+        return convoy with { LastChangedByName = name, LastChangedAt = at };
+    }
+
     private sealed record StoredVehicle(InspectionStatus Inspection, bool HandedOver = false);
 
     /// <summary>
@@ -190,7 +202,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     // ---- IConvoyRepository: the journey -------------------------------------------------------
 
     public Task<ConvoyReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken) =>
-        Task.FromResult(convoys.GetValueOrDefault(id));
+        Task.FromResult(convoys.TryGetValue(id, out var convoy) ? Read(convoy) : null);
 
     public Task<IReadOnlyList<ConvoyReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<ConvoyReadModel>>(
@@ -199,6 +211,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
                 .ThenByDescending(convoy => convoy.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .Select(Read)
                 .ToList());
 
     public Task<bool> ExistsAsync(int id, CancellationToken cancellationToken) =>
@@ -215,6 +228,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         convoys[id] = new ConvoyReadModel(
             id, start, expectedEnd, TruckListPublishedAt: null, ArrivedAt: null,
             CrossingMode: crossingMode, VesselImo: vesselImo);
+        changes.Stamp(id);
         return Task.FromResult(id);
     }
 
@@ -231,6 +245,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
             TruckListPublishedAt = existing.TruckListPublishedAt,
             ArrivedAt = existing.ArrivedAt,
         };
+        changes.Stamp(convoy.Id);
         return Task.FromResult(true);
     }
 
@@ -256,6 +271,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         }
 
         truckList.RemoveAll(entry => entry.ConvoyId == id);
+        changes.Forget(id);
         convoys.Remove(id);
         return Task.FromResult(DeleteResult.Deleted);
     }
@@ -278,6 +294,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         }
 
         convoys[convoyId] = convoy with { TruckListPublishedAt = publishedAt };
+        changes.Stamp(convoyId);
         return Task.FromResult(true);
     }
 
@@ -294,6 +311,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         }
 
         convoys[convoyId] = convoy with { ArrivedAt = arrivedAt };
+        changes.Stamp(convoyId);
 
         // Delivered and Lost vehicles stay in Ukraine. Nothing is released: a vehicle that was not
         // handed over is free for the next convoy because this one has arrived, which is what
@@ -420,10 +438,10 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
             .Where(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin))
             .Select(seat =>
             {
-                // LEFT JOIN: an erased volunteer keeps their seat in the history, but not their name.
+                // An erased volunteer keeps their seat in the history, but not their name.
                 var (firstName, lastName) = persons.TryGetValue(seat.PersonId, out var found)
                     ? found
-                    : ("Former", "volunteer");
+                    : PersonDisplay.Erased;
 
                 return new VehicleCrewReadModel(seat.PersonId, firstName, lastName, seat.Role);
             })

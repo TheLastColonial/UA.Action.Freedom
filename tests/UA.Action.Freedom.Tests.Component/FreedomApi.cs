@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Locations;
@@ -53,6 +54,18 @@ internal static class FreedomApi
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services => services.Replace(repository));
+
+    /// <summary>As above, with the volunteer roster the caller's login is looked up in.</summary>
+    internal static WebApplicationFactory<Program> WithVehicles(
+        IVehicleRepository repository,
+        IPersonRepository people,
+        bool authenticated = true,
+        params string[] roles) =>
+        WithFakes(authenticated, roles, services =>
+        {
+            services.Replace(repository);
+            services.Replace(people);
+        });
 
     /// <summary>The application with its volunteer persistence swapped for <paramref name="repository"/>.</summary>
     internal static WebApplicationFactory<Program> WithPeople(
@@ -219,6 +232,7 @@ internal static class FreedomApi
             builder.ConfigureTestServices(services =>
             {
                 swapFakes(services);
+                EnsureCallerIsOnFile(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -234,6 +248,31 @@ internal static class FreedomApi
         where TService : class
     {
         services.RemoveAll<TService>();
-        services.AddScoped(_ => instance);
+        services.AddScoped(provider =>
+        {
+            if (instance is IRecordsWhoChanged fake)
+            {
+                fake.Attach(
+                    provider.GetRequiredService<IChangeAttribution>(),
+                    instance as IPersonRepository ?? provider.GetRequiredService<IPersonRepository>());
+            }
+
+            return instance;
+        });
+    }
+
+    /// <summary>
+    /// Every write is signed as the caller's linked volunteer, so a test that did not supply its own
+    /// roster still gets one in which the test caller is on file.
+    /// </summary>
+    private static void EnsureCallerIsOnFile(IServiceCollection services)
+    {
+        var rosterIsFake = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IPersonRepository) && descriptor.ImplementationFactory is not null);
+
+        if (!rosterIsFake)
+        {
+            services.Replace<IPersonRepository>(InMemoryPersonRepository.WithLinkedTestUser());
+        }
     }
 }

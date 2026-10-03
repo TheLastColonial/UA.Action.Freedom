@@ -28,6 +28,8 @@ CREATE TABLE [dbo].[Box] (
     [ValidatedAt]         datetime2(0)     NULL,
     [CreatedAt]           datetime2(0)     NOT NULL CONSTRAINT [DF_Box_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]           datetime2(0)     NOT NULL CONSTRAINT [DF_Box_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
 
     -- A receiver cannot be deleted out from under cargo already routed to it.
     CONSTRAINT [FK_Box_Receiver] FOREIGN KEY ([ReceiverRef]) REFERENCES [dbo].[Receiver] ([ReceiverRef]),
@@ -42,5 +44,6 @@ CREATE TABLE [dbo].[Box] (
     -- Validation is one event, so its two halves are written together or not at all.
     CONSTRAINT [CK_Box_ValidationIsWholeOrAbsent] CHECK (
         ([ValidatedByPersonId] IS NULL AND [ValidatedAt] IS NULL)
-        OR ([ValidatedByPersonId] IS NOT NULL AND [ValidatedAt] IS NOT NULL))
+        OR ([ValidatedByPersonId] IS NOT NULL AND [ValidatedAt] IS NOT NULL)),
+    CONSTRAINT [FK_Box_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );

@@ -21,4 +21,6 @@ public sealed record PersonReadModel(
     DateTime Joined,
     string? Phone,
     bool IsDriver,
-    bool Committed);
+    bool Committed,
+    string? LastChangedByName = null,
+    DateTime? LastChangedAt = null);

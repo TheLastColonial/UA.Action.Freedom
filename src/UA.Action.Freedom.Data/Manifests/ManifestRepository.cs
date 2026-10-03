@@ -1,4 +1,5 @@
 using Dapper;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
 
@@ -12,17 +13,19 @@ namespace UA.Action.Freedom.Data.Manifests;
 /// There is no driver-team table any more: crew is read from <c>dbo.ConvoyVehicleCrew</c> through
 /// the truck list, so this repository never writes a person.
 /// </remarks>
-public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) : IManifestRepository
+public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IManifestRepository
 {
-    private const string Columns =
-        "Id, ConvoyId, Vin, Status, DeliveryNotes, FerryBookingComplete, GmrSubmittedAt";
+    private static readonly string Columns =
+        $"m.Id, m.ConvoyId, m.Vin, m.Status, m.DeliveryNotes, m.FerryBookingComplete, m.GmrSubmittedAt, {ChangeStamp.ReadColumns("m")}";
+
+    private static readonly string From = $"dbo.Manifest AS m {ChangeStamp.ReadJoin("m")}";
 
     public async Task<ManifestReadModel?> GetByIdAsync(string id, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
         return await connection.QuerySingleOrDefaultAsync<ManifestReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Manifest WHERE Id = @id",
+            $"SELECT {Columns} FROM {From} WHERE m.Id = @id",
             new { id = SqlKey.Of(id) },
             cancellationToken: cancellationToken));
     }
@@ -34,8 +37,8 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
 
         var rows = await connection.QueryAsync<ManifestReadModel>(new CommandDefinition(
             $"""
-             SELECT {Columns} FROM dbo.Manifest
-             ORDER BY Id
+             SELECT {Columns} FROM {From}
+             ORDER BY m.Id
              OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY
              """,
             new { skip = (page - 1) * pageSize, take = pageSize },
@@ -62,7 +65,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
         await using var connection = connectionFactory.Create();
 
         return await connection.QuerySingleOrDefaultAsync<ManifestReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Manifest WHERE ConvoyId = @convoyId AND Vin = @vin",
+            $"SELECT {Columns} FROM {From} WHERE m.ConvoyId = @convoyId AND m.Vin = @vin",
             new { convoyId, vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
     }
@@ -73,11 +76,11 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status, DeliveryNotes, FerryBookingComplete)
+            INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status, DeliveryNotes, FerryBookingComplete, LastChangedBy, LastChangedAt)
             VALUES (CAST(@Id AS varchar(32)), @ConvoyId, CAST(@Vin AS varchar(32)),
-                    @Status, @DeliveryNotes, @FerryBookingComplete)
+                    @Status, @DeliveryNotes, @FerryBookingComplete, @changedBy, SYSUTCDATETIME())
             """,
-            manifest,
+            attribution.With(manifest),
             cancellationToken: cancellationToken));
     }
 
@@ -94,10 +97,12 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             UPDATE dbo.Manifest SET
                 DeliveryNotes = @DeliveryNotes,
                 FerryBookingComplete = @FerryBookingComplete,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Id = CAST(@Id AS varchar(32))
             """,
-            manifest,
+            attribution.With(manifest),
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -127,10 +132,12 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             """
             UPDATE dbo.Manifest SET
                 Status = @to,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Id = @id AND Status = @from
             """,
-            new { id = SqlKey.Of(id), from = (int)from, to = (int)to },
+            attribution.With(new { id = SqlKey.Of(id), from = (int)from, to = (int)to }),
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -149,11 +156,13 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory) :
             UPDATE dbo.Manifest SET
                 Status = @confirmed,
                 GmrSubmittedAt = SYSUTCDATETIME(),
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             OUTPUT INSERTED.GmrSubmittedAt
             WHERE Id = @id AND Status = @from AND GmrSubmittedAt IS NULL
             """,
-            new { id = SqlKey.Of(id), from = (int)from, confirmed = (int)ManifestStatus.Confirmed },
+            attribution.With(new { id = SqlKey.Of(id), from = (int)from, confirmed = (int)ManifestStatus.Confirmed }),
             cancellationToken: cancellationToken));
     }
 

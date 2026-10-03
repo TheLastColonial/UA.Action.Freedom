@@ -19,7 +19,7 @@ public class VehicleRepositoryTests
     private static async Task<VehicleRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
         await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Vehicle", cancellationToken);
-        return new VehicleRepository(ConnectionFactory());
+        return new VehicleRepository(ConnectionFactory(), Unattributed);
     }
 
     private static VehicleReadModel AVehicle(string vin) => new(
@@ -61,7 +61,7 @@ public class VehicleRepositoryTests
 
             var stored = await repository.GetByVinAsync(vin, cancellationToken);
 
-            stored.Should().Be(AVehicle(vin));
+            stored.Should().Be(AVehicle(vin) with { LastChangedAt = stored!.LastChangedAt });
         }
         finally
         {
@@ -86,7 +86,8 @@ public class VehicleRepositoryTests
 
             updated.Should().BeTrue();
             missing.Should().BeFalse();
-            (await repository.GetByVinAsync(vin, cancellationToken)).Should().Be(changed);
+            var reread = await repository.GetByVinAsync(vin, cancellationToken);
+            reread.Should().Be(changed with { LastChangedAt = reread!.LastChangedAt });
         }
         finally
         {

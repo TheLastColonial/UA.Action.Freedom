@@ -161,6 +161,7 @@ public class ReceiverHandlerTests
         // logging without either of them having to remember a rule.
         var properties = typeof(ReceiverReadModel).GetProperties().Select(property => property.Name);
 
-        properties.Should().BeEquivalentTo("Ref", "Organisation", "Region");
+        // The last-changed pair names a volunteer and a time (ADR 0017); neither is a delivery detail.
+        properties.Should().BeEquivalentTo("Ref", "Organisation", "Region", "LastChangedByName", "LastChangedAt");
     }
 }

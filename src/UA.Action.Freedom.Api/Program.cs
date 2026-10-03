@@ -63,6 +63,7 @@ builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddFreedomApplication();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentPerson, ClaimsCurrentPerson>();
+builder.Services.AddFreedomChangeAttribution();
 builder.Services.AddFreedomData();
 builder.Services.AddFreedomQueueFlowMetrics();
 
@@ -250,6 +251,7 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseFreedomChangeAttribution();
 
 app.MapFreedomHealthChecks();
 app.MapFreedomVehicles();

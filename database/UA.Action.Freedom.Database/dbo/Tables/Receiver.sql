@@ -11,5 +11,8 @@ CREATE TABLE [dbo].[Receiver] (
     [Organisation] nvarchar(200)    NOT NULL,
     [Region]       nvarchar(100)    NOT NULL,
     [CreatedAt]    datetime2(0)     NOT NULL CONSTRAINT [DF_Receiver_CreatedAt] DEFAULT SYSUTCDATETIME(),
-    [UpdatedAt]    datetime2(0)     NOT NULL CONSTRAINT [DF_Receiver_UpdatedAt] DEFAULT SYSUTCDATETIME()
+    [UpdatedAt]    datetime2(0)     NOT NULL CONSTRAINT [DF_Receiver_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
+    CONSTRAINT [FK_Receiver_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
