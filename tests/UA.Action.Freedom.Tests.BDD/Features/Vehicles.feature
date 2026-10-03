@@ -47,6 +47,13 @@ Scenario: A recorded vehicle can be fetched by VIN
     And the response body field "plate" is "UA10ACT"
     And the response body field "fuel" is "Diesel"
 
+Scenario: A vehicle says who last changed it, taken from the login and not the request
+    Given I am authenticated as "operator"
+    And a vehicle exists with VIN "WDB9066331S0BDD01"
+    When I GET "/vehicles/WDB9066331S0BDD01"
+    Then the response status is 200
+    And the response body field "lastChangedByName" is "BDD operator"
+
 Scenario: A recorded vehicle appears in the list
     Given I am authenticated as "operator"
     And a vehicle exists with VIN "WDB9066331S0BDD01"

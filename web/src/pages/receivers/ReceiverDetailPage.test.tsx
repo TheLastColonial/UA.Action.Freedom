@@ -89,3 +89,25 @@ test('a Ground Officer sees the reveal control', async () => {
     .element(screen.getByRole('button', { name: 'Reveal delivery detail' }))
     .toBeInTheDocument();
 });
+
+test('a receiver says who last changed it and when', async () => {
+  worker.use(
+    ...receiverApi([
+      makeReceiver({
+        ref: 'r1',
+        lastChangedByName: 'Olena Shevchenko',
+        lastChangedAt: '2026-10-03T18:04:11',
+      }),
+    ]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/receivers/r1',
+    roles: ['Dispatcher'],
+  });
+
+  await expect
+    .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
+    .toBeInTheDocument();
+});

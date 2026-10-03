@@ -1,12 +1,25 @@
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Tests.Component;
 
 /// <summary>
 /// Dictionary-backed box persistence so the endpoint tests run without a database.
 /// </summary>
-internal sealed class InMemoryBoxRepository : IBoxRepository
+internal sealed class InMemoryBoxRepository : IBoxRepository, IRecordsWhoChanged
 {
+    private readonly ChangeLedger<int> changes = new();
+
+    public void Attach(IChangeAttribution attribution, IPersonRepository people) =>
+        changes.Attach(attribution, people);
+
+    private BoxReadModel Read(BoxReadModel box)
+    {
+        var (name, at) = changes.Of(box.Id);
+        return box with { LastChangedByName = name, LastChangedAt = at };
+    }
+
     private readonly Dictionary<int, BoxReadModel> boxes = [];
     private readonly Dictionary<int, List<BoxItemReadModel>> items = [];
     private readonly List<BoxQrCodeReadModel> qrCodes = [];
@@ -54,11 +67,11 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
     }
 
     public Task<BoxReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken) =>
-        Task.FromResult(boxes.GetValueOrDefault(id));
+        Task.FromResult(boxes.TryGetValue(id, out var box) ? Read(box) : null);
 
     public Task<IReadOnlyList<BoxReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<BoxReadModel>>(
-            boxes.Values.OrderBy(box => box.Id).Skip((page - 1) * pageSize).Take(pageSize).ToList());
+            boxes.Values.OrderBy(box => box.Id).Skip((page - 1) * pageSize).Take(pageSize).Select(Read).ToList());
 
     public Task<bool> ExistsAsync(int id, CancellationToken cancellationToken) =>
         Task.FromResult(boxes.ContainsKey(id));
@@ -71,6 +84,7 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
             Id = id, WeightKg = 0, WidthCm = null, DepthCm = null, HeightCm = null,
             ValidatedByPersonId = null, ValidatedAt = null,
         };
+        changes.Stamp(id);
         return Task.FromResult(id);
     }
 
@@ -91,6 +105,7 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
             ValidatedByPersonId = existing.ValidatedByPersonId,
             ValidatedAt = existing.ValidatedAt,
         };
+        changes.Stamp(box.Id);
 
         return Task.FromResult(true);
     }
@@ -98,6 +113,7 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
     public Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)
     {
         items.Remove(id);
+        changes.Forget(id);
         return Task.FromResult(boxes.Remove(id));
     }
 
@@ -120,6 +136,7 @@ internal sealed class InMemoryBoxRepository : IBoxRepository
             ValidatedByPersonId = validatedByPersonId,
             ValidatedAt = validatedAt,
         };
+        changes.Stamp(id);
 
         return Task.FromResult(true);
     }

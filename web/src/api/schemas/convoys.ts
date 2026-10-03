@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
+import { lastChangedShape } from './common';
+
 // Response shapes — src/UA.Action.Freedom.Application/Convoys/ConvoyReadModel.cs.
 export const convoyReadModelSchema = z.object({
+  ...lastChangedShape,
   id: z.number().int(),
   start: z.string(),
   expectedEnd: z.string(),

@@ -29,6 +29,8 @@ CREATE TABLE [dbo].[ConvoyVehicle] (
     -- Set when the vehicle left the convoy mid-journey. NULL means it is still travelling.
     [WithdrawnAt]     datetime2(0)   NULL,
     [WithdrawnReason] nvarchar(500)  NULL,
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
 
     CONSTRAINT [PK_ConvoyVehicle] PRIMARY KEY ([ConvoyId], [Vin]),
     CONSTRAINT [FK_ConvoyVehicle_Convoy] FOREIGN KEY ([ConvoyId]) REFERENCES [dbo].[Convoy] ([Id]),
@@ -36,7 +38,8 @@ CREATE TABLE [dbo].[ConvoyVehicle] (
 
     -- A reason without a withdrawal would read as a vehicle that left for a stated cause and is
     -- somehow still on the road.
-    CONSTRAINT [CK_ConvoyVehicle_Withdrawn] CHECK ([WithdrawnAt] IS NOT NULL OR [WithdrawnReason] IS NULL)
+    CONSTRAINT [CK_ConvoyVehicle_Withdrawn] CHECK ([WithdrawnAt] IS NOT NULL OR [WithdrawnReason] IS NULL),
+    CONSTRAINT [FK_ConvoyVehicle_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
 

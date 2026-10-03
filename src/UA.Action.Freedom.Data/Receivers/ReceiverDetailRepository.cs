@@ -1,4 +1,5 @@
 using Dapper;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Receivers;
 
 namespace UA.Action.Freedom.Data.Receivers;
@@ -13,7 +14,7 @@ namespace UA.Action.Freedom.Data.Receivers;
 /// so it cannot be constructed with the application's ordinary connection, and no other
 /// repository can be constructed with this one.
 /// </remarks>
-public sealed class ReceiverDetailRepository(ISensitiveDbConnectionFactory connectionFactory)
+public sealed class ReceiverDetailRepository(ISensitiveDbConnectionFactory connectionFactory, IChangeAttribution attribution)
     : IReceiverDetailRepository
 {
     private const string Columns =
@@ -68,10 +69,12 @@ public sealed class ReceiverDetailRepository(ISensitiveDbConnectionFactory conne
                 AddressLine2 = @AddressLine2,
                 City = @City,
                 PostCode = @PostCode,
-                DeleteAfter = @DeleteAfter
+                DeleteAfter = @DeleteAfter,
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE ReceiverRef = @Ref
             """,
-            detail,
+            attribution.With(detail),
             cancellationToken: cancellationToken));
 
         if (affected == 0)
@@ -79,11 +82,11 @@ public sealed class ReceiverDetailRepository(ISensitiveDbConnectionFactory conne
             await connection.ExecuteAsync(new CommandDefinition(
                 """
                 INSERT INTO sensitive.ReceiverDetail
-                    (ReceiverRef, ContactName, ContactPhone, AddressLine1, AddressLine2, City, PostCode, DeleteAfter)
+                    (ReceiverRef, ContactName, ContactPhone, AddressLine1, AddressLine2, City, PostCode, DeleteAfter, LastChangedBy, LastChangedAt)
                 VALUES
-                    (@Ref, @ContactName, @ContactPhone, @AddressLine1, @AddressLine2, @City, @PostCode, @DeleteAfter)
+                    (@Ref, @ContactName, @ContactPhone, @AddressLine1, @AddressLine2, @City, @PostCode, @DeleteAfter, @changedBy, SYSUTCDATETIME())
                 """,
-                detail,
+                attribution.With(detail),
                 cancellationToken: cancellationToken));
         }
     }

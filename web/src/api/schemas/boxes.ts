@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
+import { lastChangedShape } from './common';
+
 // Response shapes — src/UA.Action.Freedom.Application/Boxes/BoxReadModel.cs.
 export const boxReadModelSchema = z.object({
+  ...lastChangedShape,
   id: z.number().int(),
   weightKg: z.number().int(),
   widthCm: z.number().nullable(),

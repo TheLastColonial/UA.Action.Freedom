@@ -12,9 +12,12 @@ CREATE TABLE [dbo].[BoxQrCode] (
     [BoxId]     int              NOT NULL,
     [IssuedAt]  datetime2(0)     NOT NULL CONSTRAINT [DF_BoxQrCode_IssuedAt] DEFAULT SYSUTCDATETIME(),
     [RevokedAt] datetime2(0)     NULL,
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
 
     -- A label has no life outside its box: deleting the box takes its labels with it.
-    CONSTRAINT [FK_BoxQrCode_Box] FOREIGN KEY ([BoxId]) REFERENCES [dbo].[Box] ([Id]) ON DELETE CASCADE
+    CONSTRAINT [FK_BoxQrCode_Box] FOREIGN KEY ([BoxId]) REFERENCES [dbo].[Box] ([Id]) ON DELETE CASCADE,
+    CONSTRAINT [FK_BoxQrCode_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
 

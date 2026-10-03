@@ -33,7 +33,9 @@ public sealed record ManifestReadModel(
     ManifestStatus Status,
     string? DeliveryNotes,
     bool FerryBookingComplete,
-    DateTime? GmrSubmittedAt)
+    DateTime? GmrSubmittedAt,
+    string? LastChangedByName = null,
+    DateTime? LastChangedAt = null)
 {
     /// <summary>Whether the manifest can still be edited at all.</summary>
     public bool Frozen => this.GmrSubmittedAt is not null;

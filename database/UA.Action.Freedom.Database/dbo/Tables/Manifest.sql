@@ -34,13 +34,16 @@ CREATE TABLE [dbo].[Manifest] (
     [GmrSubmittedAt]       datetime2(0)   NULL,
     [CreatedAt]            datetime2(0)   NOT NULL CONSTRAINT [DF_Manifest_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]            datetime2(0)   NOT NULL CONSTRAINT [DF_Manifest_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
 
     CONSTRAINT [FK_Manifest_ConvoyVehicle] FOREIGN KEY ([ConvoyId], [Vin])
         REFERENCES [dbo].[ConvoyVehicle] ([ConvoyId], [Vin]),
 
     -- One manifest per vehicle per convoy. Arrival asks each vehicle for its finished manifest and
     -- has to get one answer.
-    CONSTRAINT [UQ_Manifest_ConvoyVehicle] UNIQUE ([ConvoyId], [Vin])
+    CONSTRAINT [UQ_Manifest_ConvoyVehicle] UNIQUE ([ConvoyId], [Vin]),
+    CONSTRAINT [FK_Manifest_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
 

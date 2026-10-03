@@ -150,3 +150,25 @@ test('arrival is not offered before the truck list is published, nor to a loader
     .element(loader.getByRole('button', { name: 'Mark arrived' }))
     .not.toBeInTheDocument();
 });
+
+test('a convoy says who last changed it and when', async () => {
+  worker.use(
+    ...convoyApi([
+      makeConvoy({
+        id: 7,
+        lastChangedByName: 'Olena Shevchenko',
+        lastChangedAt: '2026-10-03T18:04:11',
+      }),
+    ]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/convoys/7',
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
+    .toBeInTheDocument();
+});

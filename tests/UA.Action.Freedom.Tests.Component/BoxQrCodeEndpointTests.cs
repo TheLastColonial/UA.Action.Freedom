@@ -31,7 +31,7 @@ public class BoxQrCodeEndpointTests
         ValidatedByPersonId: validated ? Guid.NewGuid() : null,
         ValidatedAt: validated ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null);
 
-    private static InMemoryPersonRepository NoPeople() => new();
+    private static InMemoryPersonRepository NoPeople() => new InMemoryPersonRepository().CalledByALinkedVolunteer();
 
     private static string TokenFromLocation(HttpResponseMessage response) =>
         response.Headers.Location!.ToString().Split('/')[^1];

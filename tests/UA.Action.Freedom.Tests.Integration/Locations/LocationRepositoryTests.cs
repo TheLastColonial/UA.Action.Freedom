@@ -15,7 +15,7 @@ public class LocationRepositoryTests
     private static async Task<LocationRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
         await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Location", cancellationToken);
-        return new LocationRepository(ConnectionFactory());
+        return new LocationRepository(ConnectionFactory(), Unattributed);
     }
 
     private static LocationReadModel ANewLocation() => new(
@@ -39,7 +39,7 @@ public class LocationRepositoryTests
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
 
-            stored.Should().Be(ANewLocation() with { Id = id });
+            stored.Should().Be(ANewLocation() with { Id = id, LastChangedAt = stored!.LastChangedAt });
         }
         finally
         {
@@ -62,7 +62,8 @@ public class LocationRepositoryTests
 
             updated.Should().BeTrue();
             missing.Should().BeFalse();
-            (await repository.GetByIdAsync(id, cancellationToken)).Should().Be(changed);
+            var reread = await repository.GetByIdAsync(id, cancellationToken);
+            reread.Should().Be(changed with { LastChangedAt = reread!.LastChangedAt });
         }
         finally
         {

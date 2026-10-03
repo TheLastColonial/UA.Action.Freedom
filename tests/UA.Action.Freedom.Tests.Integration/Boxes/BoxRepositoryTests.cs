@@ -21,7 +21,7 @@ public class BoxRepositoryTests
     private static async Task<BoxRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
         await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Box; SELECT COUNT(1) FROM dbo.BoxItem;", cancellationToken);
-        return new BoxRepository(ConnectionFactory());
+        return new BoxRepository(ConnectionFactory(), Unattributed);
     }
 
     private static BoxReadModel ANewBox() => new(
@@ -57,7 +57,7 @@ public class BoxRepositoryTests
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
 
-            stored.Should().Be(ANewBox() with { Id = id });
+            stored.Should().Be(ANewBox() with { Id = id, LastChangedAt = stored!.LastChangedAt });
             stored!.Validated.Should().BeFalse();
         }
         finally

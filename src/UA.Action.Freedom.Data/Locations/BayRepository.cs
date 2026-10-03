@@ -1,4 +1,5 @@
 using Dapper;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Locations;
 
 namespace UA.Action.Freedom.Data.Locations;
@@ -6,7 +7,7 @@ namespace UA.Action.Freedom.Data.Locations;
 /// <summary>
 /// Dapper-backed <see cref="IBayRepository"/> over <c>dbo.Bay</c>.
 /// </summary>
-public sealed class BayRepository(IDbConnectionFactory connectionFactory) : IBayRepository
+public sealed class BayRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IBayRepository
 {
     private const string Columns = "Id, LocationId, Code";
 
@@ -53,11 +54,11 @@ public sealed class BayRepository(IDbConnectionFactory connectionFactory) : IBay
 
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """
-            INSERT INTO dbo.Bay (LocationId, Code)
-            VALUES (@LocationId, @Code);
+            INSERT INTO dbo.Bay (LocationId, Code, LastChangedBy, LastChangedAt)
+            VALUES (@LocationId, @Code, @changedBy, SYSUTCDATETIME());
             SELECT CAST(SCOPE_IDENTITY() AS int);
             """,
-            bay,
+            attribution.With(bay),
             cancellationToken: cancellationToken));
     }
 
@@ -66,8 +67,15 @@ public sealed class BayRepository(IDbConnectionFactory connectionFactory) : IBay
         await using var connection = connectionFactory.Create();
 
         var affected = await connection.ExecuteAsync(new CommandDefinition(
-            "UPDATE dbo.Bay SET LocationId = @LocationId, Code = @Code WHERE Id = @Id",
-            bay,
+            """
+            UPDATE dbo.Bay SET
+                LocationId = @LocationId,
+                Code = @Code,
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
+            WHERE Id = @Id
+            """,
+            attribution.With(bay),
             cancellationToken: cancellationToken));
 
         return affected > 0;

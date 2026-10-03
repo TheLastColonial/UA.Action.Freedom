@@ -17,7 +17,7 @@ public class PersonRepositoryTests
     private static async Task<PersonRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
         await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Person", cancellationToken);
-        return new PersonRepository(ConnectionFactory());
+        return new PersonRepository(ConnectionFactory(), Unattributed);
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public class PersonRepositoryTests
 
             // Record equality: proves every column round-trips as the CLR type the read model's
             // constructor expects, which is what catches a bit/int or datetime2 mismatch.
-            stored.Should().Be(APerson(id, surname, isDriver: true, committed: true));
+            stored.Should().Be(APerson(id, surname, isDriver: true, committed: true) with { LastChangedAt = stored!.LastChangedAt });
         }
         finally
         {

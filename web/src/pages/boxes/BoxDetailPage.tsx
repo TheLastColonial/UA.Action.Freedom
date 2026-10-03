@@ -7,6 +7,7 @@ import { ApiNotFound } from '../../api/problem';
 import { Button, LinkButton } from '../../components/Button';
 import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
+import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { BoxBayPanel } from './BoxBayPanel';
@@ -47,6 +48,8 @@ export function BoxDetailPage(): JSX.Element {
         <h1>Box #{box.id}</h1>
         <span>{box.validated ? 'Validated' : 'Open'}</span>
       </header>
+
+      <LastChanged by={box.lastChangedByName} at={box.lastChangedAt} />
 
       <DetailCard title="Box details">
         <dl>

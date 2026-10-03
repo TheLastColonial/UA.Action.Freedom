@@ -26,7 +26,7 @@ public class ConvoyVehicleRepositoryTests
     {
         await SkipUnlessReachableAsync(Probe, cancellationToken);
         await EnsureRecorderAsync();
-        return (new ConvoyRepository(ConnectionFactory()), new ConvoyVehicleRepository(ConnectionFactory()));
+        return (new ConvoyRepository(ConnectionFactory(), Unattributed), new ConvoyVehicleRepository(ConnectionFactory(), Unattributed));
     }
 
     [Fact]

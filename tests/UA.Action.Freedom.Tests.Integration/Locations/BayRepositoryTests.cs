@@ -15,7 +15,7 @@ public class BayRepositoryTests
     private static async Task<BayRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
         await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Bay", cancellationToken);
-        return new BayRepository(ConnectionFactory());
+        return new BayRepository(ConnectionFactory(), Unattributed);
     }
 
     private static Task<int> AddLocationAsync() => ScalarAsync(

@@ -13,6 +13,8 @@ export function makePerson(overrides: Partial<PersonReadModel> = {}): PersonRead
     phone: null,
     isDriver: false,
     committed: false,
+    lastChangedByName: null,
+    lastChangedAt: null,
     ...overrides,
   };
 }

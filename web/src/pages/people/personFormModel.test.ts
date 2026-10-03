@@ -49,6 +49,8 @@ describe('personToFormValues', () => {
       phone: null,
       isDriver: false,
       committed: false,
+      lastChangedByName: null,
+      lastChangedAt: null,
     };
 
     const values = personToFormValues(person);

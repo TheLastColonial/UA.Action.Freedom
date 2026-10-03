@@ -140,10 +140,10 @@ not the same as holding it.
 ## Linking a login to a volunteer
 
 A login is not a volunteer. Until an Administrator links the two, `GET /me` shows the login's
-`subject` and `roles` and a `null` `personId`, and **every write that records who did it is refused
-with `403` and a problem of type `login-not-linked`** — validating a box, placing it in a bay,
-recording insurance, resolving a delivery address. Nothing is written and nothing is logged as
-"unknown".
+`subject` and `roles` and a `null` `personId`, and **every write is refused
+with `403` and a problem of type `login-not-linked`** — because every change records who last made it (ADR 0017), as well as the
+acts that always did: validating a box, placing it in a bay, recording insurance, resolving a delivery address. Nothing is written and
+nothing is logged as "unknown". The two exceptions are `POST /people` and `PUT /people/{id}/login`, which are how a login gets linked.
 
 ```bash
 # 1. What does the API think I am?

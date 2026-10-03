@@ -217,7 +217,7 @@ the domain documents, which link back here.
 | ID | Decision | Notes |
 |---|---|---|
 | <a id="o18"></a>**O18** | **If the page is unavailable, the fallback is to call HQ and use printed documents.** | See [X10](#x10). |
-| <a id="o19"></a>**O19** | **Every entity records who last changed it,** and when. | |
+| <a id="o19"></a>**O19** | **Every entity records who last changed it,** and when. | Built by [plan 03](../plans/03-last-changed-audit.md): `LastChangedBy`/`LastChangedAt` on every entity table, stamped in the same statement as the change. |
 | <a id="o20"></a>**O20** | **There is no live tracking and no GPS,** because of connectivity and security concerns. **The Convoy Leader marks arrival at each route point and each accommodation,** and HQ sees progress from those marks. | |
 | <a id="o21"></a>**O21** | **Notifications are shown on screen.** Email notifications may be built later. | |
 | <a id="o23"></a>**O23** | **Design assumptions:** about 500 vehicles over four years of operation, **one convoy a month**, and **about 25 users**. | Not a rule. A guide for sizing and for what is worth building. |
@@ -273,7 +273,6 @@ per-vehicle anchor.
 | Loader | sees every location | sees only the locations they manage ([O14](#o14)) |
 | Item classification | free text and properties | category, mapped to each authority's codes ([O16](#o16)) |
 | Label | one language | English and Ukrainian ([O17](#o17)) |
-| Audit | who validated or shelved | who last changed every entity ([O19](#o19)) |
 
 ### Other consequences
 

@@ -90,3 +90,25 @@ test('a loader cannot add a bay', async () => {
 
   await expect.element(screen.getByLabelText('Bay code')).not.toBeInTheDocument();
 });
+
+test('a location says who last changed it and when', async () => {
+  worker.use(
+    ...locationApi([
+      makeLocation({
+        id: 3,
+        lastChangedByName: 'Olena Shevchenko',
+        lastChangedAt: '2026-10-03T18:04:11',
+      }),
+    ]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/locations/3',
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
+    .toBeInTheDocument();
+});

@@ -117,6 +117,8 @@ describe('vehicleToFormValues', () => {
       inspectionStatus: 'Pending',
       inspectionNotes: null,
       handedOverAt: null,
+      lastChangedByName: null,
+      lastChangedAt: null,
     };
 
     const values = vehicleToFormValues(vehicle);

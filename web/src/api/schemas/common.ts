@@ -25,3 +25,11 @@ export const manifestStatusSchema = z.enum([
   'Returned',
 ]);
 export type ManifestStatus = z.infer<typeof manifestStatusSchema>;
+
+// ADR 0017: every entity says who last changed it and when. The name comes from the login, never
+// the request; a volunteer who has since been erased reads "Former volunteer"; a row nobody has
+// changed since it was seeded has neither. Spread into each read model's schema.
+export const lastChangedShape = {
+  lastChangedByName: z.string().nullable(),
+  lastChangedAt: z.string().nullable(),
+};

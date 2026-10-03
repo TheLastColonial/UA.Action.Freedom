@@ -1,8 +1,11 @@
 import { z } from 'zod';
 
+import { lastChangedShape } from './common';
+
 // Response shape — src/UA.Action.Freedom.Application/People/PersonReadModel.cs.
 // This is personal data: never log a value from it.
 export const personReadModelSchema = z.object({
+  ...lastChangedShape,
   id: z.string(),
   firstName: z.string(),
   lastName: z.string(),

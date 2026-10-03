@@ -16,8 +16,11 @@ CREATE TABLE [dbo].[PersonDetail] (
     [Committed]   bit              NOT NULL CONSTRAINT [DF_PersonDetail_Committed] DEFAULT 0,
     [IdentitySubject] nvarchar(200)  NULL,
     [UpdatedAt]   datetime2(0)     NOT NULL CONSTRAINT [DF_PersonDetail_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
 
-    CONSTRAINT [FK_PersonDetail_Person] FOREIGN KEY ([PersonId]) REFERENCES [dbo].[Person] ([Id]) ON DELETE CASCADE
+    CONSTRAINT [FK_PersonDetail_Person] FOREIGN KEY ([PersonId]) REFERENCES [dbo].[Person] ([Id]) ON DELETE CASCADE,
+    CONSTRAINT [FK_PersonDetail_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
 

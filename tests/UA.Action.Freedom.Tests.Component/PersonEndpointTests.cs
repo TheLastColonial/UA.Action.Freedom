@@ -220,7 +220,7 @@ public class PersonEndpointTests
     [Fact]
     public async Task An_administrator_updates_a_volunteer()
     {
-        var repository = new InMemoryPersonRepository(AStoredPerson());
+        var repository = new InMemoryPersonRepository(AStoredPerson()).CalledByALinkedVolunteer();
         await using var api = FreedomApi.WithPeople(repository, roles: "Administrator");
         using var client = api.CreateClient();
 
@@ -248,7 +248,7 @@ public class PersonEndpointTests
     [Fact]
     public async Task Updating_an_unknown_volunteer_is_a_404()
     {
-        await using var api = FreedomApi.WithPeople(new InMemoryPersonRepository(), roles: "Administrator");
+        await using var api = FreedomApi.WithPeople(new InMemoryPersonRepository().CalledByALinkedVolunteer(), roles: "Administrator");
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync(
@@ -270,7 +270,7 @@ public class PersonEndpointTests
     [Fact]
     public async Task An_administrator_removes_a_volunteer_who_has_left()
     {
-        var repository = new InMemoryPersonRepository(AStoredPerson());
+        var repository = new InMemoryPersonRepository(AStoredPerson()).CalledByALinkedVolunteer();
         await using var api = FreedomApi.WithPeople(repository, roles: "Administrator");
         using var client = api.CreateClient();
 
@@ -283,7 +283,7 @@ public class PersonEndpointTests
     [Fact]
     public async Task Removing_an_unknown_volunteer_is_a_404()
     {
-        await using var api = FreedomApi.WithPeople(new InMemoryPersonRepository(), roles: "Administrator");
+        await using var api = FreedomApi.WithPeople(new InMemoryPersonRepository().CalledByALinkedVolunteer(), roles: "Administrator");
         using var client = api.CreateClient();
 
         var response = await client.DeleteAsync($"/people/{Guid.NewGuid()}", TestContext.Current.CancellationToken);
@@ -294,7 +294,7 @@ public class PersonEndpointTests
     [Fact]
     public async Task A_volunteer_on_a_live_crew_is_not_erased_and_the_reason_given()
     {
-        var repository = new InMemoryPersonRepository(AStoredPerson(isDriver: true)).OnALiveCrew(Id);
+        var repository = new InMemoryPersonRepository(AStoredPerson(isDriver: true)).OnALiveCrew(Id).CalledByALinkedVolunteer();
         await using var api = FreedomApi.WithPeople(repository, roles: "Administrator");
         using var client = api.CreateClient();
 

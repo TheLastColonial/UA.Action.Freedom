@@ -15,6 +15,8 @@ export function makeManifest(overrides: Partial<ManifestReadModel> = {}): Manife
     ferryBookingComplete: false,
     gmrSubmittedAt: null,
     frozen: false,
+    lastChangedByName: null,
+    lastChangedAt: null,
     ...overrides,
   };
 }

@@ -15,7 +15,12 @@ namespace UA.Action.Freedom.Application.Receivers;
 /// only has a <see cref="ReceiverReadModel"/> has nothing sensitive to leak, so a document
 /// generator or a log statement cannot disclose an address by accident.
 /// </remarks>
-public sealed record ReceiverReadModel(Guid Ref, string Organisation, string Region);
+public sealed record ReceiverReadModel(
+    Guid Ref,
+    string Organisation,
+    string Region,
+    string? LastChangedByName = null,
+    DateTime? LastChangedAt = null);
 
 /// <summary>
 /// The delivery detail for a receiver: where the aid actually goes and who signs for it.

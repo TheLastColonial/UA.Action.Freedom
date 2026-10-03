@@ -35,5 +35,8 @@ CREATE TABLE [dbo].[Convoy] (
     [ArrivedAt]            datetime2(0) NULL,
     [CreatedAt]            datetime2(0) NOT NULL CONSTRAINT [DF_Convoy_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]            datetime2(0) NOT NULL CONSTRAINT [DF_Convoy_UpdatedAt] DEFAULT SYSUTCDATETIME(),
-    CONSTRAINT [CK_Convoy_CrossingMode] CHECK ([CrossingMode] >= 0 AND [CrossingMode] <= 1)
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
+    CONSTRAINT [CK_Convoy_CrossingMode] CHECK ([CrossingMode] >= 0 AND [CrossingMode] <= 1),
+    CONSTRAINT [FK_Convoy_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );

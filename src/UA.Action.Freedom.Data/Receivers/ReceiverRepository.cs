@@ -1,4 +1,5 @@
 using Dapper;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Receivers;
 
 namespace UA.Action.Freedom.Data.Receivers;
@@ -12,16 +13,19 @@ namespace UA.Action.Freedom.Data.Receivers;
 /// <c>DENY SELECT</c>'d on the <c>sensitive</c> schema, so a query added here that reached for
 /// an address would fail at the database rather than quietly succeed.
 /// </remarks>
-public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory) : IReceiverRepository
+public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IReceiverRepository
 {
-    private const string Columns = "ReceiverRef AS [Ref], Organisation, Region";
+    private static readonly string Columns =
+        $"r.ReceiverRef AS [Ref], r.Organisation, r.Region, {ChangeStamp.ReadColumns("r")}";
+
+    private static readonly string From = $"dbo.Receiver AS r {ChangeStamp.ReadJoin("r")}";
 
     public async Task<ReceiverReadModel?> GetByRefAsync(Guid receiverRef, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
         return await connection.QuerySingleOrDefaultAsync<ReceiverReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Receiver WHERE ReceiverRef = @receiverRef",
+            $"SELECT {Columns} FROM {From} WHERE r.ReceiverRef = @receiverRef",
             new { receiverRef },
             cancellationToken: cancellationToken));
     }
@@ -33,8 +37,8 @@ public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory) :
 
         var rows = await connection.QueryAsync<ReceiverReadModel>(new CommandDefinition(
             $"""
-             SELECT {Columns} FROM dbo.Receiver
-             ORDER BY Organisation, ReceiverRef
+             SELECT {Columns} FROM {From}
+             ORDER BY r.Organisation, r.ReceiverRef
              OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY
              """,
             new { skip = (page - 1) * pageSize, take = pageSize },
@@ -61,10 +65,10 @@ public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory) :
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO dbo.Receiver (ReceiverRef, Organisation, Region)
-            VALUES (@Ref, @Organisation, @Region)
+            INSERT INTO dbo.Receiver (ReceiverRef, Organisation, Region, LastChangedBy, LastChangedAt)
+            VALUES (@Ref, @Organisation, @Region, @changedBy, SYSUTCDATETIME())
             """,
-            receiver,
+            attribution.With(receiver),
             cancellationToken: cancellationToken));
     }
 
@@ -77,10 +81,12 @@ public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory) :
             UPDATE dbo.Receiver SET
                 Organisation = @Organisation,
                 Region = @Region,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE ReceiverRef = @Ref
             """,
-            receiver,
+            attribution.With(receiver),
             cancellationToken: cancellationToken));
 
         return affected > 0;

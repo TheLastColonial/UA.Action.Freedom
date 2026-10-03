@@ -56,10 +56,10 @@ public class ReceiverSegregationTests
     }
 
     private static ReceiverRepository AppRepository() =>
-        new(new SqlConnectionFactory(Configuration(AppConnectionString, SensitiveConnectionString)));
+        new(new SqlConnectionFactory(Configuration(AppConnectionString, SensitiveConnectionString)), SqlTestDatabase.Unattributed);
 
     private static ReceiverDetailRepository GroundOfficerRepository() =>
-        new(new SensitiveSqlConnectionFactory(Configuration(AppConnectionString, SensitiveConnectionString)));
+        new(new SensitiveSqlConnectionFactory(Configuration(AppConnectionString, SensitiveConnectionString)), SqlTestDatabase.Unattributed);
 
     private static IConfiguration Configuration(string app, string sensitive) =>
         new ConfigurationBuilder()
@@ -147,7 +147,7 @@ public class ReceiverSegregationTests
 
             var stored = await repository.GetByRefAsync(receiverRef, cancellationToken);
 
-            stored.Should().Be(AReceiver(receiverRef));
+            stored.Should().Be(AReceiver(receiverRef) with { LastChangedAt = stored!.LastChangedAt });
         }
         finally
         {

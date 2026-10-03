@@ -6,6 +6,7 @@ import { useDeleteVehicle, useVehicle } from '../../api/vehicles';
 import { Button, LinkButton } from '../../components/Button';
 import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
+import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { INSPECTION_STATUS_LABELS } from './inspection';
@@ -66,6 +67,8 @@ export function VehicleDetailPage(): JSX.Element {
           </Gate>
         </span>
       </header>
+
+      <LastChanged by={vehicle.lastChangedByName} at={vehicle.lastChangedAt} />
 
       {remove.isError ? <p role="alert">{remove.error.message}</p> : null}
 

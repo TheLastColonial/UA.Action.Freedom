@@ -1,5 +1,6 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Domain;
 
@@ -15,10 +16,12 @@ namespace UA.Action.Freedom.Data.People;
 /// gone — is simply not found, anywhere, without any caller having to remember to filter.
 /// Volunteer personal data, so nothing here logs a row or a parameter (recommendations §4.8).
 /// </remarks>
-public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : IPersonRepository
+public sealed class PersonRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IPersonRepository
 {
-    private const string Columns =
-        "PersonId AS Id, FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed";
+    private static readonly string Columns =
+        $"d.PersonId AS Id, d.FirstName, d.LastName, d.DateOfBirth, d.Joined, d.Phone, d.IsDriver, d.Committed, {ChangeStamp.ReadColumns("d")}";
+
+    private static readonly string From = $"dbo.PersonDetail AS d {ChangeStamp.ReadJoin("d")}";
 
     /// <summary>The manifest states that say what became of the load: its team is history.</summary>
     private static readonly string FinishedStatuses =
@@ -29,7 +32,7 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
         await using var connection = connectionFactory.Create();
 
         return await connection.QuerySingleOrDefaultAsync<PersonReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.PersonDetail WHERE PersonId = @id",
+            $"SELECT {Columns} FROM {From} WHERE d.PersonId = @id",
             new { id },
             cancellationToken: cancellationToken));
     }
@@ -43,9 +46,9 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
         // row eligible, so one query plan serves both the full roster and the driver shortlist.
         var rows = await connection.QueryAsync<PersonReadModel>(new CommandDefinition(
             $"""
-             SELECT {Columns} FROM dbo.PersonDetail
-             WHERE (@driversOnly = 0 OR IsDriver = 1)
-             ORDER BY LastName, FirstName, PersonId
+             SELECT {Columns} FROM {From}
+             WHERE (@driversOnly = 0 OR d.IsDriver = 1)
+             ORDER BY d.LastName, d.FirstName, d.PersonId
              OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY
              """,
             new { driversOnly, skip = (page - 1) * pageSize, take = pageSize },
@@ -78,11 +81,11 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
             """
             INSERT INTO dbo.Person (Id) VALUES (@Id);
             INSERT INTO dbo.PersonDetail
-                (PersonId, FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed)
+                (PersonId, FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed, LastChangedBy, LastChangedAt)
             VALUES
-                (@Id, @FirstName, @LastName, @DateOfBirth, @Joined, @Phone, @IsDriver, @Committed);
+                (@Id, @FirstName, @LastName, @DateOfBirth, @Joined, @Phone, @IsDriver, @Committed, @changedBy, SYSUTCDATETIME());
             """,
-            person,
+            attribution.With(person),
             transaction,
             cancellationToken: cancellationToken));
 
@@ -103,10 +106,12 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
                 Phone = @Phone,
                 IsDriver = @IsDriver,
                 Committed = @Committed,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE PersonId = @Id
             """,
-            person,
+            attribution.With(person),
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -201,8 +206,15 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory) : I
         try
         {
             var affected = await connection.ExecuteAsync(new CommandDefinition(
-                "UPDATE dbo.PersonDetail SET IdentitySubject = @subject, UpdatedAt = SYSUTCDATETIME() WHERE PersonId = @personId",
-                new { personId, subject },
+                """
+                UPDATE dbo.PersonDetail SET
+                    IdentitySubject = @subject,
+                    UpdatedAt = SYSUTCDATETIME(),
+                    LastChangedBy = @changedBy,
+                    LastChangedAt = SYSUTCDATETIME()
+                WHERE PersonId = @personId
+                """,
+                attribution.With(new { personId, subject }),
                 cancellationToken: cancellationToken));
 
             return affected > 0 ? LinkLoginResult.Linked : LinkLoginResult.NotFound;

@@ -128,6 +128,8 @@ export function manifestApi(
 
       db.set(body.id, {
         id: body.id,
+        lastChangedByName: null,
+        lastChangedAt: null,
         convoyId,
         vin,
         status: 'Created',

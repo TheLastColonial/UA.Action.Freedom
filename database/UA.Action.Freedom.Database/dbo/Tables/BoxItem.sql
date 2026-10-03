@@ -15,9 +15,12 @@ CREATE TABLE [dbo].[BoxItem] (
     -- filing sheet reports it as missing rather than assuming.
     [CommodityCode]  varchar(10)      NULL,
     [PropertiesJson] nvarchar(max)    NOT NULL CONSTRAINT [DF_BoxItem_PropertiesJson] DEFAULT '{}',
+    [LastChangedBy] uniqueidentifier NULL,
+    [LastChangedAt] datetime2(0)     NULL,
 
     -- Items have no life outside their box: unpacking one is deleting the box.
-    CONSTRAINT [FK_BoxItem_Box] FOREIGN KEY ([BoxId]) REFERENCES [dbo].[Box] ([Id]) ON DELETE CASCADE
+    CONSTRAINT [FK_BoxItem_Box] FOREIGN KEY ([BoxId]) REFERENCES [dbo].[Box] ([Id]) ON DELETE CASCADE,
+    CONSTRAINT [FK_BoxItem_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
 

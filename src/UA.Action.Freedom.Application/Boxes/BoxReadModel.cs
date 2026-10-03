@@ -25,7 +25,9 @@ public sealed record BoxReadModel(
     Guid? ReceiverRef,
     int? LocationId,
     Guid? ValidatedByPersonId,
-    DateTime? ValidatedAt)
+    DateTime? ValidatedAt,
+    string? LastChangedByName = null,
+    DateTime? LastChangedAt = null)
 {
     /// <summary>Whether a Loader has confirmed the contents and the weight.</summary>
     public bool Validated => this.ValidatedAt is not null;

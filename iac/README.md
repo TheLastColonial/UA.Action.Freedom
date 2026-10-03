@@ -306,7 +306,7 @@ which is most of the time.
 
 ### Keycloak subjects change whenever the realm is recreated
 
-A login is linked to a volunteer by its token `sub`, and Keycloak generates a new `sub` for each seed user every time the realm is imported (`docker compose down -v` then `tofu apply`). The links are lost with the database, and a surviving database would hold stale subjects, so the seed logins must be linked again. The BDD suite (`LoginLinkHooks`) and the Playwright setup (`e2e/linkLogins.ts`) do it on every run; by hand, see `docs/local-authentication.md` § Linking a login to a volunteer. Until then a seed login can read but cannot validate a box, place one in a bay, record insurance or resolve an address: it gets `403 login-not-linked`.
+A login is linked to a volunteer by its token `sub`, and Keycloak generates a new `sub` for each seed user every time the realm is imported (`docker compose down -v` then `tofu apply`). The links are lost with the database, and a surviving database would hold stale subjects, so the seed logins must be linked again. The BDD suite (`LoginLinkHooks`) and the Playwright setup (`e2e/linkLogins.ts`) do it on every run; by hand, see `docs/local-authentication.md` § Linking a login to a volunteer. Until then a seed login can read but cannot write anything — every write is recorded against the person who made it, so it gets `403 login-not-linked` (creating a volunteer and linking a login are the two exceptions).
 
 ### WireMock response templates cannot contain escaped double quotes
 

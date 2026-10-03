@@ -21,7 +21,7 @@ public class BoxQrCodeRepositoryTests
     private static async Task<BoxRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
         await SkipUnlessReachableAsync("SELECT COUNT(1) FROM dbo.Box; SELECT COUNT(1) FROM dbo.BoxQrCode;", cancellationToken);
-        return new BoxRepository(ConnectionFactory());
+        return new BoxRepository(ConnectionFactory(), Unattributed);
     }
 
     private static BoxReadModel ANewBox() => new(

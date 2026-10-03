@@ -125,7 +125,7 @@ namespace UA.Action.Freedom.Tests.BDD.Features
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Vehicles.feature.ndjson", 17);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Vehicles.feature.ndjson", 18);
         }
         
         async System.Threading.Tasks.ValueTask Xunit.IAsyncLifetime.InitializeAsync()
@@ -350,15 +350,15 @@ await this.FeatureBackgroundAsync();
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="A recorded vehicle appears in the list")]
+        [global::Xunit.FactAttribute(DisplayName="A vehicle says who last changed it, taken from the login and not the request")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Vehicles API")]
-        [global::Xunit.TraitAttribute("Description", "A recorded vehicle appears in the list")]
-        public async global::System.Threading.Tasks.Task ARecordedVehicleAppearsInTheList()
+        [global::Xunit.TraitAttribute("Description", "A vehicle says who last changed it, taken from the login and not the request")]
+        public async global::System.Threading.Tasks.Task AVehicleSaysWhoLastChangedItTakenFromTheLoginAndNotTheRequest()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "5";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A recorded vehicle appears in the list", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A vehicle says who last changed it, taken from the login and not the request", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 50
@@ -381,27 +381,27 @@ await this.FeatureBackgroundAsync();
     await testRunner.AndAsync("a vehicle exists with VIN \"WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
 #line 53
-    await testRunner.WhenAsync("I GET \"/vehicles?page=1&pageSize=200\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I GET \"/vehicles/WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 54
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 55
-    await testRunner.AndAsync("the response body lists a vehicle with VIN \"WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.AndAsync("the response body field \"lastChangedByName\" is \"BDD operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="Recording a vehicle whose VIN is taken is a conflict")]
+        [global::Xunit.FactAttribute(DisplayName="A recorded vehicle appears in the list")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Vehicles API")]
-        [global::Xunit.TraitAttribute("Description", "Recording a vehicle whose VIN is taken is a conflict")]
-        public async global::System.Threading.Tasks.Task RecordingAVehicleWhoseVINIsTakenIsAConflict()
+        [global::Xunit.TraitAttribute("Description", "A recorded vehicle appears in the list")]
+        public async global::System.Threading.Tasks.Task ARecordedVehicleAppearsInTheList()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "6";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Recording a vehicle whose VIN is taken is a conflict", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A recorded vehicle appears in the list", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 57
@@ -424,10 +424,53 @@ await this.FeatureBackgroundAsync();
     await testRunner.AndAsync("a vehicle exists with VIN \"WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
 #line 60
+    await testRunner.WhenAsync("I GET \"/vehicles?page=1&pageSize=200\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 61
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 62
+    await testRunner.AndAsync("the response body lists a vehicle with VIN \"WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.FactAttribute(DisplayName="Recording a vehicle whose VIN is taken is a conflict")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Vehicles API")]
+        [global::Xunit.TraitAttribute("Description", "Recording a vehicle whose VIN is taken is a conflict")]
+        public async global::System.Threading.Tasks.Task RecordingAVehicleWhoseVINIsTakenIsAConflict()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "7";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Recording a vehicle whose VIN is taken is a conflict", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 64
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 12
+await this.FeatureBackgroundAsync();
+#line hidden
+#line 65
+    await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 66
+    await testRunner.AndAsync("a vehicle exists with VIN \"WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 67
     await testRunner.WhenAsync("I POST \"/vehicles\" with body:", "{ \"vin\": \"WDB9066331S0BDD01\", \"plate\": \"UA10ACT\", \"year\": 2014, \"fuel\": \"Diesel\"," +
                         " \"transmission\": \"Manual\", \"weightKg\": 2200 }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 64
+#line 71
     await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -441,11 +484,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "7";
+            string pickleIndex = "8";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A vehicle with a blank VIN is rejected", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 66
+#line 73
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -458,17 +501,17 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 12
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 67
+#line 74
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 68
+#line 75
     await testRunner.WhenAsync("I POST \"/vehicles\" with body:", "{ \"vin\": \"\", \"plate\": \"X\", \"year\": 1000, \"fuel\": \"Diesel\", \"transmission\": \"Manua" +
                         "l\", \"weightKg\": -5 }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 72
+#line 79
     await testRunner.ThenAsync("the response status is 400", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 73
+#line 80
     await testRunner.AndAsync("the response body names \"Vin\" as invalid", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
@@ -482,11 +525,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "8";
+            string pickleIndex = "9";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An administrator updates a vehicle", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 75
+#line 82
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -499,29 +542,29 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 12
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 76
+#line 83
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 77
+#line 84
     await testRunner.AndAsync("a vehicle exists with VIN \"WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 78
+#line 85
     await testRunner.AndAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 79
+#line 86
     await testRunner.WhenAsync("I PUT \"/vehicles/WDB9066331S0BDD01\" with body:", "{ \"plate\": \"UA99UPD\", \"year\": 2014, \"fuel\": \"Hybrid\", \"transmission\": \"Automatic\"" +
                         ", \"weightKg\": 2350, \"servicing\": true }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 83
+#line 90
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 84
+#line 91
     await testRunner.WhenAsync("I GET \"/vehicles/WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 85
+#line 92
     await testRunner.ThenAsync("the response body field \"plate\" is \"UA99UPD\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 86
+#line 93
     await testRunner.AndAsync("the response body field \"weightKg\" is \"2350\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
@@ -535,11 +578,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "9";
+            string pickleIndex = "10";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Updating an unknown vehicle is a 404", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 88
+#line 95
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -552,14 +595,14 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 12
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 89
+#line 96
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 90
+#line 97
     await testRunner.WhenAsync("I PUT \"/vehicles/NOSUCHVIN0000BDD1\" with body:", "{ \"plate\": \"UA00XXX\", \"year\": 2014, \"fuel\": \"Diesel\", \"transmission\": \"Manual\", \"" +
                         "weightKg\": 2000 }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 94
+#line 101
     await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -573,11 +616,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "10";
+            string pickleIndex = "11";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A purchaser deletes a vehicle", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 96
+#line 103
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -590,22 +633,22 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 12
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 97
+#line 104
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 98
+#line 105
     await testRunner.AndAsync("a vehicle exists with VIN \"WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 99
+#line 106
     await testRunner.WhenAsync("I DELETE \"/vehicles/WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 100
+#line 107
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 101
+#line 108
     await testRunner.WhenAsync("I GET \"/vehicles/WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 102
+#line 109
     await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -619,11 +662,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "11";
+            string pickleIndex = "12";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Deleting an unknown vehicle is a 404", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 104
+#line 111
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -636,13 +679,13 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 12
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 105
+#line 112
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 106
+#line 113
     await testRunner.WhenAsync("I DELETE \"/vehicles/NOSUCHVIN0000BDD1\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 107
+#line 114
     await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -656,11 +699,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "12";
+            string pickleIndex = "13";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A mechanic records a vehicle\'s inspection and it is read back", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 109
+#line 116
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -673,25 +716,25 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 12
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 110
+#line 117
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 111
+#line 118
     await testRunner.AndAsync("a vehicle exists with VIN \"WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 112
+#line 119
     await testRunner.WhenAsync("I PUT \"/vehicles/WDB9066331S0BDD01/inspection\" with body:", "{ \"status\": \"Failed\", \"notes\": \"Nearside rear tyre below legal tread\" }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 116
+#line 123
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 117
+#line 124
     await testRunner.WhenAsync("I GET \"/vehicles/WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 118
+#line 125
     await testRunner.ThenAsync("the response body field \"inspectionStatus\" is \"Failed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 119
+#line 126
     await testRunner.AndAsync("the response body field \"inspectionNotes\" is \"Nearside rear tyre below legal trea" +
                         "d\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
@@ -706,11 +749,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "13";
+            string pickleIndex = "14";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Editing a vehicle leaves its inspection alone", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 121
+#line 128
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -723,29 +766,29 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 12
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 122
+#line 129
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 123
+#line 130
     await testRunner.AndAsync("a vehicle exists with VIN \"WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 124
+#line 131
     await testRunner.AndAsync("the vehicle \"WDB9066331S0BDD01\" has passed its inspection", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 125
+#line 132
     await testRunner.WhenAsync("I PUT \"/vehicles/WDB9066331S0BDD01\" with body:", "{ \"plate\": \"UA99ACT\", \"year\": 2014, \"fuel\": \"Diesel\", \"transmission\": \"Manual\", \"" +
                         "weightKg\": 2200, \"inspectionStatus\": \"Failed\" }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 129
+#line 136
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 130
+#line 137
     await testRunner.WhenAsync("I GET \"/vehicles/WDB9066331S0BDD01\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 131
+#line 138
     await testRunner.ThenAsync("the response body field \"plate\" is \"UA99ACT\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 132
+#line 139
     await testRunner.AndAsync("the response body field \"inspectionStatus\" is \"Passed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
@@ -759,11 +802,11 @@ await this.FeatureBackgroundAsync();
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "14";
+            string pickleIndex = "15";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A ground officer may not record an inspection", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 134
+#line 141
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -776,13 +819,13 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 12
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 135
+#line 142
     await testRunner.GivenAsync("I am authenticated as \"groundofficer\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 136
+#line 143
     await testRunner.WhenAsync("I PUT \"/vehicles/WDB9066331S0BDD01/inspection\" with body:", "{ \"status\": \"Passed\" }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 140
+#line 147
     await testRunner.ThenAsync("the response status is 403", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }

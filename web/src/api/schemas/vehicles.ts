@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { fuelTypeSchema, transmissionSchema } from './common';
+import { fuelTypeSchema, lastChangedShape, transmissionSchema } from './common';
 
 // src/UA.Action.Freedom.Domain/Vehicle.cs — InspectionStatus. Only Passed may join a convoy.
 export const inspectionStatusSchema = z.enum(['Pending', 'Inspecting', 'Passed', 'Failed']);
@@ -9,6 +9,7 @@ export type InspectionStatus = z.infer<typeof inspectionStatusSchema>;
 // Response shape — src/UA.Action.Freedom.Application/Vehicles/VehicleReadModel.cs. Optional
 // scalars come back as JSON null (System.Text.Json does not omit them).
 export const vehicleReadModelSchema = z.object({
+  ...lastChangedShape,
   vin: z.string(),
   plate: z.string(),
   brand: z.string().nullable(),

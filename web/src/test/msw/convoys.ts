@@ -126,6 +126,8 @@ export function convoyApi(
       const body = (await request.json()) as CreateConvoyRequest;
       db.set(minted, {
         id: minted,
+        lastChangedByName: null,
+        lastChangedAt: null,
         start: body.start,
         expectedEnd: body.expectedEnd,
         truckListPublishedAt: null,

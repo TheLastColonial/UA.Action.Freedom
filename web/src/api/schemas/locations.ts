@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
+import { lastChangedShape } from './common';
+
 // Response shapes — src/UA.Action.Freedom.Application/Locations/LocationReadModel.cs.
 export const locationReadModelSchema = z.object({
+  ...lastChangedShape,
   id: z.number().int(),
   name: z.string(),
   house: z.string().nullable(),

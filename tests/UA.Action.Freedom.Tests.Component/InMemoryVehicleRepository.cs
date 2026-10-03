@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Vehicles;
 using UA.Action.Freedom.Domain;
 
@@ -8,9 +9,20 @@ namespace UA.Action.Freedom.Tests.Component;
 /// A dictionary-backed <see cref="IVehicleRepository"/> so the endpoint tests run without a
 /// database. The Dapper implementation is covered separately by the integration tests.
 /// </summary>
-internal sealed class InMemoryVehicleRepository : IVehicleRepository
+internal sealed class InMemoryVehicleRepository : IVehicleRepository, IRecordsWhoChanged
 {
     private readonly Dictionary<string, VehicleReadModel> store = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly ChangeLedger<string> changes = new(StringComparer.OrdinalIgnoreCase);
+
+    public void Attach(IChangeAttribution attribution, IPersonRepository people) =>
+        changes.Attach(attribution, people);
+
+    private VehicleReadModel Read(VehicleReadModel vehicle)
+    {
+        var (name, at) = changes.Of(vehicle.Vin);
+        return vehicle with { LastChangedByName = name, LastChangedAt = at };
+    }
 
     public InMemoryVehicleRepository(params VehicleReadModel[] seed)
     {
@@ -25,11 +37,11 @@ internal sealed class InMemoryVehicleRepository : IVehicleRepository
     public bool Contains(string vin) => store.ContainsKey(vin);
 
     public Task<VehicleReadModel?> GetByVinAsync(string vin, CancellationToken cancellationToken) =>
-        Task.FromResult(store.GetValueOrDefault(vin));
+        Task.FromResult(store.TryGetValue(vin, out var vehicle) ? Read(vehicle) : null);
 
     public Task<IReadOnlyList<VehicleReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<VehicleReadModel>>(
-            store.Values.OrderBy(v => v.Vin, StringComparer.Ordinal).Skip((page - 1) * pageSize).Take(pageSize).ToList());
+            store.Values.OrderBy(v => v.Vin, StringComparer.Ordinal).Skip((page - 1) * pageSize).Take(pageSize).Select(Read).ToList());
 
     public Task<bool> ExistsAsync(string vin, CancellationToken cancellationToken) =>
         Task.FromResult(store.ContainsKey(vin));
@@ -37,6 +49,7 @@ internal sealed class InMemoryVehicleRepository : IVehicleRepository
     public Task AddAsync(VehicleReadModel vehicle, CancellationToken cancellationToken)
     {
         store[vehicle.Vin] = vehicle;
+        changes.Stamp(vehicle.Vin);
         return Task.CompletedTask;
     }
 
@@ -53,6 +66,7 @@ internal sealed class InMemoryVehicleRepository : IVehicleRepository
             InspectionStatus = existing.InspectionStatus,
             InspectionNotes = existing.InspectionNotes,
         };
+        changes.Stamp(vehicle.Vin);
         return Task.FromResult(true);
     }
 
@@ -72,6 +86,7 @@ internal sealed class InMemoryVehicleRepository : IVehicleRepository
             return Task.FromResult(DeleteResult.StillReferenced);
         }
 
+        changes.Forget(vin);
         return Task.FromResult(store.Remove(vin) ? DeleteResult.Deleted : DeleteResult.NotFound);
     }
 
@@ -84,6 +99,7 @@ internal sealed class InMemoryVehicleRepository : IVehicleRepository
         }
 
         store[vin] = existing with { InspectionStatus = status, InspectionNotes = notes };
+        changes.Stamp(vin);
         return Task.FromResult(true);
     }
 }

@@ -18,6 +18,8 @@ export function makeConvoy(overrides: Partial<ConvoyReadModel> = {}): ConvoyRead
     truckListPublished: false,
     arrivedAt: null,
     arrived: false,
+    lastChangedByName: null,
+    lastChangedAt: null,
     ...overrides,
   };
 }

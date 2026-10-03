@@ -70,7 +70,7 @@ public class ManifestEndpointTests
         null, isDriver, Committed: true);
 
     private static InMemoryPersonRepository ARosterOfDrivers() =>
-        new(APerson(Primary), APerson(Secondary));
+        new InMemoryPersonRepository(APerson(Primary), APerson(Secondary)).CalledByALinkedVolunteer();
 
     /// <summary>The ICS2 MRN the crossing was accepted under.</summary>
     private const string Mrn = "25FR17551780961AT5";

@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
-import { manifestStatusSchema } from './common';
+import { lastChangedShape, manifestStatusSchema } from './common';
 
 // Response shapes — src/UA.Action.Freedom.Application/Manifests/ManifestReadModel.cs.
 // The document pack for one vehicle on one convoy. convoyId and vin are the truck-list entry it
 // is the paperwork for — its identity, not editable attributes — so PUT /manifests/{id} has no
 // field for either.
 export const manifestReadModelSchema = z.object({
+  ...lastChangedShape,
   id: z.string(),
   convoyId: z.number().int(),
   vin: z.string(),

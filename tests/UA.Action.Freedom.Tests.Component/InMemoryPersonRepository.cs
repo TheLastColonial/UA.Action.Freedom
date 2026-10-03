@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Tests.Component;
@@ -6,9 +7,20 @@ namespace UA.Action.Freedom.Tests.Component;
 /// A dictionary-backed <see cref="IPersonRepository"/> so the endpoint tests run without a
 /// database. The Dapper implementation is covered separately by the integration tests.
 /// </summary>
-internal sealed class InMemoryPersonRepository : IPersonRepository
+internal sealed class InMemoryPersonRepository : IPersonRepository, IRecordsWhoChanged
 {
     private readonly Dictionary<Guid, PersonReadModel> store = [];
+
+    private readonly ChangeLedger<Guid> changes = new();
+
+    public void Attach(IChangeAttribution attribution, IPersonRepository people) =>
+        changes.Attach(attribution, this);
+
+    private PersonReadModel Read(PersonReadModel person)
+    {
+        var (name, at) = changes.Of(person.Id);
+        return person with { LastChangedByName = name, LastChangedAt = at };
+    }
 
     /// <summary>Volunteers on a live crew or manifest team, whom erasure refuses.</summary>
     private readonly HashSet<Guid> active = [];
@@ -41,6 +53,21 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
 
     public InMemoryPersonRepository WithTestUserLinkedTo(Guid personId) => LinkedTo(TestUserSubject, personId);
 
+    /// <summary>
+    /// The caller is a linked volunteer who is not counted in the roster under test, so a test about
+    /// who is on file can still make the writes that are signed as the caller.
+    /// </summary>
+    public InMemoryPersonRepository CalledByALinkedVolunteer()
+    {
+        caller = new PersonReadModel(
+            TestUserId, "Test", "User", new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), null, false, false);
+
+        return WithTestUserLinkedTo(TestUserId);
+    }
+
+    private PersonReadModel? caller;
+
     /// <summary>The volunteer <see cref="WithLinkedTestUser"/> puts on file for the caller.</summary>
     public static readonly Guid TestUserId = new("7e57a5e2-0000-4000-8000-000000000001");
 
@@ -61,7 +88,8 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
     public PersonReadModel Single() => store.Values.Single();
 
     public Task<PersonReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
-        Task.FromResult(store.GetValueOrDefault(id));
+        Task.FromResult<PersonReadModel?>(
+            store.TryGetValue(id, out var person) ? Read(person) : caller?.Id == id ? caller : null);
 
     public Task<IReadOnlyList<PersonReadModel>> ListAsync(
         int page, int pageSize, bool driversOnly, CancellationToken cancellationToken) =>
@@ -72,6 +100,7 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
                 .ThenBy(person => person.FirstName, StringComparer.Ordinal)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .Select(Read)
                 .ToList());
 
     public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken) =>
@@ -80,6 +109,7 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
     public Task AddAsync(PersonReadModel person, CancellationToken cancellationToken)
     {
         store[person.Id] = person;
+        changes.Stamp(person.Id);
         return Task.CompletedTask;
     }
 
@@ -91,6 +121,7 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
         }
 
         store[person.Id] = person;
+        changes.Stamp(person.Id);
         return Task.FromResult(true);
     }
 
@@ -115,7 +146,7 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
     }
 
     public Task<Guid?> FindBySubjectAsync(string subject, CancellationToken cancellationToken) =>
-        Task.FromResult<Guid?>(logins.TryGetValue(subject, out var id) && store.ContainsKey(id) ? id : null);
+        Task.FromResult<Guid?>(logins.TryGetValue(subject, out var id) && (store.ContainsKey(id) || caller?.Id == id) ? id : null);
 
     public Task<LinkLoginResult> LinkLoginAsync(Guid personId, string subject, CancellationToken cancellationToken)
     {
@@ -135,6 +166,7 @@ internal sealed class InMemoryPersonRepository : IPersonRepository
         }
 
         logins[subject] = personId;
+        changes.Stamp(personId);
         return Task.FromResult(LinkLoginResult.Linked);
     }
 }

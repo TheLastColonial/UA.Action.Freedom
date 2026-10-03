@@ -16,7 +16,7 @@ namespace UA.Action.Freedom.Data.Vehicles;
 /// more. Which convoy a vehicle is travelling with is the truck list, <c>dbo.ConvoyVehicle</c>,
 /// and it is derived below rather than stored, so it cannot drift from the list.
 /// </summary>
-public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : IVehicleRepository
+public sealed class VehicleRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IVehicleRepository
 {
     /// <summary>
     /// The convoy this vehicle is currently travelling with, or NULL. Derived, not stored: a
@@ -33,14 +33,14 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
         """;
 
     private static readonly string Columns =
-        $"v.Vin, v.Plate, v.Brand, v.Model, v.Colour, v.Transmission, v.Notes, v.Mileage, v.Servicing, v.[Year], v.Fuel, {CurrentConvoy}, v.PurchaserName, v.PurchaseDate, v.WeightKg, v.MaxCargoWeightKg, v.CargoWidthCm, v.CargoDepthCm, v.CargoHeightCm, v.InspectionStatus, v.InspectionNotes, v.HandedOverAt";
+        $"v.Vin, v.Plate, v.Brand, v.Model, v.Colour, v.Transmission, v.Notes, v.Mileage, v.Servicing, v.[Year], v.Fuel, {CurrentConvoy}, v.PurchaserName, v.PurchaseDate, v.WeightKg, v.MaxCargoWeightKg, v.CargoWidthCm, v.CargoDepthCm, v.CargoHeightCm, v.InspectionStatus, v.InspectionNotes, v.HandedOverAt, {ChangeStamp.ReadColumns("v")}";
 
     public async Task<VehicleReadModel?> GetByVinAsync(string vin, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
         return await connection.QuerySingleOrDefaultAsync<VehicleReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Vehicle AS v WHERE v.Vin = @vin",
+            $"SELECT {Columns} FROM dbo.Vehicle AS v {ChangeStamp.ReadJoin("v")} WHERE v.Vin = @vin",
             new { vin = SqlKey.Of(vin) },
             cancellationToken: cancellationToken));
     }
@@ -50,7 +50,7 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
         await using var connection = connectionFactory.Create();
 
         var rows = await connection.QueryAsync<VehicleReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Vehicle AS v ORDER BY v.Vin OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY",
+            $"SELECT {Columns} FROM dbo.Vehicle AS v {ChangeStamp.ReadJoin("v")} ORDER BY v.Vin OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY",
             new { skip = (page - 1) * pageSize, take = pageSize },
             cancellationToken: cancellationToken));
 
@@ -76,11 +76,11 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
         await connection.ExecuteAsync(new CommandDefinition(
             """
             INSERT INTO dbo.Vehicle
-                (Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm)
+                (Vin, Plate, Brand, Model, Colour, Transmission, Notes, Mileage, Servicing, [Year], Fuel, PurchaserName, PurchaseDate, WeightKg, MaxCargoWeightKg, CargoWidthCm, CargoDepthCm, CargoHeightCm, LastChangedBy, LastChangedAt)
             VALUES
-                (@Vin, @Plate, @Brand, @Model, @Colour, @Transmission, @Notes, @Mileage, @Servicing, @Year, @Fuel, @PurchaserName, @PurchaseDate, @WeightKg, @MaxCargoWeightKg, @CargoWidthCm, @CargoDepthCm, @CargoHeightCm)
+                (@Vin, @Plate, @Brand, @Model, @Colour, @Transmission, @Notes, @Mileage, @Servicing, @Year, @Fuel, @PurchaserName, @PurchaseDate, @WeightKg, @MaxCargoWeightKg, @CargoWidthCm, @CargoDepthCm, @CargoHeightCm, @changedBy, SYSUTCDATETIME())
             """,
-            vehicle,
+            attribution.With(vehicle),
             cancellationToken: cancellationToken));
     }
 
@@ -108,10 +108,12 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
                 CargoWidthCm = @CargoWidthCm,
                 CargoDepthCm = @CargoDepthCm,
                 CargoHeightCm = @CargoHeightCm,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Vin = CAST(@Vin AS varchar(32))
             """,
-            vehicle,
+            attribution.With(vehicle),
             cancellationToken: cancellationToken));
 
         return affected > 0;
@@ -127,10 +129,12 @@ public sealed class VehicleRepository(IDbConnectionFactory connectionFactory) : 
             UPDATE dbo.Vehicle SET
                 InspectionStatus = @status,
                 InspectionNotes = @notes,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Vin = @vin
             """,
-            new { vin = SqlKey.Of(vin), status = (int)status, notes },
+            attribution.With(new { vin = SqlKey.Of(vin), status = (int)status, notes }),
             cancellationToken: cancellationToken));
 
         return affected > 0;

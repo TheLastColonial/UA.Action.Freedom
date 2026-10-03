@@ -1,3 +1,5 @@
+using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
 
 namespace UA.Action.Freedom.Tests.Component;
@@ -5,9 +7,20 @@ namespace UA.Action.Freedom.Tests.Component;
 /// <summary>
 /// Dictionary-backed receiver persistence so the endpoint tests run without a database.
 /// </summary>
-internal sealed class InMemoryReceiverRepository : IReceiverRepository
+internal sealed class InMemoryReceiverRepository : IReceiverRepository, IRecordsWhoChanged
 {
     private readonly Dictionary<Guid, ReceiverReadModel> store = [];
+
+    private readonly ChangeLedger<Guid> changes = new();
+
+    public void Attach(IChangeAttribution attribution, IPersonRepository people) =>
+        changes.Attach(attribution, people);
+
+    private ReceiverReadModel Read(ReceiverReadModel receiver)
+    {
+        var (name, at) = changes.Of(receiver.Ref);
+        return receiver with { LastChangedByName = name, LastChangedAt = at };
+    }
 
     public InMemoryReceiverRepository(params ReceiverReadModel[] seed)
     {
@@ -22,7 +35,7 @@ internal sealed class InMemoryReceiverRepository : IReceiverRepository
     public bool Contains(Guid receiverRef) => store.ContainsKey(receiverRef);
 
     public Task<ReceiverReadModel?> GetByRefAsync(Guid receiverRef, CancellationToken cancellationToken) =>
-        Task.FromResult(store.GetValueOrDefault(receiverRef));
+        Task.FromResult(store.TryGetValue(receiverRef, out var receiver) ? Read(receiver) : null);
 
     public Task<IReadOnlyList<ReceiverReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<ReceiverReadModel>>(
@@ -30,6 +43,7 @@ internal sealed class InMemoryReceiverRepository : IReceiverRepository
                 .OrderBy(receiver => receiver.Organisation, StringComparer.Ordinal)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .Select(Read)
                 .ToList());
 
     public Task<bool> ExistsAsync(Guid receiverRef, CancellationToken cancellationToken) =>
@@ -38,6 +52,7 @@ internal sealed class InMemoryReceiverRepository : IReceiverRepository
     public Task AddAsync(ReceiverReadModel receiver, CancellationToken cancellationToken)
     {
         store[receiver.Ref] = receiver;
+        changes.Stamp(receiver.Ref);
         return Task.CompletedTask;
     }
 
@@ -49,11 +64,15 @@ internal sealed class InMemoryReceiverRepository : IReceiverRepository
         }
 
         store[receiver.Ref] = receiver;
+        changes.Stamp(receiver.Ref);
         return Task.FromResult(true);
     }
 
-    public Task<bool> DeleteAsync(Guid receiverRef, CancellationToken cancellationToken) =>
-        Task.FromResult(store.Remove(receiverRef));
+    public Task<bool> DeleteAsync(Guid receiverRef, CancellationToken cancellationToken)
+    {
+        changes.Forget(receiverRef);
+        return Task.FromResult(store.Remove(receiverRef));
+    }
 }
 
 /// <summary>

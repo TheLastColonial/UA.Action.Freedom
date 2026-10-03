@@ -34,4 +34,6 @@ public sealed record VehicleReadModel(
     decimal? CargoHeightCm,
     InspectionStatus InspectionStatus = InspectionStatus.Pending,
     string? InspectionNotes = null,
-    DateTime? HandedOverAt = null);
+    DateTime? HandedOverAt = null,
+    string? LastChangedByName = null,
+    DateTime? LastChangedAt = null);

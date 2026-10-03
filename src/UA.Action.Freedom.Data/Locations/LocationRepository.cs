@@ -1,4 +1,5 @@
 using Dapper;
+using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Locations;
 
 namespace UA.Action.Freedom.Data.Locations;
@@ -6,16 +7,20 @@ namespace UA.Action.Freedom.Data.Locations;
 /// <summary>
 /// Dapper-backed <see cref="ILocationRepository"/> over <c>dbo.Location</c>.
 /// </summary>
-public sealed class LocationRepository(IDbConnectionFactory connectionFactory) : ILocationRepository
+public sealed class LocationRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution)
+    : ILocationRepository
 {
-    private const string Columns = "Id, Name, House, Street, City, Country, Postcode";
+    private static readonly string Columns =
+        $"l.Id, l.Name, l.House, l.Street, l.City, l.Country, l.Postcode, {ChangeStamp.ReadColumns("l")}";
+
+    private static readonly string From = $"dbo.Location AS l {ChangeStamp.ReadJoin("l")}";
 
     public async Task<LocationReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
         return await connection.QuerySingleOrDefaultAsync<LocationReadModel>(new CommandDefinition(
-            $"SELECT {Columns} FROM dbo.Location WHERE Id = @id",
+            $"SELECT {Columns} FROM {From} WHERE l.Id = @id",
             new { id },
             cancellationToken: cancellationToken));
     }
@@ -26,8 +31,8 @@ public sealed class LocationRepository(IDbConnectionFactory connectionFactory) :
 
         var rows = await connection.QueryAsync<LocationReadModel>(new CommandDefinition(
             $"""
-             SELECT {Columns} FROM dbo.Location
-             ORDER BY Id
+             SELECT {Columns} FROM {From}
+             ORDER BY l.Id
              OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY
              """,
             new { skip = (page - 1) * pageSize, take = pageSize },
@@ -54,11 +59,11 @@ public sealed class LocationRepository(IDbConnectionFactory connectionFactory) :
 
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """
-            INSERT INTO dbo.Location (Name, House, Street, City, Country, Postcode)
-            VALUES (@Name, @House, @Street, @City, @Country, @Postcode);
+            INSERT INTO dbo.Location (Name, House, Street, City, Country, Postcode, LastChangedBy, LastChangedAt)
+            VALUES (@Name, @House, @Street, @City, @Country, @Postcode, @changedBy, SYSUTCDATETIME());
             SELECT CAST(SCOPE_IDENTITY() AS int);
             """,
-            location,
+            attribution.With(location),
             cancellationToken: cancellationToken));
     }
 
@@ -75,10 +80,12 @@ public sealed class LocationRepository(IDbConnectionFactory connectionFactory) :
                 City = @City,
                 Country = @Country,
                 Postcode = @Postcode,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
             WHERE Id = @Id
             """,
-            location,
+            attribution.With(location),
             cancellationToken: cancellationToken));
 
         return affected > 0;
