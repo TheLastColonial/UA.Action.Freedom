@@ -32,6 +32,8 @@ describe('convoyToFormValues', () => {
       truckListPublished: false,
       arrivedAt: null,
       arrived: false,
+      lastChangedByName: null,
+      lastChangedAt: null,
     });
     expect(values.start).toBe('2026-03-01T08:00');
   });

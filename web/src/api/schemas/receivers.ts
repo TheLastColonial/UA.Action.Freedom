@@ -1,9 +1,12 @@
 import { z } from 'zod';
 
+import { lastChangedShape } from './common';
+
 // The non-sensitive receiver. This type has NO address or contact fields — code holding one
 // has nothing sensitive to leak. Do not add fields here; the delivery detail lives behind
 // `receivers:detail` and its own module (api/receiverDetail.ts).
 export const receiverReadModelSchema = z.object({
+  ...lastChangedShape,
   ref: z.string(),
   organisation: z.string(),
   region: z.string(),

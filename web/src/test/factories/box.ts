@@ -23,6 +23,8 @@ export function makeBox(overrides: Partial<BoxReadModel> = {}): BoxReadModel {
     validatedByPersonId: null,
     validatedAt: null,
     validated: false,
+    lastChangedByName: null,
+    lastChangedAt: null,
     ...overrides,
   };
 }

@@ -16,6 +16,8 @@ let minted = 0;
 function toReadModel(id: string, body: CreatePersonRequest): PersonReadModel {
   return {
     id,
+    lastChangedByName: null,
+    lastChangedAt: null,
     firstName: body.firstName,
     lastName: body.lastName,
     dateOfBirth: `${body.dateOfBirth}T00:00:00`,

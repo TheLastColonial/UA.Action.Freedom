@@ -102,3 +102,25 @@ test('the tabs open the Status, Crew, Cargo and Weight panels', async () => {
     .element(screen.getByRole('heading', { name: 'Border-check weight' }))
     .toBeInTheDocument();
 });
+
+test('a manifest says who last changed it and when', async () => {
+  worker.use(
+    ...manifestApi([
+      makeManifest({
+        id: 'D1',
+        lastChangedByName: 'Olena Shevchenko',
+        lastChangedAt: '2026-10-03T18:04:11',
+      }),
+    ]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/manifests/D1',
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
+    .toBeInTheDocument();
+});

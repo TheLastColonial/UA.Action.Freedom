@@ -33,6 +33,8 @@ test('@smoke operator creates a vehicle and reads it back', async ({ page }) => 
   // Landing on the detail page is a read-back through GET /vehicles/{vin}.
   await expect(page.getByText('E2E 001')).toBeVisible();
   await expect(page.getByText('Not yet inspected')).toBeVisible();
+  // The change is signed as the volunteer the operator login is linked to (the BDD or the e2e one), never typed in.
+  await expect(page.getByText(/Last changed by \w+ operator on \d{4}-\d{2}-\d{2}/)).toBeVisible();
 });
 
 test('@smoke a mechanic records an inspection and it survives a reload', async ({ page }) => {

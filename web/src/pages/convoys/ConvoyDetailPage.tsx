@@ -6,6 +6,7 @@ import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
 import { Button, LinkButton } from '../../components/Button';
 import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
+import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
@@ -59,6 +60,8 @@ export function ConvoyDetailPage(): JSX.Element {
           {convoy.arrived ? 'Arrived' : published ? 'Truck list published' : 'Truck list open'}
         </span>
       </header>
+
+      <LastChanged by={convoy.lastChangedByName} at={convoy.lastChangedAt} />
 
       <Tabs
         label="Convoy sections"

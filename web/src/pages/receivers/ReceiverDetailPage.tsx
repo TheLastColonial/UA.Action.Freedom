@@ -6,6 +6,7 @@ import { useReceiver } from '../../api/receivers';
 import { LinkButton } from '../../components/Button';
 import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
+import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { ReceiverSensitivePanel } from './ReceiverSensitivePanel';
@@ -40,6 +41,8 @@ export function ReceiverDetailPage(): JSX.Element {
           </LinkButton>
         </Gate>
       </header>
+
+      <LastChanged by={receiver.lastChangedByName} at={receiver.lastChangedAt} />
 
       <DetailCard title="Receiver details">
         <dl>

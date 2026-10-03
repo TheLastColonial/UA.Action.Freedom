@@ -39,6 +39,8 @@ export function locationApi(
       const body = (await request.json()) as CreateLocationRequest;
       db.set(mintedLocation, {
         id: mintedLocation,
+        lastChangedByName: null,
+        lastChangedAt: null,
         name: body.name,
         house: body.house ?? null,
         street: body.street ?? null,
@@ -60,6 +62,8 @@ export function locationApi(
       const body = (await request.json()) as CreateLocationRequest;
       db.set(id, {
         id,
+        lastChangedByName: null,
+        lastChangedAt: null,
         name: body.name,
         house: body.house ?? null,
         street: body.street ?? null,

@@ -39,7 +39,13 @@ export function receiverApi(
       minted += 1;
       const ref = `dddddddd-0000-0000-0000-${String(minted).padStart(12, '0')}`;
       const body = (await request.json()) as CreateReceiverRequest;
-      db.set(ref, { ref, organisation: body.organisation, region: body.region });
+      db.set(ref, {
+        ref,
+        organisation: body.organisation,
+        region: body.region,
+        lastChangedByName: null,
+        lastChangedAt: null,
+      });
       return new HttpResponse(null, { status: 201, headers: { Location: `/receivers/${ref}` } });
     }),
 
@@ -49,7 +55,13 @@ export function receiverApi(
         return new HttpResponse(null, { status: 404 });
       }
       const body = (await request.json()) as CreateReceiverRequest;
-      db.set(ref, { ref, organisation: body.organisation, region: body.region });
+      db.set(ref, {
+        ref,
+        organisation: body.organisation,
+        region: body.region,
+        lastChangedByName: null,
+        lastChangedAt: null,
+      });
       return new HttpResponse(null, { status: 204 });
     }),
 

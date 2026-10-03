@@ -9,6 +9,8 @@ export function makeReceiver(overrides: Partial<ReceiverReadModel> = {}): Receiv
     ref: `cccccccc-0000-0000-0000-${String(seq).padStart(12, '0')}`,
     organisation: `Aid Partner ${String(seq)}`,
     region: 'Kyiv Oblast',
+    lastChangedByName: null,
+    lastChangedAt: null,
     ...overrides,
   };
 }

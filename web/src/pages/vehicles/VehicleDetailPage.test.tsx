@@ -227,3 +227,25 @@ test('a vehicle handed over in Ukraine says so', async () => {
 
   await expect.element(screen.getByText('Handed over on 2026-06-05')).toBeInTheDocument();
 });
+
+test('a vehicle says who last changed it and when', async () => {
+  worker.use(
+    ...vehicleApi([
+      makeVehicle({
+        vin: 'VIN-X',
+        lastChangedByName: 'Olena Shevchenko',
+        lastChangedAt: '2026-10-03T18:04:11',
+      }),
+    ]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/vehicles/VIN-X',
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
+    .toBeInTheDocument();
+});

@@ -196,3 +196,25 @@ test('hides the link-login panel from a non-administrator', async () => {
   await expect.element(screen.getByRole('heading', { name: 'Olena K' })).toBeInTheDocument();
   await expect.element(screen.getByRole('button', { name: 'Link login' })).not.toBeInTheDocument();
 });
+
+test('a volunteer says who last changed it and when', async () => {
+  worker.use(
+    ...personApi([
+      makePerson({
+        id: 'p1',
+        lastChangedByName: 'Olena Shevchenko',
+        lastChangedAt: '2026-10-03T18:04:11',
+      }),
+    ]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/people/p1',
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
+    .toBeInTheDocument();
+});

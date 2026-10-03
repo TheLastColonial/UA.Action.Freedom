@@ -60,6 +60,8 @@ export function boxApi(
       const body = (await request.json()) as CreateBoxRequest;
       db.set(mintedBox, {
         id: mintedBox,
+        lastChangedByName: null,
+        lastChangedAt: null,
         weightKg: 0,
         widthCm: null,
         depthCm: null,

@@ -146,3 +146,25 @@ test('a Loader whose login is not linked cannot validate or place a box', async 
   await expect.element(screen.getByRole('button', { name: 'Validate box' })).toBeDisabled();
   await expect.element(screen.getByRole('button', { name: 'Place in bay' })).toBeDisabled();
 });
+
+test('a box says who last changed it and when', async () => {
+  worker.use(
+    ...boxApi([
+      makeBox({
+        id: 4,
+        lastChangedByName: 'Olena Shevchenko',
+        lastChangedAt: '2026-10-03T18:04:11',
+      }),
+    ]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/boxes/4',
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
+    .toBeInTheDocument();
+});

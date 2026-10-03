@@ -6,6 +6,7 @@ import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
 import { Button, LinkButton } from '../../components/Button';
 import { DetailCard } from '../../components/DetailCard';
 import { Gate } from '../../components/Gate';
+import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
@@ -67,6 +68,8 @@ export function ManifestDetailPage(): JSX.Element {
           {manifest.frozen ? ' · frozen' : ''}
         </span>
       </header>
+
+      <LastChanged by={manifest.lastChangedByName} at={manifest.lastChangedAt} />
 
       <Tabs
         label="Manifest sections"
