@@ -245,7 +245,7 @@ Core resource endpoints:
   - `PUT /vehicles/{vin}/inspection` — Record the servicing inspection (`Pending`/`Inspecting`/`Passed`/`Failed` + notes) — **Administrator and Mechanic only** (`vehicles:service`). The ordinary `PUT /vehicles/{vin}` cannot change it — nor which convoy the vehicle is on, which only `/convoys/{id}/vehicles/{vin}` changes
 - `GET|POST /people` — Volunteers & drivers; `DELETE /people/{id}` **erases** a volunteer (their personal data is deleted; past records show "Former volunteer"), refused with 409 while they are crewing a convoy that has not arrived or a vehicle whose load is not yet finished
   - `PUT /people/{id}/login` — Link the login (token subject) a volunteer signs in with — **Administrator only** (`people:write`); 204, 404, or 409 when the login already belongs to another volunteer. An Administrator may link their own login, so the first link can be made
-- `GET /me` — Who the caller is: subject and roles, plus person id and display name once their login is linked. Any authenticated caller, Ground Officer included. **Every write that records who did it** (validating or shelving a box, recording insurance, resolving a delivery address) is signed as the caller's linked volunteer and refused with `403` / `login-not-linked` from a login nobody has linked — there is no body field to forge it with
+- `GET /me` — Who the caller is: subject and roles, plus person id and display name once their login is linked. Any authenticated caller, Ground Officer included. **Every write** is signed as the caller's linked volunteer and refused with `403` / `login-not-linked` from a login nobody has linked — there is no body field to forge it with. The only writes an unlinked login may make are `POST /people` and `PUT /people/{id}/login`, which are how a login becomes linked
 - `GET|POST /convoys` — Convoy groups with routes
   - `PUT|GET /convoys/{id}/route` — Ordered stop list
   - `GET /convoys/{id}/vehicles` — The truck list, withdrawn vehicles included (each entry says which it is)
@@ -504,6 +504,16 @@ records name it — they then show "Former volunteer". Refused while the volunte
 a convoy that has not arrived, or a vehicle whose load is not yet delivered, lost or returned —
 two questions of the one crew record, where they used to be two questions of two.
 
+### Who last changed what
+
+Every entity table carries `LastChangedBy` (a volunteer, or NULL for a change made by a login nobody had linked yet) and `LastChangedAt`, set by the same
+statement as the change. The person comes from the login — `ChangeAttributionMiddleware` resolves it after authorization and the repositories stamp it —
+never from a request body, and a login that is not linked to a volunteer is refused (`403 login-not-linked`) on every write except creating a volunteer and
+linking a login. Reads show it as `lastChangedByName` / `lastChangedAt`, and the operator UI shows "Last changed by … on …" on the vehicle, volunteer, convoy,
+box, receiver, location and manifest pages. A volunteer who has since been erased reads "Former volunteer" — decided once, in the `dbo.PersonDisplay` view.
+It is *who changed it last*, not a history. A new table must carry both columns: `LastChangedGuardTests` fails the integration run otherwise, and lists the
+tables that are exempt (links, and logs that already say who) with the reason.
+
 ### Vehicle servicing and the convoy gate
 
 A vehicle's **inspection status** is the Mechanic's result, recorded through its own route
@@ -574,7 +584,9 @@ To add a new domain concept (e.g., a new `Donation` slice):
    first** in each outcome enum: command handlers are wrapped by `InstrumentedCommandHandler`, which
    reports member zero as `result="ok"` and any other member as `result="rejected"` on
    `freedom.handler.invocations` — no telemetry code is needed in the handler itself
-4. Implement Dapper repository in `src/UA.Action.Freedom.Data/Donations/`
+4. Implement Dapper repository in `src/UA.Action.Freedom.Data/Donations/`. Take `IChangeAttribution` and set
+   `LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()` in every `INSERT`/`UPDATE` (pass the parameters through
+   `attribution.With(...)`), and read `LastChangedByName` through `ChangeStamp.ReadColumns/ReadJoin`
 5. Create endpoints in `src/UA.Action.Freedom.Api/Donations/DonationEndpoints.cs`
 6. Register in `Program.cs` via `AddFreedomApplication()` and `AddFreedomData()`
 7. Add test suites: Unit, Component, Integration, and BDD feature files. Integration tests use
@@ -583,7 +595,7 @@ To add a new domain concept (e.g., a new `Donation` slice):
    `FreedomApi.With*`; the `InMemory*Repository` fake must enforce the same rules as the SQL —
    a fake kinder than the database lets a test pass that production fails.
 8. Add the table as `database/UA.Action.Freedom.Database/dbo/Tables/Donation.sql` — a plain
-   `CREATE TABLE` in its final shape, no guards. `dbo` already carries the schema-level grants.
+   `CREATE TABLE` in its final shape, no guards, with `LastChangedBy` (FK to `dbo.Person`) and `LastChangedAt` (the schema guard test enforces it). `dbo` already carries the schema-level grants.
    Then `cd iac/local && docker compose build db-deploy && docker compose up -d --wait db-deploy`.
    Write CHECK constraints the way SQL Server stores them (see the gotchas doc), or every publish
    recreates them

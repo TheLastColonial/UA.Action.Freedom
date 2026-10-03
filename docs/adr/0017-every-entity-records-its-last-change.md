@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented. The groundwork exists ([plan 02](../plans/02-login-person-link.md)): `ICurrentPerson` resolves the caller to a linked volunteer, and the insurer's `RecordedBy` and the receiver access log already record that person.
+Accepted. Implemented by [plan 03](../plans/03-last-changed-audit.md), on the groundwork of [plan 02](../plans/02-login-person-link.md): `ICurrentPerson` resolves the caller to a linked volunteer, and the insurer's `RecordedBy` and the receiver access log already record that person.
 
 ## Context
 
@@ -77,3 +77,19 @@ Added 2026-10-02, from questions resolved before implementation planning.
   [plan 02](../plans/02-login-person-link.md) before this ADR's own [plan 03](../plans/03-last-changed-audit.md).
 - **An unlinked login is refused (403)** on any write that records who did it, so no "unknown" identity is ever stored
   ([decision O35](../domain/decisions.md#o35)).
+
+## Implementation notes
+
+Added with [plan 03](../plans/03-last-changed-audit.md).
+
+- **The person reaches the repository as request state, not as a command field.** `IChangeAttribution` is a scoped holder that
+  `ChangeAttributionMiddleware` fills from `ICurrentPerson` after authorization, for every write. A handler cannot forget to pass it,
+  and nothing in a request body can set it. The cost is that the stamp is not visible in a handler's signature; it is visible in each
+  statement (`LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()`), which is where the rule lives.
+- **`403 login-not-linked` applies to every write**, as the amendment above asked, with one necessary exception: creating a volunteer and linking
+  a login, which are how a login becomes linked. Those changes carry a time and a NULL person.
+- **Exempt tables** are links and logs that already say who: `Person` (the anonymous key; changes to a volunteer are on `PersonDetail`),
+  `ManifestBox`, `ConvoyVehicleInsuranceDriver`, `ConvoyVehicleInsurance` (`RecordedByPersonId`), `BoxBayAssignment` (`AssignedByPersonId`) and
+  `sensitive.ReceiverDetailAccessLog`. A schema guard test fails for any other table without the pair.
+- **Deletes are not stamped** (there is no row left), and a child's change does not stamp its parent: adding an item records the item, not the box.
+- **`UpdatedAt` stays** where it exists. Whether to drop it in favour of `LastChangedAt` is left for a later change.

@@ -107,7 +107,9 @@ outright.
 
 A volunteer's **login link** (`PersonDetail.IdentitySubject`, set by an Administrator) is part of the personal data,
 so erasure removes it and the login reads as not linked. A login that is not linked cannot do anything that records
-who did it: such writes are refused with `403 login-not-linked`.
+who did it, and since every change records who last made it, that is every write: such writes are refused with `403 login-not-linked`
+(creating a volunteer and linking a login are the two exceptions). Every entity shows who last changed it and when; a volunteer erased since then
+reads "Former volunteer".
 
 Erasure is **refused while the volunteer is still needed**: on the crew of a convoy that has not arrived, or on the
 team of a manifest still under way. Take them off it first. Only the Administrator erases, and the operator UI asks

@@ -44,7 +44,7 @@ web -> api : write request (no person id in the body)
 api -> detail : resolve caller's person from the token subject
 alt not linked, or erased
   api --> web : **403 login-not-linked**
-  note right : No "unknown" identity is ever written (O35)
+  note right : No "unknown" identity is ever written (O35).\nOnly creating a volunteer and linking a login\nmay be made by an unlinked login: they carry a time, no person.
 else linked
   api -> tables : UPDATE ... , LastChangedBy = person, LastChangedAt = now\n(same statement as the change)
   tables --> api : ok

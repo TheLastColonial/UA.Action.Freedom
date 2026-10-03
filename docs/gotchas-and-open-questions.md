@@ -398,6 +398,23 @@ nothing is written. There is no "unknown" fallback and the box and bay request b
 `PersonId` with **no** foreign key, like its receiver, and deliberately not the token subject, which is erasable.
 The Keycloak subject of a seed user is generated per realm import, so a recreated realm needs its logins linked again.
 
+### Every write is attributed, so most people are named by some row
+
+ADR 0017 made `LastChangedBy` a foreign key to `dbo.Person` on every entity table. Three consequences worth knowing before touching it.
+
+- **Erasure mostly stamps `ErasedAt`.** Almost any volunteer who has made a change is now named by a row, so `PersonRepository.DeleteAsync`'s
+  `DELETE dbo.Person` hits the foreign key and falls back to stamping `ErasedAt`; only a volunteer nobody's row names is removed outright. The
+  personal data is deleted either way. The `UPDLOCK` and the foreign-key fallback rely on `XACT_ABORT` being off on the app connection.
+- **"Former volunteer" is decided in one place, `dbo.PersonDisplay`.** It LEFT JOINs `PersonDetail`, so an erased person has no name to join. Do not
+  rebuild the `COALESCE` in a query; join the view. The in-memory twin is `PersonDisplay.Erased` in the component tests.
+- **The attribution is request state, not an argument.** Repositories read `IChangeAttribution`, filled by `ChangeAttributionMiddleware` from the
+  login after authorization. A repository used outside a request (a test, a job) gets whatever the holder was given — NULL if nothing — so an
+  integration test says who it is with `SqlTestDatabase.AttributedTo(person)` or `Unattributed`. And `LastChangedAt` is stamped even when
+  `LastChangedBy` is NULL (a login nobody had linked created the volunteer it is about to link): it records *when*, and never invents a *who*.
+
+The schema guard (`LastChangedGuardTests`) reads `INFORMATION_SCHEMA` as `freedom_sensitive`, not `freedom_app`: the `DENY` on the `sensitive` schema
+hides its tables from the catalogue too, so the app's own identity would pass a guard that could not see them.
+
 ### `Committed` requires `IsDriver`
 
 Commitment is a commitment to *drive on a convoy*. Letting the two disagree would put a non-driver on

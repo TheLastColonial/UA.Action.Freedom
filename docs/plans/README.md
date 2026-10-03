@@ -20,7 +20,7 @@ disagree, the domain document wins: raise it in the PR rather than building arou
 |---|---|---|---|---|---|---|
 | 01 | [Crew without legs](01-crew-without-legs.md) | `feat/crew-without-legs` | [ADR 0007](../adr/0007-journey-legs-are-removed-from-the-crew-model.md), [O7](../domain/decisions.md#o7) | – | – | In review |
 | 02 | [Link a login to a person](02-login-person-link.md) | `feat/login-person-link` | [O34](../domain/decisions.md#o34), [O35](../domain/decisions.md#o35) | – | `/security-review` before PR | In review |
-| 03 | [Who last changed it](03-last-changed-audit.md) | `feat/last-changed-audit` | [ADR 0017](../adr/0017-every-entity-records-its-last-change.md) | 02 | – | Not started |
+| 03 | [Who last changed it](03-last-changed-audit.md) | `feat/last-changed-audit` | [ADR 0017](../adr/0017-every-entity-records-its-last-change.md) | 02 | – | In review |
 | 04 | [Receiver registration](04-receiver-registration.md) | `feat/receiver-registration` | [ADR 0012](../adr/0012-receiver-registration-gates-convoys-and-boxes.md), [P11](../domain/decisions.md#p11) | 03 | – | Not started |
 | 05 | [Item classification and value](05-item-classification-value.md) | `feat/item-classification-value` | [ADR 0014](../adr/0014-items-are-classified-by-category-and-valued-in-gbp.md) | 03 | – | Not started |
 | 06 | [Donors and donations](06-donors-donations.md) | `feat/donors-donations` | [ADR 0013](../adr/0013-donors-are-a-split-identity.md) | 05 | – | Not started |
