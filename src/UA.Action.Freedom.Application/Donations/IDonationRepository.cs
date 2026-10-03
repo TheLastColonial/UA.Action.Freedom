@@ -16,6 +16,9 @@ public interface IDonationRepository
 
     Task<DeleteDonationResult> DeleteAsync(int id, CancellationToken cancellationToken);
 
+    /// <summary>The donor name as a record shows it, Former donor once erased, or nothing if there never was one.</summary>
+    Task<string?> DonorNameAsync(Guid donorId, CancellationToken cancellationToken);
+
     /// <summary>Every item the donor gave, with what each is worth and the status of the box it is in.</summary>
     Task<IReadOnlyList<DonorReportItem>> ReportItemsAsync(Guid donorId, CancellationToken cancellationToken);
 }
@@ -33,6 +36,7 @@ public enum DeleteDonationResult
 /// </summary>
 public sealed record DonorReportItem(
     int DonationId,
+    DateOnly ReceivedOn,
     string CategoryNameEn,
     int Quantity,
     decimal? ValueGbp,

@@ -103,6 +103,21 @@ public static class AuthenticationExtensions
     /// </remarks>
     public const string BoxesAllocateBay = "boxes:allocate-bay";
 
+    /// <summary>Read donors, their donations and the donor status report — every operational role.</summary>
+    public const string DonationsRead = "donations:read";
+
+    /// <summary>
+    /// Enter or correct a donor or a donation — Administrator, Dispatcher and Loader (O22): the people who take a
+    /// donation in. Not Purchaser or Mechanic, and never GroundOfficer.
+    /// </summary>
+    public const string DonationsWrite = "donations:write";
+
+    /// <summary>
+    /// Erase a donor — Administrator only, as for volunteers. Erasure deletes personal data for good, so it is not
+    /// part of entering one.
+    /// </summary>
+    public const string DonorsErase = "donors:erase";
+
     /// <summary>Read the item categories and the customs code each maps to — every operational role.</summary>
     public const string CategoriesRead = "categories:read";
 
@@ -265,6 +280,12 @@ public static class AuthenticationExtensions
                 policy.RequireRole(Administrator, Loader))
             .AddPolicy(BoxesAllocateBay, policy =>
                 policy.RequireRole(Loader))
+            .AddPolicy(DonationsRead, policy =>
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
+            .AddPolicy(DonationsWrite, policy =>
+                policy.RequireRole(Administrator, Dispatcher, Loader))
+            .AddPolicy(DonorsErase, policy =>
+                policy.RequireRole(Administrator))
             .AddPolicy(CategoriesRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(CategoriesWrite, policy =>

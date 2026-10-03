@@ -8,6 +8,7 @@ using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Donations;
 using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
@@ -149,6 +150,7 @@ internal static class FreedomApi
         IPersonRepository people,
         IBayRepository? bays = null,
         IItemCategoryRepository? categories = null,
+        InMemoryDonationRepository? donations = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
@@ -159,6 +161,12 @@ internal static class FreedomApi
             if (categories is not null)
             {
                 services.Replace(categories);
+            }
+
+            if (donations is not null)
+            {
+                services.Replace<IDonorRepository>(donations);
+                services.Replace<IDonationRepository>(donations);
             }
 
         });
@@ -173,6 +181,17 @@ internal static class FreedomApi
         {
             services.Replace(boxes);
             services.Replace(receivers);
+        });
+
+    /// <summary>The application with donor and donation persistence swapped for <paramref name="donations"/>, one fake behind both ports.</summary>
+    internal static WebApplicationFactory<Program> WithDonations(
+        InMemoryDonationRepository donations,
+        bool authenticated = true,
+        params string[] roles) =>
+        WithFakes(authenticated, roles, services =>
+        {
+            services.Replace<IDonorRepository>(donations);
+            services.Replace<IDonationRepository>(donations);
         });
 
     /// <summary>The application with its item category persistence swapped for <paramref name="categories"/>.</summary>
@@ -275,6 +294,7 @@ internal static class FreedomApi
                 EnsureCallerIsOnFile(services);
                 EnsureReceiversAreFaked(services);
                 EnsureCategoriesAreFaked(services);
+                EnsureDonationsAreFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -330,6 +350,23 @@ internal static class FreedomApi
         if (!fake)
         {
             services.Replace<IItemCategoryRepository>(InMemoryItemCategoryRepository.WithDefaults());
+        }
+    }
+
+    /// <summary>
+    /// Packing an item may name its donation, so a test that did not supply a donation store gets an empty one
+    /// rather than a route to a real database.
+    /// </summary>
+    private static void EnsureDonationsAreFaked(IServiceCollection services)
+    {
+        var fake = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IDonationRepository) && descriptor.ImplementationFactory is not null);
+
+        if (!fake)
+        {
+            var donations = new InMemoryDonationRepository();
+            services.Replace<IDonorRepository>(donations);
+            services.Replace<IDonationRepository>(donations);
         }
     }
 

@@ -111,16 +111,30 @@ public sealed class DonationRepository(IDbConnectionFactory connectionFactory, I
         }
     }
 
+    public async Task<string?> DonorNameAsync(Guid donorId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<string>(new CommandDefinition(
+            "SELECT DisplayName FROM dbo.DonorDisplay WHERE DonorId = @donorId",
+            new { donorId },
+            cancellationToken: cancellationToken));
+    }
+
+    private sealed record ReportRow(
+        int DonationId, DateTime ReceivedOn, string CategoryNameEn, int Quantity, decimal? ValueGbp, bool BoxValidated);
+
     public async Task<IReadOnlyList<DonorReportItem>> ReportItemsAsync(Guid donorId, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
         // Only what a donor may be told. The box is read for one fact, whether it has been validated: no
         // receiver, location, route or manifest is selected, so none can reach the report.
-        var rows = await connection.QueryAsync<DonorReportItem>(new CommandDefinition(
+        var rows = await connection.QueryAsync<ReportRow>(new CommandDefinition(
             """
             SELECT
                 n.Id AS DonationId,
+                n.ReceivedOn,
                 c.NameEn AS CategoryNameEn,
                 COALESCE(i.Quantity, 1) AS Quantity,
                 i.ValueGbp,
@@ -130,11 +144,14 @@ public sealed class DonationRepository(IDbConnectionFactory connectionFactory, I
             JOIN dbo.ItemCategory AS c ON c.Id = i.CategoryId
             JOIN dbo.Box AS b ON b.Id = i.BoxId
             WHERE n.DonorId = @donorId
-            ORDER BY n.Id, c.NameEn, i.Id
+            ORDER BY n.ReceivedOn, n.Id, c.NameEn, i.Id
             """,
             new { donorId },
             cancellationToken: cancellationToken));
 
-        return rows.ToList();
+        return rows
+            .Select(row => new DonorReportItem(
+                row.DonationId, DateOnly.FromDateTime(row.ReceivedOn), row.CategoryNameEn, row.Quantity, row.ValueGbp, row.BoxValidated))
+            .ToList();
     }
 }

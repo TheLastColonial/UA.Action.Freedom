@@ -29,7 +29,7 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
     /// </summary>
     private sealed record BoxItemRow(
         Guid Id, string Description, string PropertiesJson, int CategoryId, string? CommodityCode,
-        int? Quantity, decimal? ValueGbp, int? ValueSource, DateTime? ExpiresOn);
+        int? Quantity, decimal? ValueGbp, int? ValueSource, DateTime? ExpiresOn, int? DonationId);
 
     private static BoxItemReadModel ToItem(BoxItemRow row) => new(
         row.Id,
@@ -40,7 +40,8 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
         row.Quantity,
         row.ValueGbp,
         row.ValueSource is { } source ? (ValueSource)source : null,
-        row.ExpiresOn is { } expiresOn ? DateOnly.FromDateTime(expiresOn) : null);
+        row.ExpiresOn is { } expiresOn ? DateOnly.FromDateTime(expiresOn) : null,
+        DonationId: row.DonationId);
 
     private static Dictionary<string, string> ReadProperties(string json) =>
         (JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) ?? [])
@@ -173,7 +174,7 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
         await using var connection = connectionFactory.Create();
 
         var rows = await connection.QueryAsync<BoxItemRow>(new CommandDefinition(
-            "SELECT Id, Description, PropertiesJson, CategoryId, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn "
+            "SELECT Id, Description, PropertiesJson, CategoryId, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn, DonationId "
             + "FROM dbo.BoxItem WHERE BoxId = @boxId ORDER BY Description, Id",
             new { boxId },
             cancellationToken: cancellationToken));
@@ -188,9 +189,9 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
         await connection.ExecuteAsync(new CommandDefinition(
             """
             INSERT INTO dbo.BoxItem
-                (Id, BoxId, CategoryId, Description, PropertiesJson, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn, LastChangedBy, LastChangedAt)
+                (Id, BoxId, CategoryId, Description, PropertiesJson, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn, DonationId, LastChangedBy, LastChangedAt)
             VALUES
-                (@id, @boxId, @categoryId, @description, @propertiesJson, @commodityCode, @quantity, @valueGbp, @valueSource, @expiresOn, @changedBy, SYSUTCDATETIME())
+                (@id, @boxId, @categoryId, @description, @propertiesJson, @commodityCode, @quantity, @valueGbp, @valueSource, @expiresOn, @donationId, @changedBy, SYSUTCDATETIME())
             """,
             attribution.With(new
             {
@@ -204,6 +205,7 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
                 valueGbp = item.ValueGbp,
                 valueSource = item.ValueSource is { } source ? (int?)source : null,
                 expiresOn = item.ExpiresOn?.ToDateTime(TimeOnly.MinValue),
+                donationId = item.DonationId,
             }),
             cancellationToken: cancellationToken));
     }

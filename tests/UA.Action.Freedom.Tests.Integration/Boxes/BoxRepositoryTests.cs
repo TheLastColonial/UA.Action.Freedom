@@ -378,4 +378,34 @@ public class BoxRepositoryTests
             await RemoveCategoryAsync(category);
         }
     }
+
+    [Fact]
+    public async Task An_item_remembers_the_donation_it_came_in()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = await repository.AddAsync(ANewBox(), cancellationToken);
+        var category = await AddCategoryAsync();
+        var donorId = Guid.NewGuid();
+        await ExecuteAsync("INSERT INTO dbo.Donor (Id) VALUES (@id)", ("@id", donorId));
+        var donationId = await ScalarAsync(
+            "INSERT INTO dbo.Donation (DonorId, ReceivedOn) VALUES (@donor, '2026-09-20'); SELECT CAST(SCOPE_IDENTITY() AS int);",
+            ("@donor", donorId));
+
+        try
+        {
+            var item = new BoxItemReadModel(
+                Guid.NewGuid(), "Tins", new Dictionary<string, string>(), category, DonationId: donationId);
+            await repository.AddItemAsync(id, item, cancellationToken);
+
+            (await repository.ListItemsAsync(id, cancellationToken)).Should().ContainSingle()
+                .Which.DonationId.Should().Be(donationId);
+        }
+        finally
+        {
+            await RemoveBoxAsync(id);
+            await ExecuteAsync("DELETE FROM dbo.Donation WHERE Id = @id; DELETE FROM dbo.Donor WHERE Id = @donor", ("@id", donationId), ("@donor", donorId));
+            await RemoveCategoryAsync(category);
+        }
+    }
 }

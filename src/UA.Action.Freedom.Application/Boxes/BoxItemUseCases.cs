@@ -1,5 +1,6 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Categories;
+using UA.Action.Freedom.Application.Donations;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Boxes;
@@ -67,14 +68,16 @@ public sealed record AddBoxItemCommand(
     int? Quantity = null,
     decimal? ValueGbp = null,
     ValueSource? ValueSource = null,
-    DateOnly? ExpiresOn = null);
+    DateOnly? ExpiresOn = null,
+    int? DonationId = null);
 
 public enum AddBoxItemOutcome
 {
     Added,
     BoxNotFound,
     AlreadyValidated,
-    CategoryNotFound
+    CategoryNotFound,
+    DonationNotFound
 }
 
 /// <summary>Something worth telling the packer about an item that was nonetheless accepted.</summary>
@@ -105,7 +108,8 @@ public sealed record AddBoxItemResult(
 /// An already-expired or not-carried item is accepted and warned about, not refused: the Loader needs to see
 /// it to deal with it, and validation is where an expired one is stopped.
 /// </remarks>
-public sealed class AddBoxItemHandler(IBoxRepository repository, IItemCategoryRepository categories)
+public sealed class AddBoxItemHandler(
+    IBoxRepository repository, IItemCategoryRepository categories, IDonationRepository donations)
     : ICommandHandler<AddBoxItemCommand, AddBoxItemResult>
 {
     public async Task<AddBoxItemResult> HandleAsync(AddBoxItemCommand command, CancellationToken cancellationToken)
@@ -129,9 +133,16 @@ public sealed class AddBoxItemHandler(IBoxRepository repository, IItemCategoryRe
             return new AddBoxItemResult(AddBoxItemOutcome.CategoryNotFound);
         }
 
+        if (command.DonationId is { } donationId
+            && await donations.GetByIdAsync(donationId, cancellationToken) is null)
+        {
+            return new AddBoxItemResult(AddBoxItemOutcome.DonationNotFound);
+        }
+
         var item = new BoxItemReadModel(
             Guid.NewGuid(), command.Description, command.Properties, command.CategoryId,
-            command.CommodityCode, command.Quantity, command.ValueGbp, command.ValueSource, command.ExpiresOn);
+            command.CommodityCode, command.Quantity, command.ValueGbp, command.ValueSource, command.ExpiresOn,
+            DonationId: command.DonationId);
 
         await repository.AddItemAsync(command.BoxId, item, cancellationToken);
 
