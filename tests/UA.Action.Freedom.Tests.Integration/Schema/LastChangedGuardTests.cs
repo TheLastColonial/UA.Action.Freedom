@@ -20,6 +20,7 @@ public class LastChangedGuardTests
     private static readonly IReadOnlyDictionary<string, string> Exempt = new Dictionary<string, string>
     {
         ["dbo.Person"] = "the anonymous key; a change to a volunteer is recorded on dbo.PersonDetail, which erasure deletes",
+        ["dbo.Donor"] = "the anonymous key; a change to a donor is recorded on dbo.DonorDetail, which erasure deletes",
         ["dbo.ManifestBox"] = "a link between a manifest and a box, never updated",
         ["dbo.ConvoyVehicleInsuranceDriver"] = "a link between an insurance and a driver, never updated",
         ["dbo.ConvoyVehicleInsurance"] = "RecordedByPersonId and RecordedAt already say who and when",
