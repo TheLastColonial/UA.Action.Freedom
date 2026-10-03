@@ -4,7 +4,9 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented.
+Accepted. Implemented by [plan 06](../plans/06-donors-donations.md): `dbo.Donor`, `dbo.DonorDetail` and `dbo.Donation`, `BoxItem.DonationId`, the `/donors` and `/donations` API with its three policies, and the donor status report. The repository does not refuse erasure, as decided here.
+
+Implementation note: the report filters out voided boxes only once [plan 16](../plans/16-box-replacement-label.md) adds voiding. There is no voided state to filter today.
 
 ## Context
 

@@ -162,6 +162,11 @@ public static class BoxEndpoints
                     title: "There is no such category.",
                     detail: "The category named does not exist.",
                     statusCode: StatusCodes.Status422UnprocessableEntity),
+                AddBoxItemOutcome.DonationNotFound => Results.Problem(
+                    type: "donation-not-found",
+                    title: "There is no such donation.",
+                    detail: "The donation named does not exist.",
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
                 _ => Results.Problem(detail: ValidatedProblem, statusCode: StatusCodes.Status409Conflict),
             };
         })

@@ -43,6 +43,7 @@ test('the sections are nested under the Dashboard, one level down', async () => 
     'Volunteers',
     'Convoys',
     'Boxes',
+    'Donors',
     'Manifests',
     'Receivers',
     'Locations',

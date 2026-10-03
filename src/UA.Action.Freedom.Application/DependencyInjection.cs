@@ -6,6 +6,7 @@ using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
+using UA.Action.Freedom.Application.Donations;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Telemetry;
@@ -31,6 +32,19 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<CreatePersonCommand, Guid>, CreatePersonHandler>();
         services.AddScoped<ICommandHandler<UpdatePersonCommand, UpdatePersonOutcome>, UpdatePersonHandler>();
         services.AddScoped<ICommandHandler<DeletePersonCommand, DeletePersonOutcome>, DeletePersonHandler>();
+
+        services.AddScoped<ICommandHandler<CreateDonorCommand, Guid>, CreateDonorHandler>();
+        services.AddScoped<ICommandHandler<UpdateDonorCommand, UpdateDonorOutcome>, UpdateDonorHandler>();
+        services.AddScoped<ICommandHandler<EraseDonorCommand, EraseDonorOutcome>, EraseDonorHandler>();
+        services.AddScoped<IQueryHandler<GetDonorByIdQuery, DonorReadModel?>, GetDonorByIdHandler>();
+        services.AddScoped<IQueryHandler<ListDonorsQuery, IReadOnlyList<DonorReadModel>>, ListDonorsHandler>();
+        services.AddScoped<IQueryHandler<GetDonorReportQuery, DonorReport?>, GetDonorReportHandler>();
+        services.AddScoped<ICommandHandler<CreateDonationCommand, CreateDonationResult>, CreateDonationHandler>();
+        services.AddScoped<ICommandHandler<UpdateDonationCommand, UpdateDonationOutcome>, UpdateDonationHandler>();
+        services.AddScoped<ICommandHandler<DeleteDonationCommand, DeleteDonationOutcome>, DeleteDonationHandler>();
+        services.AddScoped<IQueryHandler<GetDonationByIdQuery, DonationReadModel?>, GetDonationByIdHandler>();
+        services.AddScoped<IQueryHandler<ListDonationsQuery, IReadOnlyList<DonationReadModel>>, ListDonationsHandler>();
+        services.AddScoped<IQueryHandler<ListDonorDonationsQuery, IReadOnlyList<DonationReadModel>?>, ListDonorDonationsHandler>();
         services.AddScoped<ICommandHandler<LinkLoginCommand, LinkLoginOutcome>, LinkLoginHandler>();
         services.AddScoped<IQueryHandler<GetPersonByIdQuery, PersonReadModel?>, GetPersonByIdHandler>();
         services.AddScoped<IQueryHandler<ListPeopleQuery, IReadOnlyList<PersonReadModel>>, ListPeopleHandler>();

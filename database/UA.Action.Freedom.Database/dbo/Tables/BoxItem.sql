@@ -24,6 +24,8 @@ CREATE TABLE [dbo].[BoxItem] (
     [ValueGbp]       decimal(12,2)    NULL,
     [ValueSource]    int              NULL,
     [ExpiresOn]      date             NULL,
+    -- Which drop-off this item came from (ADR 0013). NULL for items entered before donations existed.
+    [DonationId]     int              NULL,
     [PropertiesJson] nvarchar(max)    NOT NULL CONSTRAINT [DF_BoxItem_PropertiesJson] DEFAULT '{}',
     [LastChangedBy] uniqueidentifier NULL,
     [LastChangedAt] datetime2(0)     NULL,
@@ -35,9 +37,13 @@ CREATE TABLE [dbo].[BoxItem] (
     -- Items have no life outside their box: unpacking one is deleting the box.
     CONSTRAINT [FK_BoxItem_Box] FOREIGN KEY ([BoxId]) REFERENCES [dbo].[Box] ([Id]) ON DELETE CASCADE,
     CONSTRAINT [FK_BoxItem_Category] FOREIGN KEY ([CategoryId]) REFERENCES [dbo].[ItemCategory] ([Id]),
+    CONSTRAINT [FK_BoxItem_Donation] FOREIGN KEY ([DonationId]) REFERENCES [dbo].[Donation] ([Id]),
     CONSTRAINT [FK_BoxItem_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
 
 CREATE INDEX [IX_BoxItem_BoxId] ON [dbo].[BoxItem] ([BoxId]);
+GO
+
+CREATE INDEX [IX_BoxItem_DonationId] ON [dbo].[BoxItem] ([DonationId]) WHERE [DonationId] IS NOT NULL;
 GO

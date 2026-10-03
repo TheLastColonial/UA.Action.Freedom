@@ -2,8 +2,10 @@ import { expect, test } from 'vitest';
 
 import { makeBox, makeBoxItem } from '../../test/factories/box';
 import { makeCategory } from '../../test/factories/category';
+import { makeDonation, makeDonor } from '../../test/factories/donation';
 import { boxApi } from '../../test/msw/boxes';
 import { categoryApi } from '../../test/msw/categories';
+import { donationApi } from '../../test/msw/donations';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { BoxItemsPanel } from './BoxItemsPanel';
@@ -158,4 +160,23 @@ test('is read-only when the box is frozen', async () => {
     .toBeInTheDocument();
   await expect.element(screen.getByRole('button', { name: 'Add item' })).not.toBeInTheDocument();
   await expect.element(screen.getByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+});
+
+test('names the donation an item came in', async () => {
+  serve();
+  const donor = makeDonor({ id: 'd1', name: 'Margaret Hollis' });
+  worker.use(...donationApi([donor], [makeDonation('d1', { id: 41 })]).handlers);
+
+  const screen = await renderWithProviders(<BoxItemsPanel boxId={8} frozen={false} />, {
+    roles: ['Loader'],
+  });
+
+  await screen.getByLabelText('Description').fill('Tinned soup');
+  await screen.getByLabelText('Category').selectOptions('Bedding');
+  await screen
+    .getByLabelText('Donation')
+    .selectOptions('#41 from Margaret Hollis, received 2026-09-20');
+  await screen.getByRole('button', { name: 'Add item' }).click();
+
+  await expect.element(screen.getByText(/donation #41 from Margaret Hollis/)).toBeInTheDocument();
 });

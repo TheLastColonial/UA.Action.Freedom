@@ -47,10 +47,11 @@ public sealed record AddBoxItemRequest(
     int? Quantity = null,
     decimal? ValueGbp = null,
     ValueSource? ValueSource = null,
-    DateOnly? ExpiresOn = null)
+    DateOnly? ExpiresOn = null,
+    int? DonationId = null)
 {
     public AddBoxItemCommand ToCommand(int boxId) =>
-        new(boxId, Description, Properties ?? [], CategoryId, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn);
+        new(boxId, Description, Properties ?? [], CategoryId, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn, DonationId);
 }
 
 /// <summary>Written out for each body rather than shared, matching the vehicle and volunteer validators.</summary>
@@ -117,6 +118,7 @@ public sealed class AddBoxItemRequestValidator : AbstractValidator<AddBoxItemReq
         RuleFor(r => r.CommodityCode!).Matches(Categories.CommodityCodes.Pattern)
             .WithMessage("'Commodity Code' must be 6 to 10 digits.")
             .When(r => r.CommodityCode is not null);
+        RuleFor(r => r.DonationId).GreaterThan(0).When(r => r.DonationId is not null);
         RuleFor(r => r.Quantity).GreaterThanOrEqualTo(1).When(r => r.Quantity is not null);
         RuleFor(r => r.ValueGbp).GreaterThanOrEqualTo(0).PrecisionScale(12, 2, ignoreTrailingZeros: true)
             .When(r => r.ValueGbp is not null);

@@ -26,11 +26,13 @@ public sealed class CategoriesSteps(FreedomApiClient api, ScenarioState state)
     private const string NotCarriedName = "BDD Not Carried";
 
     /// <summary>
-    /// Fills the placeholders a body may use: <c>{category}</c> is the remembered category and <c>{yesterday}</c> is a
+    /// Fills the placeholders a body may use: <c>{donor}</c> and <c>{donation}</c> are the remembered donor and donation, <c>{category}</c> is the remembered category and <c>{yesterday}</c> is a
     /// date that has already passed.
     /// </summary>
     internal static string Expand(ScenarioState state, string text) => text
         .Replace("{category}", state.TryPinned(CategoryKey) ?? "missing-category", StringComparison.Ordinal)
+        .Replace("{donor}", state.TryPinned(DonationsSteps.DonorKey) ?? "missing-donor", StringComparison.Ordinal)
+        .Replace("{donation}", state.TryPinned(DonationsSteps.DonationKey) ?? "missing-donation", StringComparison.Ordinal)
         .Replace("{yesterday}", DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd"), StringComparison.Ordinal);
 
     [Given("a category exists")]
@@ -84,15 +86,9 @@ public sealed class CategoriesSteps(FreedomApiClient api, ScenarioState state)
     {
         var admin = await api.TokenForAsync("admin");
 
-        await api.SendAsync(HttpMethod.Get, "/categories", admin, null);
-        var existing = JsonDocument.Parse(api.LastBody).RootElement.EnumerateArray()
-            .Where(category => category.GetProperty("nameEn").GetString() == name)
-            .Select(category => (int?)category.GetProperty("id").GetInt32())
-            .FirstOrDefault();
-
-        if (existing is { } id)
+        if (await FindCategoryAsync(admin, name) is { } existing)
         {
-            state.Pin(CategoryKey, id.ToString());
+            state.Pin(CategoryKey, existing.ToString());
             return;
         }
 
@@ -102,11 +98,30 @@ public sealed class CategoriesSteps(FreedomApiClient api, ScenarioState state)
             admin,
             JsonSerializer.Serialize(new { nameEn = name, isSensitive = false, isNotCarried }));
 
+        // Features run in parallel, so on a fresh database another scenario may have created the fixture between
+        // the lookup and the post. The name is unique, so a conflict means it exists: take that one.
+        if (response.StatusCode == HttpStatusCode.Conflict
+            && await FindCategoryAsync(admin, name) is { } raced)
+        {
+            state.Pin(CategoryKey, raced.ToString());
+            return;
+        }
+
         response.StatusCode.Should().Be(HttpStatusCode.Created, "the body was: {0}", api.LastBody);
 
         var path = response.Headers.Location!.IsAbsoluteUri
             ? response.Headers.Location.AbsolutePath
             : response.Headers.Location.ToString();
         state.Pin(CategoryKey, path.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1]);
+    }
+
+    private async Task<int?> FindCategoryAsync(string token, string name)
+    {
+        await api.SendAsync(HttpMethod.Get, "/categories", token, null);
+
+        return JsonDocument.Parse(api.LastBody).RootElement.EnumerateArray()
+            .Where(category => category.GetProperty("nameEn").GetString() == name)
+            .Select(category => (int?)category.GetProperty("id").GetInt32())
+            .FirstOrDefault();
     }
 }

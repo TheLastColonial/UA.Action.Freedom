@@ -53,6 +53,7 @@ export const boxItemReadModelSchema = z.object({
   categoryNameEn: z.string().nullable(),
   isNotCarried: z.boolean(),
   shelfLife: shelfLifeStatusSchema,
+  donationId: z.number().int().nullable(),
 });
 export type BoxItemReadModel = z.infer<typeof boxItemReadModelSchema>;
 
@@ -104,4 +105,5 @@ export interface AddBoxItemRequest {
   valueGbp?: number;
   valueSource?: ItemValueSource;
   expiresOn?: string;
+  donationId?: number;
 }

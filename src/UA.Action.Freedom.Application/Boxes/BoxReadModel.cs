@@ -49,6 +49,7 @@ public sealed record BoxReadModel(
 /// </param>
 /// <param name="ValueGbp">What it is worth in pounds, with no conversion, and <paramref name="ValueSource"/> says who gave the figure (D5).</param>
 /// <param name="ExpiresOn">When it expires. An item already past it blocks validation of its box (D1).</param>
+/// <param name="DonationId">The drop-off this item came in, if one was recorded (ADR 0013); null for items that predate donations.</param>
 /// <param name="CategoryNameEn">Read-time: the category's name, so a client need not look it up.</param>
 /// <param name="IsNotCarried">Read-time: the category is one the convoy will not take (D21).</param>
 /// <param name="ShelfLife">Read-time: expired, short-dated by the category's rule, or fine (D1, D25).</param>
@@ -64,7 +65,8 @@ public sealed record BoxItemReadModel(
     DateOnly? ExpiresOn = null,
     string? CategoryNameEn = null,
     bool IsNotCarried = false,
-    ShelfLifeStatus ShelfLife = ShelfLifeStatus.Fine);
+    ShelfLifeStatus ShelfLife = ShelfLifeStatus.Fine,
+    int? DonationId = null);
 
 /// <summary>
 /// A QR label issued for a box: an opaque, non-enumerable token a scanner resolves back to the

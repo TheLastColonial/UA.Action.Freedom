@@ -23,7 +23,7 @@ disagree, the domain document wins: raise it in the PR rather than building arou
 | 03 | [Who last changed it](03-last-changed-audit.md) | `feat/last-changed-audit` | [ADR 0017](../adr/0017-every-entity-records-its-last-change.md) | 02 | – | In review |
 | 04 | [Receiver registration](04-receiver-registration.md) | `feat/receiver-registration` | [ADR 0012](../adr/0012-receiver-registration-gates-convoys-and-boxes.md), [P11](../domain/decisions.md#p11) | 03 | – | In review |
 | 05 | [Item classification and value](05-item-classification-value.md) | `feat/item-classification-value` | [ADR 0014](../adr/0014-items-are-classified-by-category-and-valued-in-gbp.md) | 03 | – | In review |
-| 06 | [Donors and donations](06-donors-donations.md) | `feat/donors-donations` | [ADR 0013](../adr/0013-donors-are-a-split-identity.md) | 05 | – | Not started |
+| 06 | [Donors and donations](06-donors-donations.md) | `feat/donors-donations` | [ADR 0013](../adr/0013-donors-are-a-split-identity.md) | 05 | – | In review |
 | 07 | [Box allocation and ferry booking](07-box-allocation-ferry.md) | `feat/box-allocation-ferry` | [ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md) (cargo), [P1](../domain/decisions.md#p1) | 03 | – | Not started |
 | 08 | [Declarations and filing mode](08-declarations-filing.md) | `feat/declarations-filing` | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (entity), [ADR 0006](../adr/0006-filing-is-manual-by-default.md) | 04, 05, 07 | – | Not started |
 | 09 | [Declaration staleness](09-declaration-staleness.md) | `feat/declaration-staleness` | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (snapshot) | 08 | – | Not started |

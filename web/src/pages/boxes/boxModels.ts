@@ -66,6 +66,7 @@ export interface AddItemFormValues {
   valueSource: '' | ItemValueSource;
   expiresOn: string;
   commodityCode: string;
+  donationId: string;
   properties: ItemPropertyRow[];
 }
 
@@ -78,6 +79,7 @@ export function emptyAddItemForm(): AddItemFormValues {
     valueSource: '',
     expiresOn: '',
     commodityCode: '',
+    donationId: '',
     properties: [],
   };
 }
@@ -108,6 +110,8 @@ export function addItemFormToRequest(values: AddItemFormValues): AddBoxItemReque
   if (expiresOn !== undefined) request.expiresOn = expiresOn;
   const commodityCode = trimmed(values.commodityCode);
   if (commodityCode !== undefined) request.commodityCode = commodityCode;
+  const donationId = trimmed(values.donationId);
+  if (donationId !== undefined) request.donationId = Number(donationId);
 
   return request;
 }
@@ -134,6 +138,7 @@ export const addItemFormSchema = z
       ),
     valueSource: z.enum(['', 'Donor', 'Estimate']),
     expiresOn: z.string(),
+    donationId: z.string(),
     commodityCode: z
       .string()
       .refine(

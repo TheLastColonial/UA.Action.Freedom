@@ -99,6 +99,13 @@ that turns it into the shape the application uses (the category, quantity, value
 real columns on the same row now, and the seam maps them too). That is the exception, and it is commented as
 such. A non-string JSON value in the bag is kept as its raw text rather than refused.
 
+### A `date` column does not hydrate a `DateOnly` constructor parameter
+
+Dapper maps a SQL `date` to `DateTime`, so a read model with a `DateOnly` parameter fails with "A parameterless default
+constructor or one matching signature ... is required". `DonationRepository` reads into a private `DonationRow`
+(`DateTime`) and converts, the same seam `BoxRepository` uses for `ExpiresOn`. Writes are fine: a `DateOnly` parameter
+goes in as a `date`.
+
 ### The schema is a SQL project, declared as its end state
 
 `database/UA.Action.Freedom.Database` (SDK-style `Microsoft.Build.Sql`) holds one plain `CREATE`
@@ -441,6 +448,16 @@ ADR 0017 made `LastChangedBy` a foreign key to `dbo.Person` on every entity tabl
 
 The schema guard (`LastChangedGuardTests`) reads `INFORMATION_SCHEMA` as `freedom_sensitive`, not `freedom_app`: the `DENY` on the `sensitive` schema
 hides its tables from the catalogue too, so the app's own identity would pass a guard that could not see them.
+
+### A donor is erased, never refused, and is not a volunteer
+
+`DonorRepository.EraseAsync` copies the volunteer pattern (delete the detail, try to delete the identity, stamp
+`ErasedAt` on a foreign-key violation) but has no refusal: a donor has no operational dependency, so there is no
+`StillActive`. Erasure of a donor never touches a volunteer and the reverse; they are separate tables with separate
+keys, and `DonorRepositoryTests` asserts it. The donor report is the other place this matters: it must keep working
+after erasure, so it asks `dbo.DonorDisplay` for the name rather than reading the detail row.
+[Q-retention](domain/decisions.md#q-retention) (how long a donor's details are kept) is still open, as is the lawful
+basis for entering a donor's details from an email: that is the charity's decision, not the code's.
 
 ### `Committed` requires `IsDriver`
 

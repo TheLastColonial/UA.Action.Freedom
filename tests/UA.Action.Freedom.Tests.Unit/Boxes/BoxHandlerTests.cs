@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Donations;
 using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Domain;
@@ -263,7 +264,7 @@ public class BoxHandlerTests
     {
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
-        var handler = new AddBoxItemHandler(repository, ACategoryRepository());
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(), Substitute.For<IDonationRepository>());
 
         var result = await handler.HandleAsync(
             new AddBoxItemCommand(BoxId, "Blankets", new Dictionary<string, string>(), CategoryId), CancellationToken.None);
@@ -289,11 +290,46 @@ public class BoxHandlerTests
     }
 
     [Fact]
+    public async Task An_item_can_name_the_donation_it_came_in()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        var donations = Substitute.For<IDonationRepository>();
+        donations.GetByIdAsync(41, Arg.Any<CancellationToken>())
+            .Returns(new DonationReadModel(41, Guid.NewGuid(), "Margaret Hollis", new DateOnly(2026, 9, 20), null));
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(), donations);
+
+        var result = await handler.HandleAsync(
+            new AddBoxItemCommand(BoxId, "Blankets", new Dictionary<string, string>(), CategoryId, DonationId: 41),
+            CancellationToken.None);
+
+        result.Outcome.Should().Be(AddBoxItemOutcome.Added);
+        await repository.Received(1).AddItemAsync(
+            BoxId, Arg.Is<BoxItemReadModel>(item => item.DonationId == 41), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task An_item_cannot_name_a_donation_that_does_not_exist()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(), Substitute.For<IDonationRepository>());
+
+        var result = await handler.HandleAsync(
+            new AddBoxItemCommand(BoxId, "Blankets", new Dictionary<string, string>(), CategoryId, DonationId: 41),
+            CancellationToken.None);
+
+        result.Outcome.Should().Be(AddBoxItemOutcome.DonationNotFound);
+        await repository.DidNotReceive().AddItemAsync(
+            Arg.Any<int>(), Arg.Any<BoxItemReadModel>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Packing_an_item_into_an_open_box_mints_it_an_identifier()
     {
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
-        var handler = new AddBoxItemHandler(repository, ACategoryRepository());
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(), Substitute.For<IDonationRepository>());
 
         var result = await handler.HandleAsync(
             new AddBoxItemCommand(BoxId, "Blankets", new Dictionary<string, string> { ["size"] = "double" }, CategoryId),
@@ -382,7 +418,7 @@ public class BoxHandlerTests
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
         var categories = Substitute.For<IItemCategoryRepository>();
-        var handler = new AddBoxItemHandler(repository, categories);
+        var handler = new AddBoxItemHandler(repository, categories, Substitute.For<IDonationRepository>());
 
         var result = await handler.HandleAsync(
             new AddBoxItemCommand(BoxId, "Gas canister", new Dictionary<string, string>(), CategoryId),
@@ -398,7 +434,7 @@ public class BoxHandlerTests
     {
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
-        var handler = new AddBoxItemHandler(repository, ACategoryRepository(ACategory(isNotCarried: true)));
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(ACategory(isNotCarried: true)), Substitute.For<IDonationRepository>());
 
         var result = await handler.HandleAsync(
             new AddBoxItemCommand(BoxId, "Gas canister", new Dictionary<string, string>(), CategoryId),
@@ -415,7 +451,7 @@ public class BoxHandlerTests
     {
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
-        var handler = new AddBoxItemHandler(repository, ACategoryRepository(ACategory(warnWithinDays: 180)));
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(ACategory(warnWithinDays: 180)), Substitute.For<IDonationRepository>());
 
         var result = await handler.HandleAsync(
             new AddBoxItemCommand(
@@ -431,7 +467,7 @@ public class BoxHandlerTests
     {
         var repository = Substitute.For<IBoxRepository>();
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
-        var handler = new AddBoxItemHandler(repository, ACategoryRepository(ACategory(warnWithinDays: 180)));
+        var handler = new AddBoxItemHandler(repository, ACategoryRepository(ACategory(warnWithinDays: 180)), Substitute.For<IDonationRepository>());
 
         var short_ = await handler.HandleAsync(
             new AddBoxItemCommand(

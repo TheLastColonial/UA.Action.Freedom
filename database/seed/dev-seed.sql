@@ -90,6 +90,21 @@ INSERT INTO dbo.Person (Id) SELECT Id FROM @people;
 INSERT INTO dbo.PersonDetail (PersonId, FirstName, LastName, DateOfBirth, Joined, Phone, IsDriver, Committed)
 SELECT Id, FirstName, LastName, '1985-01-01', '2024-01-01', N'07700 900000', IsDriver, Committed FROM @people;
 
+-- Donors are a split identity too (dbo.Donor, dbo.DonorDetail). Fictional names and example.org addresses only.
+DECLARE @donorA uniqueidentifier = NEWID(), @donorB uniqueidentifier = NEWID();
+INSERT INTO dbo.Donor (Id) VALUES (@donorA), (@donorB);
+INSERT INTO dbo.DonorDetail (DonorId, Name, Email, Phone)
+VALUES (@donorA, N'Margaret Example', N'margaret@example.org', N'07700 900111'),
+       (@donorB, N'Riverside Community Church', N'office@example.org', NULL);
+
+DECLARE @donationA int, @donationB int;
+INSERT INTO dbo.Donation (DonorId, ReceivedOn, Notes)
+VALUES (@donorA, DATEADD(DAY, -14, CAST(SYSUTCDATETIME() AS date)), N'Dropped off at the depot');
+SET @donationA = SCOPE_IDENTITY();
+INSERT INTO dbo.Donation (DonorId, ReceivedOn, Notes)
+VALUES (@donorB, DATEADD(DAY, -7, CAST(SYSUTCDATETIME() AS date)), N'Collected after the Sunday collection');
+SET @donationB = SCOPE_IDENTITY();
+
 -- A convoy still being planned: truck list not published, so vehicles can join and leave.
 DECLARE @convoy int;
 -- CrossingMode 0 is Ferry, 1 is Shuttle. A ferry crossing is declared maritime on an ICS2 ENS and
@@ -142,6 +157,10 @@ FROM dbo.Box AS b
 CROSS APPLY (VALUES (N'First aid kits',   N'Medical devices', 10, CAST(120.00 AS decimal(12,2)), 0, DATEADD(DAY, 400, CAST(SYSUTCDATETIME() AS date)), CAST(NULL AS varchar(10)), N'{"size":"small"}'),
                     (N'Thermal blankets', N'Other',           20, CAST(60.00 AS decimal(12,2)),  1, CAST(NULL AS date),                                    CAST('99190000' AS varchar(10)), N'{}')) AS i (Description, CategoryName, Quantity, ValueGbp, ValueSource, ExpiresOn, CommodityCode, PropertiesJson)
 INNER JOIN dbo.ItemCategory AS c ON c.NameEn = i.CategoryName;
+
+-- Every seeded item came in on a donation.
+UPDATE dbo.BoxItem SET DonationId = @donationA WHERE Description = N'First aid kits';
+UPDATE dbo.BoxItem SET DonationId = @donationB WHERE Description = N'Thermal blankets';
 
 COMMIT;
 

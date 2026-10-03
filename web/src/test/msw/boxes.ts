@@ -193,6 +193,7 @@ export function boxApi(
         categoryNameEn: category.nameEn,
         isNotCarried: category.isNotCarried,
         shelfLife,
+        donationId: body.donationId ?? null,
       });
       items.set(id, list);
       const warnings = [

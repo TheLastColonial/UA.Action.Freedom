@@ -220,6 +220,9 @@ token lacking the role is **403**.
 | `boxes:write` | ✓ | ✓ | ✓ | | | |
 | `boxes:validate` | ✓ | | ✓ | | | |
 | `boxes:allocate-bay` | | | ✓ | | | |
+| `donations:read` | ✓ | ✓ | ✓ | ✓ | | |
+| `donations:write` | ✓ | | ✓ | ✓ | | |
+| `donors:erase` | ✓ | | | | | |
 | `categories:read` | ✓ | ✓ | ✓ | ✓ | | |
 | `categories:write` | ✓ | | | | | |
 | `locations:read` | ✓ | ✓ | ✓ | ✓ | | |

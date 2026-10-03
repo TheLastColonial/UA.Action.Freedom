@@ -262,6 +262,41 @@ public class BoxEndpointTests
     }
 
     [Fact]
+    public async Task An_item_can_be_packed_under_a_donation_that_exists()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        var donations = new InMemoryDonationRepository().WithDonation(41, Guid.NewGuid(), new DateOnly(2026, 9, 20));
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), donations: donations, roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/items",
+            new { description = "Tins", categoryId = InMemoryItemCategoryRepository.OtherId, donationId = 41 },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        boxes.Items(BoxId).Should().ContainSingle().Which.DonationId.Should().Be(41);
+    }
+
+    [Fact]
+    public async Task An_item_cannot_be_packed_under_a_donation_that_does_not_exist()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/boxes/{BoxId}/items",
+            new { description = "Tins", categoryId = InMemoryItemCategoryRepository.OtherId, donationId = 41 },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
+            .GetProperty("type").GetString().Should().Be("donation-not-found");
+        boxes.Items(BoxId).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Nothing_can_be_unpacked_from_a_validated_box()
     {
         var item = new BoxItemReadModel(

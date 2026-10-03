@@ -5,8 +5,10 @@ import { useFieldArray, useForm } from 'react-hook-form';
 
 import { useAddBoxItem, useBoxItems, useRemoveBoxItem } from '../../api/boxes';
 import { useCategories } from '../../api/categories';
+import { useDonations } from '../../api/donations';
 import { ApiDomainProblem } from '../../api/problem';
 import type { BoxItemReadModel, ItemWarning } from '../../api/schemas/boxes';
+import { useAuth } from '../../auth/useAuth';
 import { Button } from '../../components/Button';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { SelectField, TextField } from '../../components/form/fields';
@@ -33,7 +35,7 @@ const VALUE_SOURCE_OPTIONS = [
 
 const poundsFormat = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 
-function describeItem(item: BoxItemReadModel): string {
+function describeItem(item: BoxItemReadModel, donation: string | undefined): string {
   const parts: string[] = [];
   if (item.categoryNameEn) parts.push(item.categoryNameEn);
   if (item.quantity !== null) parts.push(`quantity ${String(item.quantity)}`);
@@ -42,6 +44,7 @@ function describeItem(item: BoxItemReadModel): string {
   }
   if (item.expiresOn) parts.push(`expires ${item.expiresOn}`);
   if (item.commodityCode) parts.push(`code ${item.commodityCode}`);
+  if (donation !== undefined) parts.push(`donation ${donation}`);
   for (const [key, value] of Object.entries(item.properties)) parts.push(`${key}: ${value}`);
   return parts.join(', ');
 }
@@ -65,6 +68,8 @@ function ItemBadge({ children }: { children: string }): JSX.Element {
 export function BoxItemsPanel({ boxId, frozen }: BoxItemsPanelProps): JSX.Element {
   const query = useBoxItems(boxId);
   const categories = useCategories();
+  const auth = useAuth();
+  const donations = useDonations({ page: 1, pageSize: 200 }, auth.hasPolicy('donations:read'));
   const add = useAddBoxItem(boxId);
   const removeItem = useRemoveBoxItem(boxId);
   const [warnings, setWarnings] = useState<readonly ItemWarning[]>([]);
@@ -91,6 +96,16 @@ export function BoxItemsPanel({ boxId, frozen }: BoxItemsPanelProps): JSX.Elemen
   const items = 'parentMissing' in query.data ? [] : query.data;
   const addError =
     add.error instanceof ApiDomainProblem ? (add.error.detail ?? add.error.message) : undefined;
+  const donationLabels = new Map(
+    (donations.data ?? []).map((donation) => [
+      donation.id,
+      `#${String(donation.id)} from ${donation.donorName}, received ${donation.receivedOn.slice(0, 10)}`,
+    ]),
+  );
+  const donationOptions = [
+    { value: '', label: 'No donation recorded' },
+    ...[...donationLabels].map(([value, label]) => ({ value: String(value), label })),
+  ];
   const categoryOptions = [
     { value: '', label: 'Choose a category…' },
     ...(categories.data ?? []).map((category) => ({
@@ -109,7 +124,9 @@ export function BoxItemsPanel({ boxId, frozen }: BoxItemsPanelProps): JSX.Elemen
           {items.map((item) => (
             <li key={item.id}>
               {item.description}
-              {describeItem(item).length > 0 ? <span> ({describeItem(item)})</span> : null}
+              {describeItem(item, donationLabels.get(item.donationId ?? -1)).length > 0 ? (
+                <span> ({describeItem(item, donationLabels.get(item.donationId ?? -1))})</span>
+              ) : null}
               {item.shelfLife === 'Expired' ? <ItemBadge>Expired</ItemBadge> : null}
               {item.shelfLife === 'Short' ? <ItemBadge>Short shelf life</ItemBadge> : null}
               {item.isNotCarried ? <ItemBadge>Not carried</ItemBadge> : null}
@@ -197,6 +214,14 @@ export function BoxItemsPanel({ boxId, frozen }: BoxItemsPanelProps): JSX.Elemen
             type="date"
             error={errors.expiresOn?.message}
             {...register('expiresOn')}
+          />
+
+          <SelectField
+            label="Donation"
+            hint="The drop-off this item came in, if one has been recorded."
+            options={donationOptions}
+            error={errors.donationId?.message}
+            {...register('donationId')}
           />
 
           <TextField

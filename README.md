@@ -280,6 +280,11 @@ Core resource endpoints:
 - `GET|POST /categories` — The categories donated items are sorted into, each with its hazard class, whether it is sensitive or not carried, how close to expiry an item counts as short-dated, and the customs code it maps to per authority (`ukCode`, `euCode`, `uaCode`). Reads are `categories:read` (every operational role); writes are **Administrator only** (`categories:write`)
   - `GET|PUT /categories/{id}` — Read a category, or change its names, flags and shelf-life rule. A built-in category stays built in
   - `PUT /categories/{id}/codes/{UK|EU|UA}` — Map a category to the code an authority wants; a `null` code clears it. Six to ten digits
+- `GET|POST /donors` — Donors, who gave goods. A donor is a **split identity** like a volunteer: an anonymous key plus erasable details, entered by a Dispatcher or Loader because the donor has no login. Reads are `donations:read` (every operational role); writes are `donations:write` (Administrator, Dispatcher, Loader)
+  - `GET|PUT|DELETE /donors/{id}` — Read or correct a donor. `DELETE` is an **erasure** (`donors:erase`, Administrator only): the details are deleted, the donations, their items and their value stay and read "Former donor". Never refused for being in use
+  - `GET /donors/{id}/donations` — That donor's donations, newest first
+  - `GET /donors/{id}/report` — The donor status report: what was given, its value by category and how far each item has got (`BeingPacked` or `PackedAndChecked`). **No receiver, region, route or address** — nothing about where it is going. Still readable after the donor is erased, under "Former donor", with the same totals
+- `GET|POST /donations` — One donor, one drop-off, many items (`donations:read` / `donations:write`). `PUT /donations/{id}` changes the date and notes; `DELETE` is refused `409` while items still name it. A box item names its donation with an optional `donationId` on `POST /boxes/{id}/items` (`422 donation-not-found` for one that does not exist)
 - `GET|POST /locations` — Distribution hubs (garages/warehouses); writes are **Administrator only**
   - `PUT|DELETE /locations/{id}` — Rename or remove a location
   - `GET|POST /locations/{id}/bays` — Bays within a location (code unique per location, not globally)
@@ -289,7 +294,7 @@ Core resource endpoints:
 
 See `docs/local-authentication.md` for the full role/policy matrix.
 
-The **operator UI (`web/`) covers every endpoint above** — all eight slices (the Administrator page for item categories and their customs codes included), every sub-resource
+The **operator UI (`web/`) covers every endpoint above** — all nine slices (donors, their donations and the printable donor report included, and the Administrator page for item categories and their customs codes included), every sub-resource
 (convoy route/truck list/crew/insurance, box items/validate/bay, box QR label issue/print/revoke,
 location bays, manifest crew/boxes/weight, the ICS2 declaration a manifest's approval now requires),
 all nine manifest transitions, and the reason-gated receiver-detail flow — with nav and actions

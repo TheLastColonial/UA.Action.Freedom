@@ -309,7 +309,6 @@ the Convoy Leader sees destinations have been brought into line. These sections 
 | [Vehicle](key-concepts.md#vehicle) | Cargo capacity is required, not optional ([D18](#d18)). |
 | [Item](key-concepts.md#item) and [Box](key-concepts.md#box) | Donor, replace-not-edit, label contents and languages, delivery and refusal outcomes ([D2](#d2), [D3](#d3), [D14](#d14), [O2](#o2), [O5](#o5), [O9](#o9), [O17](#o17)). Value and source, category and its code mapping and expiry are in ([D5](#d5), [D6](#d6), [O16](#o16)). |
 | [Arrival](key-concepts.md#arrival) | Closing a convoy and its report ([O10](#o10)). |
-| [Donor](key-concepts.md#donor-external) | Becomes an entity with erasable details, no longer only external ([D14](#d14), [D15](#d15)). |
 | [Receiver](key-concepts.md#receiver) | Registration status ([D30](#d30), [D35](#d35)). |
 | [Manifest](key-concepts.md#manifest) and [Manifest Status](key-concepts.md#manifest-status) | Redefined as the load sign-off, with re-approval on change ([P6](#p6), [X3](#x3)). |
 | [Documents](key-concepts.md#documents) | Declarations become one concept, with a submission mode ([X5](#x5)). |
