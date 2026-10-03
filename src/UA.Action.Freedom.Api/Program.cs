@@ -8,6 +8,7 @@ using FluentValidation;
 using Scalar.AspNetCore;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Api.Boxes;
+using UA.Action.Freedom.Api.Categories;
 using UA.Action.Freedom.Api.Convoys;
 using UA.Action.Freedom.Api.Documents;
 using UA.Action.Freedom.Api.Health;
@@ -260,6 +261,7 @@ app.MapFreedomMe();
 app.MapFreedomConvoys();
 app.MapFreedomReceivers();
 app.MapFreedomBoxes();
+app.MapFreedomCategories();
 app.MapFreedomManifests();
 app.MapFreedomLocations();
 

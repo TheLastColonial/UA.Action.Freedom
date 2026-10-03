@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
@@ -167,6 +168,13 @@ internal static class FreedomApi
             services.Replace(boxes);
             services.Replace(receivers);
         });
+
+    /// <summary>The application with its item category persistence swapped for <paramref name="categories"/>.</summary>
+    internal static WebApplicationFactory<Program> WithCategories(
+        IItemCategoryRepository categories,
+        bool authenticated = true,
+        params string[] roles) =>
+        WithFakes(authenticated, roles, services => services.Replace(categories));
 
     /// <summary>The application with location and bay persistence swapped out.</summary>
     internal static WebApplicationFactory<Program> WithLocations(

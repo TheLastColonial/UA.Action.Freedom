@@ -103,6 +103,15 @@ public static class AuthenticationExtensions
     /// </remarks>
     public const string BoxesAllocateBay = "boxes:allocate-bay";
 
+    /// <summary>Read the item categories and the customs code each maps to — every operational role.</summary>
+    public const string CategoriesRead = "categories:read";
+
+    /// <summary>
+    /// Create or change a category, or map it to a customs code — Administrator only (O31). The mapping decides what
+    /// is declared at a border, so the people who pack boxes do not set it.
+    /// </summary>
+    public const string CategoriesWrite = "categories:write";
+
     /// <summary>Read distribution hubs and their bays — every operational role.</summary>
     public const string LocationsRead = "locations:read";
 
@@ -256,6 +265,10 @@ public static class AuthenticationExtensions
                 policy.RequireRole(Administrator, Loader))
             .AddPolicy(BoxesAllocateBay, policy =>
                 policy.RequireRole(Loader))
+            .AddPolicy(CategoriesRead, policy =>
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
+            .AddPolicy(CategoriesWrite, policy =>
+                policy.RequireRole(Administrator))
             .AddPolicy(LocationsRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(LocationsWrite, policy =>
