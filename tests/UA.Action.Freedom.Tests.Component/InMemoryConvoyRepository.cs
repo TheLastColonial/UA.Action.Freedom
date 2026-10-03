@@ -43,7 +43,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     /// row outlives the vehicle leaving the convoy.
     /// </summary>
     private sealed record TruckListEntry(
-        int ConvoyId, string Vin, DateTime AddedAt, DateTime? WithdrawnAt = null, string? WithdrawnReason = null);
+        int ConvoyId, string Vin, DateTime AddedAt, DateTime? WithdrawnAt = null, string? WithdrawnReason = null,
+        Guid? HandoverReceiverRef = null);
 
     /// <summary>
     /// The status of each vehicle's manifest on its convoy — standing in for the join to
@@ -146,6 +147,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         truckList.Add(new TruckListEntry(convoyId, vin, DateTime.UtcNow, DateTime.UtcNow, reason));
         return this;
     }
+
+    public Guid? HandoverReceiverOf(int convoyId, string vin) => EntryFor(convoyId, vin)?.HandoverReceiverRef;
 
     public bool IsHandedOver(string vin) => vehicles.GetValueOrDefault(vin)?.HandedOver ?? false;
 
@@ -358,7 +361,24 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         CountOf(entry, CrewRole.Driver),
         CountOf(entry, CrewRole.Passenger),
         entry.WithdrawnAt,
-        entry.WithdrawnReason);
+        entry.WithdrawnReason,
+        entry.HandoverReceiverRef);
+
+    public Task<bool> SetHandoverReceiverAsync(
+        int convoyId, string vin, Guid receiverRef, CancellationToken cancellationToken)
+    {
+        // Mirrors the SQL: only a vehicle still travelling with the convoy can be given a handover receiver.
+        var index = truckList.FindIndex(entry =>
+            entry.ConvoyId == convoyId && Same(entry.Vin, vin) && entry.WithdrawnAt is null);
+
+        if (index < 0)
+        {
+            return Task.FromResult(false);
+        }
+
+        truckList[index] = truckList[index] with { HandoverReceiverRef = receiverRef };
+        return Task.FromResult(true);
+    }
 
     public Task<AddToTruckListResult> AddAsync(int convoyId, string vin, CancellationToken cancellationToken)
     {

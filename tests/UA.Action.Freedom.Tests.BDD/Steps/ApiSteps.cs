@@ -49,7 +49,7 @@ public sealed class ApiSteps(FreedomApiClient api, ScenarioState state)
     [When("I POST \"(.*)\" with body:")]
     public async Task WhenIPostWithBody(string path, string body)
     {
-        var response = await api.SendAsync(HttpMethod.Post, Resolve(path), state.CurrentToken, body);
+        var response = await api.SendAsync(HttpMethod.Post, Resolve(path), state.CurrentToken, Resolve(body));
         TrackCreated(response);
     }
 
@@ -62,7 +62,7 @@ public sealed class ApiSteps(FreedomApiClient api, ScenarioState state)
 
     [When("I PUT \"(.*)\" with body:")]
     public Task WhenIPutWithBody(string path, string body) =>
-        api.SendAsync(HttpMethod.Put, Resolve(path), state.CurrentToken, body);
+        api.SendAsync(HttpMethod.Put, Resolve(path), state.CurrentToken, Resolve(body));
 
     [When("I PUT \"(.*)\"")]
     public Task WhenIPut(string path) =>
@@ -73,7 +73,8 @@ public sealed class ApiSteps(FreedomApiClient api, ScenarioState state)
         api.SendAsync(HttpMethod.Delete, Resolve(path), state.CurrentToken, jsonBody: null);
 
     /// <summary>
-    /// Substitutes <c>{id}</c> for the key of the resource the scenario most recently created.
+    /// Substitutes <c>{id}</c> for the key of the resource the scenario most recently created, in a path
+    /// or in a body (a box names its receiver in the body).
     /// </summary>
     private string Resolve(string path) =>
         path.Replace("{id}", state.LastCreatedKey ?? "missing-id", StringComparison.Ordinal);

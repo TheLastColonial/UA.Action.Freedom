@@ -1,6 +1,7 @@
 using Dapper;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Receivers;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Data.Receivers;
 
@@ -16,7 +17,7 @@ namespace UA.Action.Freedom.Data.Receivers;
 public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IReceiverRepository
 {
     private static readonly string Columns =
-        $"r.ReceiverRef AS [Ref], r.Organisation, r.Region, {ChangeStamp.ReadColumns("r")}";
+        $"r.ReceiverRef AS [Ref], r.Organisation, r.Region, r.[Status], {ChangeStamp.ReadColumns("r")}";
 
     private static readonly string From = $"dbo.Receiver AS r {ChangeStamp.ReadJoin("r")}";
 
@@ -105,5 +106,59 @@ public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory, I
             cancellationToken: cancellationToken));
 
         return affected > 0;
+    }
+
+    public async Task<bool> SetStatusAsync(Guid receiverRef, ReceiverStatus status, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // The only statement that writes Status: UpdateAsync leaves it out, so an ordinary edit
+        // cannot register a receiver.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.Receiver SET
+                [Status] = @status,
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
+            WHERE ReceiverRef = @receiverRef
+            """,
+            attribution.With(new { receiverRef, status = (int)status }),
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<ReceiverUsageReadModel> GetUsageAsync(Guid receiverRef, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // Identifiers only. A convoy is touched when one of its vehicles is handed over to the receiver,
+        // or a manifest on it carries a box addressed to the receiver; an arrived convoy is history.
+        var boxes = await connection.QueryAsync<int>(new CommandDefinition(
+            "SELECT Id FROM dbo.Box WHERE ReceiverRef = @receiverRef ORDER BY Id",
+            new { receiverRef },
+            cancellationToken: cancellationToken));
+
+        var convoys = await connection.QueryAsync<int>(new CommandDefinition(
+            """
+            SELECT touched.ConvoyId
+            FROM (
+                SELECT cv.ConvoyId FROM dbo.ConvoyVehicle AS cv WHERE cv.HandoverReceiverRef = @receiverRef
+                UNION
+                SELECT m.ConvoyId
+                FROM dbo.Box AS b
+                INNER JOIN dbo.ManifestBox AS mb ON mb.BoxId = b.Id
+                INNER JOIN dbo.Manifest AS m ON m.Id = mb.ManifestId
+                WHERE b.ReceiverRef = @receiverRef
+            ) AS touched
+            INNER JOIN dbo.Convoy AS c ON c.Id = touched.ConvoyId
+            WHERE c.ArrivedAt IS NULL
+            ORDER BY touched.ConvoyId
+            """,
+            new { receiverRef },
+            cancellationToken: cancellationToken));
+
+        return new ReceiverUsageReadModel(boxes.ToList(), convoys.ToList());
     }
 }

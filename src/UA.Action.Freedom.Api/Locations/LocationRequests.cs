@@ -3,18 +3,24 @@ using UA.Action.Freedom.Application.Locations;
 
 namespace UA.Action.Freedom.Api.Locations;
 
-/// <summary>Body of <c>POST /locations</c>.</summary>
+/// <summary>
+/// Body of <c>POST /locations</c>. <paramref name="IsRegisteredHub"/> marks the location as a distribution hub an
+/// Administrator has registered; creating a location is Administrator only, so no one else can set it.
+/// </summary>
 public sealed record CreateLocationRequest(
-    string Name, string? House, string? Street, string? City, string? Country, string? Postcode)
+    string Name, string? House, string? Street, string? City, string? Country, string? Postcode,
+    bool IsRegisteredHub = false)
 {
-    public CreateLocationCommand ToCommand() => new(Name, House, Street, City, Country, Postcode);
+    public CreateLocationCommand ToCommand() => new(Name, House, Street, City, Country, Postcode, IsRegisteredHub);
 }
 
 /// <summary>Body of <c>PUT /locations/{id}</c>. The route supplies the identifier.</summary>
 public sealed record UpdateLocationRequest(
-    string Name, string? House, string? Street, string? City, string? Country, string? Postcode)
+    string Name, string? House, string? Street, string? City, string? Country, string? Postcode,
+    bool IsRegisteredHub = false)
 {
-    public UpdateLocationCommand ToCommand(int id) => new(id, Name, House, Street, City, Country, Postcode);
+    public UpdateLocationCommand ToCommand(int id) =>
+        new(id, Name, House, Street, City, Country, Postcode, IsRegisteredHub);
 }
 
 /// <summary>Body of <c>POST /locations/{id}/bays</c>.</summary>

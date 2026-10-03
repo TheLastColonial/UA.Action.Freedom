@@ -41,7 +41,8 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             COALESCE(c.Drivers, 0)    AS DriverCount,
             COALESCE(c.Passengers, 0) AS PassengerCount,
             cv.WithdrawnAt,
-            cv.WithdrawnReason
+            cv.WithdrawnReason,
+            cv.HandoverReceiverRef
         FROM dbo.ConvoyVehicle AS cv
         INNER JOIN dbo.Vehicle AS v ON v.Vin = cv.Vin
         OUTER APPLY (
@@ -167,6 +168,27 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM dbo.ConvoyVehicle WHERE ConvoyId = @convoyId AND Vin = @vin",
             new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<bool> SetHandoverReceiverAsync(
+        int convoyId, string vin, Guid receiverRef, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // A withdrawn vehicle is not handed over by this convoy, so the write is conditional on it
+        // still travelling, like the crew and the insurance.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.ConvoyVehicle SET
+                HandoverReceiverRef = @receiverRef,
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
+            WHERE ConvoyId = @convoyId AND Vin = @vin AND WithdrawnAt IS NULL
+            """,
+            attribution.With(new { convoyId, vin = SqlKey.Of(vin), receiverRef }),
             cancellationToken: cancellationToken));
 
         return affected > 0;

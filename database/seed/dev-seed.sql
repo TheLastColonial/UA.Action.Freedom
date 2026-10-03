@@ -36,6 +36,17 @@ SET @london = SCOPE_IDENTITY();
 INSERT INTO dbo.Bay (LocationId, Code)
 VALUES (@coventry, N'A1'), (@coventry, N'A2'), (@coventry, N'B1'), (@london, N'A1');
 
+-- Receivers: dbo.Receiver only -- organisation and region, never an address (that is sensitive.*).
+-- Status 0 is pending, 1 registered. A box or a vehicle can name only a registered one, so there are two
+-- of those to use and a pending one to see the refusal with. The seed registers them directly; through
+-- the API only an Administrator can.
+DECLARE @aidHospital uniqueidentifier = NEWID(), @reliefCharity uniqueidentifier = NEWID();
+
+INSERT INTO dbo.Receiver (ReceiverRef, Organisation, Region, [Status])
+VALUES (@aidHospital,   N'Example Aid Hospital',    N'Example oblast', 1),
+       (@reliefCharity, N'Sample Relief Charity',   N'Sample oblast',  1),
+       (NEWID(),        N'Test Clinic (pending)',   N'Test oblast',    0);
+
 -- Volunteers: identity and personal data are separate rows (dbo.Person, dbo.PersonDetail).
 DECLARE @people TABLE (Id uniqueidentifier, FirstName nvarchar(100), LastName nvarchar(100), IsDriver bit, Committed bit);
 INSERT INTO @people VALUES
@@ -83,17 +94,18 @@ VALUES ('SEEDVIN0000000001', N'AB12 CDE', N'Ford',       N'Transit',  N'White', 
 
 -- The truck list. The Hilux is left off it: it has not passed inspection, so it is the vehicle to
 -- try assigning when you want to see the 409.
-INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin)
-VALUES (@convoy, 'SEEDVIN0000000001'),
-       (@convoy, 'SEEDVIN0000000002');
+INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin, HandoverReceiverRef)
+VALUES (@convoy, 'SEEDVIN0000000001', @aidHospital),
+       (@convoy, 'SEEDVIN0000000002', NULL);
 
 -- Crew: one seat per person per convoy. Role 0 is Driver.
 INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, [Role])
 SELECT @convoy, 'SEEDVIN0000000001', p.Id, 0
 FROM (SELECT TOP 2 Id FROM @people WHERE IsDriver = 1 ORDER BY LastName) AS p;
 
--- Boxes waiting at the Coventry depot, not yet validated.
-INSERT INTO dbo.Box (WeightKg, LocationId) VALUES (12, @coventry), (8, @coventry), (15, @london);
+-- Boxes waiting at the depots, not yet validated, each addressed to a registered receiver.
+INSERT INTO dbo.Box (WeightKg, LocationId, ReceiverRef)
+VALUES (12, @coventry, @aidHospital), (8, @coventry, @aidHospital), (15, @london, @reliefCharity);
 
 -- CommodityCode 99190000 is goods for humanitarian relief (issue #24), which is what an ICS2 ENS
 -- declares this cargo under. Seeded so a filing sheet from local data reports nothing missing --

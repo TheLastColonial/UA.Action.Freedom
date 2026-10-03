@@ -4,7 +4,8 @@ namespace UA.Action.Freedom.Application.Locations;
 
 /// <summary>Record a new distribution hub.</summary>
 public sealed record CreateLocationCommand(
-    string Name, string? House, string? Street, string? City, string? Country, string? Postcode);
+    string Name, string? House, string? Street, string? City, string? Country, string? Postcode,
+    bool IsRegisteredHub = false);
 
 public sealed class CreateLocationHandler(ILocationRepository repository)
     : ICommandHandler<CreateLocationCommand, int>
@@ -18,13 +19,15 @@ public sealed class CreateLocationHandler(ILocationRepository repository)
                 command.Street,
                 command.City,
                 command.Country,
-                command.Postcode),
+                command.Postcode,
+                command.IsRegisteredHub),
             cancellationToken);
 }
 
 /// <summary>Change a distribution hub's name or address.</summary>
 public sealed record UpdateLocationCommand(
-    int Id, string Name, string? House, string? Street, string? City, string? Country, string? Postcode);
+    int Id, string Name, string? House, string? Street, string? City, string? Country, string? Postcode,
+    bool IsRegisteredHub = false);
 
 public enum UpdateLocationOutcome
 {
@@ -45,7 +48,8 @@ public sealed class UpdateLocationHandler(ILocationRepository repository)
                 command.Street,
                 command.City,
                 command.Country,
-                command.Postcode),
+                command.Postcode,
+                command.IsRegisteredHub),
             cancellationToken);
 
         return updated ? UpdateLocationOutcome.Updated : UpdateLocationOutcome.NotFound;

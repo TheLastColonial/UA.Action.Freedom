@@ -69,6 +69,31 @@ public static class ReceiverEndpoints
         .AddEndpointFilter<ValidationFilter<UpdateReceiverRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ReceiversWrite);
 
+        // Narrower than receivers:write on purpose: registration is an act of authorisation, as approving
+        // a volunteer is, so the Ground Officer — who writes the receiver — cannot grant it (ADR 0012).
+        receivers.MapPut("/{receiverRef:guid}/status", async (
+            Guid receiverRef,
+            SetReceiverStatusRequest request,
+            ICommandHandler<SetReceiverStatusCommand, SetReceiverStatusOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(request.ToCommand(receiverRef), cancellationToken);
+            return outcome == SetReceiverStatusOutcome.NotFound ? Results.NotFound() : Results.NoContent();
+        })
+        .AddEndpointFilter<ValidationFilter<SetReceiverStatusRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.ReceiversRegister);
+
+        // What a status change touches: ids and counts of boxes and convoys. Never an address.
+        receivers.MapGet("/{receiverRef:guid}/usage", async (
+            Guid receiverRef,
+            IQueryHandler<GetReceiverUsageQuery, ReceiverUsageReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var usage = await handler.HandleAsync(new GetReceiverUsageQuery(receiverRef), cancellationToken);
+            return usage is null ? Results.NotFound() : Results.Ok(usage);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ReceiversRegister);
+
         receivers.MapDelete("/{receiverRef:guid}", async (
             Guid receiverRef,
             ICommandHandler<DeleteReceiverCommand, DeleteReceiverOutcome> handler,

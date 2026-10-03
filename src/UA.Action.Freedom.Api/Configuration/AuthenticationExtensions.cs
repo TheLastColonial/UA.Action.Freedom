@@ -58,6 +58,13 @@ public static class AuthenticationExtensions
     public const string ReceiversWrite = "receivers:write";
 
     /// <summary>
+    /// Record whether a receiver is registered, suspended or expired — <strong>Administrator only</strong>,
+    /// narrower than <see cref="ReceiversWrite"/> because registration is an act of authorisation and the
+    /// Ground Officer, who writes the receiver, must not grant it (ADR 0012). Also reads a receiver's usage.
+    /// </summary>
+    public const string ReceiversRegister = "receivers:register";
+
+    /// <summary>
     /// Resolve, record or remove a Ukrainian delivery address — <strong>Ground Officer alone</strong>.
     /// </summary>
     /// <remarks>
@@ -237,6 +244,8 @@ public static class AuthenticationExtensions
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader, GroundOfficer))
             .AddPolicy(ReceiversWrite, policy =>
                 policy.RequireRole(Administrator, GroundOfficer))
+            .AddPolicy(ReceiversRegister, policy =>
+                policy.RequireRole(Administrator))
             .AddPolicy(ReceiversDetail, policy =>
                 policy.RequireRole(GroundOfficer))
             .AddPolicy(BoxesRead, policy =>

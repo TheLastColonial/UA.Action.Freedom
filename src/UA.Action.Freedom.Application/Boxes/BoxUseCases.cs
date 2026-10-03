@@ -1,18 +1,44 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.People;
+using UA.Action.Freedom.Application.Receivers;
 
 namespace UA.Action.Freedom.Application.Boxes;
 
 /// <summary>Start a box: where it is, and who it is ultimately for.</summary>
 public sealed record CreateBoxCommand(Guid? ReceiverRef, int? LocationId);
 
-public sealed class CreateBoxHandler(IBoxRepository repository)
-    : ICommandHandler<CreateBoxCommand, int>
+public enum CreateBoxOutcome
 {
-    public Task<int> HandleAsync(CreateBoxCommand command, CancellationToken cancellationToken)
+    Created,
+    ReceiverNotFound,
+    ReceiverNotRegistered
+}
+
+/// <summary>The outcome, and the new box identifier when it was created.</summary>
+public sealed record CreateBoxResult(CreateBoxOutcome Outcome, int BoxId = 0);
+
+public sealed class CreateBoxHandler(IBoxRepository repository, IReceiverRepository receivers)
+    : ICommandHandler<CreateBoxCommand, CreateBoxResult>
+{
+    public async Task<CreateBoxResult> HandleAsync(CreateBoxCommand command, CancellationToken cancellationToken)
+    {
+        // A destination has to be a receiver that is registered: Ukraine goods list is filed by the
+        // Receiver, and one that is not registered cannot file it (ADR 0012). Refusing here, rather than
+        // leaning on the foreign key, turns a bad reference into an answer instead of a SqlException.
+        if (command.ReceiverRef is { } receiverRef)
+        {
+            switch (await ReceiverEligibilityCheck.CheckAsync(receivers, receiverRef, cancellationToken))
+            {
+                case ReceiverEligibility.NotFound:
+                    return new CreateBoxResult(CreateBoxOutcome.ReceiverNotFound);
+                case ReceiverEligibility.NotRegistered:
+                    return new CreateBoxResult(CreateBoxOutcome.ReceiverNotRegistered);
+            }
+        }
+
         // Weight starts at zero and stays there until a Loader validates the box. An unvalidated
         // weight on a border document would be a guess presented as a fact.
-        => repository.AddAsync(
+        var id = await repository.AddAsync(
             new BoxReadModel(
                 Id: 0,
                 WeightKg: 0,
@@ -24,6 +50,9 @@ public sealed class CreateBoxHandler(IBoxRepository repository)
                 ValidatedByPersonId: null,
                 ValidatedAt: null),
             cancellationToken);
+
+        return new CreateBoxResult(CreateBoxOutcome.Created, id);
+    }
 }
 
 /// <summary>Move a box to a different location, or point it at a different receiver.</summary>
@@ -33,10 +62,12 @@ public enum UpdateBoxOutcome
 {
     Updated,
     NotFound,
-    AlreadyValidated
+    AlreadyValidated,
+    ReceiverNotFound,
+    ReceiverNotRegistered
 }
 
-public sealed class UpdateBoxHandler(IBoxRepository repository)
+public sealed class UpdateBoxHandler(IBoxRepository repository, IReceiverRepository receivers)
     : ICommandHandler<UpdateBoxCommand, UpdateBoxOutcome>
 {
     public async Task<UpdateBoxOutcome> HandleAsync(UpdateBoxCommand command, CancellationToken cancellationToken)
@@ -54,6 +85,20 @@ public sealed class UpdateBoxHandler(IBoxRepository repository)
         if (box.Validated)
         {
             return UpdateBoxOutcome.AlreadyValidated;
+        }
+
+        // Only a receiver the box is being newly pointed at has to qualify. Moving a box that already
+        // names a receiver which has since been suspended is not a new allocation, and refusing it would
+        // make the box impossible to relocate; the suspension shows up as a blocking requirement instead.
+        if (command.ReceiverRef is { } receiverRef && command.ReceiverRef != box.ReceiverRef)
+        {
+            switch (await ReceiverEligibilityCheck.CheckAsync(receivers, receiverRef, cancellationToken))
+            {
+                case ReceiverEligibility.NotFound:
+                    return UpdateBoxOutcome.ReceiverNotFound;
+                case ReceiverEligibility.NotRegistered:
+                    return UpdateBoxOutcome.ReceiverNotRegistered;
+            }
         }
 
         var updated = await repository.UpdateAsync(

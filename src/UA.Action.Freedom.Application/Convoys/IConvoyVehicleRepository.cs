@@ -63,6 +63,13 @@ public interface IConvoyVehicleRepository
     Task<bool> RemoveAsync(int convoyId, string vin, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Records the Receiver this vehicle is handed over to in Ukraine. Returns false when the vehicle is not
+    /// on the convoy. The caller has already checked the Receiver is registered.
+    /// </summary>
+    Task<bool> SetHandoverReceiverAsync(
+        int convoyId, string vin, Guid receiverRef, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Records that the vehicle left the convoy mid-journey, keeping the row, its crew, its
     /// insurance and its manifest. Returns false when it is not on this convoy or has already
     /// withdrawn.

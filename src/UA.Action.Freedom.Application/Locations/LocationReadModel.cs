@@ -11,6 +11,7 @@ public sealed record LocationReadModel(
     string? City,
     string? Country,
     string? Postcode,
+    bool IsRegisteredHub = false,
     string? LastChangedByName = null,
     DateTime? LastChangedAt = null);
 

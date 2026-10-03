@@ -29,6 +29,10 @@ CREATE TABLE [dbo].[ConvoyVehicle] (
     -- Set when the vehicle left the convoy mid-journey. NULL means it is still travelling.
     [WithdrawnAt]     datetime2(0)   NULL,
     [WithdrawnReason] nvarchar(500)  NULL,
+
+    -- The Receiver this vehicle is handed over to in Ukraine. It must be registered when it is set;
+    -- plan 13 makes it a requirement for departure. NO ACTION: a Receiver a vehicle names cannot go.
+    [HandoverReceiverRef] uniqueidentifier NULL,
     [LastChangedBy] uniqueidentifier NULL,
     [LastChangedAt] datetime2(0)     NULL,
 
@@ -39,10 +43,14 @@ CREATE TABLE [dbo].[ConvoyVehicle] (
     -- A reason without a withdrawal would read as a vehicle that left for a stated cause and is
     -- somehow still on the road.
     CONSTRAINT [CK_ConvoyVehicle_Withdrawn] CHECK ([WithdrawnAt] IS NOT NULL OR [WithdrawnReason] IS NULL),
+    CONSTRAINT [FK_ConvoyVehicle_HandoverReceiver] FOREIGN KEY ([HandoverReceiverRef]) REFERENCES [dbo].[Receiver] ([ReceiverRef]),
     CONSTRAINT [FK_ConvoyVehicle_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
 
 -- "Which convoys has this vehicle been on?", and the lookup the Vehicle foreign key needs.
 CREATE INDEX [IX_ConvoyVehicle_Vin] ON [dbo].[ConvoyVehicle] ([Vin]);
+GO
+
+CREATE INDEX [IX_ConvoyVehicle_HandoverReceiverRef] ON [dbo].[ConvoyVehicle] ([HandoverReceiverRef]) WHERE [HandoverReceiverRef] IS NOT NULL;
 GO

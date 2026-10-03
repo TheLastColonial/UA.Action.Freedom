@@ -150,4 +150,63 @@ public class LocationEndpointTests
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         bays.Bay(BayId).Should().BeNull();
     }
+
+    [Fact]
+    public async Task An_administrator_registers_a_location_as_a_hub()
+    {
+        var locations = new InMemoryLocationRepository();
+        await using var api = FreedomApi.WithLocations(locations, new InMemoryBayRepository(), roles: "Administrator");
+        using var client = api.CreateClient();
+
+        await client.PostAsJsonAsync(
+            "/locations", new { name = "Przemysl Hub", isRegisteredHub = true }, TestContext.Current.CancellationToken);
+        var location = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            "/locations/1", TestContext.Current.CancellationToken);
+
+        location.GetProperty("isRegisteredHub").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_location_is_not_a_registered_hub_unless_an_administrator_says_so()
+    {
+        await using var api = FreedomApi.WithLocations(
+            new InMemoryLocationRepository(), new InMemoryBayRepository(), roles: "Administrator");
+        using var client = api.CreateClient();
+
+        await client.PostAsJsonAsync("/locations", ACreateLocationBody(), TestContext.Current.CancellationToken);
+        var location = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            "/locations/1", TestContext.Current.CancellationToken);
+
+        location.GetProperty("isRegisteredHub").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_hub_can_be_unregistered_by_editing_the_location()
+    {
+        var locations = new InMemoryLocationRepository(
+            new LocationReadModel(3, "Przemysl Hub", null, null, null, null, null, IsRegisteredHub: true));
+        await using var api = FreedomApi.WithLocations(locations, new InMemoryBayRepository(), roles: "Administrator");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            "/locations/3", new { name = "Przemysl Hub", isRegisteredHub = false }, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        locations.Location(3)!.IsRegisteredHub.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_loader_cannot_register_a_hub()
+    {
+        // locations:write is Administrator only: depots are infrastructure, not day-to-day box handling.
+        var locations = new InMemoryLocationRepository();
+        await using var api = FreedomApi.WithLocations(locations, new InMemoryBayRepository(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/locations", new { name = "Przemysl Hub", isRegisteredHub = true }, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        locations.Location(1).Should().BeNull();
+    }
 }

@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<ReplaceConvoyRouteCommand, ReplaceConvoyRouteOutcome>, ReplaceConvoyRouteHandler>();
         services.AddScoped<ICommandHandler<PublishTruckListCommand, PublishTruckListOutcome>, PublishTruckListHandler>();
         services.AddScoped<ICommandHandler<AssignVehicleToConvoyCommand, AssignVehicleOutcome>, AssignVehicleToConvoyHandler>();
+        services.AddScoped<ICommandHandler<SetHandoverReceiverCommand, SetHandoverReceiverOutcome>, SetHandoverReceiverHandler>();
         services.AddScoped<ICommandHandler<UnassignVehicleFromConvoyCommand, UnassignVehicleOutcome>, UnassignVehicleFromConvoyHandler>();
         services.AddScoped<IQueryHandler<ListConvoyVehiclesQuery, IReadOnlyList<ConvoyVehicleReadModel>?>, ListConvoyVehiclesHandler>();
         services.AddScoped<ICommandHandler<AssignCrewToVehicleCommand, AssignCrewOutcome>, AssignCrewToVehicleHandler>();
@@ -59,10 +60,12 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DeleteReceiverCommand, DeleteReceiverOutcome>, DeleteReceiverHandler>();
         services.AddScoped<IQueryHandler<GetReceiverByRefQuery, ReceiverReadModel?>, GetReceiverByRefHandler>();
         services.AddScoped<IQueryHandler<ListReceiversQuery, IReadOnlyList<ReceiverReadModel>>, ListReceiversHandler>();
+        services.AddScoped<ICommandHandler<SetReceiverStatusCommand, SetReceiverStatusOutcome>, SetReceiverStatusHandler>();
+        services.AddScoped<IQueryHandler<GetReceiverUsageQuery, ReceiverUsageReadModel?>, GetReceiverUsageHandler>();
         services.AddScoped<IQueryHandler<GetReceiverDetailQuery, ReceiverDetailReadModel?>, GetReceiverDetailHandler>();
         services.AddScoped<ICommandHandler<SetReceiverDetailCommand, SetReceiverDetailOutcome>, SetReceiverDetailHandler>();
 
-        services.AddScoped<ICommandHandler<CreateBoxCommand, int>, CreateBoxHandler>();
+        services.AddScoped<ICommandHandler<CreateBoxCommand, CreateBoxResult>, CreateBoxHandler>();
         services.AddScoped<ICommandHandler<UpdateBoxCommand, UpdateBoxOutcome>, UpdateBoxHandler>();
         services.AddScoped<ICommandHandler<DeleteBoxCommand, DeleteBoxOutcome>, DeleteBoxHandler>();
         services.AddScoped<IQueryHandler<GetBoxByIdQuery, BoxReadModel?>, GetBoxByIdHandler>();

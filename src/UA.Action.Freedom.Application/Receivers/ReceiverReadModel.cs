@@ -1,3 +1,5 @@
+using UA.Action.Freedom.Domain;
+
 namespace UA.Action.Freedom.Application.Receivers;
 
 /// <summary>
@@ -11,6 +13,9 @@ namespace UA.Action.Freedom.Application.Receivers;
 /// (docs/domain/key-concepts.md § Data Sensitivity, recommendations §4.4.2). The full detail
 /// lives in <see cref="ReceiverDetailReadModel"/>, behind a different database identity.
 ///
+/// The <see cref="Status"/> is not sensitive: it records only that an Administrator has authorised sending to
+/// this Receiver, never what kind of body it is (decision D33).
+///
 /// Keeping the two apart as separate types is what makes the redaction structural: code that
 /// only has a <see cref="ReceiverReadModel"/> has nothing sensitive to leak, so a document
 /// generator or a log statement cannot disclose an address by accident.
@@ -19,6 +24,7 @@ public sealed record ReceiverReadModel(
     Guid Ref,
     string Organisation,
     string Region,
+    ReceiverStatus Status = ReceiverRegistration.Initial,
     string? LastChangedByName = null,
     DateTime? LastChangedAt = null);
 
