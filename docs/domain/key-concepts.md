@@ -115,10 +115,18 @@ Erasure is **refused while the volunteer is still needed**: on the crew of a con
 team of a manifest still under way. Take them off it first. Only the Administrator erases, and the operator UI asks
 for confirmation, since it cannot be undone.
 
-### Donor _(external)_
+### Donor
 
-A person or organisation donating a vehicle, goods or funds. Interacts with the public website, not with Freedom
-directly.
+A person or organisation that gave goods. A donor has **no login** and no access to Freedom: a Dispatcher or Loader
+enters them, and their donations, from an email or a drop-off ([O22](decisions.md#o22)). A donor is a **split identity**
+like a volunteer ([D15](decisions.md#d15)): an anonymous key that donations point at, and the personal details (name,
+email, phone) held separately so an Administrator can erase them. Erasing deletes the details and keeps the donation,
+its items and its value, which then read "Former donor". A volunteer who also gives goods is two unrelated records.
+
+A **Donation** is one donor's drop-off and holds many items ([D14](decisions.md#d14)); an item names it with its
+`donationId`, which is empty for items entered before donations existed. The **donor status report**
+([O6](decisions.md#o6)) is a user's account for the donor: what was given, its value by category and how far each item
+has got. It shows no Receiver, region, route or address, and is still available after the donor is erased.
 
 ### Border Guard _(external)_
 
