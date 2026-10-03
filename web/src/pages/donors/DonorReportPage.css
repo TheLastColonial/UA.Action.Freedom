@@ -1,0 +1,20 @@
+.donor-report__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+/* The report is handed to the donor on paper: print only the report, not the app around it. */
+@media print {
+  .app-shell__header,
+  .app-shell__sidebar,
+  .donor-report__print {
+    display: none;
+  }
+
+  .app-shell__body,
+  .app-shell__main {
+    display: block;
+    padding: 0;
+  }
+}

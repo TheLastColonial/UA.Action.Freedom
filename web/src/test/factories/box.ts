@@ -60,6 +60,7 @@ export function makeBoxItem(overrides: Partial<BoxItemReadModel> = {}): BoxItemR
     categoryNameEn: null,
     isNotCarried: false,
     shelfLife: 'Fine',
+    donationId: null,
     ...overrides,
   };
 }

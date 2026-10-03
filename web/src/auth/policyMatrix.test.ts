@@ -23,6 +23,9 @@ const EXPECTED: Record<Policy, readonly Role[]> = {
   'boxes:write': ['Administrator', 'Dispatcher', 'Loader'],
   'boxes:validate': ['Administrator', 'Loader'],
   'boxes:allocate-bay': ['Loader'],
+  'donations:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
+  'donations:write': ['Administrator', 'Dispatcher', 'Loader'],
+  'donors:erase': ['Administrator'],
   'categories:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
   'categories:write': ['Administrator'],
   'locations:read': ['Administrator', 'Purchaser', 'Dispatcher', 'Loader'],
@@ -43,7 +46,7 @@ const ALL_ROLES: readonly Role[] = [
 ];
 
 describe('policySatisfiedBy', () => {
-  it('covers exactly the 24 documented policies', () => {
+  it('covers exactly the 27 documented policies', () => {
     expect([...ALL_POLICIES].sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 

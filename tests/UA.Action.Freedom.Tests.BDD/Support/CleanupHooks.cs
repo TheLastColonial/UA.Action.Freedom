@@ -49,6 +49,7 @@ public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
     {
         "boxes" => 0,
         "vehicles" => 1,
+        "donors" => 3,
         "people" => 3,
         _ => 2,
     };

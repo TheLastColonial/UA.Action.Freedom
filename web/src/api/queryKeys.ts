@@ -22,6 +22,17 @@ export const qk = {
     list: (params: PeopleListParams) => ['people', 'list', params] as const,
     detail: (id: string) => ['people', 'detail', id] as const,
   },
+  donors: {
+    all: ['donors'] as const,
+    list: (params: PageParams) => ['donors', 'list', params] as const,
+    detail: (id: string) => ['donors', 'detail', id] as const,
+    donations: (id: string) => ['donors', id, 'donations'] as const,
+    report: (id: string) => ['donors', id, 'report'] as const,
+  },
+  donations: {
+    all: ['donations'] as const,
+    list: (params: PageParams) => ['donations', 'list', params] as const,
+  },
   convoys: {
     all: ['convoys'] as const,
     list: (params: PageParams) => ['convoys', 'list', params] as const,

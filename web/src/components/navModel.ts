@@ -16,6 +16,7 @@ export const NAV_SECTIONS: readonly NavEntry[] = [
   { label: 'Volunteers', to: '/people', policy: 'people:read' },
   { label: 'Convoys', to: '/convoys', policy: 'convoys:read' },
   { label: 'Boxes', to: '/boxes', policy: 'boxes:read' },
+  { label: 'Donors', to: '/donors', policy: 'donations:read' },
   { label: 'Manifests', to: '/manifests', policy: 'manifests:read' },
   { label: 'Receivers', to: '/receivers', policy: 'receivers:read' },
   { label: 'Locations', to: '/locations', policy: 'locations:read' },

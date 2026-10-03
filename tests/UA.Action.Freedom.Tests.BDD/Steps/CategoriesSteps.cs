@@ -26,11 +26,13 @@ public sealed class CategoriesSteps(FreedomApiClient api, ScenarioState state)
     private const string NotCarriedName = "BDD Not Carried";
 
     /// <summary>
-    /// Fills the placeholders a body may use: <c>{category}</c> is the remembered category and <c>{yesterday}</c> is a
+    /// Fills the placeholders a body may use: <c>{donor}</c> and <c>{donation}</c> are the remembered donor and donation, <c>{category}</c> is the remembered category and <c>{yesterday}</c> is a
     /// date that has already passed.
     /// </summary>
     internal static string Expand(ScenarioState state, string text) => text
         .Replace("{category}", state.TryPinned(CategoryKey) ?? "missing-category", StringComparison.Ordinal)
+        .Replace("{donor}", state.TryPinned(DonationsSteps.DonorKey) ?? "missing-donor", StringComparison.Ordinal)
+        .Replace("{donation}", state.TryPinned(DonationsSteps.DonationKey) ?? "missing-donation", StringComparison.Ordinal)
         .Replace("{yesterday}", DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd"), StringComparison.Ordinal);
 
     [Given("a category exists")]
