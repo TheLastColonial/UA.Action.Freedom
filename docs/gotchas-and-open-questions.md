@@ -95,8 +95,9 @@ is an `int` for a three-member enum.
 
 The one place this does not hold is `dbo.BoxItem.PropertiesJson`: item properties are an
 open-ended bag, so `BoxRepository` has a private `BoxItemRow` seam that Dapper fills and a mapper
-that turns it into the shape the application uses. That is the exception, and it is commented as
-such.
+that turns it into the shape the application uses (the category, quantity, value, expiry and code are
+real columns on the same row now, and the seam maps them too). That is the exception, and it is commented as
+such. A non-string JSON value in the bag is kept as its raw text rather than refused.
 
 ### The schema is a SQL project, declared as its end state
 
@@ -372,6 +373,27 @@ with. A withdrawn vehicle is skipped by readiness and arrival and may join a lat
 
 No items in or out, no new receiver, no second validation. The Loader's confirmed weight is what
 the border check relies on; any of those would leave it describing something no longer true.
+
+### An item names a category, and "expired" is a date, not a category rule
+
+Plan 05 (ADR 0014) gave an item a typed `CategoryId`, `Quantity`, `ValueGbp`/`ValueSource` and `ExpiresOn`. These are easy to trip on:
+
+- **`ExpiresOn` is a `date`, and *expired* needs no category.** An item is expired once the date is before today (UTC), which `ValidateBoxHandler`
+  decides from the item alone. *Short-dated* is the part that needs the category's `WarnWithinDays`, and it is worked out at read time by
+  `ListBoxItemsHandler`, never stored. An item expiring today is not expired. Do not "optimise" the validate check into the repository query without
+  keeping the already-validated answer: a box validated last month whose item has since expired still answers `409 already validated`, not `box-has-expired-items`.
+- **The shelf-life thresholds are unverified (D25) and are data.** Medicine 180 days and food 90 are placeholders in `dev-seed.sql`. They are columns on
+  `dbo.ItemCategory`, changed by an Administrator through `PUT /categories/{id}`, so nothing about them needs a release. Keep them out of code.
+- **`PropertiesJson` holds strings only.** The seed once stored `{"quantity":10}`, a JSON number, which `Dictionary<string,string>` refuses to read and
+  turned the whole item list into a `500`. The reader now keeps any non-string value as its raw JSON text, and `quantity` has a column of its own, so the
+  seed no longer writes one. A new typed field belongs in a column, not in the bag.
+- **`POST /boxes/{id}/items` answers `200` with `{ itemId, warnings }`, not `204`.** A not-carried or already-expired item is *accepted*: the Loader has to see it
+  to take it out. A client that treats only `204` as success will think a perfectly good add failed.
+- **There is no `DELETE /categories`.** A category cannot be removed once an item names it (`FK_BoxItem_Category` is NO ACTION), and nobody has asked for deletion.
+  The BDD suite therefore finds its fixture categories by name instead of creating one per scenario.
+- **The fixed list is seed data, not part of the dacpac.** A database that was never seeded has no categories and nothing can be packed until an
+  Administrator adds one. See §9.
+
 
 ### Only a Passed vehicle joins a convoy — and it cannot be moved from another
 
@@ -1051,6 +1073,14 @@ Questions 9–12 from the previous round are **decided and built**:
     Every other delete maps a foreign-key refusal to a 409 `StillReferenced`. **Decide:** return `409` and check *before*
     removing the address (so a refused delete leaves the address alone), or accept deleting the address while the receiver
     stays. `GET /receivers/{ref}/usage` already says what names a receiver. Not fixed in plan 04.
+
+18. **The fixed item categories exist only in the dev seed.** Plan 05 put the ten built-in categories in
+    `database/seed/dev-seed.sql`, which is deliberately never run outside a local stack. A deployed database that was never
+    seeded has no categories, so nothing can be packed until an Administrator adds one by hand, and they could not make one
+    built in. **Decide:** make the list part of every deployment (a post-deployment script in the dacpac that inserts the fixed
+    rows once, which the "no migration code" rule has to be read around), or accept that an Administrator creates them. The
+    codes and shelf-life windows in the seed are placeholders either way (D25).
+
 
 ### Web coverage backlog
 
