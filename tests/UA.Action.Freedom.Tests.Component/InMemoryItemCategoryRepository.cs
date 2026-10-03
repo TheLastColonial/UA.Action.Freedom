@@ -26,6 +26,18 @@ internal sealed class InMemoryItemCategoryRepository : IItemCategoryRepository, 
         }
     }
 
+    public const int OtherId = 1;
+
+    public const int GasId = 2;
+
+    public const int MedicineId = 3;
+
+    /// <summary>A small fixed list: ordinary goods, goods the convoy will not carry, and goods that expire.</summary>
+    public static InMemoryItemCategoryRepository WithDefaults() => new(
+        new ItemCategoryReadModel(OtherId, "Other", "", IsFixed: true, null, false, false, null),
+        new ItemCategoryReadModel(GasId, "Gas", "", IsFixed: true, HazardClass: 2, false, IsNotCarried: true, null),
+        new ItemCategoryReadModel(MedicineId, "Medicine", "", IsFixed: true, null, IsSensitive: true, false, WarnWithinDays: 180));
+
     public void Attach(IChangeAttribution attribution, IPersonRepository people) =>
         changes.Attach(attribution, people);
 

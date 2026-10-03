@@ -1,3 +1,5 @@
+using UA.Action.Freedom.Domain;
+
 namespace UA.Action.Freedom.Application.Boxes;
 
 /// <summary>
@@ -36,18 +38,33 @@ public sealed record BoxReadModel(
 /// <summary>
 /// A single donated thing inside a box. Tracked as contents, never individually in transit.
 /// </summary>
+/// <param name="CategoryId">What kind of thing it is (ADR 0014). It carries the hazard flags and the customs codes.</param>
 /// <param name="CommodityCode">
 /// The commodity code this item is declared under on an ICS2 Entry Summary Declaration, at least six
 /// digits — <c>EnsCommodity.HumanitarianAid</c> covers aid. A field of its own rather than a key in
 /// <paramref name="Properties"/>: the properties are open-ended precisely because nothing depends on
-/// them, and a border refusal turns on this. <see langword="null"/> until somebody classifies the
-/// item, which the filing sheet reports as missing rather than guessing.
+/// them, and a border refusal turns on this. <see langword="null"/> when the item has no code of its own,
+/// in which case its category's code for the authority being filed with applies, and the filing sheet
+/// reports it as missing only when neither exists.
 /// </param>
+/// <param name="ValueGbp">What it is worth in pounds, with no conversion, and <paramref name="ValueSource"/> says who gave the figure (D5).</param>
+/// <param name="ExpiresOn">When it expires. An item already past it blocks validation of its box (D1).</param>
+/// <param name="CategoryNameEn">Read-time: the category's name, so a client need not look it up.</param>
+/// <param name="IsNotCarried">Read-time: the category is one the convoy will not take (D21).</param>
+/// <param name="ShelfLife">Read-time: expired, short-dated by the category's rule, or fine (D1, D25).</param>
 public sealed record BoxItemReadModel(
     Guid Id,
     string Description,
     IReadOnlyDictionary<string, string> Properties,
-    string? CommodityCode = null);
+    int CategoryId,
+    string? CommodityCode = null,
+    int? Quantity = null,
+    decimal? ValueGbp = null,
+    ValueSource? ValueSource = null,
+    DateOnly? ExpiresOn = null,
+    string? CategoryNameEn = null,
+    bool IsNotCarried = false,
+    ShelfLifeStatus ShelfLife = ShelfLifeStatus.Fine);
 
 /// <summary>
 /// A QR label issued for a box: an opaque, non-enumerable token a scanner resolves back to the

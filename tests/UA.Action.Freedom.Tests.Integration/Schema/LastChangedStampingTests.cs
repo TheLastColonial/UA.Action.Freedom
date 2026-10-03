@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
@@ -9,6 +10,7 @@ using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Vehicles;
 using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Data.Boxes;
+using UA.Action.Freedom.Data.Categories;
 using UA.Action.Freedom.Data.Convoys;
 using UA.Action.Freedom.Data.Locations;
 using UA.Action.Freedom.Data.Manifests;
@@ -178,6 +180,7 @@ public class LastChangedStampingTests
         var edits = new BoxRepository(Connections(), AttributedTo(editor));
         var newBox = new BoxReadModel(0, 0, null, null, null, null, null, null, null);
         int id = 0;
+        var category = await AddCategoryAsync();
 
         try
         {
@@ -187,7 +190,7 @@ public class LastChangedStampingTests
             await edits.UpdateAsync(newBox with { Id = id }, Cancel);
             await ShouldBeStampedAsync(editor, "dbo.Box", "Id = @id", ("@id", id));
 
-            await boxes.AddItemAsync(id, new BoxItemReadModel(itemId, "Bandages", new Dictionary<string, string>()), Cancel);
+            await boxes.AddItemAsync(id, new BoxItemReadModel(itemId, "Bandages", new Dictionary<string, string>(), category), Cancel);
             await ShouldBeStampedAsync(author, "dbo.BoxItem", "Id = @id", ("@id", itemId));
 
             await boxes.IssueQrCodeAsync(id, token, DateTime.UtcNow, Cancel);
@@ -202,6 +205,32 @@ public class LastChangedStampingTests
         finally
         {
             await ExecuteAsync("DELETE FROM dbo.Box WHERE Id = @id", ("@id", id));
+            await RemoveCategoryAsync(category);
+            await ExecuteAsync("DELETE FROM dbo.Person WHERE Id IN (@a, @b)", ("@a", author), ("@b", editor));
+        }
+    }
+
+    [Fact]
+    public async Task A_category_and_its_customs_code_record_who_last_changed_them()
+    {
+        await SkipUnlessProvisionedAsync(TestContext.Current.CancellationToken);
+        var (author, editor) = (await AddVolunteerAsync("Stamp", "Author"), await AddVolunteerAsync("Stamp", "Editor"));
+        int id = 0;
+
+        try
+        {
+            id = (await new ItemCategoryRepository(Connections(), AttributedTo(author)).AddAsync(
+                new ItemCategoryReadModel(0, $"Stamp {Guid.NewGuid():N}", "", false, null, false, false, null), Cancel))!.Value;
+            await ShouldBeStampedAsync(author, "dbo.ItemCategory", "Id = @id", ("@id", id));
+
+            await new ItemCategoryRepository(Connections(), AttributedTo(editor))
+                .SetCodeAsync(id, CustomsAuthority.EU, "300490", Cancel);
+            await ShouldBeStampedAsync(editor, "dbo.CategoryCustomsCode", "CategoryId = @id", ("@id", id));
+            await ShouldBeStampedAsync(editor, "dbo.ItemCategory", "Id = @id", ("@id", id));
+        }
+        finally
+        {
+            await ExecuteAsync("DELETE FROM dbo.ItemCategory WHERE Id = @id", ("@id", id));
             await ExecuteAsync("DELETE FROM dbo.Person WHERE Id IN (@a, @b)", ("@a", author), ("@b", editor));
         }
     }

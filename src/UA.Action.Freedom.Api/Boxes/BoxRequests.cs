@@ -1,5 +1,6 @@
 using FluentValidation;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Boxes;
 
@@ -39,10 +40,17 @@ public sealed record ValidateBoxRequest(
 
 /// <summary>Body of <c>POST /boxes/{id}/items</c>.</summary>
 public sealed record AddBoxItemRequest(
-    string Description, Dictionary<string, string>? Properties, string? CommodityCode = null)
+    string Description,
+    Dictionary<string, string>? Properties,
+    int CategoryId,
+    string? CommodityCode = null,
+    int? Quantity = null,
+    decimal? ValueGbp = null,
+    ValueSource? ValueSource = null,
+    DateOnly? ExpiresOn = null)
 {
     public AddBoxItemCommand ToCommand(int boxId) =>
-        new(boxId, Description, Properties ?? [], CommodityCode);
+        new(boxId, Description, Properties ?? [], CategoryId, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn);
 }
 
 /// <summary>Written out for each body rather than shared, matching the vehicle and volunteer validators.</summary>
@@ -105,6 +113,23 @@ public sealed class AddBoxItemRequestValidator : AbstractValidator<AddBoxItemReq
     public AddBoxItemRequestValidator()
     {
         RuleFor(r => r.Description).NotEmpty().MaximumLength(400);
+        RuleFor(r => r.CategoryId).GreaterThan(0);
+        RuleFor(r => r.CommodityCode!).Matches(Categories.CommodityCodes.Pattern)
+            .WithMessage("'Commodity Code' must be 6 to 10 digits.")
+            .When(r => r.CommodityCode is not null);
+        RuleFor(r => r.Quantity).GreaterThanOrEqualTo(1).When(r => r.Quantity is not null);
+        RuleFor(r => r.ValueGbp).GreaterThanOrEqualTo(0).PrecisionScale(12, 2, ignoreTrailingZeros: true)
+            .When(r => r.ValueGbp is not null);
+        RuleFor(r => r.ValueSource)
+            .NotNull().WithMessage("A value needs its source: Donor or Estimate.")
+            .When(r => r.ValueGbp is not null);
+        RuleFor(r => r.ValueGbp)
+            .NotNull().WithMessage("A value source needs the value it describes.")
+            .When(r => r.ValueSource is not null);
+        RuleFor(r => r.ValueSource)
+            .Must(source => source is ValueSource.Donor or ValueSource.Estimate)
+            .WithMessage("An item's value comes from the Donor or is an Estimate.")
+            .When(r => r.ValueSource is not null);
         RuleFor(r => r.Properties)
             .Must(properties => properties is null || properties.Count <= MaxProperties)
             .WithMessage($"An item may carry at most {MaxProperties} properties.");

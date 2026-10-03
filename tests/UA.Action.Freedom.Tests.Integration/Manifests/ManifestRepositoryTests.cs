@@ -400,13 +400,14 @@ public class ManifestRepositoryTests
         }
     }
 
-    private static Task AddItemAsync(int boxId, string description, string? commodityCode) =>
+    private static Task AddItemAsync(int boxId, int categoryId, string description, string? commodityCode) =>
         ExecuteAsync(
             """
-            INSERT INTO dbo.BoxItem (Id, BoxId, Description, CommodityCode)
-            VALUES (NEWID(), @boxId, @description, @commodityCode)
+            INSERT INTO dbo.BoxItem (Id, BoxId, CategoryId, Description, CommodityCode)
+            VALUES (NEWID(), @boxId, @categoryId, @description, @commodityCode)
             """,
             ("@boxId", boxId),
+            ("@categoryId", categoryId),
             ("@description", description),
             ("@commodityCode", (object?)commodityCode ?? DBNull.Value));
 
@@ -431,15 +432,16 @@ public class ManifestRepositoryTests
         var validatedBy = await AddVolunteerAsync();
         var packed = await AddBoxAsync(30, validated: true, validatedBy);
         var unpacked = await AddBoxAsync(0, validated: false, validatedBy: null);
+        var category = await AddCategoryAsync();
 
         try
         {
             await repository.AddAsync(AManifest(id, entry), cancellationToken);
             await repository.AddBoxAsync(id, packed, cancellationToken);
             await repository.AddBoxAsync(id, unpacked, cancellationToken);
-            await AddItemAsync(packed, "Blankets", "99190000");
-            await AddItemAsync(packed, "Sleeping bags", "99190000");
-            await AddItemAsync(unpacked, "Assorted donations", commodityCode: null);
+            await AddItemAsync(packed, category, "Blankets", "99190000");
+            await AddItemAsync(packed, category, "Sleeping bags", "99190000");
+            await AddItemAsync(unpacked, category, "Assorted donations", commodityCode: null);
 
             var lines = await repository.GetEnsGoodsLinesAsync(id, cancellationToken);
 
@@ -466,6 +468,7 @@ public class ManifestRepositoryTests
             await RemoveManifestAsync(id);
             await RemoveBoxAsync(packed);
             await RemoveBoxAsync(unpacked);
+            await RemoveCategoryAsync(category);
             await RemoveVolunteerAsync(validatedBy);
             await RemoveTruckListEntryAsync(entry);
         }
