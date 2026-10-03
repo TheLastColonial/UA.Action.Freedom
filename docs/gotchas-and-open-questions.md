@@ -1043,6 +1043,15 @@ Questions 9–12 from the previous round are **decided and built**:
     `OTEL_TRACES_SAMPLER_ARG`) — the SDK default is 100%, so the "sampling from day one" in
     `recommendations.md` §2.4 is not yet true.
 
+17. **Deleting a receiver something still names answers 500, after its address is already gone.** `DeleteReceiverHandler`
+    removes the delivery detail through the Ground Officer identity first, then deletes `dbo.Receiver`. If a box
+    (`FK_Box_Receiver`) or a vehicle (`FK_ConvoyVehicle_HandoverReceiver`, added by plan 04) still names the receiver, that
+    second delete fails on the foreign key, nothing catches it, and the caller gets a 500 with the address already deleted
+    and the receiver still there. The box half pre-dates registration; the handover receiver adds a second way to reach it.
+    Every other delete maps a foreign-key refusal to a 409 `StillReferenced`. **Decide:** return `409` and check *before*
+    removing the address (so a refused delete leaves the address alone), or accept deleting the address while the receiver
+    stays. `GET /receivers/{ref}/usage` already says what names a receiver. Not fixed in plan 04.
+
 ### Web coverage backlog
 
 Pages with no test file of their own (some are exercised through a parent page's test):
