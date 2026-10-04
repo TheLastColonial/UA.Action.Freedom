@@ -41,7 +41,12 @@ export function ManifestStatePanel({ manifest }: ManifestStatePanelProps): JSX.E
           {errorMessage}
         </p>
       ) : null}
-      {justApproved ? <p role="status">GMR submitted — the manifest is now frozen.</p> : null}
+      {justApproved ? (
+        <p role="status">
+          Load signed off — the manifest is now frozen. Declarations are filed from the Declarations
+          tab.
+        </p>
+      ) : null}
 
       {options.length === 0 ? <p>No further transitions are available from here.</p> : null}
 

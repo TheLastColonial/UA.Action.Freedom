@@ -73,6 +73,11 @@ export const qk = {
     detail: (id: number) => ['locations', 'detail', id] as const,
     bays: (id: number) => ['locations', id, 'bays'] as const,
   },
+  declarations: {
+    vehicle: (convoyId: number, vin: string) => ['declarations', convoyId, vin] as const,
+    list: (convoyId: number, vin: string) => ['declarations', convoyId, vin, 'list'] as const,
+    ens: (convoyId: number, vin: string) => ['declarations', convoyId, vin, 'ens'] as const,
+  },
   manifests: {
     all: ['manifests'] as const,
     list: (params: PageParams) => ['manifests', 'list', params] as const,
@@ -80,6 +85,5 @@ export const qk = {
     crew: (id: string) => ['manifests', id, 'crew'] as const,
     boxes: (id: string) => ['manifests', id, 'boxes'] as const,
     weight: (id: string) => ['manifests', id, 'weight'] as const,
-    ens: (id: string) => ['manifests', id, 'ens'] as const,
   },
 } as const;

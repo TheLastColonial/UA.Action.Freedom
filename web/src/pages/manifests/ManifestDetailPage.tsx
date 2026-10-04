@@ -11,16 +11,17 @@ import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
 import { ManifestBoxesPanel } from './ManifestBoxesPanel';
-import { ManifestEnsPanel } from './ManifestEnsPanel';
+import { DeclarationsPanel } from './DeclarationsPanel';
 import { ManifestStatePanel } from './ManifestStatePanel';
 import { ManifestCrewPanel } from './ManifestCrewPanel';
 import { ManifestWeightPanel } from './ManifestWeightPanel';
 
-type Tab = 'overview' | 'status' | 'crew' | 'cargo' | 'weight';
-const TABS: readonly Tab[] = ['overview', 'status', 'crew', 'cargo', 'weight'];
+type Tab = 'overview' | 'status' | 'declarations' | 'crew' | 'cargo' | 'weight';
+const TABS: readonly Tab[] = ['overview', 'status', 'declarations', 'crew', 'cargo', 'weight'];
 const TAB_LABEL: Record<Tab, string> = {
   overview: 'Overview',
   status: 'Status',
+  declarations: 'Declarations',
   crew: 'Crew',
   cargo: 'Cargo',
   weight: 'Weight',
@@ -76,6 +77,7 @@ export function ManifestDetailPage(): JSX.Element {
         tabs={[
           { id: 'overview', label: TAB_LABEL.overview },
           { id: 'status', label: TAB_LABEL.status },
+          { id: 'declarations', label: TAB_LABEL.declarations },
           { id: 'crew', label: TAB_LABEL.crew },
           { id: 'cargo', label: TAB_LABEL.cargo },
           { id: 'weight', label: TAB_LABEL.weight },
@@ -131,8 +133,12 @@ export function ManifestDetailPage(): JSX.Element {
 
       {tab === 'status' ? (
         <TabPanel id="status">
-          <ManifestEnsPanel manifestId={manifest.id} />
           <ManifestStatePanel manifest={manifest} />
+        </TabPanel>
+      ) : null}
+      {tab === 'declarations' ? (
+        <TabPanel id="declarations">
+          <DeclarationsPanel convoyId={manifest.convoyId} vin={manifest.vin} />
         </TabPanel>
       ) : null}
       {tab === 'crew' ? (

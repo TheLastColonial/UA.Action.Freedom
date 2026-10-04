@@ -7,20 +7,16 @@ import { delete204, getCollection, getJson, postTransition, put204 } from './htt
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
 import {
-  ensDeclarationReadModelSchema,
   manifestBoxReadModelSchema,
   manifestReadModelSchema,
   manifestWeightReadModelSchema,
 } from './schemas/manifests';
 import type {
-  EnsDeclarationReadModel,
   ManifestBoxReadModel,
   ManifestReadModel,
   ManifestWeightReadModel,
-  RecordEnsRequest,
   UpdateManifestRequest,
 } from './schemas/manifests';
-import { ApiNotFound } from './problem';
 import { vehicleCrewReadModelSchema } from './schemas/convoys';
 import type { VehicleCrewReadModel } from './schemas/convoys';
 import type { ManifestVerb } from '../pages/manifests/transitions';
@@ -67,27 +63,6 @@ export function fetchManifestWeight(id: string): Promise<ManifestWeightReadModel
 
 export function transitionManifest(id: string, verb: ManifestVerb): Promise<void> {
   return postTransition(`${idPath(id)}/${verb}`);
-}
-
-// No declaration recorded is a bare 404 — an answer ("not filed"), not an error — so it resolves
-// to null, the same convention as a vehicle's insurance.
-export async function fetchManifestEns(id: string): Promise<EnsDeclarationReadModel | null> {
-  try {
-    return await getJson(`${idPath(id)}/ens`, ensDeclarationReadModelSchema);
-  } catch (error) {
-    if (error instanceof ApiNotFound) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-export function recordManifestEns(id: string, body: RecordEnsRequest): Promise<void> {
-  return put204(`${idPath(id)}/ens`, body);
-}
-
-export function withdrawManifestEns(id: string): Promise<void> {
-  return delete204(`${idPath(id)}/ens`);
 }
 
 export function useManifests(params: PageParams): UseQueryResult<readonly ManifestReadModel[]> {
@@ -144,25 +119,5 @@ export function useTransitionManifest(id: string): UseMutationResult<void, Error
       await queryClient.invalidateQueries({ queryKey: qk.manifests.weight(id) });
       await queryClient.invalidateQueries({ queryKey: qk.manifests.all });
     },
-  });
-}
-
-export function useManifestEns(id: string): UseQueryResult<EnsDeclarationReadModel | null> {
-  return useQuery({ queryKey: qk.manifests.ens(id), queryFn: () => fetchManifestEns(id) });
-}
-
-export function useRecordManifestEns(id: string): UseMutationResult<void, Error, RecordEnsRequest> {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body: RecordEnsRequest) => recordManifestEns(id, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.manifests.ens(id) }),
-  });
-}
-
-export function useWithdrawManifestEns(id: string): UseMutationResult<void, Error, void> {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => withdrawManifestEns(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.manifests.ens(id) }),
   });
 }
