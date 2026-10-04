@@ -35,6 +35,13 @@ export function ConvoyReadinessPanel({ convoyId }: { convoyId: number }): JSX.El
           ))}
         </ul>
       ) : null}
+      {readiness.advisories.length > 0 ? (
+        <ul aria-label="Advice">
+          {readiness.advisories.map((advice) => (
+            <li key={advice}>{advice}</li>
+          ))}
+        </ul>
+      ) : null}
       <p className="field__hint">This is advisory only — nothing is blocked by it.</p>
     </DetailCard>
   );

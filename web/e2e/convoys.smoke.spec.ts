@@ -226,3 +226,32 @@ test('@smoke editing a route keeps its point ids, and the Dispatcher nominates a
   await page.getByRole('button', { name: 'Nominate' }).click();
   await expect(page.getByText(`${driver} leads this convoy.`)).toBeVisible();
 });
+
+test('@smoke operator allocates a convoy budget, enters fuel over the line and sees it flagged', async ({
+  page,
+}) => {
+  await signIn(page, 'operator');
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+
+  await nav.getByRole('link', { name: 'Convoys' }).click();
+  await page.getByRole('link', { name: 'New convoy' }).click();
+  await page.getByLabel('Departs').fill('2026-08-01T08:00');
+  await page.getByLabel('Expected arrival').fill('2026-08-06T20:00');
+  await page.getByRole('button', { name: 'Create convoy' }).click();
+  await expect(page.getByRole('heading', { name: /Convoy #/ })).toBeVisible();
+
+  // No budget is advice, never a blocker.
+  await expect(page.getByText('No budget set')).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Budget' }).click();
+  await page.getByLabel('Fuel budget (£)').fill('1000');
+  await page.getByRole('button', { name: 'Save budget' }).click();
+  await expect(page.getByRole('cell', { name: '£1000.00' })).toBeVisible();
+
+  await page.getByLabel('Amount (£)').fill('1100');
+  await page.getByRole('button', { name: 'Add cost' }).click();
+  await expect(page.getByRole('cell', { name: 'Over budget' })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByText('Fuel is over budget')).toBeVisible();
+});
