@@ -55,7 +55,7 @@ Scenario: A validated box travels on an approved manifest and is delivered
     # truck-list entry rather than created loose.
     When I POST a manifest for the insured vehicle on the remembered convoy
     Then the response status is 201
-    When I put the remembered box on the remembered manifest
+    When I put the remembered box on the insured vehicle
     Then the response status is 204
     When I GET "/boxes" on the remembered manifest
     Then the response status is 200

@@ -1,6 +1,8 @@
 Feature: Manifests API
     The deployed Freedom service exposes manifests at /manifests — the document pack for one
-    vehicle on one convoy: its cargo, its border weight, its GMR and its ferry booking.
+    vehicle on one convoy: its border weight and its GMR. Its cargo and its ferry booking are
+    recorded against the same truck-list entry, at /convoys/{id}/vehicles/{vin}/boxes and
+    /ferry, and the manifest reads them.
 
     A manifest is opened against a truck-list entry, at
     POST /convoys/{id}/vehicles/{vin}/manifest, because that pair is what it is the paperwork
@@ -196,6 +198,25 @@ Scenario: The border weight shows its fixed allowances
     And the response body field "crewAndBagsKg" is "200"
     And the response body field "fuelKg" is "45"
     And the response body field "unvalidatedBoxCount" is "0"
+
+Scenario: A vehicle's outbound ferry is booked on its truck-list entry
+    Given I am authenticated as "operator"
+    And a convoy exists with an insured vehicle on its published truck list
+    When I book a ferry for the insured vehicle
+    Then the response status is 204
+    When I GET the ferry booking of the insured vehicle
+    Then the response status is 200
+    And the response body field "reference" is "BDD-FERRY-1"
+    And the response body field "operator" is "P&O Ferries"
+
+Scenario: Cargo is written on the vehicle, and the manifest route points there
+    Given I am authenticated as "operator"
+    And a convoy exists with an insured vehicle on its published truck list
+    And a manifest reference that is not yet used
+    When I POST a manifest for the insured vehicle on the remembered convoy
+    Then the response status is 201
+    When I PUT "/boxes/1" on the remembered manifest
+    Then the response status is 410
 
 Scenario: Fetching an unknown manifest is a 404
     Given I am authenticated as "operator"
