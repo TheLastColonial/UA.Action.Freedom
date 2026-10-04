@@ -8,9 +8,11 @@ import './BoxQrCodePanel.css';
 
 interface BoxQrCodePanelProps {
   boxId: number;
+  /** A replaced box takes no label: voiding revoked it on purpose (ADR 0011). */
+  voided?: boolean;
 }
 
-export function BoxQrCodePanel({ boxId }: BoxQrCodePanelProps): JSX.Element {
+export function BoxQrCodePanel({ boxId, voided = false }: BoxQrCodePanelProps): JSX.Element {
   const qrCode = useBoxQrCode(boxId);
   const issue = useIssueBoxQrCode(boxId);
   const revoke = useRevokeBoxQrCode(boxId);
@@ -23,6 +25,15 @@ export function BoxQrCodePanel({ boxId }: BoxQrCodePanelProps): JSX.Element {
       <div className="qr-panel">
         <h2>QR label</h2>
         <PageSkeleton />
+      </div>
+    );
+  }
+
+  if (voided) {
+    return (
+      <div className="qr-panel">
+        <h2>QR label</h2>
+        <p>This box was replaced, so its label no longer works.</p>
       </div>
     );
   }
@@ -99,7 +110,8 @@ export function BoxQrCodePanel({ boxId }: BoxQrCodePanelProps): JSX.Element {
           </div>
 
           <p className="qr-panel__note">
-            The label carries only the box number — never the receiver or destination.
+            The label lists what is in the box and who signed it, in English and Ukrainian — never
+            the receiver or destination.
           </p>
         </>
       )}

@@ -168,3 +168,70 @@ test('a box says who last changed it and when', async () => {
     .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
     .toBeInTheDocument();
 });
+
+test('replacing an attested box opens its unattested replacement, which points back', async () => {
+  const api = boxApi([makeBox({ id: 4, validated: true, weightKg: 18 })]);
+  worker.use(...api.handlers, ...meApi());
+
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+
+  await screen.getByRole('button', { name: 'Replace box' }).click();
+
+  await expect.element(screen.getByRole('heading', { name: 'Box #501' })).toBeInTheDocument();
+  await expect.element(screen.getByText('Open', { exact: true })).toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: 'Box #4' })).toBeInTheDocument();
+  await expect.element(screen.getByText('Replaces', { exact: false })).toBeInTheDocument();
+});
+
+test('a box nobody has attested is edited, so it offers no Replace', async () => {
+  worker.use(...boxApi([makeBox({ id: 4 })]).handlers, ...meApi());
+
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+
+  await expect.element(screen.getByRole('heading', { name: 'Box #4' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Replace box' })).not.toBeInTheDocument();
+});
+
+test('an attested box cannot be deleted, so Delete is not offered', async () => {
+  worker.use(...boxApi([makeBox({ id: 4, validated: true, weightKg: 18 })]).handlers, ...meApi());
+
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+
+  await expect.element(screen.getByRole('heading', { name: 'Box #4' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+});
+
+test('a voided box says so, links to its replacement and offers no Replace', async () => {
+  worker.use(
+    ...boxApi([
+      makeBox({
+        id: 4,
+        validated: true,
+        weightKg: 18,
+        voided: true,
+        voidedAt: '2026-05-02T09:00:00',
+        replacedByBoxId: 9,
+      }),
+    ]).handlers,
+    ...meApi(),
+  );
+
+  const screen = await renderWithProviders(null, { routes, route: '/boxes/4', roles: ['Loader'] });
+
+  await expect.element(screen.getByText('Voided', { exact: true })).toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: 'Box #9' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Replace box' })).not.toBeInTheDocument();
+});
+
+test('a Purchaser may read an attested box but cannot replace it', async () => {
+  worker.use(...boxApi([makeBox({ id: 4, validated: true, weightKg: 18 })]).handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/boxes/4',
+    roles: ['Purchaser'],
+  });
+
+  await expect.element(screen.getByRole('heading', { name: 'Box #4' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Replace box' })).not.toBeInTheDocument();
+});

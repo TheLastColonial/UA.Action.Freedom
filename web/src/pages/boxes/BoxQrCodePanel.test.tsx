@@ -94,3 +94,32 @@ test('the label never carries the box destination', async () => {
   expect(svg).toContain('BOX #8');
   expect(svg).not.toContain('Coventry');
 });
+
+test('a voided box takes no label and says its label no longer works', async () => {
+  worker.use(...boxApi([makeBox({ id: 8 })]).handlers);
+
+  const screen = await renderWithProviders(<BoxQrCodePanel boxId={8} voided />, {
+    roles: ['Loader'],
+  });
+
+  await expect
+    .element(screen.getByText('This box was replaced, so its label no longer works.'))
+    .toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Issue label' })).not.toBeInTheDocument();
+});
+
+test('the label note says what it carries, and still never the destination', async () => {
+  const api = boxApi([makeBox({ id: 8 })]);
+  api.qr.set(8, { token: 'cccccccc-0000-0000-0000-000000000009', issuedAt: '2026-05-01T09:00:00' });
+  worker.use(...api.handlers);
+
+  const screen = await renderWithProviders(<BoxQrCodePanel boxId={8} />, { roles: ['Loader'] });
+
+  await expect
+    .element(
+      screen.getByText(
+        'The label lists what is in the box and who signed it, in English and Ukrainian — never the receiver or destination.',
+      ),
+    )
+    .toBeInTheDocument();
+});

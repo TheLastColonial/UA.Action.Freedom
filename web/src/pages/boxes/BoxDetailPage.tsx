@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import { useBox, useDeleteBox } from '../../api/boxes';
+import { useBox, useDeleteBox, useReplaceBox } from '../../api/boxes';
 import { useLocation } from '../../api/locations';
 import { ApiNotFound } from '../../api/problem';
 import { Button, LinkButton } from '../../components/Button';
@@ -29,6 +29,7 @@ export function BoxDetailPage(): JSX.Element {
   const navigate = useNavigate();
   const query = useBox(boxId);
   const remove = useDeleteBox();
+  const replace = useReplaceBox(boxId);
 
   if (query.isError && query.error instanceof ApiNotFound) {
     return <NotFound />;
@@ -46,8 +47,20 @@ export function BoxDetailPage(): JSX.Element {
     <section>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>Box #{box.id}</h1>
-        <span>{box.validated ? 'Validated' : 'Open'}</span>
+        <span>{box.voided ? 'Voided' : box.validated ? 'Validated' : 'Open'}</span>
       </header>
+
+      {box.replacedByBoxId !== null ? (
+        <p>
+          Replaced by{' '}
+          <Link to={`/boxes/${String(box.replacedByBoxId)}`}>Box #{box.replacedByBoxId}</Link>.
+        </p>
+      ) : null}
+      {box.replacesBoxId !== null ? (
+        <p>
+          Replaces <Link to={`/boxes/${String(box.replacesBoxId)}`}>Box #{box.replacesBoxId}</Link>.
+        </p>
+      ) : null}
 
       <LastChanged by={box.lastChangedByName} at={box.lastChangedAt} />
 
@@ -69,26 +82,44 @@ export function BoxDetailPage(): JSX.Element {
               Edit
             </LinkButton>
           ) : null}
-          <Button
-            variant="danger"
-            disabled={remove.isPending}
-            onClick={() => {
-              remove.mutate(box.id, {
-                onSuccess: () => {
-                  void navigate('/boxes');
-                },
-              });
-            }}
-          >
-            Delete
-          </Button>
+          {box.validated && !box.voided ? (
+            <Button
+              variant="secondary"
+              disabled={replace.isPending}
+              onClick={() => {
+                replace.mutate(undefined, {
+                  onSuccess: (created) => {
+                    void navigate(`/boxes/${created.id}`);
+                  },
+                });
+              }}
+            >
+              Replace box
+            </Button>
+          ) : null}
+          {!box.validated ? (
+            <Button
+              variant="danger"
+              disabled={remove.isPending}
+              onClick={() => {
+                remove.mutate(box.id, {
+                  onSuccess: () => {
+                    void navigate('/boxes');
+                  },
+                });
+              }}
+            >
+              Delete
+            </Button>
+          ) : null}
         </span>
       </Gate>
       {remove.isError ? <p role="alert">The box could not be removed.</p> : null}
+      {replace.isError ? <p role="alert">The box could not be replaced.</p> : null}
 
       <BoxItemsPanel boxId={box.id} frozen={box.validated} />
 
-      <BoxQrCodePanel boxId={box.id} />
+      <BoxQrCodePanel boxId={box.id} voided={box.voided} />
 
       <BoxBayPanel boxId={box.id} locationId={box.locationId} />
 
