@@ -95,7 +95,7 @@ public class ArrivalHandlerTests
         var assign = await new AssignCrewToVehicleHandler(repository, truckList, people).HandleAsync(
             new AssignCrewToVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id),
             TestContext.Current.CancellationToken);
-        var unassign = await new UnassignCrewFromVehicleHandler(repository, truckList).HandleAsync(
+        var unassign = await new UnassignCrewFromVehicleHandler(repository, truckList, Substitute.For<IConvoyLeaderRepository>()).HandleAsync(
             new UnassignCrewFromVehicleCommand(ConvoyTestData.Id, Vin, PersonTestData.Id),
             TestContext.Current.CancellationToken);
 

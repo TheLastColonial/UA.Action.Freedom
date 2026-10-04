@@ -338,13 +338,13 @@ await this.FeatureBackgroundAsync();
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 54
-    await testRunner.WhenAsync("I PUT \"/convoys/{id}/route\" with body:", "{ \"stops\": [\r\n    { \"house\": \"Unit 4\", \"street\": \"Cross Road\", \"city\": \"Coventry\"" +
-                        ", \"country\": \"United Kingdom\", \"postcode\": \"CV1 2AB\" },\r\n    { \"street\": \"Trasa " +
-                        "Katowicka\", \"city\": \"Warszawa\", \"country\": \"Poland\", \"postcode\": \"80-180\" }\r\n] }" +
-                        "", ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I PUT \"/convoys/{id}/route\" with body:", @"{ ""stops"": [
+    { ""name"": ""Coventry depot"", ""kind"": ""Hub"", ""house"": ""Unit 4"", ""street"": ""Cross Road"", ""city"": ""Coventry"", ""country"": ""United Kingdom"", ""postcode"": ""CV1 2AB"" },
+    { ""name"": ""Warsaw hub"", ""street"": ""Trasa Katowicka"", ""city"": ""Warszawa"", ""country"": ""Poland"", ""postcode"": ""80-180"" }
+] }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 61
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 62
     await testRunner.WhenAsync("I GET \"/convoys/{id}/route\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");

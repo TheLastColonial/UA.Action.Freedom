@@ -59,6 +59,8 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetConvoyRouteQuery, IReadOnlyList<RouteStopReadModel>?>, GetConvoyRouteHandler>();
         services.TryAddSingleton<IRoutePointReferences, NoRoutePointReferences>();
         services.AddScoped<ICommandHandler<ReplaceConvoyRouteCommand, ReplaceConvoyRouteOutcome>, ReplaceConvoyRouteHandler>();
+        services.AddScoped<IQueryHandler<GetConvoyLeaderQuery, ConvoyLeaderReadModel?>, GetConvoyLeaderHandler>();
+        services.AddScoped<ICommandHandler<NominateConvoyLeaderCommand, NominateConvoyLeaderOutcome>, NominateConvoyLeaderHandler>();
         services.AddScoped<ICommandHandler<PublishTruckListCommand, PublishTruckListOutcome>, PublishTruckListHandler>();
         services.AddScoped<ICommandHandler<AssignVehicleToConvoyCommand, AssignVehicleOutcome>, AssignVehicleToConvoyHandler>();
         services.AddScoped<ICommandHandler<SetHandoverReceiverCommand, SetHandoverReceiverOutcome>, SetHandoverReceiverHandler>();

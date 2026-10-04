@@ -74,6 +74,17 @@ public sealed record ReplaceConvoyRouteRequest(IReadOnlyList<RouteStopRequest> S
             stop.CountryCode, stop.RoutePointId ?? 0, stop.Name, stop.Kind, stop.Authority))]);
 }
 
+/// <summary>Body of <c>PUT /convoys/{id}/leader</c>: the volunteer to lead the convoy.</summary>
+public sealed record NominateLeaderRequest(Guid PersonId);
+
+public sealed class NominateLeaderRequestValidator : AbstractValidator<NominateLeaderRequest>
+{
+    public NominateLeaderRequestValidator()
+    {
+        RuleFor(r => r.PersonId).NotEmpty();
+    }
+}
+
 /// <summary>
 /// Body of <c>PUT /convoys/{id}/vehicles/{vin}/handover-receiver</c>: the registered Receiver the vehicle is
 /// handed over to in Ukraine.

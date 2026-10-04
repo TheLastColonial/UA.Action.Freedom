@@ -187,6 +187,12 @@ public static class AuthenticationExtensions
     /// </remarks>
     public const string ConvoysAssignDrivers = "convoys:assign-drivers";
 
+    /// <summary>
+    /// Nominate or reassign the Convoy Leader — Dispatcher or Administrator (D17, P14). A leader is a fact about the
+    /// convoy, not a login capability: their own permissions arrive with scoped permissions.
+    /// </summary>
+    public const string ConvoysLeadAssign = "convoys:lead-assign";
+
     private const string RoleClaimType = "roles";
 
     private const string Administrator = "Administrator";
@@ -264,6 +270,8 @@ public static class AuthenticationExtensions
                 policy.RequireRole(Administrator, Dispatcher))
             .AddPolicy(ConvoysAssignDrivers, policy =>
                 policy.RequireRole(Dispatcher))
+            .AddPolicy(ConvoysLeadAssign, policy =>
+                policy.RequireRole(Administrator, Dispatcher))
             .AddPolicy(ReceiversRead, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader, GroundOfficer))
             .AddPolicy(ReceiversWrite, policy =>

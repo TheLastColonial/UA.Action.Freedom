@@ -95,6 +95,7 @@ internal static class FreedomApi
             services.Replace<IConvoyRepository>(repository);
             services.Replace<IConvoyVehicleRepository>(repository);
             services.Replace<IRoutePointReferences>(repository);
+            services.Replace<IConvoyLeaderRepository>(repository);
             services.Replace(people ?? InMemoryPersonRepository.WithLinkedTestUser());
             var manifestFake = manifests ?? new InMemoryManifestRepository();
             ShareCargo(repository, manifestFake);
@@ -128,6 +129,7 @@ internal static class FreedomApi
         {
             services.Replace<IConvoyRepository>(repository);
             services.Replace<IConvoyVehicleRepository>(repository);
+            services.Replace<IConvoyLeaderRepository>(repository);
             services.Replace(receivers);
             services.Replace(new InMemoryManifestRepository());
         });

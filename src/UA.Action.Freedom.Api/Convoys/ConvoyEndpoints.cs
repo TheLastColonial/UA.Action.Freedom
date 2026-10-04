@@ -125,6 +125,45 @@ public static class ConvoyEndpoints
         .AddEndpointFilter<ValidationFilter<ReplaceConvoyRouteRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        convoys.MapGet("/{id:int}/leader", async (
+            int id,
+            IQueryHandler<GetConvoyLeaderQuery, ConvoyLeaderReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var leader = await handler.HandleAsync(new GetConvoyLeaderQuery(id), cancellationToken);
+            return leader is null ? Results.NotFound() : Results.Ok(leader);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+
+        convoys.MapPut("/{id:int}/leader", async (
+            int id,
+            NominateLeaderRequest request,
+            ICommandHandler<NominateConvoyLeaderCommand, NominateConvoyLeaderOutcome> handler,
+            IQueryHandler<GetConvoyLeaderQuery, ConvoyLeaderReadModel?> reader,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new NominateConvoyLeaderCommand(id, request.PersonId), cancellationToken);
+            return outcome switch
+            {
+                NominateConvoyLeaderOutcome.Nominated =>
+                    Results.Ok(await reader.HandleAsync(new GetConvoyLeaderQuery(id), cancellationToken)),
+                NominateConvoyLeaderOutcome.ConvoyNotFound => Results.NotFound(),
+                NominateConvoyLeaderOutcome.ConvoyArrived => Results.Problem(
+                    detail: "This convoy has arrived, so it can no longer change leader.",
+                    statusCode: StatusCodes.Status409Conflict),
+                NominateConvoyLeaderOutcome.AlreadyLeader => Results.Problem(
+                    detail: "That volunteer already leads this convoy.",
+                    type: "already-convoy-leader",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.Problem(
+                    detail: "The leader must be a driver crewed on this convoy.",
+                    type: "leader-not-a-driver-on-convoy",
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+            };
+        })
+        .AddEndpointFilter<ValidationFilter<NominateLeaderRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysLeadAssign);
+
         convoys.MapGet("/{id:int}/vehicles", async (
             int id,
             IQueryHandler<ListConvoyVehiclesQuery, IReadOnlyList<ConvoyVehicleReadModel>?> handler,
@@ -396,6 +435,10 @@ public static class ConvoyEndpoints
                 UnassignCrewOutcome.Unassigned => Results.NoContent(),
                 UnassignCrewOutcome.ConvoyNotFound => Results.NotFound(),
                 UnassignCrewOutcome.ConvoyArrived => ConvoyArrived(),
+                UnassignCrewOutcome.IsConvoyLeader => Results.Problem(
+                    detail: "That volunteer leads this convoy. Nominate another leader before taking them off the crew.",
+                    type: "convoy-leader-on-crew",
+                    statusCode: StatusCodes.Status409Conflict),
                 UnassignCrewOutcome.NotOnThisConvoy => Results.Problem(
                     detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
                     statusCode: StatusCodes.Status404NotFound),

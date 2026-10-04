@@ -24,9 +24,11 @@ namespace UA.Action.Freedom.Tests.Component;
 /// this one returned <c>[]</c> where the SQL returned <c>null</c> once already.
 /// </para>
 /// </remarks>
-internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehicleRepository, IRoutePointReferences, IRecordsWhoChanged
+internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehicleRepository, IConvoyLeaderRepository, IRoutePointReferences, IRecordsWhoChanged
 {
     private readonly ChangeLedger<int> changes = new();
+
+    private readonly ChangeLedger<int> leaderChanges = new();
 
     private readonly ChangeLedger<string> ferryChanges = new(StringComparer.OrdinalIgnoreCase);
 
@@ -34,6 +36,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     {
         changes.Attach(attribution, people);
         ferryChanges.Attach(attribution, people);
+        leaderChanges.Attach(attribution, people);
     }
 
     /// <summary>Standing in for <c>dbo.ConvoyVehicleFerryBooking</c>, keyed (ConvoyId, Vin).</summary>
@@ -296,6 +299,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         }
 
         truckList.RemoveAll(entry => entry.ConvoyId == id);
+        leaderAssignments.RemoveAll(assignment => assignment.ConvoyId == id);
         changes.Forget(id);
         convoys.Remove(id);
         return Task.FromResult(DeleteResult.Deleted);
@@ -303,6 +307,43 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
 
     public Task<IReadOnlyList<RouteStopReadModel>> GetRouteAsync(int convoyId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<RouteStopReadModel>>(routes.GetValueOrDefault(convoyId, []));
+
+    /// <summary>Standing in for <c>dbo.ConvoyLeaderAssignment</c>, newest last.</summary>
+    private readonly List<ConvoyLeaderAssignmentReadModel> leaderAssignments = [];
+
+    public Task<IReadOnlyList<ConvoyLeaderAssignmentReadModel>> HistoryAsync(int convoyId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ConvoyLeaderAssignmentReadModel>>(
+            [.. leaderAssignments.Where(a => a.ConvoyId == convoyId).OrderByDescending(a => a.Id)]);
+
+    public Task<bool> IsCurrentLeaderAsync(int convoyId, Guid personId, CancellationToken cancellationToken) =>
+        Task.FromResult(leaderAssignments.Exists(a => a.ConvoyId == convoyId && a.PersonId == personId && a.Until is null));
+
+    public Task<NominateLeaderResult> NominateAsync(
+        int convoyId, Guid personId, DateTime at, CancellationToken cancellationToken)
+    {
+        if (leaderAssignments.Exists(a => a.ConvoyId == convoyId && a.PersonId == personId && a.Until is null))
+        {
+            return Task.FromResult(NominateLeaderResult.AlreadyLeader);
+        }
+
+        if (!crew.Exists(seat => seat.ConvoyId == convoyId && seat.PersonId == personId && seat.Role == CrewRole.Driver))
+        {
+            return Task.FromResult(NominateLeaderResult.NotADriverOnConvoy);
+        }
+
+        var open = leaderAssignments.FindIndex(a => a.ConvoyId == convoyId && a.Until is null);
+        if (open >= 0)
+        {
+            leaderAssignments[open] = leaderAssignments[open] with { Until = at };
+        }
+
+        var (first, last) = persons.TryGetValue(personId, out var found) ? found : PersonDisplay.Erased;
+        var id = leaderAssignments.Count + 1;
+        leaderChanges.Stamp(id);
+        var (name, stampedAt) = leaderChanges.Of(id);
+        leaderAssignments.Add(new ConvoyLeaderAssignmentReadModel(id, convoyId, personId, $"{first} {last}", at, null, name, stampedAt));
+        return Task.FromResult(NominateLeaderResult.Nominated);
+    }
 
     /// <summary>Standing in for <c>IDENTITY</c> on <c>dbo.ConvoyRouteStop.RoutePointId</c>.</summary>
     private int lastRoutePointId;
