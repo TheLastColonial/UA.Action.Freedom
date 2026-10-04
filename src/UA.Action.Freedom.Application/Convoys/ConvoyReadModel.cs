@@ -45,6 +45,11 @@ public sealed record ConvoyReadModel(
 /// stops EU customs completing its pre-arrival risk assessment, so the code is stored beside the name
 /// rather than guessed from it at filing time.
 /// </param>
+/// <param name="RoutePointId">
+/// The point's stable identity, assigned by the database. <c>0</c> on a point not stored yet; a route edit that
+/// names an existing id updates that point in place, so whatever refers to it keeps pointing at it.
+/// </param>
+/// <param name="Kind">What the point is for. Only a <see cref="RoutePointKind.Border"/> has an <paramref name="Authority"/>.</param>
 public sealed record RouteStopReadModel(
     int Sequence,
     string? House,
@@ -52,7 +57,11 @@ public sealed record RouteStopReadModel(
     string? City,
     string? Country,
     string Postcode,
-    string? CountryCode = null);
+    string? CountryCode = null,
+    int RoutePointId = 0,
+    string Name = "",
+    RoutePointKind Kind = RoutePointKind.Stop,
+    CustomsAuthority? Authority = null);
 
 /// <summary>
 /// A vehicle as it appears on a convoy's truck list — enough to recognise it, to add up a

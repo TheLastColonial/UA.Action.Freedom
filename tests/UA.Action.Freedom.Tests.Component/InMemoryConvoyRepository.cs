@@ -24,7 +24,7 @@ namespace UA.Action.Freedom.Tests.Component;
 /// this one returned <c>[]</c> where the SQL returned <c>null</c> once already.
 /// </para>
 /// </remarks>
-internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehicleRepository, IRecordsWhoChanged
+internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehicleRepository, IRoutePointReferences, IRecordsWhoChanged
 {
     private readonly ChangeLedger<int> changes = new();
 
@@ -304,10 +304,25 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     public Task<IReadOnlyList<RouteStopReadModel>> GetRouteAsync(int convoyId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<RouteStopReadModel>>(routes.GetValueOrDefault(convoyId, []));
 
+    /// <summary>Standing in for <c>IDENTITY</c> on <c>dbo.ConvoyRouteStop.RoutePointId</c>.</summary>
+    private int lastRoutePointId;
+
+    private readonly HashSet<int> referencedRoutePoints = [];
+
+    /// <summary>Stands in for a later feature (accommodation, a progress mark) that refers to a route point.</summary>
+    public void ReferenceRoutePoint(int routePointId) => referencedRoutePoints.Add(routePointId);
+
+    public Task<bool> AnyAsync(int convoyId, IReadOnlyCollection<int> routePointIds, CancellationToken cancellationToken) =>
+        Task.FromResult(routePointIds.Any(referencedRoutePoints.Contains));
+
     public Task ReplaceRouteAsync(
         int convoyId, IReadOnlyList<RouteStopReadModel> stops, CancellationToken cancellationToken)
     {
-        routes[convoyId] = [.. stops];
+        // A merge, as the SQL is: a point named by id keeps it, a new one is given the next, the rest go.
+        routes[convoyId] =
+        [
+            .. stops.Select(stop => stop.RoutePointId != 0 ? stop : stop with { RoutePointId = ++lastRoutePointId })
+        ];
         return Task.CompletedTask;
     }
 

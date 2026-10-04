@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Categories;
@@ -56,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetConvoyByIdQuery, ConvoyReadModel?>, GetConvoyByIdHandler>();
         services.AddScoped<IQueryHandler<ListConvoysQuery, IReadOnlyList<ConvoyReadModel>>, ListConvoysHandler>();
         services.AddScoped<IQueryHandler<GetConvoyRouteQuery, IReadOnlyList<RouteStopReadModel>?>, GetConvoyRouteHandler>();
+        services.TryAddSingleton<IRoutePointReferences, NoRoutePointReferences>();
         services.AddScoped<ICommandHandler<ReplaceConvoyRouteCommand, ReplaceConvoyRouteOutcome>, ReplaceConvoyRouteHandler>();
         services.AddScoped<ICommandHandler<PublishTruckListCommand, PublishTruckListOutcome>, PublishTruckListHandler>();
         services.AddScoped<ICommandHandler<AssignVehicleToConvoyCommand, AssignVehicleOutcome>, AssignVehicleToConvoyHandler>();

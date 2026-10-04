@@ -48,8 +48,8 @@ public class ConvoyEndpointTests
     {
         stops = new object[]
         {
-            new { house = "Unit 4", street = "Cross Road", city = "Coventry", country = "United Kingdom", postcode = "CV1 2AB" },
-            new { street = "Trasa Katowicka", city = "Warszawa", country = "Poland", postcode = "80-180" },
+            new { name = "Coventry depot", kind = "Hub", house = "Unit 4", street = "Cross Road", city = "Coventry", country = "United Kingdom", postcode = "CV1 2AB" },
+            new { name = "Warsaw hub", street = "Trasa Katowicka", city = "Warszawa", country = "Poland", postcode = "80-180" },
         },
     };
 
@@ -141,7 +141,7 @@ public class ConvoyEndpointTests
         var response = await client.PutAsJsonAsync(
             $"/convoys/{Id}/route", ARouteBody(), TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var route = await client.GetFromJsonAsync<JsonElement>(
             $"/convoys/{Id}/route", TestContext.Current.CancellationToken);
@@ -152,6 +152,124 @@ public class ConvoyEndpointTests
         stops[0].GetProperty("city").GetString().Should().Be("Coventry");
         stops[1].GetProperty("sequence").GetInt32().Should().Be(2);
         stops[1].GetProperty("city").GetString().Should().Be("Warszawa");
+    }
+
+    private static object APoint(string name, string kind = "Stop", string? authority = null, int? routePointId = null) => new
+    {
+        routePointId,
+        name,
+        kind,
+        authority,
+        city = name,
+        country = "United Kingdom",
+        countryCode = "GB",
+        postcode = "CV1 2AB",
+    };
+
+    private static async Task<List<JsonElement>> PutRouteAsync(HttpClient client, params object[] points)
+    {
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/route", new { stops = points }, TestContext.Current.CancellationToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
+            .EnumerateArray().ToList();
+    }
+
+    [Fact]
+    public async Task Saving_a_route_answers_with_the_points_and_their_ids_kinds_and_country_codes()
+    {
+        await using var api = FreedomApi.WithConvoys(new InMemoryConvoyRepository(AConvoy()), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var points = await PutRouteAsync(
+            client, APoint("Coventry", "Hub"), APoint("Dover", "Border", "UK"), APoint("Lille", "Overnight"));
+
+        points.Select(p => p.GetProperty("routePointId").GetInt32()).Should().OnlyHaveUniqueItems().And.NotContain(0);
+        points.Select(p => p.GetProperty("kind").GetString()).Should().Equal("Hub", "Border", "Overnight");
+        points[1].GetProperty("authority").GetString().Should().Be("UK");
+        points[0].GetProperty("countryCode").GetString().Should().Be("GB");
+        points.Select(p => p.GetProperty("sequence").GetInt32()).Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public async Task Editing_a_route_by_id_keeps_the_ids_through_a_reorder()
+    {
+        await using var api = FreedomApi.WithConvoys(new InMemoryConvoyRepository(AConvoy()), roles: "Dispatcher");
+        using var client = api.CreateClient();
+        var first = await PutRouteAsync(client, APoint("Coventry"), APoint("Dover", "Border", "UK"));
+        var coventry = first[0].GetProperty("routePointId").GetInt32();
+        var dover = first[1].GetProperty("routePointId").GetInt32();
+
+        var second = await PutRouteAsync(
+            client, APoint("Dover", "Border", "UK", dover), APoint("Lille"), APoint("Coventry", routePointId: coventry));
+
+        second.Select(p => p.GetProperty("name").GetString()).Should().Equal("Dover", "Lille", "Coventry");
+        second[0].GetProperty("routePointId").GetInt32().Should().Be(dover);
+        second[2].GetProperty("routePointId").GetInt32().Should().Be(coventry);
+        second[1].GetProperty("routePointId").GetInt32().Should().NotBe(0).And.NotBe(coventry).And.NotBe(dover);
+        second.Select(p => p.GetProperty("sequence").GetInt32()).Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public async Task A_point_id_from_another_convoy_is_refused()
+    {
+        await using var api = FreedomApi.WithConvoys(new InMemoryConvoyRepository(AConvoy()), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/route", new { stops = new[] { APoint("Coventry", routePointId: 9999) } },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task Removing_a_point_something_refers_to_is_a_conflict_and_changes_nothing()
+    {
+        var repository = new InMemoryConvoyRepository(AConvoy());
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+        var first = await PutRouteAsync(client, APoint("Coventry"), APoint("Dover"));
+        var coventry = first[0].GetProperty("routePointId").GetInt32();
+        var dover = first[1].GetProperty("routePointId").GetInt32();
+        repository.ReferenceRoutePoint(dover);
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/route", new { stops = new[] { APoint("Coventry", routePointId: coventry) } },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        repository.RouteOf(Id).Should().HaveCount(2);
+    }
+
+    [Theory]
+    [InlineData("Border", null)]
+    [InlineData("Stop", "UK")]
+    [InlineData("Hub", "EU")]
+    public async Task Only_a_border_point_has_an_authority_and_a_border_point_must_have_one(string kind, string? authority)
+    {
+        var repository = new InMemoryConvoyRepository(AConvoy());
+        await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/route", new { stops = new[] { APoint("Dover", kind, authority) } },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        repository.RouteOf(Id).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_point_needs_a_name()
+    {
+        await using var api = FreedomApi.WithConvoys(new InMemoryConvoyRepository(AConvoy()), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            $"/convoys/{Id}/route", new { stops = new[] { APoint("") } }, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -181,7 +299,7 @@ public class ConvoyEndpointTests
 
         var response = await client.PutAsJsonAsync(
             $"/convoys/{Id}/route",
-            new { stops = new object[] { new { city = "Coventry", postcode = "" } } },
+            new { stops = new object[] { new { name = "Coventry", city = "Coventry", postcode = "" } } },
             TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);

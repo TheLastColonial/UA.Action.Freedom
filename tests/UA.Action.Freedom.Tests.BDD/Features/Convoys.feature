@@ -54,11 +54,11 @@ Scenario: A convoy's route is stored in the order it was sent
     When I PUT "/convoys/{id}/route" with body:
         """
         { "stops": [
-            { "house": "Unit 4", "street": "Cross Road", "city": "Coventry", "country": "United Kingdom", "postcode": "CV1 2AB" },
-            { "street": "Trasa Katowicka", "city": "Warszawa", "country": "Poland", "postcode": "80-180" }
+            { "name": "Coventry depot", "kind": "Hub", "house": "Unit 4", "street": "Cross Road", "city": "Coventry", "country": "United Kingdom", "postcode": "CV1 2AB" },
+            { "name": "Warsaw hub", "street": "Trasa Katowicka", "city": "Warszawa", "country": "Poland", "postcode": "80-180" }
         ] }
         """
-    Then the response status is 204
+    Then the response status is 200
     When I GET "/convoys/{id}/route"
     Then the response status is 200
     And the response body lists a route of 2 stops

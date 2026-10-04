@@ -88,6 +88,80 @@ public class ConvoyRepositoryTests
         }
     }
 
+    private static RouteStopReadModel APoint(
+        int sequence, string name, RoutePointKind kind = RoutePointKind.Stop, CustomsAuthority? authority = null, int id = 0) =>
+        new(sequence, null, null, name, "United Kingdom", "CV1 2AB", "GB", id, name, kind, authority);
+
+    [Fact]
+    public async Task Keeps_a_points_id_when_the_route_is_reordered_and_edited()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, _) = await ConnectOrSkipAsync(cancellationToken);
+        var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
+
+        try
+        {
+            await convoys.ReplaceRouteAsync(
+                id,
+                [
+                    APoint(1, "Coventry", RoutePointKind.Hub),
+                    APoint(2, "Dover", RoutePointKind.Border, CustomsAuthority.UK),
+                    APoint(3, "Lille", RoutePointKind.Overnight),
+                ],
+                cancellationToken);
+            var before = await convoys.GetRouteAsync(id, cancellationToken);
+            var ids = before.ToDictionary(point => point.Name, point => point.RoutePointId);
+            ids.Values.Should().OnlyHaveUniqueItems().And.NotContain(0);
+
+            await convoys.ReplaceRouteAsync(
+                id,
+                [
+                    APoint(1, "Lille", RoutePointKind.Overnight, id: ids["Lille"]),
+                    APoint(2, "Coventry depot", RoutePointKind.Hub, id: ids["Coventry"]),
+                    APoint(3, "Dover", RoutePointKind.Border, CustomsAuthority.UK, ids["Dover"]),
+                ],
+                cancellationToken);
+
+            var after = await convoys.GetRouteAsync(id, cancellationToken);
+            after.Select(point => (point.Sequence, point.RoutePointId, point.Name, point.Kind, point.Authority))
+                .Should().Equal(
+                    (1, ids["Lille"], "Lille", RoutePointKind.Overnight, (CustomsAuthority?)null),
+                    (2, ids["Coventry"], "Coventry depot", RoutePointKind.Hub, null),
+                    (3, ids["Dover"], "Dover", RoutePointKind.Border, CustomsAuthority.UK));
+        }
+        finally
+        {
+            await RemoveConvoyAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task Inserts_new_points_in_the_middle_and_deletes_removed_ones_leaving_the_rest_alone()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, _) = await ConnectOrSkipAsync(cancellationToken);
+        var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
+
+        try
+        {
+            await convoys.ReplaceRouteAsync(id, [APoint(1, "A"), APoint(2, "B"), APoint(3, "C")], cancellationToken);
+            var ids = (await convoys.GetRouteAsync(id, cancellationToken)).ToDictionary(p => p.Name, p => p.RoutePointId);
+
+            await convoys.ReplaceRouteAsync(
+                id, [APoint(1, "A", id: ids["A"]), APoint(2, "New"), APoint(3, "C", id: ids["C"])], cancellationToken);
+
+            var after = await convoys.GetRouteAsync(id, cancellationToken);
+            after.Select(p => p.Name).Should().Equal("A", "New", "C");
+            after[0].RoutePointId.Should().Be(ids["A"]);
+            after[2].RoutePointId.Should().Be(ids["C"]);
+            after[1].RoutePointId.Should().NotBe(ids["B"]).And.NotBe(0);
+        }
+        finally
+        {
+            await RemoveConvoyAsync(id);
+        }
+    }
+
     [Fact]
     public async Task Deleting_a_convoy_takes_its_route_with_it()
     {

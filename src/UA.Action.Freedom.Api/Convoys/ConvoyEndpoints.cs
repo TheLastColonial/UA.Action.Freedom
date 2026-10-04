@@ -103,10 +103,24 @@ public static class ConvoyEndpoints
             int id,
             ReplaceConvoyRouteRequest request,
             ICommandHandler<ReplaceConvoyRouteCommand, ReplaceConvoyRouteOutcome> handler,
+            IQueryHandler<GetConvoyRouteQuery, IReadOnlyList<RouteStopReadModel>?> reader,
             CancellationToken cancellationToken) =>
         {
             var outcome = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
-            return outcome == ReplaceConvoyRouteOutcome.NotFound ? Results.NotFound() : Results.NoContent();
+            return outcome switch
+            {
+                ReplaceConvoyRouteOutcome.Replaced =>
+                    Results.Ok(await reader.HandleAsync(new GetConvoyRouteQuery(id), cancellationToken)),
+                ReplaceConvoyRouteOutcome.UnknownPoint => Results.Problem(
+                    title: "A route point named in the edit is not on this convoy's route.",
+                    type: "route-point-unknown",
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+                ReplaceConvoyRouteOutcome.PointInUse => Results.Problem(
+                    title: "A route point the edit would remove is still referred to.",
+                    type: "route-point-in-use",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            };
         })
         .AddEndpointFilter<ValidationFilter<ReplaceConvoyRouteRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
