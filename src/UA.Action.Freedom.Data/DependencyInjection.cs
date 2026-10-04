@@ -47,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IDeclarationRepository, DeclarationRepository>();
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<IBayRepository, BayRepository>();
+        services.AddScoped<ILoaderAssignmentRepository, LoaderAssignmentRepository>();
 
         // The Ground Officer path to Ukrainian delivery detail. A second connection factory,
         // bound to a database identity in the ground_officer role — the application's own

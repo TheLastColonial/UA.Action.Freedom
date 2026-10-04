@@ -114,6 +114,10 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DeleteLocationCommand, DeleteLocationOutcome>, DeleteLocationHandler>();
         services.AddScoped<IQueryHandler<GetLocationByIdQuery, LocationReadModel?>, GetLocationByIdHandler>();
         services.AddScoped<IQueryHandler<ListLocationsQuery, IReadOnlyList<LocationReadModel>>, ListLocationsHandler>();
+        services.AddScoped<IQueryHandler<ListLoadersQuery, IReadOnlyList<LoaderAssignmentReadModel>?>, ListLoadersHandler>();
+        services.AddScoped<ICommandHandler<AssignLoaderCommand, AssignLoaderOutcome>, AssignLoaderHandler>();
+        services.AddScoped<ICommandHandler<UnassignLoaderCommand, UnassignLoaderOutcome>, UnassignLoaderHandler>();
+        services.AddScoped<IScopeAssignments, ScopeAssignments>();
         services.AddScoped<ICommandHandler<CreateBayCommand, CreateBayResult>, CreateBayHandler>();
         services.AddScoped<ICommandHandler<UpdateBayCommand, UpdateBayOutcome>, UpdateBayHandler>();
         services.AddScoped<ICommandHandler<DeleteBayCommand, DeleteBayOutcome>, DeleteBayHandler>();

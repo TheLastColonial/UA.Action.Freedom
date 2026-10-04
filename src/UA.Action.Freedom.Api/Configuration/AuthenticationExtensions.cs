@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using UA.Action.Freedom.Api.Configuration.Scope;
 using Microsoft.IdentityModel.Tokens;
 
 namespace UA.Action.Freedom.Api.Configuration;
@@ -252,6 +255,10 @@ public static class AuthenticationExtensions
 
     public static IServiceCollection AddFreedomAuthorization(this IServiceCollection services)
     {
+        // Resource-scoped permissions (ADR 0010): the one handler, and the ConvoyLeader role derived from an assignment.
+        services.AddScoped<IAuthorizationHandler, ScopedAuthorizationHandler>();
+        services.AddScoped<IClaimsTransformation, LeaderRoleClaims>();
+
         services
             .AddAuthorizationBuilder()
             .AddPolicy(VehiclesRead, policy =>

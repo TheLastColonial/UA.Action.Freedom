@@ -3,6 +3,7 @@ using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Api.Configuration.Scope;
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Tests.Component.Scope;
 
@@ -20,12 +21,11 @@ public class LeaderRoleClaimsTests
 
     private static LeaderRoleClaims Transformation(bool linked, params int[] led)
     {
-        var current = Substitute.For<ICurrentPerson>();
-        current.ResolveAsync(Arg.Any<CancellationToken>())
-            .Returns(linked ? new CurrentPerson.Linked(Person) : new CurrentPerson.NotLinked());
+        var people = Substitute.For<IPersonRepository>();
+        people.FindBySubjectAsync("kc-1", Arg.Any<CancellationToken>()).Returns(linked ? Person : null);
         var assignments = Substitute.For<IScopeAssignments>();
         assignments.LedConvoyIdsAsync(Person, Arg.Any<CancellationToken>()).Returns(led);
-        return new LeaderRoleClaims(current, assignments);
+        return new LeaderRoleClaims(people, assignments);
     }
 
     [Fact]

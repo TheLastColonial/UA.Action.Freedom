@@ -20,6 +20,7 @@ public static class MeEndpoints
             ClaimsPrincipal caller,
             ICurrentPerson currentPerson,
             IQueryHandler<GetPersonByIdQuery, PersonReadModel?> people,
+            IScopeAssignments assignments,
             CancellationToken cancellationToken) =>
         {
             var subject = ClaimsCurrentPerson.SubjectOf(caller);
@@ -27,11 +28,17 @@ public static class MeEndpoints
 
             if (await currentPerson.ResolveAsync(cancellationToken) is not CurrentPerson.Linked(var personId))
             {
-                return Results.Ok(new MeResponse(subject, roles, null, null));
+                return Results.Ok(new MeResponse(subject, roles, null, null, [], []));
             }
 
             var person = await people.HandleAsync(new GetPersonByIdQuery(personId), cancellationToken);
-            return Results.Ok(new MeResponse(subject, roles, personId, person is null ? null : $"{person.FirstName} {person.LastName}"));
+            return Results.Ok(new MeResponse(
+                subject,
+                roles,
+                personId,
+                person is null ? null : $"{person.FirstName} {person.LastName}",
+                await assignments.LedConvoyIdsAsync(personId, cancellationToken),
+                await assignments.ManagedLocationIdsAsync(personId, cancellationToken)));
         })
         .WithTags("Me")
         .RequireAuthorization();
@@ -40,4 +47,14 @@ public static class MeEndpoints
     }
 }
 
-public sealed record MeResponse(string? Subject, string[] Roles, Guid? PersonId, string? DisplayName);
+/// <summary>
+/// <paramref name="LedConvoyIds"/> and <paramref name="ManagedLocationIds"/> come from the assignment tables on every
+/// call (ADR 0010), never from the token, so a reassignment shows at once.
+/// </summary>
+public sealed record MeResponse(
+    string? Subject,
+    string[] Roles,
+    Guid? PersonId,
+    string? DisplayName,
+    IReadOnlyList<int> LedConvoyIds,
+    IReadOnlyList<int> ManagedLocationIds);

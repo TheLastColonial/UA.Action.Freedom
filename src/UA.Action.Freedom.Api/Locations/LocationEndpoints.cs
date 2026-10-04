@@ -131,6 +131,53 @@ public static class LocationEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.LocationsWrite);
 
+        // Who manages a location (O31). A Loader sees only the locations with an open row here (O14), and only an
+        // Administrator writes them.
+        locations.MapGet("/{id:int}/loaders", async (
+            int id,
+            IQueryHandler<ListLoadersQuery, IReadOnlyList<LoaderAssignmentReadModel>?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var loaders = await handler.HandleAsync(new ListLoadersQuery(id), cancellationToken);
+            return loaders is null ? Results.NotFound() : Results.Ok(loaders);
+        })
+        .RequireAuthorization(AuthenticationExtensions.LocationsWrite);
+
+        locations.MapPut("/{id:int}/loaders/{personId:guid}", async (
+            int id,
+            Guid personId,
+            ICommandHandler<AssignLoaderCommand, AssignLoaderOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new AssignLoaderCommand(id, personId), cancellationToken);
+
+            return outcome switch
+            {
+                AssignLoaderOutcome.Assigned => Results.NoContent(),
+                AssignLoaderOutcome.LocationNotFound => Results.NotFound(),
+                AssignLoaderOutcome.PersonNotFound => Results.Problem(
+                    detail: "There is no such volunteer.",
+                    type: "person-not-found",
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+                _ => Results.Problem(
+                    detail: "That volunteer already manages this location.",
+                    type: "loader-already-assigned",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.LocationsWrite);
+
+        locations.MapDelete("/{id:int}/loaders/{personId:guid}", async (
+            int id,
+            Guid personId,
+            ICommandHandler<UnassignLoaderCommand, UnassignLoaderOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new UnassignLoaderCommand(id, personId), cancellationToken);
+            return outcome == UnassignLoaderOutcome.Unassigned ? Results.NoContent() : Results.NotFound();
+        })
+        .RequireAuthorization(AuthenticationExtensions.LocationsWrite);
+
         return app;
     }
 }

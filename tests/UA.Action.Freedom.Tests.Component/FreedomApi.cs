@@ -242,10 +242,25 @@ internal static class FreedomApi
         IBayRepository bays,
         bool authenticated = true,
         params string[] roles) =>
+        WithLocations(locations, bays, new InMemoryLoaderAssignmentRepository(), null, authenticated, roles);
+
+    /// <summary>As above, with the Loader assignments (and optionally the roster they are checked against).</summary>
+    internal static WebApplicationFactory<Program> WithLocations(
+        ILocationRepository locations,
+        IBayRepository bays,
+        InMemoryLoaderAssignmentRepository loaders,
+        IPersonRepository? people = null,
+        bool authenticated = true,
+        params string[] roles) =>
         WithFakes(authenticated, roles, services =>
         {
             services.Replace(locations);
             services.Replace(bays);
+            services.Replace<ILoaderAssignmentRepository>(loaders);
+            if (people is not null)
+            {
+                services.Replace(people);
+            }
         });
 
     /// <summary>
@@ -347,6 +362,7 @@ internal static class FreedomApi
                 EnsureDonationsAreFaked(services);
                 EnsureBudgetIsFaked(services);
                 EnsureEquipmentIsFaked(services);
+                EnsureScopeIsFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -448,6 +464,27 @@ internal static class FreedomApi
             services.Replace<IVehicleEquipmentRepository>(new InMemoryVehicleEquipmentRepository());
         }
     }
+
+    /// <summary>
+    /// Scope reads two assignment stores on every request (ADR 0010): who leads which convoy, and which locations a
+    /// Loader manages. A test that supplied neither gets empty ones, so nobody is scoped into anything and no route
+    /// reaches for a real database.
+    /// </summary>
+    private static void EnsureScopeIsFaked(IServiceCollection services)
+    {
+        if (!IsFaked<IConvoyLeaderRepository>(services))
+        {
+            services.Replace<IConvoyLeaderRepository>(new InMemoryConvoyRepository());
+        }
+
+        if (!IsFaked<ILoaderAssignmentRepository>(services))
+        {
+            services.Replace<ILoaderAssignmentRepository>(new InMemoryLoaderAssignmentRepository());
+        }
+    }
+
+    private static bool IsFaked<TService>(IServiceCollection services) =>
+        services.Any(descriptor => descriptor.ServiceType == typeof(TService) && descriptor.ImplementationFactory is not null);
 
     /// <summary>
     /// Every write is signed as the caller's linked volunteer, so a test that did not supply its own

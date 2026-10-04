@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Api.Configuration.Scope;
 
@@ -127,8 +128,10 @@ public sealed class ScopedAuthorizationHandler(ICurrentPerson currentPerson, ISc
 /// provider is involved. A role of that name in a token is removed first, so only an assignment can grant it, and a
 /// Ground Officer never receives it because the isolation of that role runs both ways.
 /// </summary>
-public sealed class LeaderRoleClaims(ICurrentPerson currentPerson, IScopeAssignments assignments) : IClaimsTransformation
+public sealed class LeaderRoleClaims(IPersonRepository people, IScopeAssignments assignments) : IClaimsTransformation
 {
+    private bool? leadsAConvoy;
+
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
         if (principal.Identity?.IsAuthenticated != true)
@@ -137,11 +140,11 @@ public sealed class LeaderRoleClaims(ICurrentPerson currentPerson, IScopeAssignm
         }
 
         var identities = principal.Identities.Select(StripLeaderRole).ToList();
-        var groundOfficer = principal.HasClaim(ScopedRequirements.RoleClaimType, ScopedRequirements.GroundOfficer);
 
-        if (!groundOfficer
-            && await currentPerson.ResolveAsync(CancellationToken.None) is CurrentPerson.Linked(var personId)
-            && (await assignments.LedConvoyIdsAsync(personId, CancellationToken.None)).Count > 0)
+        // The transformation runs inside authentication, before HttpContext.User is set, so ICurrentPerson (which reads
+        // it and remembers its answer) must not be asked here: the subject is taken from the principal in hand.
+        if (!principal.HasClaim(ScopedRequirements.RoleClaimType, ScopedRequirements.GroundOfficer)
+            && await LeadsAConvoyAsync(principal))
         {
             identities.Add(new ClaimsIdentity(
                 [new Claim(ScopedRequirements.RoleClaimType, ScopedRequirements.ConvoyLeader)],
@@ -149,6 +152,23 @@ public sealed class LeaderRoleClaims(ICurrentPerson currentPerson, IScopeAssignm
         }
 
         return new ClaimsPrincipal(identities);
+    }
+
+    private async Task<bool> LeadsAConvoyAsync(ClaimsPrincipal principal)
+    {
+        if (leadsAConvoy is { } known)
+        {
+            return known;
+        }
+
+        var subject = ClaimsCurrentPerson.SubjectOf(principal);
+        if (string.IsNullOrWhiteSpace(subject)
+            || await people.FindBySubjectAsync(subject, CancellationToken.None) is not Guid personId)
+        {
+            return (leadsAConvoy = false).Value;
+        }
+
+        return (leadsAConvoy = (await assignments.LedConvoyIdsAsync(personId, CancellationToken.None)).Count > 0).Value;
     }
 
     private static ClaimsIdentity StripLeaderRole(ClaimsIdentity identity)
