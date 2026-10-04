@@ -7,11 +7,13 @@ import { delete204, getCollection, getJson, postCreate, postTransition, put204 }
 import { ApiNotFound } from './problem';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
-import type { CreateConvoyVehicleManifestRequest } from './schemas/manifests';
+import { manifestBoxReadModelSchema } from './schemas/manifests';
+import type { CreateConvoyVehicleManifestRequest, ManifestBoxReadModel } from './schemas/manifests';
 import {
   convoyReadModelSchema,
   convoyReadinessReadModelSchema,
   convoyVehicleReadModelSchema,
+  ferryBookingReadModelSchema,
   routeStopReadModelSchema,
   vehicleCrewReadModelSchema,
   vehicleInsuranceReadModelSchema,
@@ -22,6 +24,8 @@ import type {
   ConvoyVehicleReadModel,
   CreateConvoyRequest,
   CrewRole,
+  FerryBookingReadModel,
+  RecordFerryBookingRequest,
   RecordInsuranceRequest,
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
@@ -150,6 +154,49 @@ export function recordInsurance(
   body: RecordInsuranceRequest,
 ): Promise<void> {
   return put204(`${vinPath(id, vin)}/insurance`, body);
+}
+
+export function fetchVehicleBoxes(
+  id: number,
+  vin: string,
+): Promise<readonly ManifestBoxReadModel[] | ParentMissing> {
+  return getCollection(`${vinPath(id, vin)}/boxes`, manifestBoxReadModelSchema);
+}
+
+// Putting a box on a second vehicle moves it: a box is on at most one truck-list entry.
+export function allocateBox(id: number, vin: string, boxId: number): Promise<void> {
+  return put204(`${vinPath(id, vin)}/boxes/${String(boxId)}`);
+}
+
+export function removeBoxAllocation(id: number, vin: string, boxId: number): Promise<void> {
+  return delete204(`${vinPath(id, vin)}/boxes/${String(boxId)}`);
+}
+
+// A vehicle with no ferry booked is a bare 404; that is an answer ("not booked"), not an error.
+export async function fetchFerryBooking(
+  id: number,
+  vin: string,
+): Promise<FerryBookingReadModel | null> {
+  try {
+    return await getJson(`${vinPath(id, vin)}/ferry`, ferryBookingReadModelSchema);
+  } catch (error) {
+    if (error instanceof ApiNotFound) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export function recordFerryBooking(
+  id: number,
+  vin: string,
+  body: RecordFerryBookingRequest,
+): Promise<void> {
+  return put204(`${vinPath(id, vin)}/ferry`, body);
+}
+
+export function cancelFerryBooking(id: number, vin: string): Promise<void> {
+  return delete204(`${vinPath(id, vin)}/ferry`);
 }
 
 export function arriveConvoy(id: number): Promise<void> {
@@ -374,5 +421,76 @@ export function useConvoyReadiness(id: number): UseQueryResult<ConvoyReadinessRe
     queryKey: qk.convoys.readiness(id),
     queryFn: () => getJson(`${idPath(id)}/readiness`, convoyReadinessReadModelSchema),
     refetchOnMount: 'always',
+  });
+}
+
+export function useVehicleBoxes(
+  id: number,
+  vin: string,
+): UseQueryResult<readonly ManifestBoxReadModel[] | ParentMissing> {
+  return useQuery({
+    queryKey: qk.convoys.vehicleBoxes(id, vin),
+    queryFn: () => fetchVehicleBoxes(id, vin),
+  });
+}
+
+// A move changes two vehicles' cargo, so every vehicle on the convoy is refreshed, and the
+// manifest's read-through (its cargo and its weight) with them.
+async function invalidateCargo(
+  queryClient: ReturnType<typeof useQueryClient>,
+  id: number,
+): Promise<void> {
+  await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
+  await queryClient.invalidateQueries({ queryKey: qk.manifests.all });
+}
+
+export function useAllocateBox(id: number, vin: string): UseMutationResult<void, Error, number> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (boxId: number) => allocateBox(id, vin, boxId),
+    onSuccess: () => invalidateCargo(queryClient, id),
+  });
+}
+
+export function useRemoveBoxAllocation(
+  id: number,
+  vin: string,
+): UseMutationResult<void, Error, number> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (boxId: number) => removeBoxAllocation(id, vin, boxId),
+    onSuccess: () => invalidateCargo(queryClient, id),
+  });
+}
+
+export function useFerryBooking(
+  id: number,
+  vin: string,
+): UseQueryResult<FerryBookingReadModel | null> {
+  return useQuery({
+    queryKey: qk.convoys.ferry(id, vin),
+    queryFn: () => fetchFerryBooking(id, vin),
+  });
+}
+
+export function useRecordFerryBooking(
+  id: number,
+  vin: string,
+): UseMutationResult<void, Error, RecordFerryBookingRequest> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RecordFerryBookingRequest) => recordFerryBooking(id, vin, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.ferry(id, vin) }),
+  });
+}
+
+export function useCancelFerryBooking(
+  id: number,
+  vin: string,
+): UseMutationResult<void, Error, void> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => cancelFerryBooking(id, vin),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.ferry(id, vin) }),
   });
 }

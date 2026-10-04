@@ -14,18 +14,16 @@ describe('manifestFormToRequest', () => {
     const request = manifestFormToRequest({
       ...emptyManifestForm(),
       id: '  UA-2026-07 ',
-      ferryBookingComplete: true,
     });
-    expect(request).toEqual({ id: 'UA-2026-07', ferryBookingComplete: true });
+    expect(request).toEqual({ id: 'UA-2026-07' });
   });
 
   it('keeps the notes when set', () => {
     const request = manifestFormToRequest({
       id: 'M1',
       deliveryNotes: 'Fragile',
-      ferryBookingComplete: false,
     });
-    expect(request).toEqual({ id: 'M1', deliveryNotes: 'Fragile', ferryBookingComplete: false });
+    expect(request).toEqual({ id: 'M1', deliveryNotes: 'Fragile' });
   });
 
   it('carries no convoy or vehicle: the route does', () => {
@@ -42,7 +40,6 @@ describe('manifestFormToRequest', () => {
     const request = manifestFormToUpdateRequest({
       ...emptyManifestForm(),
       id: 'M1',
-      ferryBookingComplete: false,
     });
     expect('id' in request).toBe(false);
   });
@@ -62,7 +59,7 @@ describe('manifestToFormValues', () => {
       makeManifest({ id: 'M1', convoyId: 7, vin: 'VIN-1', deliveryNotes: 'Fragile' }),
     );
 
-    expect(values).toEqual({ id: 'M1', deliveryNotes: 'Fragile', ferryBookingComplete: false });
+    expect(values).toEqual({ id: 'M1', deliveryNotes: 'Fragile' });
   });
 });
 

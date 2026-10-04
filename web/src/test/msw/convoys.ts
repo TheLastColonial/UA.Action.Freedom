@@ -9,9 +9,11 @@ import type {
   ReplaceConvoyRouteRequest,
   RouteStopReadModel,
   VehicleCrewReadModel,
+  FerryBookingReadModel,
   VehicleInsuranceReadModel,
 } from '../../api/schemas/convoys';
 import type { ManifestStatus } from '../../api/schemas/common';
+import type { ManifestBoxReadModel } from '../../api/schemas/manifests';
 import type { PersonReadModel } from '../../api/schemas/people';
 import type { ReceiverStatus } from '../../api/schemas/receivers';
 import type { VehicleReadModel } from '../../api/schemas/vehicles';
@@ -26,6 +28,15 @@ const insuranceBodySchema = z.object({
   policyNumber: z.string().min(1).max(100),
   coverStart: z.string(),
   coverEnd: z.string(),
+  costGbp: z.number().min(0).optional(),
+});
+
+// Mirrors RecordFerryBookingRequest and its validator.
+const ferryBodySchema = z.object({
+  operator: z.string().min(1).max(200),
+  reference: z.string().min(1).max(100),
+  sailingAt: z.string().min(1),
+  ticketDetails: z.string().max(1000).optional(),
   costGbp: z.number().min(0).optional(),
 });
 
@@ -58,6 +69,10 @@ export interface ConvoyApi {
   crew: Map<string, VehicleCrewReadModel[]>;
   /** Keyed `${convoyId}:${vin}`, like `crew`. */
   insurance: Map<string, VehicleInsuranceReadModel>;
+  /** The cargo of each truck-list entry, keyed like `crew`. A box is in at most one list. */
+  boxes: Map<string, ManifestBoxReadModel[]>;
+  /** Each vehicle's outbound ferry booking, keyed like `crew`. */
+  ferry: Map<string, FerryBookingReadModel>;
   handlers: RequestHandler[];
 }
 
@@ -77,6 +92,8 @@ export function convoyApi(
   const vehicles = new Map<number, ConvoyVehicleReadModel[]>();
   const crew = new Map<string, VehicleCrewReadModel[]>();
   const insurance = new Map<string, VehicleInsuranceReadModel>();
+  const boxes = new Map<string, ManifestBoxReadModel[]>();
+  const ferry = new Map<string, FerryBookingReadModel>();
 
   const idFrom = (raw: string | readonly string[] | undefined) => Number(String(raw));
   const crewKey = (convoyId: number, vin: string) => `${String(convoyId)}:${vin}`;
@@ -313,6 +330,8 @@ export function convoyApi(
         );
         crew.delete(crewKey(id, vin));
         insurance.delete(crewKey(id, vin));
+        boxes.delete(crewKey(id, vin));
+        ferry.delete(crewKey(id, vin));
         return new HttpResponse(null, { status: 204 });
       }
 
@@ -583,7 +602,101 @@ export function convoyApi(
         ? new HttpResponse(null, { status: 204 })
         : new HttpResponse(null, { status: 404 }),
     ),
+
+    http.get('/convoys/:id/vehicles/:vin/boxes', ({ params }) => {
+      const id = idFrom(params['id']);
+      const vin = decodeURIComponent(String(params['vin']));
+      return onConvoy(id, vin)
+        ? HttpResponse.json(boxes.get(crewKey(id, vin)) ?? [])
+        : new HttpResponse(null, { status: 404 });
+    }),
+
+    // A box is on at most one vehicle, so putting it on this one takes it off any other.
+    http.put('/convoys/:id/vehicles/:vin/boxes/:boxId', ({ params }) => {
+      const id = idFrom(params['id']);
+      const vin = decodeURIComponent(String(params['vin']));
+      const entry = entryFor(id, vin);
+      if (!entry) {
+        return problem(404, `There is no vehicle with VIN '${vin}' on this convoy.`);
+      }
+      if (entry.withdrawn) {
+        return problem(
+          409,
+          `Vehicle '${vin}' has been withdrawn from this convoy, so it takes no more cargo.`,
+        );
+      }
+      const boxId = Number(String(params['boxId']));
+      for (const [key, list] of boxes) {
+        boxes.set(
+          key,
+          list.filter((box) => box.boxId !== boxId),
+        );
+      }
+      const key = crewKey(id, vin);
+      boxes.set(key, [
+        ...(boxes.get(key) ?? []),
+        { boxId, weightKg: 15, validated: true, widthCm: null, depthCm: null, heightCm: null },
+      ]);
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.delete('/convoys/:id/vehicles/:vin/boxes/:boxId', ({ params }) => {
+      const id = idFrom(params['id']);
+      const vin = decodeURIComponent(String(params['vin']));
+      if (!onConvoy(id, vin)) {
+        return problem(404, `There is no vehicle with VIN '${vin}' on this convoy.`);
+      }
+      const key = crewKey(id, vin);
+      const list = boxes.get(key) ?? [];
+      const next = list.filter((box) => box.boxId !== Number(String(params['boxId'])));
+      if (next.length === list.length) {
+        return problem(404, 'That box is not on this vehicle.');
+      }
+      boxes.set(key, next);
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.get('/convoys/:id/vehicles/:vin/ferry', ({ params }) => {
+      const booking = ferry.get(
+        crewKey(idFrom(params['id']), decodeURIComponent(String(params['vin']))),
+      );
+      return booking ? HttpResponse.json(booking) : new HttpResponse(null, { status: 404 });
+    }),
+
+    http.put('/convoys/:id/vehicles/:vin/ferry', async ({ params, request }) => {
+      const id = idFrom(params['id']);
+      const vin = decodeURIComponent(String(params['vin']));
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const entry = entryFor(id, vin);
+      if (!entry || entry.withdrawn) {
+        return problem(404, `There is no vehicle with VIN '${vin}' travelling on this convoy.`);
+      }
+      const parsed = ferryBodySchema.safeParse(await request.json());
+      if (!parsed.success) {
+        return validationProblem({ Operator: [parsed.error.message] });
+      }
+      ferry.set(crewKey(id, vin), {
+        convoyId: id,
+        vin,
+        operator: parsed.data.operator,
+        reference: parsed.data.reference,
+        sailingAt: parsed.data.sailingAt,
+        ticketDetails: parsed.data.ticketDetails ?? null,
+        costGbp: parsed.data.costGbp ?? null,
+        lastChangedByName: null,
+        lastChangedAt: null,
+      });
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.delete('/convoys/:id/vehicles/:vin/ferry', ({ params }) =>
+      ferry.delete(crewKey(idFrom(params['id']), decodeURIComponent(String(params['vin']))))
+        ? new HttpResponse(null, { status: 204 })
+        : new HttpResponse(null, { status: 404 }),
+    ),
   ];
 
-  return { db, routes, vehicles, crew, insurance, handlers };
+  return { db, routes, vehicles, crew, insurance, boxes, ferry, handlers };
 }

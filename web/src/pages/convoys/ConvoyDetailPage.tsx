@@ -10,13 +10,14 @@ import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
+import { ConvoyCargoPanel } from './ConvoyCargoPanel';
 import { ConvoyDriversPanel } from './ConvoyDriversPanel';
 import { ConvoyReadinessPanel } from './ConvoyReadinessPanel';
 import { ConvoyVehiclesPanel } from './ConvoyVehiclesPanel';
 import { RouteEditor } from './RouteEditor';
 
-type Tab = 'overview' | 'route' | 'vehicles' | 'drivers';
-const TABS: readonly Tab[] = ['overview', 'route', 'vehicles', 'drivers'];
+type Tab = 'overview' | 'route' | 'vehicles' | 'drivers' | 'cargo';
+const TABS: readonly Tab[] = ['overview', 'route', 'vehicles', 'drivers', 'cargo'];
 
 export function ConvoyDetailPage(): JSX.Element {
   const { id = '' } = useParams();
@@ -70,6 +71,7 @@ export function ConvoyDetailPage(): JSX.Element {
           { id: 'route', label: 'Route' },
           { id: 'vehicles', label: 'Vehicles' },
           { id: 'drivers', label: 'Crew' },
+          { id: 'cargo', label: 'Cargo and ferry' },
         ]}
         active={tab}
         onChange={selectTab}
@@ -147,6 +149,11 @@ export function ConvoyDetailPage(): JSX.Element {
       {tab === 'drivers' ? (
         <TabPanel id="drivers">
           <ConvoyDriversPanel convoyId={convoy.id} />
+        </TabPanel>
+      ) : null}
+      {tab === 'cargo' ? (
+        <TabPanel id="cargo">
+          <ConvoyCargoPanel convoyId={convoy.id} />
         </TabPanel>
       ) : null}
     </section>

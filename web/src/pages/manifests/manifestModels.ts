@@ -15,18 +15,16 @@ import type {
 export interface ManifestFormValues {
   id: string;
   deliveryNotes: string;
-  ferryBookingComplete: boolean;
 }
 
 export function emptyManifestForm(): ManifestFormValues {
-  return { id: '', deliveryNotes: '', ferryBookingComplete: false };
+  return { id: '', deliveryNotes: '' };
 }
 
 export function manifestToFormValues(manifest: ManifestReadModel): ManifestFormValues {
   return {
     id: manifest.id,
     deliveryNotes: manifest.deliveryNotes ?? '',
-    ferryBookingComplete: manifest.ferryBookingComplete,
   };
 }
 
@@ -36,7 +34,7 @@ function trimmed(value: string): string | undefined {
 }
 
 function baseRequest(values: ManifestFormValues): UpdateManifestRequest {
-  const request: UpdateManifestRequest = { ferryBookingComplete: values.ferryBookingComplete };
+  const request: UpdateManifestRequest = {};
   const notes = trimmed(values.deliveryNotes);
   if (notes !== undefined) request.deliveryNotes = notes;
   return request;
@@ -59,5 +57,4 @@ export const manifestFormSchema = z.object({
     .min(1, 'A manifest reference is required')
     .max(32, 'The reference must be 32 characters or fewer'),
   deliveryNotes: z.string().max(2000, 'Delivery notes must be 2000 characters or fewer'),
-  ferryBookingComplete: z.boolean(),
 });

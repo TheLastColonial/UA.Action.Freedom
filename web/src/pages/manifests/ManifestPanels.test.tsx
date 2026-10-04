@@ -56,37 +56,32 @@ test('the crew panel offers no way to crew from here and points at the convoy', 
     .toBeInTheDocument();
 });
 
-test('cargo panel adds and removes a box', async () => {
-  worker.use(...manifestApi([makeManifest({ id: 'C1' })]).handlers);
-
-  const screen = await renderWithProviders(<ManifestBoxesPanel manifestId="C1" frozen={false} />, {
-    roles: ['Dispatcher'],
-  });
-
-  await expect.element(screen.getByText('No boxes on this manifest yet.')).toBeInTheDocument();
-
-  await screen.getByLabelText('Box id to add').fill('9');
-  await screen.getByRole('button', { name: 'Add box' }).click();
-  await expect.element(screen.getByText('#9')).toBeInTheDocument();
-
-  await screen.getByRole('button', { name: 'Remove' }).click();
-  await expect.element(screen.getByText('No boxes on this manifest yet.')).toBeInTheDocument();
-});
-
-test('cargo panel is read-only when the manifest is frozen', async () => {
-  const api = manifestApi([makeManifest({ id: 'C2', frozen: true })]);
-  api.boxes.set('C2', [makeManifestBox({ boxId: 3 })]);
+test('cargo panel lists the boxes allocated to the vehicle and sends loading to the convoy', async () => {
+  const api = manifestApi([makeManifest({ id: 'C1', convoyId: 7, vin: 'VIN-1' })]);
+  api.boxes.set('C1', [makeManifestBox({ boxId: 3 })]);
   worker.use(...api.handlers);
 
-  const screen = await renderWithProviders(<ManifestBoxesPanel manifestId="C2" frozen />, {
-    roles: ['Dispatcher'],
-  });
+  const screen = await renderWithProviders(
+    <ManifestBoxesPanel manifestId="C1" convoyId={7} vin="VIN-1" />,
+    { roles: ['Dispatcher'] },
+  );
 
   await expect.element(screen.getByText('#3')).toBeInTheDocument();
-  await expect
-    .element(screen.getByText('Frozen — cargo can no longer be changed.'))
-    .toBeInTheDocument();
   await expect.element(screen.getByRole('button', { name: 'Add box' })).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole('link', { name: /Manage the cargo of VIN-1 on its convoy/ }))
+    .toBeInTheDocument();
+});
+
+test('cargo panel says so when nothing is allocated yet', async () => {
+  worker.use(...manifestApi([makeManifest({ id: 'C2' })]).handlers);
+
+  const screen = await renderWithProviders(
+    <ManifestBoxesPanel manifestId="C2" convoyId={1} vin="VIN-CONVOY-1" />,
+    { roles: ['Dispatcher'] },
+  );
+
+  await expect.element(screen.getByText('No boxes on this manifest yet.')).toBeInTheDocument();
 });
 
 test('weight panel shows the border-check total and a provisional warning', async () => {

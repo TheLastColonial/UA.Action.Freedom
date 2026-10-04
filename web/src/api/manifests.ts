@@ -61,14 +61,6 @@ export function fetchManifestBoxes(
   return getCollection(`${idPath(id)}/boxes`, manifestBoxReadModelSchema);
 }
 
-export function attachManifestBox(id: string, boxId: number): Promise<void> {
-  return put204(`${idPath(id)}/boxes/${String(boxId)}`);
-}
-
-export function detachManifestBox(id: string, boxId: number): Promise<void> {
-  return delete204(`${idPath(id)}/boxes/${String(boxId)}`);
-}
-
 export function fetchManifestWeight(id: string): Promise<ManifestWeightReadModel> {
   return getJson(`${idPath(id)}/weight`, manifestWeightReadModelSchema);
 }
@@ -140,28 +132,6 @@ export function useDeleteManifest(): UseMutationResult<void, Error, string> {
   return useMutation({
     mutationFn: deleteManifest,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.manifests.all }),
-  });
-}
-
-export function useAttachManifestBox(id: string): UseMutationResult<void, Error, number> {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (boxId: number) => attachManifestBox(id, boxId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: qk.manifests.boxes(id) });
-      await queryClient.invalidateQueries({ queryKey: qk.manifests.weight(id) });
-    },
-  });
-}
-
-export function useDetachManifestBox(id: string): UseMutationResult<void, Error, number> {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (boxId: number) => detachManifestBox(id, boxId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: qk.manifests.boxes(id) });
-      await queryClient.invalidateQueries({ queryKey: qk.manifests.weight(id) });
-    },
   });
 }
 

@@ -12,7 +12,6 @@ export function makeManifest(overrides: Partial<ManifestReadModel> = {}): Manife
     vin: 'VIN-CONVOY-1',
     status: 'Created',
     deliveryNotes: null,
-    ferryBookingComplete: false,
     gmrSubmittedAt: null,
     frozen: false,
     lastChangedByName: null,

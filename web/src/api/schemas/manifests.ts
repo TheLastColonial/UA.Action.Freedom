@@ -13,7 +13,6 @@ export const manifestReadModelSchema = z.object({
   vin: z.string(),
   status: manifestStatusSchema,
   deliveryNotes: z.string().nullable(),
-  ferryBookingComplete: z.boolean(),
   gmrSubmittedAt: z.string().nullable(),
   frozen: z.boolean(),
 });
@@ -63,12 +62,10 @@ export type EnsDeclarationReadModel = z.infer<typeof ensDeclarationReadModelSche
 export interface CreateConvoyVehicleManifestRequest {
   id: string;
   deliveryNotes?: string;
-  ferryBookingComplete: boolean;
 }
 
 export interface UpdateManifestRequest {
   deliveryNotes?: string;
-  ferryBookingComplete: boolean;
 }
 
 // Body of PUT /manifests/{id}/ens — RecordEnsRequest. AcceptedAt is ICS2's own timestamp, supplied

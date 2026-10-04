@@ -1,24 +1,34 @@
 import type { JSX } from 'react';
-import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
-import { useAttachManifestBox, useDetachManifestBox, useManifestBoxes } from '../../api/manifests';
-import { ApiDomainProblem } from '../../api/problem';
+import { useManifestBoxes } from '../../api/manifests';
 import type { ManifestBoxReadModel } from '../../api/schemas/manifests';
-import { Button } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
 import { PageSkeleton } from '../../components/PageSkeleton';
 
 interface ManifestBoxesPanelProps {
   manifestId: string;
-  frozen: boolean;
+  convoyId: number;
+  vin: string;
 }
 
-export function ManifestBoxesPanel({ manifestId, frozen }: ManifestBoxesPanelProps): JSX.Element {
+const columns: readonly Column<ManifestBoxReadModel>[] = [
+  { header: 'Box', cell: (b) => `#${String(b.boxId)}` },
+  { header: 'Weight (kg)', cell: (b) => b.weightKg },
+  { header: 'Validated', cell: (b) => (b.validated ? 'Yes' : 'No') },
+];
+
+/**
+ * The cargo the manifest's vehicle is carrying, read-only. Cargo is a box allocated to the
+ * vehicle's truck-list entry (ADR 0004), so boxes are added and moved on the convoy, not here.
+ */
+export function ManifestBoxesPanel({
+  manifestId,
+  convoyId,
+  vin,
+}: ManifestBoxesPanelProps): JSX.Element {
   const query = useManifestBoxes(manifestId);
-  const attach = useAttachManifestBox(manifestId);
-  const detach = useDetachManifestBox(manifestId);
-  const [boxId, setBoxId] = useState('');
 
   if (query.isPending) {
     return <PageSkeleton />;
@@ -28,40 +38,16 @@ export function ManifestBoxesPanel({ manifestId, frozen }: ManifestBoxesPanelPro
   }
 
   const rows: readonly ManifestBoxReadModel[] = 'parentMissing' in query.data ? [] : query.data;
-  const problemMessage = (error: unknown) =>
-    error instanceof ApiDomainProblem ? (error.detail ?? error.message) : undefined;
-  const message = problemMessage(attach.error) ?? problemMessage(detach.error);
-
-  const columns: readonly Column<ManifestBoxReadModel>[] = [
-    { header: 'Box', cell: (b) => `#${b.boxId}` },
-    { header: 'Weight (kg)', cell: (b) => b.weightKg },
-    { header: 'Validated', cell: (b) => (b.validated ? 'Yes' : 'No') },
-    {
-      header: '',
-      cell: (b) => (
-        <Button
-          type="button"
-          variant="danger"
-          disabled={frozen || detach.isPending}
-          onClick={() => {
-            detach.mutate(b.boxId);
-          }}
-        >
-          Remove
-        </Button>
-      ),
-    },
-  ];
 
   return (
     <div>
       <h2>Cargo</h2>
-      {frozen ? <p role="status">Frozen — cargo can no longer be changed.</p> : null}
-      {message ? (
-        <p role="alert" className="field__error">
-          {message}
-        </p>
-      ) : null}
+      <p>
+        Boxes are put on the vehicle from the convoy.{' '}
+        <Link to={`/convoys/${String(convoyId)}?tab=cargo`}>
+          Manage the cargo of {vin} on its convoy
+        </Link>
+      </p>
 
       <DataTable
         caption="Boxes on this manifest"
@@ -70,37 +56,6 @@ export function ManifestBoxesPanel({ manifestId, frozen }: ManifestBoxesPanelPro
         rowKey={(b) => String(b.boxId)}
         emptyMessage="No boxes on this manifest yet."
       />
-
-      {!frozen ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const parsed = Number(boxId.trim());
-            if (Number.isInteger(parsed) && parsed > 0) {
-              attach.mutate(parsed, {
-                onSuccess: () => {
-                  setBoxId('');
-                },
-              });
-            }
-          }}
-          style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'end' }}
-        >
-          <label style={{ display: 'flex', flexDirection: 'column' }}>
-            Box id to add
-            <input
-              inputMode="numeric"
-              value={boxId}
-              onChange={(event) => {
-                setBoxId(event.target.value);
-              }}
-            />
-          </label>
-          <Button type="submit" disabled={attach.isPending}>
-            Add box
-          </Button>
-        </form>
-      ) : null}
     </div>
   );
 }

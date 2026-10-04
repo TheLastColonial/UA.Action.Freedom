@@ -134,7 +134,6 @@ export function manifestApi(
         vin,
         status: 'Created',
         deliveryNotes: body.deliveryNotes ?? null,
-        ferryBookingComplete: body.ferryBookingComplete,
         gmrSubmittedAt: null,
         frozen: false,
       });
@@ -159,7 +158,6 @@ export function manifestApi(
       db.set(id, {
         ...manifest,
         deliveryNotes: body.deliveryNotes ?? null,
-        ferryBookingComplete: body.ferryBookingComplete,
       });
       return new HttpResponse(null, { status: 204 });
     }),
@@ -193,50 +191,6 @@ export function manifestApi(
         return new HttpResponse(null, { status: 404 });
       }
       return HttpResponse.json(boxes.get(id) ?? []);
-    }),
-
-    http.put('/manifests/:id/boxes/:boxId', ({ params }) => {
-      const id = idFrom(params['id']);
-      const manifest = db.get(id);
-      if (!manifest) {
-        return new HttpResponse(null, { status: 404 });
-      }
-      if (manifest.frozen) {
-        return problem(409, FREEZE_MESSAGE);
-      }
-      const boxId = Number(params['boxId']);
-      const list = boxes.get(id) ?? [];
-      if (!list.some((b) => b.boxId === boxId)) {
-        list.push({
-          boxId,
-          weightKg: 15,
-          validated: true,
-          widthCm: null,
-          depthCm: null,
-          heightCm: null,
-        });
-      }
-      boxes.set(id, list);
-      return new HttpResponse(null, { status: 204 });
-    }),
-
-    http.delete('/manifests/:id/boxes/:boxId', ({ params }) => {
-      const id = idFrom(params['id']);
-      const manifest = db.get(id);
-      if (!manifest) {
-        return new HttpResponse(null, { status: 404 });
-      }
-      if (manifest.frozen) {
-        return problem(409, FREEZE_MESSAGE);
-      }
-      const boxId = Number(params['boxId']);
-      const list = boxes.get(id) ?? [];
-      const next = list.filter((b) => b.boxId !== boxId);
-      if (next.length === list.length) {
-        return new HttpResponse(null, { status: 404 });
-      }
-      boxes.set(id, next);
-      return new HttpResponse(null, { status: 204 });
     }),
 
     http.get('/manifests/:id/weight', ({ params }) => {

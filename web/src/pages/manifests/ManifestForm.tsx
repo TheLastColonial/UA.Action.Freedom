@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 
 import { Button } from '../../components/Button';
 import { FormCard } from '../../components/form/FormCard';
-import { CheckboxField, TextField } from '../../components/form/fields';
+import { TextField } from '../../components/form/fields';
 import { manifestFormSchema } from './manifestModels';
 import type { ManifestFormValues } from './manifestModels';
 
@@ -59,7 +59,6 @@ export function ManifestForm({
           error={errors.deliveryNotes?.message}
           {...register('deliveryNotes')}
         />
-        <CheckboxField label="Ferry booking complete" {...register('ferryBookingComplete')} />
       </FormCard>
 
       <Button type="submit" disabled={submitting}>
