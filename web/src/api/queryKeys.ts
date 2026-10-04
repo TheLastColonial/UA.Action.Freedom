@@ -78,6 +78,7 @@ export const qk = {
     list: (params: PageParams) => ['locations', 'list', params] as const,
     detail: (id: number) => ['locations', 'detail', id] as const,
     bays: (id: number) => ['locations', id, 'bays'] as const,
+    loaders: (id: number) => ['locations', id, 'loaders'] as const,
   },
   declarations: {
     convoy: (convoyId: number) => ['declarations', convoyId] as const,
