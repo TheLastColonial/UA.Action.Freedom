@@ -1,3 +1,5 @@
+using UA.Action.Freedom.Application.Declarations;
+
 namespace UA.Action.Freedom.Api.Configuration;
 
 /// <summary>
@@ -18,4 +20,13 @@ public sealed class CustomsOptions
 
     /// <summary>HMRC's identifier for the crossing the convoys use.</summary>
     public string RouteId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether the GMR is submitted by the Customs Worker or filed by hand in the HMRC portal and recorded
+    /// (ADR 0006). Manual unless an operator has proved the HMRC integration is live and says otherwise.
+    /// </summary>
+    public SubmissionMode GmrSubmissionMode { get; set; } = SubmissionMode.Manual;
+
+    /// <summary>As <see cref="GmrSubmissionMode"/>, for the French logistics envelope. The ENS and the goods list are always manual.</summary>
+    public SubmissionMode EloSubmissionMode { get; set; } = SubmissionMode.Manual;
 }

@@ -10,6 +10,7 @@ using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Api.Boxes;
 using UA.Action.Freedom.Api.Categories;
 using UA.Action.Freedom.Api.Convoys;
+using UA.Action.Freedom.Api.Declarations;
 using UA.Action.Freedom.Api.Documents;
 using UA.Action.Freedom.Api.Health;
 using UA.Action.Freedom.Api.Locations;
@@ -22,6 +23,7 @@ using UA.Action.Freedom.Api.People;
 using UA.Action.Freedom.Api.Vehicles;
 using UA.Action.Freedom.Application;
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Declarations;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Data;
 using UA.Action.Freedom.Telemetry;
@@ -97,6 +99,13 @@ builder.Services.AddScoped<IEnsDeclarationStore>(provider => new BlobEnsDeclarat
 // GmrSubmissionRequest draws for the haulier EORI and the route. Nothing is validated here: a
 // misconfigured deployment must produce a filing sheet that says what is missing, not a 500, because
 // the whole point of the sheet is to be read while there is still time to fix it.
+builder.Services.AddSingleton(provider =>
+{
+    var customs = provider.GetRequiredService<IOptions<CustomsOptions>>().Value;
+
+    return new DeclarationSubmissionModes(customs.GmrSubmissionMode, customs.EloSubmissionMode);
+});
+
 builder.Services.AddScoped(provider =>
 {
     var customs = provider.GetRequiredService<IOptions<CustomsOptions>>().Value;
@@ -265,6 +274,7 @@ app.MapFreedomReceivers();
 app.MapFreedomBoxes();
 app.MapFreedomCategories();
 app.MapFreedomManifests();
+app.MapFreedomDeclarations();
 app.MapFreedomLocations();
 
 // Only paths under /app that are not a real static asset reach here — the SPA's own router

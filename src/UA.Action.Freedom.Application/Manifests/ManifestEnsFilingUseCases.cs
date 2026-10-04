@@ -95,7 +95,7 @@ public sealed record EnsFilingSheetReadModel(
     IReadOnlyList<string> Missing)
 {
     /// <summary>Where the filer gets the consignee's address, which this sheet withholds.</summary>
-    public string ConsigneeAddressSource => "GET /receivers/{ref}/detail";
+    public string ConsigneeAddressSource => "Entered by the Ground Officer in the portal";
 
     /// <summary>Whether everything ICS2 requires is present.</summary>
     public bool Complete => this.Missing.Count == 0;

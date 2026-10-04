@@ -5,6 +5,7 @@ using MELT;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Declarations;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Application.Telemetry;
@@ -56,18 +57,6 @@ public sealed class ManifestTelemetryTests : IDisposable
         IManifestRepository repository, IConvoyRepository convoys, FreedomMetrics metrics) =>
         new(repository, convoys, (IConvoyVehicleRepository)convoys, metrics);
 
-    /// <summary>
-    /// A recorded ENS, because approval refuses without one — every approval counted here is meant
-    /// to get past that gate and reach the hand-offs.
-    /// </summary>
-    private static IEnsDeclarationStore AnEnsDeclaration()
-    {
-        var declarations = Substitute.For<IEnsDeclarationStore>();
-        declarations.GetAsync(Id, Arg.Any<CancellationToken>()).Returns(
-            new EnsDeclarationReadModel(
-                Id, "25FR17551780961AT5", new DateTimeOffset(Stamped, TimeSpan.Zero), "groundofficer", null));
-        return declarations;
-    }
 
     private static IManifestRepository AProposedManifest()
     {
@@ -125,8 +114,7 @@ public sealed class ManifestTelemetryTests : IDisposable
     [Fact]
     public async Task An_approval_is_counted_as_the_edge_into_confirmed()
     {
-        var handler = new ApproveManifestHandler(
-            AProposedManifest(), AConvoy(), Substitute.For<IManifestWorkQueue>(), AnEnsDeclaration(), _metrics);
+        var handler = new ApproveManifestHandler(AProposedManifest(), _metrics);
 
         await handler.HandleAsync(new ApproveManifestCommand(Id), CancellationToken.None);
 
@@ -137,51 +125,60 @@ public sealed class ManifestTelemetryTests : IDisposable
     }
 
     [Fact]
-    public async Task An_approval_that_froze_the_manifest_but_could_not_queue_the_gmr_is_counted_and_logged()
+    public async Task A_gmr_that_could_not_be_queued_is_counted_and_logged()
     {
         var logs = TestLoggerFactory.Create();
         var queue = Substitute.For<IManifestWorkQueue>();
         queue.EnqueueGmrSubmissionAsync(Arg.Any<GmrSubmissionRequest>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Storage:ConnectionString is not configured"));
-        var handler = new ApproveManifestHandler(
-            AProposedManifest(), AConvoy(), queue, AnEnsDeclaration(), _metrics,
-            logs.CreateLogger<ApproveManifestHandler>());
+        var manifests = AnApprovedManifest();
+        var handler = new FileDeclarationHandler(
+            Substitute.For<IDeclarationRepository>(), manifests, AConvoy(), queue,
+            new DeclarationSubmissionModes(Gmr: SubmissionMode.Automatic), _metrics,
+            logs.CreateLogger<FileDeclarationHandler>());
 
-        var approve = () => handler.HandleAsync(new ApproveManifestCommand(Id), CancellationToken.None);
+        var file = () => handler.HandleAsync(
+            new FileDeclarationCommand(42, "WVWZZZ1JZXW000001", DeclarationKind.Gmr), CancellationToken.None);
 
-        await approve.Should().ThrowAsync<InvalidOperationException>();
+        await file.Should().ThrowAsync<InvalidOperationException>();
         _capture.Sum("freedom.manifest.approve.partial_failures", ("stage", "gmr")).Should().Be(1);
         logs.Sink.LogEntries.Should().ContainSingle(entry =>
             entry.LogLevel == LogLevel.Warning && entry.Message!.Contains(Id));
     }
 
     [Fact]
-    public async Task An_approval_whose_document_could_not_be_queued_is_counted_at_the_document_stage()
+    public async Task A_document_that_could_not_be_queued_is_counted_at_the_document_stage()
     {
         var queue = Substitute.For<IManifestWorkQueue>();
         queue.EnqueueDocumentAsync(Arg.Any<ManifestDocumentRequest>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("no storage"));
-        var repository = AProposedManifest();
+        var repository = AnApprovedManifest();
         repository.GetDocumentLinesAsync(Id, Arg.Any<CancellationToken>()).Returns([]);
-        var handler = new ApproveManifestHandler(repository, AConvoy(), queue, AnEnsDeclaration(), _metrics);
+        var handler = new RequestManifestDocumentHandler(repository, queue, _metrics);
 
-        var approve = () => handler.HandleAsync(new ApproveManifestCommand(Id), CancellationToken.None);
+        var request = () => handler.HandleAsync(new RequestManifestDocumentCommand(Id), CancellationToken.None);
 
-        await approve.Should().ThrowAsync<InvalidOperationException>();
+        await request.Should().ThrowAsync<InvalidOperationException>();
         _capture.Sum("freedom.manifest.approve.partial_failures", ("stage", "document")).Should().Be(1);
     }
 
     [Fact]
     public async Task A_successful_approval_records_no_partial_failure()
     {
-        var repository = AProposedManifest();
-        repository.GetDocumentLinesAsync(Id, Arg.Any<CancellationToken>()).Returns([]);
-        var handler = new ApproveManifestHandler(
-            repository, AConvoy(), Substitute.For<IManifestWorkQueue>(), AnEnsDeclaration(), _metrics);
+        var handler = new ApproveManifestHandler(AProposedManifest(), _metrics);
 
         await handler.HandleAsync(new ApproveManifestCommand(Id), CancellationToken.None);
 
         _capture.Of("freedom.manifest.approve.partial_failures").Should().BeEmpty();
+    }
+
+    private static IManifestRepository AnApprovedManifest()
+    {
+        var repository = Substitute.For<IManifestRepository>();
+        var approved = AManifest(ManifestStatus.Confirmed) with { GmrSubmittedAt = Stamped };
+        repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(approved);
+        repository.GetForVehicleAsync(42, "WVWZZZ1JZXW000001", Arg.Any<CancellationToken>()).Returns(approved);
+        return repository;
     }
 
     [Theory]
