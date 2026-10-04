@@ -54,6 +54,7 @@ public class BoxAllocationHandlerTests
     [InlineData(AllocateBoxResult.Moved, AllocateBoxOutcome.Moved)]
     [InlineData(AllocateBoxResult.AlreadyAllocated, AllocateBoxOutcome.AlreadyAllocated)]
     [InlineData(AllocateBoxResult.BoxNotFound, AllocateBoxOutcome.BoxNotFound)]
+    [InlineData(AllocateBoxResult.BoxVoided, AllocateBoxOutcome.BoxVoided)]
     [InlineData(AllocateBoxResult.VehicleWithdrawn, AllocateBoxOutcome.VehicleWithdrawn)]
     [InlineData(AllocateBoxResult.VehicleNotOnConvoy, AllocateBoxOutcome.VehicleNotOnConvoy)]
     public async Task Reports_what_the_write_found(AllocateBoxResult found, AllocateBoxOutcome expected)

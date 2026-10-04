@@ -665,6 +665,11 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
             return Task.FromResult(AllocateBoxResult.VehicleWithdrawn);
         }
 
+        if (Ledger.IsVoided(boxId))
+        {
+            return Task.FromResult(AllocateBoxResult.BoxVoided);
+        }
+
         if (!Ledger.Knows(boxId))
         {
             return Task.FromResult(AllocateBoxResult.BoxNotFound);

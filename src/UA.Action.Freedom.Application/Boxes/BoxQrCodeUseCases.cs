@@ -5,27 +5,47 @@ namespace UA.Action.Freedom.Application.Boxes;
 /// <summary>Issue a QR label for a box, replacing any it already has.</summary>
 public sealed record IssueBoxQrCodeCommand(int BoxId);
 
+public enum IssueBoxQrCodeOutcome
+{
+    Issued,
+    NotFound,
+    Voided
+}
+
+/// <summary>The outcome, and the code when one was issued.</summary>
+public sealed record IssueBoxQrCodeResult(IssueBoxQrCodeOutcome Outcome, BoxQrCodeReadModel? Code = null);
+
 /// <summary>
-/// Issuing a label is not a box edit, so it is allowed whatever state the box is in — a
-/// validated box that lost its label in transit still needs a new one printed.
+/// Issuing a label is not a box edit, so it is allowed whatever state the box is in: a
+/// validated box that lost its label in transit still needs a new one printed. A voided box is the exception,
+/// because voiding revoked its label on purpose (ADR 0011).
 /// </summary>
 /// <remarks>
 /// Re-issuing revokes the previous code. The handler makes a single call: the revoke and the
 /// new insert are one act, settled together in <see cref="IBoxRepository.IssueQrCodeAsync"/>.
 /// </remarks>
 public sealed class IssueBoxQrCodeHandler(IBoxRepository repository)
-    : ICommandHandler<IssueBoxQrCodeCommand, BoxQrCodeReadModel?>
+    : ICommandHandler<IssueBoxQrCodeCommand, IssueBoxQrCodeResult>
 {
-    public async Task<BoxQrCodeReadModel?> HandleAsync(
+    public async Task<IssueBoxQrCodeResult> HandleAsync(
         IssueBoxQrCodeCommand command, CancellationToken cancellationToken)
     {
-        if (!await repository.ExistsAsync(command.BoxId, cancellationToken))
+        var box = await repository.GetByIdAsync(command.BoxId, cancellationToken);
+
+        if (box is null)
         {
-            return null;
+            return new IssueBoxQrCodeResult(IssueBoxQrCodeOutcome.NotFound);
         }
 
-        return await repository.IssueQrCodeAsync(
+        if (box.Voided)
+        {
+            return new IssueBoxQrCodeResult(IssueBoxQrCodeOutcome.Voided);
+        }
+
+        var code = await repository.IssueQrCodeAsync(
             command.BoxId, Guid.NewGuid(), DateTime.UtcNow, cancellationToken);
+
+        return new IssueBoxQrCodeResult(IssueBoxQrCodeOutcome.Issued, code);
     }
 }
 

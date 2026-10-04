@@ -14,6 +14,9 @@ namespace UA.Action.Freedom.Application.Boxes;
 /// <see cref="ReceiverRef"/> is the opaque reference only. The delivery address lives behind
 /// the Ground Officer role and never comes near a box.
 ///
+/// <see cref="VoidedAt"/>, <see cref="ReplacesBoxId"/> and <see cref="ReplacedByBoxId"/> are the replacement lineage
+/// (ADR 0011): an attested box is never edited, it is voided and a new box takes its place.
+///
 /// <see cref="LocationId"/> is the distribution hub the box currently sits in, if it has
 /// arrived at one — independent of which bay it has been shelved in (see
 /// <see cref="BoxBayAssignmentReadModel"/>), which tracks its own history.
@@ -29,10 +32,19 @@ public sealed record BoxReadModel(
     Guid? ValidatedByPersonId,
     DateTime? ValidatedAt,
     string? LastChangedByName = null,
-    DateTime? LastChangedAt = null)
+    DateTime? LastChangedAt = null,
+    DateTime? VoidedAt = null,
+    int? ReplacesBoxId = null,
+    int? ReplacedByBoxId = null)
 {
     /// <summary>Whether a Loader has confirmed the contents and the weight.</summary>
     public bool Validated => this.ValidatedAt is not null;
+
+    /// <summary>
+    /// Whether the box has been replaced (ADR 0011). A voided box is terminal: it stays as the record of what
+    /// was attested, but it carries no cargo and counts in no total.
+    /// </summary>
+    public bool Voided => this.VoidedAt is not null;
 }
 
 /// <summary>

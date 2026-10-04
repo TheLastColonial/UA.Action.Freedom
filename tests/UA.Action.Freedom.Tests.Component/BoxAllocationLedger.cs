@@ -15,6 +15,7 @@ namespace UA.Action.Freedom.Tests.Component;
 internal sealed class BoxAllocationLedger
 {
     private readonly Dictionary<int, ManifestBoxReadModel> boxes = [];
+    private readonly HashSet<int> voided = [];
     private IReadOnlyList<BoxAllocation> allocations = [];
 
     public IReadOnlyList<BoxAllocation> Allocations => allocations;
@@ -32,7 +33,21 @@ internal sealed class BoxAllocationLedger
         allocations = [.. allocations, .. other.allocations.Where(a => allocations.All(x => x.BoxId != a.BoxId))];
     }
 
+    /// <summary>
+    /// A box replaced by another: its cargo allocation goes to the replacement and the voided box is no longer
+    /// known as cargo, as the SQL moves the allocation row and the voided box carries none.
+    /// </summary>
+    public void Replace(int voidedBoxId, ManifestBoxReadModel replacement)
+    {
+        boxes.Remove(voidedBoxId);
+        voided.Add(voidedBoxId);
+        boxes[replacement.BoxId] = replacement;
+        allocations = [.. allocations.Select(a => a.BoxId == voidedBoxId ? a with { BoxId = replacement.BoxId } : a)];
+    }
+
     public bool Knows(int boxId) => boxes.ContainsKey(boxId);
+
+    public bool IsVoided(int boxId) => voided.Contains(boxId);
 
     public BoxAllocation? AllocationOf(int boxId) => allocations.FirstOrDefault(a => a.BoxId == boxId);
 

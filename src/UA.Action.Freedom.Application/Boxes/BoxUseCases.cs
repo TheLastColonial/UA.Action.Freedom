@@ -1,4 +1,6 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Domain;
@@ -152,6 +154,73 @@ public sealed class DeleteBoxHandler(IBoxRepository repository)
         var deleted = await repository.DeleteAsync(command.Id, cancellationToken);
         return deleted ? DeleteBoxOutcome.Deleted : DeleteBoxOutcome.NotFound;
     }
+}
+
+/// <summary>Replace an attested box: void it and create a new unattested box with the same items.</summary>
+public sealed record ReplaceBoxCommand(int Id);
+
+public enum ReplaceBoxOutcome
+{
+    Replaced,
+    NotFound,
+    NotAttested,
+    AlreadyVoided,
+    LoadFrozen
+}
+
+/// <summary>The outcome, and the new box identifier when it was replaced.</summary>
+public sealed record ReplaceBoxResult(ReplaceBoxOutcome Outcome, int ReplacementBoxId = 0);
+
+/// <summary>
+/// An attested box is never edited, and never unlocked: its attestation is who vouched for what, and rewriting
+/// it would make that a claim anybody could change. If its contents must change it is voided and replaced, and
+/// the replacement is attested afresh by a Loader. A box nobody has attested is simply edited, so replacing one
+/// is refused.
+/// </summary>
+/// <remarks>
+/// Transitional: replacing moves the cargo allocation to the new box, which is a change to the vehicle's load, so
+/// it is refused while the manifest's GMR freeze stands (plan 15 replaces the freeze with a return to Proposed).
+/// </remarks>
+public sealed class ReplaceBoxHandler(
+    IBoxRepository repository,
+    IConvoyVehicleRepository truckList,
+    IManifestRepository manifests)
+    : ICommandHandler<ReplaceBoxCommand, ReplaceBoxResult>
+{
+    public async Task<ReplaceBoxResult> HandleAsync(ReplaceBoxCommand command, CancellationToken cancellationToken)
+    {
+        var box = await repository.GetByIdAsync(command.Id, cancellationToken);
+
+        if (Refusal(box) is { } refusal)
+        {
+            return new ReplaceBoxResult(refusal);
+        }
+
+        var allocation = await truckList.GetBoxAllocationAsync(command.Id, cancellationToken);
+
+        if (allocation is not null
+            && await manifests.IsLoadFrozenAsync(allocation.ConvoyId.Value, allocation.Vin, cancellationToken))
+        {
+            return new ReplaceBoxResult(ReplaceBoxOutcome.LoadFrozen);
+        }
+
+        if (await repository.ReplaceAsync(command.Id, cancellationToken) is { } replacementId)
+        {
+            return new ReplaceBoxResult(ReplaceBoxOutcome.Replaced, replacementId);
+        }
+
+        // Lost a race: another Loader replaced it first. Say why from what the box is now.
+        return new ReplaceBoxResult(
+            Refusal(await repository.GetByIdAsync(command.Id, cancellationToken)) ?? ReplaceBoxOutcome.NotFound);
+    }
+
+    private static ReplaceBoxOutcome? Refusal(BoxReadModel? box) => box switch
+    {
+        null => ReplaceBoxOutcome.NotFound,
+        { Voided: true } => ReplaceBoxOutcome.AlreadyVoided,
+        { Validated: false } => ReplaceBoxOutcome.NotAttested,
+        _ => null,
+    };
 }
 
 /// <summary>Fetch one box, or <c>null</c> if there is no such box.</summary>

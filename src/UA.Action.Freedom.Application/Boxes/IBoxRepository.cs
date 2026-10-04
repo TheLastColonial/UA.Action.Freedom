@@ -32,6 +32,15 @@ public interface IBoxRepository
         decimal? widthCm, decimal? depthCm, decimal? heightCm,
         DateTime validatedAt, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Replaces an attested box, as one act in one transaction (ADR 0011): voids it, revokes its active QR code,
+    /// creates an unattested box that names it, copies its items (category, quantity, value, donation, expiry),
+    /// vacates its bay, and moves its cargo allocation, if any, to the new box. Returns the new box's identifier,
+    /// or <c>null</c> when the box does not exist, was not attested, or was already voided — the caller
+    /// distinguishes those by reading the box.
+    /// </summary>
+    Task<int?> ReplaceAsync(int boxId, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<BoxItemReadModel>> ListItemsAsync(int boxId, CancellationToken cancellationToken);
 
     Task AddItemAsync(int boxId, BoxItemReadModel item, CancellationToken cancellationToken);
