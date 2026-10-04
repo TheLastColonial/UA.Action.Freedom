@@ -225,6 +225,21 @@ test('@smoke editing a route keeps its point ids, and the Dispatcher nominates a
   await page.getByLabel('Nominate leader').selectOption({ label: driver });
   await page.getByRole('button', { name: 'Nominate' }).click();
   await expect(page.getByText(`${driver} leads this convoy.`)).toBeVisible();
+
+  // Flag the first stop as overnight: the crew member is not covered until somebody books it or arranges it.
+  await page.getByRole('tab', { name: 'Route' }).click();
+  await page.getByLabel('Kind').first().selectOption('Overnight');
+  await page.getByRole('button', { name: 'Save route' }).click();
+
+  await page.getByRole('tab', { name: 'Accommodation' }).click();
+  await expect(page.getByRole('cell', { name: `${driver} at Dover port: Missing` })).toBeVisible();
+
+  await page.getByLabel('Provider').fill('Premier Inn Dover');
+  await page.getByLabel('Check in').fill('2026-08-01');
+  await page.getByLabel('Check out').fill('2026-08-02');
+  await page.getByLabel(driver).check();
+  await page.getByRole('button', { name: 'Book accommodation' }).click();
+  await expect(page.getByRole('cell', { name: `${driver} at Dover port: Booked` })).toBeVisible();
 });
 
 test('@smoke operator allocates a convoy budget, enters fuel over the line and sees it flagged', async ({
