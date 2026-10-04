@@ -417,6 +417,22 @@ export function convoyApi(
     // Re-declare tasks come from the declarations slice (see declarationApi); a convoy alone has none.
     http.get('/convoys/:id/tasks', () => HttpResponse.json([])),
 
+    // Accommodation comes from its own slice (see accommodationApi); a convoy alone has none to cover.
+    http.get('/convoys/:id/accommodation', () =>
+      HttpResponse.json({ bookings: [], selfArranged: [] }),
+    ),
+    http.get('/convoys/:id/accommodation/coverage', () =>
+      HttpResponse.json({
+        stops: [],
+        crew: [],
+        cells: [],
+        missingCount: 0,
+        allCovered: true,
+        leftoverBookings: [],
+        warnings: [],
+      }),
+    ),
+
     // The same rules as ConvoyReadiness.Assess: one driver (two advised) and insurance covering the
     // departure date and every driver per vehicle; a route and at least one vehicle still travelling for the
     // convoy. A withdrawn vehicle is skipped — it has no crew to find and no insurance to renew.
