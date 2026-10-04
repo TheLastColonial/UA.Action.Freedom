@@ -1,9 +1,10 @@
 # Goods movement: box attestation to declarations
 
-> **Target design.** This describes the flow after [plan 08](../plans/08-declarations-filing.md) and
-> [plan 15](../plans/15-manifest-signoff-lifecycle.md). Until they merge, the code runs the earlier flow, in which
-> approval requires an ENS, freezes the manifest and hands off the GMR, the document and the ELO automatically. That
-> version of this document is in git history at commit `f659eed`.
+> **Partly built.** [Plan 08](../plans/08-declarations-filing.md) is built: approval signs off the load and files
+> nothing, a vehicle's declarations are recorded (manual, the default) or filed (automatic), and an ELO needs an
+> accepted ENS. Still the target: the three-state manifest ([plan 15](../plans/15-manifest-signoff-lifecycle.md)),
+> staleness from a snapshot ([plan 09](../plans/09-declaration-staleness.md)) and the departure gate
+> ([plan 13](../plans/13-readiness-departure.md)). The earlier flow is in git history at commit `f659eed`.
 
 The sequence is drawn in [`goods-movements.puml`](goods-movements.puml). The role-by-role processes are
 [05 Load sign-off and declarations](05-load-signoff-and-declarations.puml) and

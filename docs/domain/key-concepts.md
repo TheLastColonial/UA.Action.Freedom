@@ -377,7 +377,7 @@ place; the Administrator can see which boxes and live convoys it touches before 
 [Truck List](#truck-list): one vehicle, on one convoy. A manifest carries:
 
 - the border weight below,
-- its GMR and ELO paperwork,
+- its sign-off: approval confirms and freezes it, and files nothing,
 - and free-text delivery notes.
 
 Its **cargo** and its **ferry booking** are no longer on the manifest. Both belong to the same truck-list entry: the cargo
@@ -422,6 +422,27 @@ afterwards ([Customs declarations](customs-declarations.md)). Drawn in [`manifes
 
 > The code still implements the earlier ten-state `ManifestStatus` (`Created` to `Returned`), with approval freezing
 > the manifest, until [plan 15](../plans/15-manifest-signoff-lifecycle.md) merges.
+
+### Declaration
+
+A statement made to a customs authority about **one vehicle's load**, before that vehicle crosses the authority's
+border: the **GMR** (UK), the **ENS** (EU), the **ELO** envelope (France) and, per receiver, the **Ukrainian goods
+list**. They share one lifecycle (draft, ready to file, filed, accepted or refused, then stale, withdrawn or
+closed) and hang off the vehicle's truck-list entry, not the manifest. See
+[Customs declarations](customs-declarations.md).
+
+What the code does today (plan 08):
+
+- **Filing is manual by default.** A Dispatcher files in the authority's portal and records the reference
+  (`POST /convoys/{id}/vehicles/{vin}/declarations/{kind}/record`). Each authority with a client has a submission
+  mode, set by configuration; only in `Automatic` does `/file` enqueue the submission, and then **filed means
+  enqueued**, because the workers have no database. The ENS and the goods list are always manual.
+- **Approval files nothing.** It is the Administrator's sign-off of the load. The travelling document is requested
+  separately.
+- **A reference is write-once**, and a refusal keeps a **bounded reason code** only, never the authority's text.
+- **An ELO needs an accepted ENS.** The ENS goes straight to accepted: an MRN exists only on acceptance.
+- **Not yet built:** staleness derived from a snapshot of the load (plan 09), closing at a crossing (plan 18), and
+  departure refusing a stale declaration (plan 13).
 
 ### Truck List
 

@@ -150,20 +150,20 @@ public static class AuthenticationExtensions
     /// </summary>
     /// <remarks>
     /// Separate from <see cref="ManifestsWrite"/> because approval is not another edit. It
-    /// releases the Goods Movement Reference to HMRC and freezes the manifest for good
-    /// (docs/process.puml, recommendations §5.2), so the person who builds a manifest is not
+    /// signs off the load and freezes the manifest for good (it files nothing: the GMR and the
+    /// envelope are filed from the vehicle's declarations, recommendations §5.2), so the person who builds a manifest is not
     /// the person who signs it off.
     /// </remarks>
     public const string ManifestsApprove = "manifests:approve";
 
     /// <summary>
-    /// Record or withdraw the ICS2 Entry Summary Declaration a manifest's crossing was accepted
+    /// Record, refuse, withdraw or file a vehicle's customs declarations (GMR, ENS, ELO, goods lists), including the ICS2 Entry Summary Declaration its crossing was accepted
     /// under — Administrator and Dispatcher.
     /// </summary>
     /// <remarks>
     /// Its own policy rather than part of <see cref="ManifestsWrite"/>, because it is not an edit to
-    /// the manifest: it is the one fact approval will not proceed without, and withdrawing it strands
-    /// a convoy as surely as deleting a vehicle would.
+    /// the manifest: an accepted ENS is the one fact an ELO will not proceed without, and withdrawing it strands
+    /// an envelope as surely as deleting a vehicle would.
     ///
     /// <para>
     /// Deliberately <strong>not</strong> GroundOfficer, even though a Ground Officer is who files the

@@ -495,16 +495,29 @@ The shape, in all four cases:
   A manifest that is Confirmed but not yet frozen is editable, and that window is the thing §5.2
   rules out.
 
-### Order of operations on approval
+### Approval signs off and files nothing; filing enqueues, then stamps
 
-Freeze **then** enqueue, deliberately. A failed enqueue leaves a frozen manifest with no GMR —
-visible, and an operator can retry. The reverse risks an editable manifest whose GMR is already on
-its way, which is precisely what is forbidden. There is a `Received.InOrder` test on it.
+Approval confirms and freezes in one statement (`ConfirmAndFreezeAsync`) and does nothing else: no ENS is needed,
+and no GMR, document or envelope is enqueued, in either submission mode.
 
-Approval now hands off **three** things — the GMR, the travelling document and the French logistics
-envelope — each through `HandOff(stage, …)`, which counts
-`freedom_manifest_approve_partial_failures_total{stage}` and logs the exception *type* before
-rethrowing. Adding a fourth means adding a stage label, not changing the pattern.
+Filing a declaration is a separate act. In manual mode (the default) a Dispatcher records the reference they
+obtained in the authority's portal. In automatic mode `POST .../declarations/{gmr|elo}/file` **enqueues first and
+stamps the declaration `Filed` second**, so a failed enqueue leaves it unfiled and retryable; `HandOff` counts
+`freedom_manifest_approve_partial_failures_total{stage}` (stages `gmr`, `elo`, `document`) and logs the exception
+*type* before rethrowing. There is a `Received.InOrder` test on it.
+
+**Automatic `Filed` means *enqueued*, not *accepted*.** The workers have no database, so nothing writes the
+authority's answer back onto the declaration. A green declaration in automatic mode proves the message was
+queued; the envelope or GMR document in blob storage proves the worker got an answer.
+
+**A reference is write-once, and an ELO needs an accepted ENS.** `RecordReferenceAsync` is one conditional `UPDATE`
+(`WHERE Reference IS NULL OR Status = Refused`), so two dispatchers resolve in the database. A refused declaration is
+recorded afresh by recording again. Deleting a convoy or a vehicle that has declarations is refused (`409`): the
+foreign key to the truck-list entry is NO ACTION on purpose.
+
+**Index the foreign keys to `dbo.Person` on any new table.** Every erasure checks them; an unindexed one scans the
+table under lock, and `dbo.Declaration` deadlocked the BDD suite's person erasure against a declaration being filed
+until `IX_Declaration_RecordedBy` and `IX_Declaration_LastChangedBy` were added.
 
 ---
 

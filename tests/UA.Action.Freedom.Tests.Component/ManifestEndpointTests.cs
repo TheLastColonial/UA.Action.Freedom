@@ -18,8 +18,8 @@ namespace UA.Action.Freedom.Tests.Component;
 /// A manifest may only be proposed against a convoy whose truck list is published
 /// (docs/process.puml), and once its Goods Movement Reference exists nothing about it may change
 /// (recommendations §5.2) — the vehicle would otherwise arrive at a border carrying something
-/// HMRC was not told about. Approval is where the freeze happens and where the submission is
-/// handed off, and it is Administrator only.
+/// HMRC was not told about. Approval is where the freeze happens and it is Administrator only; it
+/// files nothing, because declarations are filed afterwards from the vehicle (ADR 0006).
 /// </remarks>
 public class ManifestEndpointTests
 {

@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented. Amends [ADR 0002](0002-elo-envelope-on-manifest-approval.md), and generalises
+Accepted. Implemented by [plan 08](../plans/08-declarations-filing.md). Amends [ADR 0002](0002-elo-envelope-on-manifest-approval.md), and generalises
 [ADR 0003](0003-ens-declaration-recorded-not-submitted.md).
 
 ## Context
@@ -77,3 +77,23 @@ already make it.
 
 **The dashboards still describe the automatic path.** `GmrSubmissionProcessor`, `EloEnvelopeProcessor` and the
 Grafana panels keep their meaning and will simply show little in manual mode.
+
+## Implementation notes
+
+Added by plan 08. The decision above stands; these are choices the implementation made inside it.
+
+- **The mode is configuration**, `Customs__GmrSubmissionMode` and `Customs__EloSubmissionMode`, `Manual` unless set
+  to `Automatic`, read into `DeclarationSubmissionModes`. The ENS and the goods list have no setting because they
+  can never be automatic. The compose stack sets both to `Automatic`, so the WireMock-backed environment and the
+  BDD suite keep proving that path.
+- **Approval hands off nothing, in either mode.** The hand-offs moved to `FileDeclarationHandler`, behind
+  `POST .../declarations/{gmr|elo}/file`, which is `409` in manual mode and says to record the reference instead.
+  "Freeze, then enqueue" became "enqueue, then stamp the declaration filed": a failed enqueue leaves the
+  declaration unfiled.
+- **In automatic mode `Filed` means *enqueued*.** The workers have no database, so nothing records the authority's
+  answer on the declaration. A Dispatcher may later record the reference over an automatic `Filed` that has none
+  (the write-once rule is on a reference, not on the status).
+- **The travelling document** is no longer a by-product of approval either. It is requested with
+  `POST /manifests/{id}/document`, once the manifest is frozen.
+- **The failure count kept its name**, `freedom.manifest.approve.partial_failures{stage}`, though it is now emitted
+  by the file and document handlers (stages `gmr`, `elo`, `document`) and not by approval.
