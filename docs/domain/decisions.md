@@ -259,8 +259,6 @@ per-vehicle anchor.
 | Area | Before | After |
 |---|---|---|
 | `Manifest` | cargo, GMR, ELO, ENS, ferry and status | load sign-off only. Documents are generated. |
-| Boxes | `ManifestBox` | allocation to the truck-list entry |
-| Ferry booking | status on the manifest | per-vehicle outbound booking with reference and ticket details |
 | Accommodation, fuel | not modelled | per-person stays linked to route points; fuel budget and entries |
 | Customs | GMR, ELO and ENS as special cases | one `Declaration` shape |
 | Readiness | advisory: route, crew, insurance | requirement checklist, with blocking requirements |

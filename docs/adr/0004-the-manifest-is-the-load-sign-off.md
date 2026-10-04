@@ -4,7 +4,8 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented. Amends [ADR 0001](0001-truck-list-as-a-table.md).
+Accepted. Partly implemented: cargo and the ferry booking have moved to the truck-list entry
+([plan 07](../plans/07-box-allocation-ferry.md)); the sign-off lifecycle and declarations have not. Amends [ADR 0001](0001-truck-list-as-a-table.md).
 
 ## Context
 
@@ -92,3 +93,12 @@ and its sign-off still stands is exactly what this ADR exists to remove.
 **Two documents are now behind.** `docs/adr/0001` and the manifest sections of `docs/domain/key-concepts.md` and
 `CLAUDE.md` describe the manifest as the central document and are amended or flagged in
 [decisions](../domain/decisions.md#consequences-and-amendments-due).
+
+## Implementation notes
+
+**Plan 07 (cargo and ferry).** `dbo.ManifestBox` is replaced by `dbo.ConvoyVehicleBoxAllocation`, keyed on `BoxId`,
+cascading from the truck-list entry and from the box. The ferry flag on the manifest is replaced by
+`dbo.ConvoyVehicleFerryBooking`. The manifest still reads its cargo, for the weight, the printed document and the filing
+sheet, by joining the allocation on `(ConvoyId, Vin)`. While the GMR stamp still freezes the manifest, an allocation
+change is refused for a vehicle whose manifest is frozen, in either direction; plan 15 removes that. `PUT` and `DELETE`
+on `/manifests/{id}/boxes/{boxId}` answer 410 Gone until then.
