@@ -18,14 +18,14 @@ disagree, the domain document wins: raise it in the PR rather than building arou
 
 | # | Plan | Branch | Covers | Depends on | Gate | Status |
 |---|---|---|---|---|---|---|
-| 01 | [Crew without legs](01-crew-without-legs.md) | `feat/crew-without-legs` | [ADR 0007](../adr/0007-journey-legs-are-removed-from-the-crew-model.md), [O7](../domain/decisions.md#o7) | – | – | In review |
-| 02 | [Link a login to a person](02-login-person-link.md) | `feat/login-person-link` | [O34](../domain/decisions.md#o34), [O35](../domain/decisions.md#o35) | – | `/security-review` before PR | In review |
-| 03 | [Who last changed it](03-last-changed-audit.md) | `feat/last-changed-audit` | [ADR 0017](../adr/0017-every-entity-records-its-last-change.md) | 02 | – | In review |
-| 04 | [Receiver registration](04-receiver-registration.md) | `feat/receiver-registration` | [ADR 0012](../adr/0012-receiver-registration-gates-convoys-and-boxes.md), [P11](../domain/decisions.md#p11) | 03 | – | In review |
-| 05 | [Item classification and value](05-item-classification-value.md) | `feat/item-classification-value` | [ADR 0014](../adr/0014-items-are-classified-by-category-and-valued-in-gbp.md) | 03 | – | In review |
-| 06 | [Donors and donations](06-donors-donations.md) | `feat/donors-donations` | [ADR 0013](../adr/0013-donors-are-a-split-identity.md) | 05 | – | In review |
-| 07 | [Box allocation and ferry booking](07-box-allocation-ferry.md) | `feat/box-allocation-ferry` | [ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md) (cargo), [P1](../domain/decisions.md#p1) | 03 | – | In review |
-| 08 | [Declarations and filing mode](08-declarations-filing.md) | `feat/declarations-filing` | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (entity), [ADR 0006](../adr/0006-filing-is-manual-by-default.md) | 04, 05, 07 | – | In review |
+| 01 | [Crew without legs](01-crew-without-legs.md) | `feat/crew-without-legs` | [ADR 0007](../adr/0007-journey-legs-are-removed-from-the-crew-model.md), [O7](../domain/decisions.md#o7) | – | – | Done |
+| 02 | [Link a login to a person](02-login-person-link.md) | `feat/login-person-link` | [O34](../domain/decisions.md#o34), [O35](../domain/decisions.md#o35) | – | `/security-review` before PR | Done |
+| 03 | [Who last changed it](03-last-changed-audit.md) | `feat/last-changed-audit` | [ADR 0017](../adr/0017-every-entity-records-its-last-change.md) | 02 | – | Done |
+| 04 | [Receiver registration](04-receiver-registration.md) | `feat/receiver-registration` | [ADR 0012](../adr/0012-receiver-registration-gates-convoys-and-boxes.md), [P11](../domain/decisions.md#p11) | 03 | – | Done |
+| 05 | [Item classification and value](05-item-classification-value.md) | `feat/item-classification-value` | [ADR 0014](../adr/0014-items-are-classified-by-category-and-valued-in-gbp.md) | 03 | – | Done |
+| 06 | [Donors and donations](06-donors-donations.md) | `feat/donors-donations` | [ADR 0013](../adr/0013-donors-are-a-split-identity.md) | 05 | – | Done |
+| 07 | [Box allocation and ferry booking](07-box-allocation-ferry.md) | `feat/box-allocation-ferry` | [ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md) (cargo), [P1](../domain/decisions.md#p1) | 03 | – | Done |
+| 08 | [Declarations and filing mode](08-declarations-filing.md) | `feat/declarations-filing` | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (entity), [ADR 0006](../adr/0006-filing-is-manual-by-default.md) | 04, 05, 07 | – | Done |
 | 09 | [Declaration staleness](09-declaration-staleness.md) | `feat/declaration-staleness` | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (snapshot) | 08 | – | Not started |
 | 10 | [Route points and the Convoy Leader](10-route-points-convoy-leader.md) | `feat/route-points-convoy-leader` | [P15](../domain/decisions.md#p15), [D17](../domain/decisions.md#d17), [P14](../domain/decisions.md#p14) | 01, 03 | – | Not started |
 | 11 | [Accommodation](11-accommodation.md) | `feat/accommodation` | [P2](../domain/decisions.md#p2), [P8](../domain/decisions.md#p8), [P13](../domain/decisions.md#p13), [P16](../domain/decisions.md#p16), [O4](../domain/decisions.md#o4), [O30](../domain/decisions.md#o30) | 10 | – | Not started |
@@ -84,12 +84,57 @@ flowchart LR
     P04 --> P19
 ```
 
-**Critical path:** 02 → 03 → 07 → 08 → 09 → 13 → 14 → 15. Plans 01 and 02 may be done in either order, and so may 04,
-05 and 07. Plans 06, 12 and 16 have slack. The security review that opens plan 19 may be started early, in parallel.
+**Critical path (remaining):** 10 → 11 → 13 → 14 → 18 → 19. Plan 09 is not on it, but 13 needs it. Plans 12, 16 and 17
+have slack.
 
 **Every merged plan leaves the system working.** While plans 08 to 14 are in flight, some legacy manifest behaviour
 sits alongside the new facts. Each plan has a **Retires and transitional** section that says what it removes and
 what it deliberately leaves for a later plan.
+
+## Running plans in parallel
+
+Plans 01 to 08 have merged. Each remaining plan can start the moment its dependencies have merged, so the remaining work
+runs in **waves**. Everything in a wave is independent of the rest of the wave. Each plan runs in its own worktree
+and stack ([`docs/parallel-agents.md`](../parallel-agents.md), skill `agent-worktree`).
+
+| Wave | Start when merged | Plans (one agent each) | Stacks |
+|---|---|---|---|
+| 1 | now | **09** Staleness, **10** Route points + leader, **12** Budget + equipment | 3 |
+| 1, docs only | now | Increment 0 of **16** (spike, label review), **17** (mechanism into ADR 0010), **19** (security review): draft PRs, no code | 0 |
+| 2 | 10 → **11** and **17** implementation; 09 → **16** implementation | 11, 16, 17 | 3 |
+| 3 | 09, 11, 12 → **13** | 13 | 1 |
+| 4 | 13 → **14** | 14 | 1 |
+| 5 | 14 (and 17) → **15**, **18** | 15, 18 | 2 |
+| 6 | 18 → **19** | 19 | 1 |
+
+A wave is a ceiling, not a barrier: a plan starts as soon as **its own** dependencies merge, not when the whole previous
+wave has. For example 16 starts when 09 merges even if 10 and 12 are still in review.
+
+**The owner gates cost nothing now.** Increment 0 of 16, 17 and 19 is a document, not code. Starting those in wave 1
+lets the owner review the spike, the mechanism and the security review while code plans run, so the gates leave the
+critical path. Each resumes on the same branch once signed off.
+
+### Limits to plan around
+
+- **At most three full stacks at once.** An agent stack is capped at about 3.5 GB, and a 16 GB Docker VM fits the main
+  stack plus two more. `agent.ps1 up` warns when the VM cannot take another. Docs-only increments need no stack.
+- **Shared files are where parallel plans collide**, not the code:
+
+| Shared file | Touched by | Rule |
+|---|---|---|
+| `CLAUDE.md`, `README.md`, `docs/domain/key-concepts.md`, `docs/gotchas-and-open-questions.md` | every plan | Add your own paragraph or row. Never reflow or reorder existing text. Resolve a conflict by keeping both sides. |
+| This index (`Status` column) | every plan | Edit only your own row. |
+| `docs/domain/decisions.md` amendments table | every plan | Delete only the rows your plan satisfies. |
+| `web/src/auth/policyMatrix.ts`, `AuthenticationExtensions.cs` | 10, 17 | 10 adds policies, 17 changes how they are evaluated. 17 implementation waits for 10, as its dependency says. |
+| `ManifestEndpoints.cs`, `ManifestTransitionUseCases.cs` | 13, 15 | Sequenced by dependency. |
+| `ConvoyRepository`, `InMemoryConvoyRepository`, `FreedomApi` helper | 10, 12 (same wave), 14, 15 | Whoever merges second rebases and re-runs the component tests. |
+| `database/` tables | most | Each plan adds its own table files. Editing an existing table file is the conflict risk: rebase, then `agent.ps1 db`. |
+
+- **Merge in dependency order.** The developer merges one PR at a time. Every other open PR then rebases on `main`
+  (`git fetch && git rebase origin/main`), re-runs the build plus the unit and component tests, and pushes with
+  `--force-with-lease` before review. A PR not rebased since the last merge is not ready for review.
+- **Never stack branches.** An agent whose dependency has not merged waits. A plan in the same wave is *not* a
+  dependency: ignore it, and expect to rebase.
 
 ## Owner gates
 
@@ -140,15 +185,22 @@ When an owner signs off a gate, the agent continues on the **same branch**, and 
 
 Follow this for every plan. It is deliberately the same each time.
 
-### 1. Start from an up-to-date main
+### 1. Start from an up-to-date main, in your own worktree
+
+Never work in the main checkout: another agent may be running its stack there.
 
 ```bash
-git checkout main && git pull --ff-only
-git log --oneline -20          # confirm every plan in "Depends on" has merged
-git checkout -b <branch from the plan>
+git fetch origin && git log --oneline -20 origin/main   # confirm every plan in "Depends on" has merged
+scripts/agent/agent.sh new plan-NN --base origin/main --up   # PowerShell: pwsh scripts/agent/agent.ps1 new plan-NN -Base origin/main -Up
+cd ../UA.Action.Freedom.worktrees/plan-NN
+. ./.agent/env.sh              # PowerShell: . ./.agent/env.ps1
 ```
 
-If a dependency has not merged, **stop** and say so. Do not stack branches.
+The worktree's branch is `agent/plan-NN`. Keep it, so `agent.ps1 remove` can clean up, and publish it under the
+plan's branch name: `git push -u origin agent/plan-NN:<branch from the plan>`. A docs-only increment can skip `--up`.
+
+If a dependency has not merged, **stop** and say so. Do not stack branches. Before the PR, and after each other PR
+merges: `git fetch && git rebase origin/main`.
 
 ### 2. Read before writing
 
@@ -197,11 +249,11 @@ npx prettier --write <changed files>                   # npm run format:write fa
 npm run verify                                         # typecheck, lint, format check, test, build
 cd ..
 
-cd iac/local && docker compose down -v && docker compose up -d --wait
-cd ../tofu && tofu apply -auto-approve
-cd ../local && docker compose build app manifest-worker customs-worker db-deploy \
-  && docker compose up -d --wait && docker compose up db-seed
-cd ../..
+scripts/agent/agent.sh down --volumes        # never raw `docker compose down -v`: it leaves stale tofu state
+scripts/agent/agent.sh up --no-hot-reload    # baked images, as CI runs them; also runs tofu apply
+(cd iac/local && docker compose build app manifest-worker customs-worker db-deploy \
+  && docker compose up -d --wait && docker compose up db-seed)
+. ./.agent/env.sh                            # so the tests below hit this worktree's stack
 FREEDOM_REQUIRE_INTEGRATION=true dotnet test --project tests/UA.Action.Freedom.Tests.Integration/UA.Action.Freedom.Tests.Integration.csproj
 FREEDOM_REQUIRE_INTEGRATION=true dotnet test --project tests/UA.Action.Freedom.Tests.BDD/UA.Action.Freedom.Tests.BDD.csproj
 cd web && npm run e2e
