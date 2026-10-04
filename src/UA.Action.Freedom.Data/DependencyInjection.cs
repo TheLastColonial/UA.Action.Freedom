@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using UA.Action.Freedom.Application.Declarations;
 using UA.Action.Freedom.Data.Declarations;
 using UA.Action.Freedom.Application.Boxes;
@@ -40,6 +41,8 @@ public static class DependencyInjection
         services.AddScoped<IConvoyLeaderRepository, ConvoyLeaderRepository>();
         services.AddScoped<IConvoyBudgetRepository, ConvoyBudgetRepository>();
         services.AddScoped<IVehicleEquipmentRepository, VehicleEquipmentRepository>();
+        services.AddScoped<IAccommodationRepository, AccommodationRepository>();
+        services.Replace(ServiceDescriptor.Scoped<IRoutePointReferences, AccommodationRoutePointReferences>());
         services.AddScoped<IReceiverRepository, ReceiverRepository>();
         services.AddScoped<IBoxRepository, BoxRepository>();
         services.AddScoped<IItemCategoryRepository, ItemCategoryRepository>();

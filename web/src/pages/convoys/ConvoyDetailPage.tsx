@@ -10,6 +10,8 @@ import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
+import { ConvoyAccommodationPanel } from './ConvoyAccommodationPanel';
+import { ConvoyAccommodationTasks } from './ConvoyAccommodationTasks';
 import { ConvoyBudgetPanel } from './ConvoyBudgetPanel';
 import { ConvoyCargoPanel } from './ConvoyCargoPanel';
 import { ConvoyDriversPanel } from './ConvoyDriversPanel';
@@ -20,12 +22,21 @@ import { ConvoyRedeclareTasks } from './ConvoyRedeclareTasks';
 import { ConvoyVehiclesPanel } from './ConvoyVehiclesPanel';
 import { RouteEditor } from './RouteEditor';
 
-type Tab = 'overview' | 'route' | 'vehicles' | 'drivers' | 'cargo' | 'budget' | 'equipment';
+type Tab =
+  | 'overview'
+  | 'route'
+  | 'vehicles'
+  | 'drivers'
+  | 'accommodation'
+  | 'cargo'
+  | 'budget'
+  | 'equipment';
 const TABS: readonly Tab[] = [
   'overview',
   'route',
   'vehicles',
   'drivers',
+  'accommodation',
   'cargo',
   'budget',
   'equipment',
@@ -83,6 +94,7 @@ export function ConvoyDetailPage(): JSX.Element {
           { id: 'route', label: 'Route' },
           { id: 'vehicles', label: 'Vehicles' },
           { id: 'drivers', label: 'Crew' },
+          { id: 'accommodation', label: 'Accommodation' },
           { id: 'cargo', label: 'Cargo and ferry' },
           { id: 'budget', label: 'Budget' },
           { id: 'equipment', label: 'Equipment' },
@@ -114,6 +126,10 @@ export function ConvoyDetailPage(): JSX.Element {
 
           <Gate policy="manifests:declare">
             <ConvoyRedeclareTasks convoyId={convoy.id} />
+          </Gate>
+
+          <Gate policy="convoys:write">
+            <ConvoyAccommodationTasks convoyId={convoy.id} />
           </Gate>
 
           <Gate policy="convoys:write">
@@ -170,6 +186,12 @@ export function ConvoyDetailPage(): JSX.Element {
           <ConvoyDriversPanel convoyId={convoy.id} />
         </TabPanel>
       ) : null}
+      {tab === 'accommodation' ? (
+        <TabPanel id="accommodation">
+          <ConvoyAccommodationPanel convoyId={convoy.id} />
+        </TabPanel>
+      ) : null}
+
       {tab === 'cargo' ? (
         <TabPanel id="cargo">
           <ConvoyCargoPanel convoyId={convoy.id} />

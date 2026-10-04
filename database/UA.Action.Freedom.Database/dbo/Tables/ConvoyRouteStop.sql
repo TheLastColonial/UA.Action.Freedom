@@ -31,6 +31,8 @@ CREATE TABLE [dbo].[ConvoyRouteStop] (
 
     CONSTRAINT [PK_ConvoyRouteStop] PRIMARY KEY ([RoutePointId]),
     CONSTRAINT [UQ_ConvoyRouteStop_Convoy_Sequence] UNIQUE ([ConvoyId], [Sequence]),
+    -- Lets accommodation (and later features) say "a point of THIS convoy" with a composite foreign key.
+    CONSTRAINT [UQ_ConvoyRouteStop_Convoy_Point] UNIQUE ([ConvoyId], [RoutePointId]),
     CONSTRAINT [CK_ConvoyRouteStop_Kind] CHECK ([Kind] >= 0 AND [Kind] <= 3),
     CONSTRAINT [CK_ConvoyRouteStop_Authority] CHECK ([Authority] >= 0 AND [Authority] <= 2),
     -- The route has no life of its own: deleting the convoy takes it with it, which is also
