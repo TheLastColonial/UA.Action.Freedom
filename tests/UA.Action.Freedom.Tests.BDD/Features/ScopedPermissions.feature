@@ -59,11 +59,11 @@ Scenario: A Loader sees only the location they manage and the boxes at it
     And a box exists at the location the loader manages
     And a box exists at the location the loader does not manage
     And I am authenticated as "loader"
-    When I GET "/boxes/{pinned}" for the pinned "myBox"
+    When I fetch "/boxes/{pinned}" using the pinned "myBox"
     Then the response status is 200
-    When I GET "/boxes/{pinned}" for the pinned "theirBox"
+    When I fetch "/boxes/{pinned}" using the pinned "theirBox"
     Then the response status is 403
-    When I POST "/boxes/{pinned}/qr-code" for the pinned "theirBox"
+    When I post "/boxes/{pinned}/qr-code" using the pinned "theirBox"
     Then the response status is 403
     When I GET "/boxes?pageSize=200"
     Then the response lists the pinned "myBox"
@@ -71,7 +71,7 @@ Scenario: A Loader sees only the location they manage and the boxes at it
     When I GET "/locations"
     Then the response lists the pinned "mine"
     And the response does not list the pinned "theirs"
-    When I GET "/locations/{pinned}" for the pinned "theirs"
+    When I fetch "/locations/{pinned}" using the pinned "theirs"
     Then the response status is 403
 
 Scenario: An operator who is also a Loader is not narrowed, because roles union

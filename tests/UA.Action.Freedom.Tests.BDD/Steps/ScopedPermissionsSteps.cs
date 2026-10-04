@@ -69,11 +69,11 @@ public sealed class ScopedPermissionsSteps(FreedomApiClient api, ScenarioState s
     public async Task GivenABoxExistsAtTheLocationTheLoaderDoesNotManage() =>
         state.Pin("theirBox", await CreateAsAdminAsync("/boxes", $$"""{ "locationId": {{state.Pinned("theirs")}} }""", "boxes"));
 
-    [When("I GET \"(.*)\" for the pinned \"(.*)\"")]
+    [When("I fetch \"(.*)\" using the pinned \"(.*)\"")]
     public Task WhenIGetForThePinned(string template, string name) =>
         api.SendAsync(HttpMethod.Get, template.Replace("{pinned}", state.Pinned(name), StringComparison.Ordinal), state.CurrentToken, null);
 
-    [When("I POST \"(.*)\" for the pinned \"(.*)\"")]
+    [When("I post \"(.*)\" using the pinned \"(.*)\"")]
     public Task WhenIPostForThePinned(string template, string name) =>
         api.SendAsync(HttpMethod.Post, template.Replace("{pinned}", state.Pinned(name), StringComparison.Ordinal), state.CurrentToken, null);
 

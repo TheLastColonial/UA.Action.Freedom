@@ -320,19 +320,19 @@ await this.FeatureBackgroundAsync();
     await testRunner.AndAsync("I am authenticated as \"loader\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
 #line 62
-    await testRunner.WhenAsync("I GET \"/boxes/{pinned}\" for the pinned \"myBox\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I fetch \"/boxes/{pinned}\" using the pinned \"myBox\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 63
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 64
-    await testRunner.WhenAsync("I GET \"/boxes/{pinned}\" for the pinned \"theirBox\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I fetch \"/boxes/{pinned}\" using the pinned \"theirBox\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 65
     await testRunner.ThenAsync("the response status is 403", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 66
-    await testRunner.WhenAsync("I POST \"/boxes/{pinned}/qr-code\" for the pinned \"theirBox\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I post \"/boxes/{pinned}/qr-code\" using the pinned \"theirBox\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 67
     await testRunner.ThenAsync("the response status is 403", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
@@ -356,7 +356,7 @@ await this.FeatureBackgroundAsync();
     await testRunner.AndAsync("the response does not list the pinned \"theirs\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
 #line 74
-    await testRunner.WhenAsync("I GET \"/locations/{pinned}\" for the pinned \"theirs\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I fetch \"/locations/{pinned}\" using the pinned \"theirs\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 75
     await testRunner.ThenAsync("the response status is 403", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
