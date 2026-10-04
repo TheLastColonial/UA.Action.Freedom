@@ -174,3 +174,56 @@ test('a loader may read the declarations but is offered no way to change them', 
     .element(screen.getByRole('button', { name: 'Record declaration' }))
     .not.toBeInTheDocument();
 });
+
+test('a stale declaration is flagged and withdrawing it starts a fresh draft to record again', async () => {
+  const api = serve();
+  api.rows.push({
+    id: 50,
+    convoyId: 7,
+    vin: VIN,
+    kind: 'Gmr',
+    status: 'Stale',
+    receiverRef: null,
+    reference: 'GMR-1',
+    reasonCode: null,
+    recordedByName: null,
+    recordedAt: null,
+    lastChangedByName: null,
+    lastChangedAt: null,
+  });
+  const screen = await renderPanel();
+
+  await expect
+    .element(screen.getByText(/the load has changed since GMR was filed/))
+    .toBeInTheDocument();
+  await screen.getByRole('button', { name: 'Withdraw GMR and re-declare' }).click();
+
+  await expect.element(screen.getByText('GMR: Draft.')).toBeInTheDocument();
+  expect(api.rows.map((row) => row.status)).toEqual(['Withdrawn', 'Draft']);
+  expect(api.rows.map((row) => row.reference)).toEqual(['GMR-1', null]);
+});
+
+test('a Loader cannot withdraw a stale declaration', async () => {
+  const api = serve();
+  api.rows.push({
+    id: 50,
+    convoyId: 7,
+    vin: VIN,
+    kind: 'Gmr',
+    status: 'Stale',
+    receiverRef: null,
+    reference: 'GMR-1',
+    reasonCode: null,
+    recordedByName: null,
+    recordedAt: null,
+    lastChangedByName: null,
+    lastChangedAt: null,
+  });
+
+  const screen = await renderPanel('Loader');
+
+  await expect.element(screen.getByText('GMR: Stale — reference GMR-1.')).toBeInTheDocument();
+  await expect
+    .element(screen.getByRole('button', { name: 'Withdraw GMR and re-declare' }))
+    .not.toBeInTheDocument();
+});

@@ -48,7 +48,7 @@ public class EnsDeclarationHandlerTests
         var repository = ARepository();
         var store = AnEmptyStore();
 
-        var outcome = await new RecordEnsDeclarationHandler(repository, store).HandleAsync(
+        var outcome = await new RecordEnsDeclarationHandler(repository, store, Substitute.For<IDeclarationSnapshots>()).HandleAsync(
             ACommand(), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordEnsOutcome.Recorded);
@@ -72,7 +72,7 @@ public class EnsDeclarationHandlerTests
     {
         var repository = ARepository();
 
-        var outcome = await new RecordEnsDeclarationHandler(repository, AnEmptyStore()).HandleAsync(
+        var outcome = await new RecordEnsDeclarationHandler(repository, AnEmptyStore(), Substitute.For<IDeclarationSnapshots>()).HandleAsync(
             ACommand(mrn), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordEnsOutcome.MalformedMrn);
@@ -87,7 +87,7 @@ public class EnsDeclarationHandlerTests
         var store = AnEmptyStore();
 
         var outcome = await new RecordEnsDeclarationHandler(
-                ARepository(RecordReferenceResult.VehicleNotOnConvoy), store)
+                ARepository(RecordReferenceResult.VehicleNotOnConvoy), store, Substitute.For<IDeclarationSnapshots>())
             .HandleAsync(ACommand(), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordEnsOutcome.VehicleNotOnConvoy);
@@ -103,7 +103,7 @@ public class EnsDeclarationHandlerTests
         var store = AnEmptyStore();
 
         var outcome = await new RecordEnsDeclarationHandler(
-                ARepository(RecordReferenceResult.AlreadyRecorded), store)
+                ARepository(RecordReferenceResult.AlreadyRecorded), store, Substitute.For<IDeclarationSnapshots>())
             .HandleAsync(ACommand(), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordEnsOutcome.AlreadyRecorded);
@@ -116,7 +116,7 @@ public class EnsDeclarationHandlerTests
         var store = Substitute.For<IEnsDeclarationStore>();
         store.SaveAsync(Arg.Any<EnsDeclarationReadModel>(), Arg.Any<CancellationToken>()).Returns(false);
 
-        var outcome = await new RecordEnsDeclarationHandler(ARepository(), store).HandleAsync(
+        var outcome = await new RecordEnsDeclarationHandler(ARepository(), store, Substitute.For<IDeclarationSnapshots>()).HandleAsync(
             ACommand(), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordEnsOutcome.AlreadyRecorded);

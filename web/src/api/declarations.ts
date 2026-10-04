@@ -9,6 +9,7 @@ import {
   KIND_SEGMENT,
   declarationReadModelSchema,
   ensDeclarationReadModelSchema,
+  redeclareTaskSchema,
 } from './schemas/declarations';
 import type {
   DeclarationKind,
@@ -16,6 +17,7 @@ import type {
   EnsDeclarationReadModel,
   RecordDeclarationRequest,
   RecordEnsRequest,
+  RedeclareTask,
   RefuseDeclarationRequest,
 } from './schemas/declarations';
 
@@ -101,7 +103,10 @@ export function useEns(
 
 function useInvalidateDeclarations(convoyId: number, vin: string): () => Promise<void> {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: qk.declarations.vehicle(convoyId, vin) });
+  return async () => {
+    await queryClient.invalidateQueries({ queryKey: qk.declarations.vehicle(convoyId, vin) });
+    await queryClient.invalidateQueries({ queryKey: qk.declarations.tasks(convoyId) });
+  };
 }
 
 export function useRecordEns(
@@ -162,6 +167,38 @@ export function useFileDeclaration(
   const invalidate = useInvalidateDeclarations(convoyId, vin);
   return useMutation({
     mutationFn: (kind: DeclarationKind) => fileDeclaration(convoyId, vin, kind),
+    onSuccess: invalidate,
+  });
+}
+
+// The Dispatcher's re-declare tasks for a convoy: one per stale declaration, derived on read.
+export function fetchRedeclareTasks(convoyId: number): Promise<readonly RedeclareTask[]> {
+  return getJson(`/convoys/${convoyId}/tasks`, z.array(redeclareTaskSchema));
+}
+
+export function useRedeclareTasks(convoyId: number): UseQueryResult<readonly RedeclareTask[]> {
+  return useQuery({
+    queryKey: qk.declarations.tasks(convoyId),
+    queryFn: () => fetchRedeclareTasks(convoyId),
+  });
+}
+
+// Keeps the stale declaration and its reference as history and starts a new draft for the same scope.
+export function withdrawDeclaration(
+  convoyId: number,
+  vin: string,
+  declarationId: number,
+): Promise<void> {
+  return postTransition(`${basePath(convoyId, vin)}/${String(declarationId)}/withdraw`);
+}
+
+export function useWithdrawDeclaration(
+  convoyId: number,
+  vin: string,
+): UseMutationResult<void, Error, number> {
+  const invalidate = useInvalidateDeclarations(convoyId, vin);
+  return useMutation({
+    mutationFn: (declarationId: number) => withdrawDeclaration(convoyId, vin, declarationId),
     onSuccess: invalidate,
   });
 }

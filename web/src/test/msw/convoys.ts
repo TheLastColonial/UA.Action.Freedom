@@ -414,6 +414,9 @@ export function convoyApi(
       return new HttpResponse(null, { status: 204 });
     }),
 
+    // Re-declare tasks come from the declarations slice (see declarationApi); a convoy alone has none.
+    http.get('/convoys/:id/tasks', () => HttpResponse.json([])),
+
     // The same rules as ConvoyReadiness.Assess: one driver (two advised) and insurance covering the
     // departure date and every driver per vehicle; a route and at least one vehicle still travelling for the
     // convoy. A withdrawn vehicle is skipped — it has no crew to find and no insurance to renew.

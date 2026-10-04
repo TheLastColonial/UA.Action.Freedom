@@ -247,11 +247,21 @@ internal static class FreedomApi
         InMemoryDeclarationRepository? declarations = null,
         IEnsDeclarationStore? ensDetails = null,
         DeclarationSubmissionModes? submissionModes = null,
+        IBoxRepository? boxes = null,
+        IReceiverRepository? receivers = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
         {
             ShareCargo(convoys, manifests);
+
+            // A declaration's snapshot reads the boxes on the vehicle, their items and their receivers.
+            services.Replace(boxes ?? new InMemoryBoxRepository());
+            if (receivers is not null)
+            {
+                services.Replace(receivers);
+            }
+
             services.Replace(manifests);
             services.Replace<IConvoyRepository>(convoys);
             services.Replace<IConvoyVehicleRepository>(convoys);

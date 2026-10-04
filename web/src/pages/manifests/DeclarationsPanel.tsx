@@ -11,6 +11,7 @@ import {
   useRecordDeclaration,
   useRecordEns,
   useRefuseDeclaration,
+  useWithdrawDeclaration,
   useWithdrawEns,
 } from '../../api/declarations';
 import { ApiDomainProblem } from '../../api/problem';
@@ -186,6 +187,14 @@ function ReferenceSection({
             receiverRef={receiverRef}
           />
         ) : null}
+        {declaration?.status === 'Stale' ? (
+          <StaleNotice
+            convoyId={convoyId}
+            vin={vin}
+            declarationId={declaration.id}
+            label={heading}
+          />
+        ) : null}
         {declaration?.status === 'Filed' ? (
           <RefuseForm
             convoyId={convoyId}
@@ -200,6 +209,37 @@ function ReferenceSection({
         ) : null}
       </Gate>
     </section>
+  );
+}
+
+/**
+ * The load changed after this was written (ADR 0005). Nobody flags it: the API says so by reading
+ * Stale. Withdrawing keeps the record and its reference as history and starts a fresh draft.
+ */
+function StaleNotice({
+  convoyId,
+  vin,
+  declarationId,
+  label,
+}: PanelProps & { declarationId: number; label: string }): JSX.Element {
+  const withdraw = useWithdrawDeclaration(convoyId, vin);
+
+  return (
+    <div role="alert" className="field__error">
+      <strong>Stale</strong>
+      <span>{` — the load has changed since ${label} was filed.`}</span>
+      <ErrorText error={withdraw.error} />
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={withdraw.isPending}
+        onClick={() => {
+          withdraw.mutate(declarationId);
+        }}
+      >
+        {`Withdraw ${label} and re-declare`}
+      </Button>
+    </div>
   );
 }
 

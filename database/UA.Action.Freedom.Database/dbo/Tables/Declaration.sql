@@ -7,6 +7,11 @@
     free text, because that can quote the declaration it objected to.
     Kind: 0 GMR, 1 ENS, 2 ELO, 3 goods list. Status: 0 draft .. 7 closed (Domain.DeclarationStatus).
     At most one declaration that is not withdrawn per scope and kind; a withdrawn one is kept as history.
+    SnapshotJson is the load this declaration was written from (Domain.LoadSnapshot), stored when it becomes
+    ready to file or, for one recorded straight to filed, when it is recorded. It is compared with the load as
+    it is now, and a difference is what makes the declaration stale (ADR 0005): staleness is derived on read and
+    Stale is never written by a read. SnapshotVersion says which fields the JSON has, so a snapshot written by
+    an older version is compared only on those. Both or neither; no names, addresses or contacts are in it.
 */
 CREATE TABLE [dbo].[Declaration] (
     [Id]            int              NOT NULL IDENTITY(1,1) CONSTRAINT [PK_Declaration] PRIMARY KEY,
@@ -19,6 +24,8 @@ CREATE TABLE [dbo].[Declaration] (
     [ReasonCode]    varchar(32)      NULL,
     [RecordedBy]    uniqueidentifier NULL,
     [RecordedAt]    datetime2(0)     NULL,
+    [SnapshotJson]    nvarchar(max)  NULL,
+    [SnapshotVersion] int            NULL,
     [LastChangedBy] uniqueidentifier NULL,
     [LastChangedAt] datetime2(0)     NULL,
 
@@ -28,7 +35,10 @@ CREATE TABLE [dbo].[Declaration] (
     CONSTRAINT [FK_Declaration_RecordedBy] FOREIGN KEY ([RecordedBy]) REFERENCES [dbo].[Person] ([Id]),
     CONSTRAINT [FK_Declaration_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id]),
     CONSTRAINT [CK_Declaration_Kind] CHECK ([Kind] >= 0 AND [Kind] <= 3),
-    CONSTRAINT [CK_Declaration_Status] CHECK ([Status] >= 0 AND [Status] <= 7)
+    CONSTRAINT [CK_Declaration_Status] CHECK ([Status] >= 0 AND [Status] <= 7),
+    CONSTRAINT [CK_Declaration_Snapshot] CHECK (
+        ([SnapshotJson] IS NULL AND [SnapshotVersion] IS NULL)
+        OR ([SnapshotJson] IS NOT NULL AND [SnapshotVersion] IS NOT NULL))
 );
 GO
 

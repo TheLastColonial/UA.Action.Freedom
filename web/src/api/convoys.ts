@@ -475,13 +475,16 @@ export function useVehicleBoxes(
 }
 
 // A move changes two vehicles' cargo, so every vehicle on the convoy is refreshed, and the
-// manifest's read-through (its cargo and its weight) with them.
+// manifest's read-through (its cargo and its weight) with them. A load change can also make a
+// declaration stale, so the convoy's declarations and its re-declare tasks are refreshed too.
 async function invalidateCargo(
   queryClient: ReturnType<typeof useQueryClient>,
   id: number,
 ): Promise<void> {
   await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
   await queryClient.invalidateQueries({ queryKey: qk.manifests.all });
+  await queryClient.invalidateQueries({ queryKey: qk.declarations.convoy(id) });
+  await queryClient.invalidateQueries({ queryKey: qk.declarations.tasks(id) });
 }
 
 export function useAllocateBox(id: number, vin: string): UseMutationResult<void, Error, number> {

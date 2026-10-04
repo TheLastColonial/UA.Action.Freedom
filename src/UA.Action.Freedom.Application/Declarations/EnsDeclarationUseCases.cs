@@ -64,7 +64,7 @@ public enum RecordEnsOutcome
 }
 
 public sealed class RecordEnsDeclarationHandler(
-    IDeclarationRepository declarations, IEnsDeclarationStore store)
+    IDeclarationRepository declarations, IEnsDeclarationStore store, IDeclarationSnapshots snapshots)
     : ICommandHandler<RecordEnsDeclarationCommand, RecordEnsOutcome>
 {
     public async Task<RecordEnsOutcome> HandleAsync(
@@ -93,13 +93,17 @@ public sealed class RecordEnsDeclarationHandler(
         var declaration = await declarations.GetCurrentAsync(
             command.ConvoyId, command.Vin, DeclarationKind.Ens, null, cancellationToken);
 
-        return declaration is not null
-            && await store.SaveAsync(
+        if (declaration is null
+            || !await store.SaveAsync(
                 new EnsDeclarationReadModel(
                     declaration.Id, command.Mrn, command.AcceptedAt, command.FiledBy, command.FilingReference),
-                cancellationToken)
-            ? RecordEnsOutcome.Recorded
-            : RecordEnsOutcome.AlreadyRecorded;
+                cancellationToken))
+        {
+            return RecordEnsOutcome.AlreadyRecorded;
+        }
+
+        await snapshots.StampAsync(command.ConvoyId, command.Vin, DeclarationKind.Ens, null, cancellationToken);
+        return RecordEnsOutcome.Recorded;
     }
 }
 

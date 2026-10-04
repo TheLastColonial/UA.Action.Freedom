@@ -48,14 +48,23 @@ public static class DeclarationRefusalReasons
 /// <summary>Every declaration on a vehicle's truck-list entry, or null when it is not on the convoy.</summary>
 public sealed record ListDeclarationsQuery(int ConvoyId, string Vin);
 
-public sealed class ListDeclarationsHandler(IConvoyVehicleRepository truckList, IDeclarationRepository declarations)
+public sealed class ListDeclarationsHandler(
+    IConvoyVehicleRepository truckList, IDeclarationRepository declarations, IVehicleLoadReader loads)
     : IQueryHandler<ListDeclarationsQuery, IReadOnlyList<DeclarationReadModel>?>
 {
     public async Task<IReadOnlyList<DeclarationReadModel>?> HandleAsync(
-        ListDeclarationsQuery query, CancellationToken cancellationToken) =>
-        await truckList.GetAsync(query.ConvoyId, query.Vin, cancellationToken) is null
-            ? null
-            : await declarations.ListAsync(query.ConvoyId, query.Vin, cancellationToken);
+        ListDeclarationsQuery query, CancellationToken cancellationToken)
+    {
+        if (await truckList.GetAsync(query.ConvoyId, query.Vin, cancellationToken) is null)
+        {
+            return null;
+        }
+
+        var stored = await declarations.ListAsync(query.ConvoyId, query.Vin, cancellationToken);
+        var current = await loads.ReadAsync(query.ConvoyId, query.Vin, cancellationToken);
+
+        return [.. stored.Select(declaration => DeclarationStaleness.Derive(declaration, current))];
+    }
 }
 
 /// <summary>
@@ -80,7 +89,7 @@ public enum RecordDeclarationOutcome
     EnsNotAccepted,
 }
 
-public sealed class RecordDeclarationHandler(IDeclarationRepository declarations)
+public sealed class RecordDeclarationHandler(IDeclarationRepository declarations, IDeclarationSnapshots snapshots)
     : ICommandHandler<RecordDeclarationCommand, RecordDeclarationOutcome>
 {
     public async Task<RecordDeclarationOutcome> HandleAsync(
@@ -107,14 +116,18 @@ public sealed class RecordDeclarationHandler(IDeclarationRepository declarations
             return RecordDeclarationOutcome.EnsNotAccepted;
         }
 
-        return await declarations.RecordReferenceAsync(
-                command.ConvoyId, command.Vin, command.Kind, command.ReceiverRef, command.Reference, cancellationToken)
-            switch
-            {
-                RecordReferenceResult.Recorded => RecordDeclarationOutcome.Recorded,
-                RecordReferenceResult.VehicleNotOnConvoy => RecordDeclarationOutcome.VehicleNotOnConvoy,
-                _ => RecordDeclarationOutcome.AlreadyRecorded,
-            };
+        var recorded = await declarations.RecordReferenceAsync(
+            command.ConvoyId, command.Vin, command.Kind, command.ReceiverRef, command.Reference, cancellationToken);
+
+        if (recorded != RecordReferenceResult.Recorded)
+        {
+            return recorded == RecordReferenceResult.VehicleNotOnConvoy
+                ? RecordDeclarationOutcome.VehicleNotOnConvoy
+                : RecordDeclarationOutcome.AlreadyRecorded;
+        }
+
+        await snapshots.StampAsync(command.ConvoyId, command.Vin, command.Kind, command.ReceiverRef, cancellationToken);
+        return RecordDeclarationOutcome.Recorded;
     }
 }
 
@@ -188,6 +201,7 @@ public sealed class FileDeclarationHandler(
     IConvoyRepository convoys,
     IManifestWorkQueue queue,
     DeclarationSubmissionModes modes,
+    IDeclarationSnapshots snapshots,
     FreedomMetrics? metrics = null,
     ILogger<FileDeclarationHandler>? logger = null)
     : ICommandHandler<FileDeclarationCommand, FileDeclarationOutcome>
@@ -242,9 +256,13 @@ public sealed class FileDeclarationHandler(
         var result = await declarations.RecordReferenceAsync(
             command.ConvoyId, command.Vin, command.Kind, null, null, cancellationToken);
 
-        return result == RecordReferenceResult.Recorded
-            ? FileDeclarationOutcome.Filed
-            : FileDeclarationOutcome.AlreadyFiled;
+        if (result != RecordReferenceResult.Recorded)
+        {
+            return FileDeclarationOutcome.AlreadyFiled;
+        }
+
+        await snapshots.StampAsync(command.ConvoyId, command.Vin, command.Kind, null, cancellationToken);
+        return FileDeclarationOutcome.Filed;
     }
 
     private async Task EnqueueAsync(

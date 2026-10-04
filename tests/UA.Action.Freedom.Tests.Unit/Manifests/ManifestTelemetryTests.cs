@@ -134,7 +134,7 @@ public sealed class ManifestTelemetryTests : IDisposable
         var manifests = AnApprovedManifest();
         var handler = new FileDeclarationHandler(
             Substitute.For<IDeclarationRepository>(), manifests, AConvoy(), queue,
-            new DeclarationSubmissionModes(Gmr: SubmissionMode.Automatic), _metrics,
+            new DeclarationSubmissionModes(Gmr: SubmissionMode.Automatic), Substitute.For<IDeclarationSnapshots>(), _metrics,
             logs.CreateLogger<FileDeclarationHandler>());
 
         var file = () => handler.HandleAsync(

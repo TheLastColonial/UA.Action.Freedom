@@ -99,6 +99,44 @@ public static class DeclarationEndpoints
                 : Results.NotFound())
         .RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
 
+        // The declaration is written: the load it was written from is stored, and it is stale from then on
+        // whenever the load differs (ADR 0005). A goods list names its receiver in the query.
+        declarations.MapPost("/{kind}/ready", async (
+            int id,
+            string vin,
+            string kind,
+            Guid? receiverRef,
+            ICommandHandler<MarkDeclarationReadyCommand, MarkDeclarationReadyOutcome> handler,
+            CancellationToken cancellationToken) =>
+            ParseKind(kind) is not { } parsed
+                ? UnknownKind()
+                : ReadyResult(await handler.HandleAsync(
+                    new MarkDeclarationReadyCommand(id, vin, parsed, receiverRef), cancellationToken)))
+        .RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
+
+        // Withdrawing a stale declaration clears its task: the record and its reference are kept as history
+        // and a new draft starts for the same scope. For the ENS this is the supersede from plan 08.
+        declarations.MapPost("/{declarationId:int}/withdraw", async (
+            int id,
+            string vin,
+            int declarationId,
+            ICommandHandler<WithdrawDeclarationCommand, WithdrawDeclarationOutcome> handler,
+            CancellationToken cancellationToken) =>
+            WithdrawResult(await handler.HandleAsync(
+                new WithdrawDeclarationCommand(id, vin, declarationId), cancellationToken)))
+        .RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
+
+        // The Dispatcher's re-declare tasks (D13): derived from the stale declarations, shown on screen.
+        app.MapGet("/convoys/{id:int}/tasks", async (
+            int id,
+            IQueryHandler<ListRedeclareTasksQuery, IReadOnlyList<RedeclareTaskReadModel>?> handler,
+            CancellationToken cancellationToken) =>
+            await handler.HandleAsync(new ListRedeclareTasksQuery(id), cancellationToken) is { } tasks
+                ? Results.Ok(tasks)
+                : Results.NotFound())
+        .WithTags("Declarations")
+        .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
+
         declarations.MapPost("/{kind}/record", async (
             int id,
             string vin,
@@ -194,6 +232,30 @@ public static class DeclarationEndpoints
         _ => Results.Problem(
             detail: "The ELO is created from the ENS MRN, so this vehicle needs an accepted ENS before its "
                     + "envelope can be recorded.",
+            statusCode: StatusCodes.Status409Conflict),
+    };
+
+    private static IResult ReadyResult(MarkDeclarationReadyOutcome outcome) => outcome switch
+    {
+        MarkDeclarationReadyOutcome.Ready => Results.NoContent(),
+        MarkDeclarationReadyOutcome.VehicleNotOnConvoy => Results.NotFound(),
+        MarkDeclarationReadyOutcome.ReceiverRequired => Results.Problem(
+            detail: "A Ukrainian goods list is one per receiver, so the receiver it is for is required "
+                    + "(?receiverRef=).",
+            statusCode: StatusCodes.Status400BadRequest),
+        MarkDeclarationReadyOutcome.ReceiverNotAllowed => Results.Problem(
+            detail: "Only a Ukrainian goods list names a receiver.", statusCode: StatusCodes.Status400BadRequest),
+        _ => Results.Problem(
+            detail: "Only a draft declaration can be marked ready: this one has been filed.",
+            statusCode: StatusCodes.Status409Conflict),
+    };
+
+    private static IResult WithdrawResult(WithdrawDeclarationOutcome outcome) => outcome switch
+    {
+        WithdrawDeclarationOutcome.Withdrawn => Results.NoContent(),
+        WithdrawDeclarationOutcome.NotFound => Results.NotFound(),
+        _ => Results.Problem(
+            detail: "Only a stale declaration can be withdrawn: this one still matches the load it was written from.",
             statusCode: StatusCodes.Status409Conflict),
     };
 

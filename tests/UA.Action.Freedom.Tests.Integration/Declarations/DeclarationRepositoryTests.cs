@@ -185,4 +185,161 @@ public class DeclarationRepositoryTests
             await RemoveConvoyAsync(convoyId);
         }
     }
+
+    // ---- the snapshot (plan 09) -------------------------------------------------------------------
+
+    [Fact]
+    public async Task Marking_ready_stores_the_snapshot_and_reads_it_back()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, truckList, declarations) = await ConnectOrSkipAsync(cancellationToken);
+        var (convoyId, vin) = await AVehicleOnAConvoyAsync(convoys, truckList, cancellationToken);
+
+        try
+        {
+            (await declarations.MarkReadyAsync(convoyId, vin, DeclarationKind.Gmr, null, "{\"vin\":\"x\"}", 1, cancellationToken))
+                .Should().Be(MarkReadyResult.Ready);
+
+            var current = await declarations.GetCurrentAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken);
+            current!.Status.Should().Be(DeclarationStatus.ReadyToFile);
+            current.SnapshotJson.Should().Be("{\"vin\":\"x\"}");
+            current.SnapshotVersion.Should().Be(1);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(convoyId);
+        }
+    }
+
+    [Fact]
+    public async Task Marking_ready_again_refreshes_the_snapshot_but_not_once_filed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, truckList, declarations) = await ConnectOrSkipAsync(cancellationToken);
+        var (convoyId, vin) = await AVehicleOnAConvoyAsync(convoys, truckList, cancellationToken);
+
+        try
+        {
+            await declarations.MarkReadyAsync(convoyId, vin, DeclarationKind.Gmr, null, "{\"n\":1}", 1, cancellationToken);
+            await declarations.MarkReadyAsync(convoyId, vin, DeclarationKind.Gmr, null, "{\"n\":2}", 1, cancellationToken);
+            (await declarations.GetCurrentAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))!
+                .SnapshotJson.Should().Be("{\"n\":2}");
+
+            await declarations.RecordReferenceAsync(convoyId, vin, DeclarationKind.Gmr, null, "GMR-1", cancellationToken);
+
+            (await declarations.MarkReadyAsync(convoyId, vin, DeclarationKind.Gmr, null, "{\"n\":3}", 1, cancellationToken))
+                .Should().Be(MarkReadyResult.NotPreparable);
+            (await declarations.GetCurrentAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))!
+                .SnapshotJson.Should().Be("{\"n\":2}");
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(convoyId);
+        }
+    }
+
+    [Fact]
+    public async Task A_snapshot_is_stored_once_against_a_declaration_recorded_without_being_marked_ready()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, truckList, declarations) = await ConnectOrSkipAsync(cancellationToken);
+        var (convoyId, vin) = await AVehicleOnAConvoyAsync(convoys, truckList, cancellationToken);
+
+        try
+        {
+            await declarations.RecordReferenceAsync(convoyId, vin, DeclarationKind.Gmr, null, "GMR-1", cancellationToken);
+
+            (await declarations.StoreSnapshotAsync(convoyId, vin, DeclarationKind.Gmr, null, "{\"n\":1}", 1, cancellationToken))
+                .Should().BeTrue();
+            (await declarations.StoreSnapshotAsync(convoyId, vin, DeclarationKind.Gmr, null, "{\"n\":2}", 1, cancellationToken))
+                .Should().BeFalse();
+            (await declarations.GetCurrentAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))!
+                .SnapshotJson.Should().Be("{\"n\":1}");
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(convoyId);
+        }
+    }
+
+    [Fact]
+    public async Task A_refused_declaration_recorded_afresh_is_snapshotted_afresh()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, truckList, declarations) = await ConnectOrSkipAsync(cancellationToken);
+        var (convoyId, vin) = await AVehicleOnAConvoyAsync(convoys, truckList, cancellationToken);
+
+        try
+        {
+            await declarations.RecordReferenceAsync(convoyId, vin, DeclarationKind.Gmr, null, "GMR-1", cancellationToken);
+            await declarations.StoreSnapshotAsync(convoyId, vin, DeclarationKind.Gmr, null, "{\"n\":1}", 1, cancellationToken);
+            var id = (await declarations.GetCurrentAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))!.Id;
+            await declarations.RefuseAsync(id, "data-error", cancellationToken);
+
+            await declarations.RecordReferenceAsync(convoyId, vin, DeclarationKind.Gmr, null, "GMR-2", cancellationToken);
+
+            (await declarations.GetCurrentAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))!
+                .SnapshotJson.Should().BeNull();
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(convoyId);
+        }
+    }
+
+    [Fact]
+    public async Task Withdrawing_and_redrafting_keeps_one_current_declaration_and_the_old_reference_as_history()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, truckList, declarations) = await ConnectOrSkipAsync(cancellationToken);
+        var (convoyId, vin) = await AVehicleOnAConvoyAsync(convoys, truckList, cancellationToken);
+
+        try
+        {
+            await declarations.RecordReferenceAsync(convoyId, vin, DeclarationKind.Gmr, null, "GMR-1", cancellationToken);
+
+            (await declarations.WithdrawAndRedraftAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))
+                .Should().BeTrue();
+
+            var all = await declarations.ListAsync(convoyId, vin, cancellationToken);
+            all.Select(row => row.Status).Should().Equal(DeclarationStatus.Withdrawn, DeclarationStatus.Draft);
+            all[0].Reference.Should().Be("GMR-1");
+            (await declarations.GetCurrentAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))!
+                .Status.Should().Be(DeclarationStatus.Draft);
+
+            (await declarations.RecordReferenceAsync(convoyId, vin, DeclarationKind.Gmr, null, "GMR-2", cancellationToken))
+                .Should().Be(RecordReferenceResult.Recorded);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(convoyId);
+        }
+    }
+
+    [Fact]
+    public async Task Nothing_is_withdrawn_or_redrafted_when_the_declaration_was_never_filed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, truckList, declarations) = await ConnectOrSkipAsync(cancellationToken);
+        var (convoyId, vin) = await AVehicleOnAConvoyAsync(convoys, truckList, cancellationToken);
+
+        try
+        {
+            await declarations.MarkReadyAsync(convoyId, vin, DeclarationKind.Gmr, null, "{}", 1, cancellationToken);
+
+            (await declarations.WithdrawAndRedraftAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))
+                .Should().BeFalse();
+            (await declarations.ListAsync(convoyId, vin, cancellationToken)).Should().ContainSingle();
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(convoyId);
+        }
+    }
 }
