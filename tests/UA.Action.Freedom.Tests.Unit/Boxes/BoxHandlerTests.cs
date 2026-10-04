@@ -275,6 +275,44 @@ public class BoxHandlerTests
     }
 
     [Fact]
+    public async Task A_validated_box_cannot_be_deleted()
+    {
+        // The attestation is a commitment made at border checkpoints. Deleting the box would erase who vouched
+        // for what, so a box whose contents must change is replaced instead (ADR 0011).
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
+        var handler = new DeleteBoxHandler(repository);
+
+        var outcome = await handler.HandleAsync(new DeleteBoxCommand(BoxId), CancellationToken.None);
+
+        outcome.Should().Be(DeleteBoxOutcome.AlreadyValidated);
+        await repository.DidNotReceive().DeleteAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_box_nobody_has_validated_can_still_be_deleted()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
+        repository.DeleteAsync(BoxId, Arg.Any<CancellationToken>()).Returns(true);
+        var handler = new DeleteBoxHandler(repository);
+
+        var outcome = await handler.HandleAsync(new DeleteBoxCommand(BoxId), CancellationToken.None);
+
+        outcome.Should().Be(DeleteBoxOutcome.Deleted);
+    }
+
+    [Fact]
+    public async Task Deleting_a_box_that_does_not_exist_is_not_found()
+    {
+        var handler = new DeleteBoxHandler(Substitute.For<IBoxRepository>());
+
+        var outcome = await handler.HandleAsync(new DeleteBoxCommand(BoxId), CancellationToken.None);
+
+        outcome.Should().Be(DeleteBoxOutcome.NotFound);
+    }
+
+    [Fact]
     public async Task Nothing_can_be_taken_out_of_a_validated_box_either()
     {
         var repository = Substitute.For<IBoxRepository>();

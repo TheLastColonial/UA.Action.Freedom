@@ -125,7 +125,8 @@ public sealed record DeleteBoxCommand(int Id);
 public enum DeleteBoxOutcome
 {
     Deleted,
-    NotFound
+    NotFound,
+    AlreadyValidated
 }
 
 public sealed class DeleteBoxHandler(IBoxRepository repository)
@@ -133,6 +134,21 @@ public sealed class DeleteBoxHandler(IBoxRepository repository)
 {
     public async Task<DeleteBoxOutcome> HandleAsync(DeleteBoxCommand command, CancellationToken cancellationToken)
     {
+        var box = await repository.GetByIdAsync(command.Id, cancellationToken);
+
+        if (box is null)
+        {
+            return DeleteBoxOutcome.NotFound;
+        }
+
+        // An attested box is a commitment made at border checkpoints, and deleting it would cascade away
+        // the item list that was vouched for. If its contents must change the box is replaced, never removed
+        // (ADR 0011).
+        if (box.Validated)
+        {
+            return DeleteBoxOutcome.AlreadyValidated;
+        }
+
         var deleted = await repository.DeleteAsync(command.Id, cancellationToken);
         return deleted ? DeleteBoxOutcome.Deleted : DeleteBoxOutcome.NotFound;
     }

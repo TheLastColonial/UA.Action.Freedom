@@ -154,6 +154,21 @@ Scenario: A validated box cannot be moved or re-pointed
         """
     Then the response status is 409
 
+Scenario: An attested box cannot be deleted
+    Given I am authenticated as "admin"
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    Given I remember the box
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 18
+    Then the response status is 204
+    When I DELETE "/boxes/{id}" on the remembered box
+    Then the response status is 409
+    When I GET "/boxes/{id}" on the remembered box
+    Then the response status is 200
+
 Scenario: A validator named in the body is ignored, the caller signs
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:

@@ -96,7 +96,12 @@ public static class BoxEndpoints
             CancellationToken cancellationToken) =>
         {
             var outcome = await handler.HandleAsync(new DeleteBoxCommand(id), cancellationToken);
-            return outcome == DeleteBoxOutcome.NotFound ? Results.NotFound() : Results.NoContent();
+            return outcome switch
+            {
+                DeleteBoxOutcome.Deleted => Results.NoContent(),
+                DeleteBoxOutcome.NotFound => Results.NotFound(),
+                _ => Results.Problem(detail: ValidatedProblem, statusCode: StatusCodes.Status409Conflict),
+            };
         })
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
