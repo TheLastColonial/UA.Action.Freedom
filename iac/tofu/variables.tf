@@ -123,3 +123,27 @@ variable "mssql_sensitive_password" {
   default     = "Local_Freedom_Sensitive_1"
   sensitive   = true
 }
+
+variable "wiremock_port" {
+  description = "Host port of the WireMock; only used to print URLs in the environment output."
+  type        = number
+  default     = 8082
+}
+
+variable "grafana_port" {
+  description = "Host port of the Grafana; only used to print URLs in the environment output."
+  type        = number
+  default     = 3000
+}
+
+variable "mailpit_port" {
+  description = "Host port of the Mailpit UI; only used to print URLs in the environment output."
+  type        = number
+  default     = 8025
+}
+
+variable "edge_dashboard_port" {
+  description = "Host port of the Traefik dashboard; only used to print URLs in the environment output."
+  type        = number
+  default     = 8090
+}

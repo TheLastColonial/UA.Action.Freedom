@@ -14,6 +14,13 @@ Built on .NET 10 with ASP.NET Core minimal APIs, Dapper for data access, and Ope
 - **PowerShell** or **Bash** — for build/test scripts
 - **OpenTofu** (optional) — for provisioning local resources (`iac/tofu/`)
 
+### Parallel work (optional)
+
+Several developers or agents can each have an isolated git worktree *and* full local stack (own
+ports, containers, database, Keycloak) plus hot reload; see
+[`docs/parallel-agents.md`](docs/parallel-agents.md). Needs git 2.31+ and PowerShell 7 (`pwsh`);
+Pester 5 to run `scripts/agent/tests`; the Dev Containers extension is optional.
+
 ### Installation
 
 Clone the repository:
@@ -64,7 +71,12 @@ web/                                    # React + Vite operator UI (TypeScript, 
 
 iac/
 ├── local/                              # Docker Compose substrate (all services)
+│   └── docker-compose.dev.yml          #   Hot-reload override (dotnet watch, Vite)
 └── tofu/                               # OpenTofu provisioning (resources)
+
+scripts/agent/                          # Worktree + isolated stack per agent (agent.ps1, agent.sh, Pester tests)
+.devcontainer/                          # Dev container toolchain (experimental)
+.claude/skills/agent-worktree/          # Claude skill: the parallel-agent checklist
 
 docs/
 ├── domain/                             # Business rules (target design)
@@ -83,6 +95,7 @@ docs/
 ├── model/domain-model.puml             # Class diagram of the target domain
 ├── timeline/convoy-timeline.puml       # Gantt worked example of the convoy time rules
 ├── process.puml, manifest-status.puml  # Manifest process and states (target design)
+├── parallel-agents.md                  # One worktree + stack per agent, ports, hot reload
 ├── local-authentication.md             # Token & role setup guide
 ├── gotchas-and-open-questions.md       # Debugging & known traps
 ├── recommendations.md                  # Azure architecture & design decisions
@@ -175,6 +188,10 @@ curl http://localhost:8080/health/ready
 # (Optional) Load fictional seed data: depots, volunteers, a convoy, vehicles, boxes, the fixed item categories
 cd ../local && docker compose up db-seed
 ```
+
+**Another stack at the same time?** Do not copy this; create an isolated worktree and stack with
+`pwsh scripts/agent/agent.ps1 new <name> -Up` (own ports from a slot, hot reload for the .NET services
+and the web UI). See [`docs/parallel-agents.md`](docs/parallel-agents.md).
 
 The `db-seed` service is optional and re-runnable — it guards against seeding an already-populated
 database. Integration/BDD suites create their own data and do not invoke it.

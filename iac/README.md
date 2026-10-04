@@ -307,6 +307,16 @@ if a dashboard is malformed, reuses a uid or names an unknown datasource. See
 The image is pinned (`grafana/otel-lgtm:0.32.0`): the datasource uids and how metric names are
 mapped into Prometheus have moved between releases, and every dashboard depends on both.
 
+### Several stacks at once
+
+The compose file is parameterised so more than one copy can run: `COMPOSE_PROJECT_NAME`,
+`FREEDOM_PREFIX` (container names), `FREEDOM_IMAGE_TAG` and every `*_PORT` in `.env`, with
+`iac/tofu/terraform.tfvars` (`keycloak_url`, `edge_url`, `vite_dev_url`, the Azurite endpoints,
+`mssql_container`) matching. Defaults are the single-stack behaviour above. Do not set these by
+hand: `scripts/agent/agent.ps1 new <name>` allocates a port block per worktree and writes both files, and
+`iac/local/docker-compose.dev.yml` adds hot reload (`dotnet watch`, Vite). See
+[`docs/parallel-agents.md`](../docs/parallel-agents.md).
+
 ### Tearing down
 
 ```bash

@@ -11,7 +11,7 @@
 #
 # See ../README.md.
 
-name: freedom-local
+name: ${COMPOSE_PROJECT_NAME:-freedom-local}
 
 # Azurite's well-known development account. Public, fixed, and safe only because nothing
 # here is reachable from outside the machine. In Azure this is replaced by managed
@@ -38,7 +38,7 @@ services:
   # local equivalent (docs/recommendations.md 4.6).
   edge:
     image: traefik:v3.3
-    container_name: freedom-edge
+    container_name: ${FREEDOM_PREFIX:-freedom}-edge
     restart: unless-stopped
     command:
       - --entrypoints.web.address=:8080
@@ -91,8 +91,10 @@ services:
     build:
       context: ../..
       dockerfile: src/UA.Action.Freedom.Api/Dockerfile
-    image: ua-action-freedom/app:local
-    container_name: freedom-app
+      args:
+        VITE_OIDC_AUTHORITY: http://localhost:${KEYCLOAK_PORT:-8081}/realms/freedom
+    image: ua-action-freedom/app:${FREEDOM_IMAGE_TAG:-local}
+    container_name: ${FREEDOM_PREFIX:-freedom}-app
     restart: unless-stopped
     environment:
       <<: *telemetry
@@ -182,8 +184,8 @@ services:
     build:
       context: ../..
       dockerfile: src/UA.Action.Freedom.CustomsWorker/Dockerfile
-    image: ua-action-freedom/customs-worker:local
-    container_name: freedom-customs-worker
+    image: ua-action-freedom/customs-worker:${FREEDOM_IMAGE_TAG:-local}
+    container_name: ${FREEDOM_PREFIX:-freedom}-customs-worker
     restart: unless-stopped
     environment:
       <<: *telemetry
@@ -231,8 +233,8 @@ services:
     build:
       context: ../..
       dockerfile: src/UA.Action.Freedom.ManifestWorker/Dockerfile
-    image: ua-action-freedom/manifest-worker:local
-    container_name: freedom-manifest-worker
+    image: ua-action-freedom/manifest-worker:${FREEDOM_IMAGE_TAG:-local}
+    container_name: ${FREEDOM_PREFIX:-freedom}-manifest-worker
     restart: unless-stopped
     environment:
       <<: *telemetry
@@ -254,7 +256,7 @@ services:
   # calls the application makes here are the ones it will make in Azure.
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:latest
-    container_name: freedom-azurite
+    container_name: ${FREEDOM_PREFIX:-freedom}-azurite
     restart: unless-stopped
     command:
       - azurite
@@ -284,12 +286,14 @@ services:
   # Azure SQL, so T-SQL and the `sensitive` schema segregation behave identically.
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: freedom-mssql
+    container_name: ${FREEDOM_PREFIX:-freedom}-mssql
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
       MSSQL_PID: Developer
+      # Caps SQL Server's buffer pool (it otherwise takes most of the machine). Agent stacks set 1024.
+      MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-4096}
     ports:
       - "${MSSQL_PORT:-1433}:1433"
     volumes:
@@ -313,8 +317,8 @@ services:
     build:
       context: ../..
       dockerfile: database/Dockerfile
-    image: ua-action-freedom/db-deploy:local
-    container_name: freedom-db-deploy
+    image: ua-action-freedom/db-deploy:${FREEDOM_IMAGE_TAG:-local}
+    container_name: ${FREEDOM_PREFIX:-freedom}-db-deploy
     restart: "no"
     environment:
       FREEDOM_DB_SERVER: mssql
@@ -332,8 +336,8 @@ services:
     build:
       context: ../..
       dockerfile: database/Dockerfile
-    image: ua-action-freedom/db-deploy:local
-    container_name: freedom-db-seed
+    image: ua-action-freedom/db-deploy:${FREEDOM_IMAGE_TAG:-local}
+    container_name: ${FREEDOM_PREFIX:-freedom}-db-seed
     restart: "no"
     entrypoint: ["/deploy/seed.sh"]
     environment:
@@ -352,13 +356,15 @@ services:
   # and issues roles as claims, so authorisation policies port across unchanged.
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
-    container_name: freedom-keycloak
+    container_name: ${FREEDOM_PREFIX:-freedom}-keycloak
     restart: unless-stopped
     command: ["start-dev", "--http-port=8080"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HEALTH_ENABLED: "true"
+      # Keycloak's own default; agent stacks lower it, because an idle dev-mode Keycloak grows past 2 GB.
+      JAVA_OPTS_KC_HEAP: ${KEYCLOAK_JAVA_HEAP:--XX:InitialRAMPercentage=50 -XX:MaxRAMPercentage=70}
       KC_HTTP_ENABLED: "true"
       # Pin the issuer to the browser-facing URL so tokens validate on both sides
       # of the split horizon described on the `app` service.
@@ -391,7 +397,7 @@ services:
   # needs no provisioning step and no script.
   wiremock:
     image: wiremock/wiremock:3.9.2
-    container_name: freedom-wiremock
+    container_name: ${FREEDOM_PREFIX:-freedom}-wiremock
     restart: unless-stopped
     command: ["--global-response-templating", "--verbose", "--port", "8080"]
     ports:
@@ -411,7 +417,7 @@ services:
     # Pinned: dashboards and alert rules depend on the datasource uids and on how metric names are
     # mapped into Prometheus, both of which have moved between releases of this image.
     image: grafana/otel-lgtm:0.32.0
-    container_name: freedom-telemetry
+    container_name: ${FREEDOM_PREFIX:-freedom}-telemetry
     restart: unless-stopped
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
@@ -430,7 +436,7 @@ services:
   # in a web inbox; nothing leaves the machine.
   mailpit:
     image: axllent/mailpit:latest
-    container_name: freedom-mailpit
+    container_name: ${FREEDOM_PREFIX:-freedom}-mailpit
     restart: unless-stopped
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: "true"
@@ -448,7 +454,7 @@ services:
   # application path (docs/recommendations.md 5.1) has somewhere to post from.
   website:
     image: nginx:1.27-alpine
-    container_name: freedom-website
+    container_name: ${FREEDOM_PREFIX:-freedom}-website
     restart: unless-stopped
     volumes:
       - ./website/html:/usr/share/nginx/html:ro

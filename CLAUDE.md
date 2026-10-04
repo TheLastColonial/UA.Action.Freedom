@@ -37,6 +37,27 @@ Test framework is xUnit v3 with `AwesomeAssertions` (fluent assertions), `NSubst
 
 The solution builds clean, with **zero warnings** — the Domain `CS8618` nullability warnings were cleared by the domain remediation (`required` on genuinely required scalars, nullable navigation properties). Keep it at zero: a warning that is allowed to persist is one nobody reads.
 
+## Working in parallel (agents)
+
+Several agents may work on this repo at once. Each gets **its own git worktree and its own full local stack**; nothing is shared but the object database. Full guide: `docs/parallel-agents.md`; checklist skill: `.claude/skills/agent-worktree`.
+
+```
+pwsh scripts/agent/agent.ps1 new <name> -Up     # (bash: scripts/agent/agent.sh new <name> --up)
+cd ../UA.Action.Freedom.worktrees/<name>        # work ONLY here
+. ./.agent/env.ps1                              # (bash: . ./.agent/env.sh) before Integration/BDD/Playwright
+pwsh scripts/agent/agent.ps1 list|status|ports|db|down [-Volumes]
+pwsh scripts/agent/agent.ps1 remove <name>      # from the main checkout, once the PR is merged
+```
+
+- **Slots.** The main checkout is slot 0 and keeps the default ports (8080/8081/1433/...). Agent N (1-9) gets `20000 + N*100 + offset` for every published port (edge +0, Keycloak +3, SQL +9, Azurite +10..12, Vite +13), its own compose project/containers (`freedom-<name>-*`), image tags (`:<name>`), volumes and tofu state. The slot registry is `<main .git>/agent-slots.json`.
+- **Tear down with `agent.ps1 down [-Volumes]`**, not raw `docker compose down -v`: the script also clears the tofu state that a volume wipe would otherwise leave stale.
+- **Do not** run bare `docker compose`, `tofu apply` or infrastructure-backed tests against ports you did not claim, edit another worktree, or edit the generated files (`iac/local/.env`, `iac/tofu/terraform.tfvars`, `.agent/`, `.devcontainer/agent/`). A worktree's `iac/local/.env` is generated from the main checkout's, so secrets change there.
+- **Hot reload.** `agent.ps1 up` layers `iac/local/docker-compose.dev.yml`: `app`, `customs-worker`, `manifest-worker` run `dotnet watch` on the bind-mounted source (no image rebuild), and the operator UI runs on Vite at `http://localhost:<VITE_PORT>/app/`. Schema changes: `agent.ps1 db`. Provisioning: `up` re-runs `tofu apply`. `up -NoHotReload` runs the baked images as CI does — do that before a PR that touches a Dockerfile or project references.
+- **Compose parameters** (defaults reproduce the old behaviour; the only intentional default change is a 4 GB SQL Server cap and Keycloak's own heap default now being explicit): `COMPOSE_PROJECT_NAME`, `FREEDOM_PREFIX` (container name prefix), `FREEDOM_IMAGE_TAG`, every `*_PORT`, `VITE_PORT`, `KEYCLOAK_JAVA_HEAP`, `MSSQL_MEMORY_LIMIT_MB`. A new compose service must use `${FREEDOM_PREFIX:-freedom}-<svc>` for `container_name`, a `${..._PORT:-default}` host port, and a `${FREEDOM_IMAGE_TAG:-local}` tag, or it will collide between agents. Any new host-port-dependent URL goes in `scripts/agent/Agent.Lib.ps1` (`New-AgentTfVars`/`Get-AgentTestVariables`) too. The SPA's Keycloak authority is a Dockerfile build arg (`VITE_OIDC_AUTHORITY`) fed from `KEYCLOAK_PORT`.
+- **Memory.** Agent stacks are capped (Keycloak heap, SQL limit) to ~3.5 GB each; main + two uncapped stacks exhausted a 16 GB Docker VM and made `dotnet watch` crash with `Cannot allocate memory`. `up` warns when the VM cannot fit another stack. If services restart in a loop, check `docker run --rm alpine free -m` before debugging code.
+- The slot/port/env logic is Pester-tested: `Invoke-Pester scripts/agent/tests` (Pester 5+). Change it test-first.
+- The dev container (`.devcontainer/`, experimental) is for editing/building/testing; run the stack from the host.
+
 ## Architecture
 
 Solution follows a layered structure under `src/`:
