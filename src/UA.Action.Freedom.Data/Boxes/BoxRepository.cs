@@ -13,7 +13,8 @@ namespace UA.Action.Freedom.Data.Boxes;
 public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IBoxRepository
 {
     private static readonly string Columns =
-        $"b.Id, b.WeightKg, b.WidthCm, b.DepthCm, b.HeightCm, b.ReceiverRef, b.LocationId, b.ValidatedByPersonId, b.ValidatedAt, {ChangeStamp.ReadColumns("b")}";
+        $"b.Id, b.WeightKg, b.WidthCm, b.DepthCm, b.HeightCm, b.ReceiverRef, b.LocationId, b.ValidatedByPersonId, b.ValidatedAt, {ChangeStamp.ReadColumns("b")}, b.VoidedAt, b.ReplacesBoxId, "
+        + "(SELECT TOP (1) r.Id FROM dbo.Box AS r WHERE r.ReplacesBoxId = b.Id) AS ReplacedByBoxId";
 
     private static readonly string From = $"dbo.Box AS b {ChangeStamp.ReadJoin("b")}";
 
@@ -178,6 +179,93 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
             cancellationToken: cancellationToken));
 
         return affected > 0;
+    }
+
+    public async Task<int?> ReplaceAsync(int boxId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+
+        // One act, so one transaction: voiding the old box and failing before the replacement exists would leave
+        // a vehicle carrying a box that no longer counts, with nothing in its place. The void is conditional on the
+        // box being attested and not already voided, so the database settles two Loaders replacing at once.
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var voided = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.Box SET
+                VoidedAt = SYSUTCDATETIME(),
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
+            WHERE Id = @boxId AND ValidatedAt IS NOT NULL AND VoidedAt IS NULL
+            """,
+            attribution.With(new { boxId }),
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (voided == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return null;
+        }
+
+        // The old label stops resolving at the instant the box is voided (D3). Revoked rows are kept.
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.BoxQrCode SET RevokedAt = SYSUTCDATETIME(), LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
+            WHERE BoxId = @boxId AND RevokedAt IS NULL
+            """,
+            attribution.With(new { boxId }),
+            transaction,
+            cancellationToken: cancellationToken));
+
+        // Unattested, weightless, and naming the box it replaces. The receiver and location carry over.
+        var replacementId = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            """
+            INSERT INTO dbo.Box (ReceiverRef, LocationId, ReplacesBoxId, LastChangedBy, LastChangedAt)
+            SELECT ReceiverRef, LocationId, Id, @changedBy, SYSUTCDATETIME() FROM dbo.Box WHERE Id = @boxId;
+            SELECT CAST(SCOPE_IDENTITY() AS int);
+            """,
+            attribution.With(new { boxId }),
+            transaction,
+            cancellationToken: cancellationToken));
+
+        // The same donation described again, not a new one: category, quantity, value, donor and expiry all copy.
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO dbo.BoxItem
+                (Id, BoxId, CategoryId, Description, PropertiesJson, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn, DonationId, LastChangedBy, LastChangedAt)
+            SELECT NEWID(), @replacementId, CategoryId, Description, PropertiesJson, CommodityCode, Quantity, ValueGbp, ValueSource, ExpiresOn, DonationId, @changedBy, SYSUTCDATETIME()
+            FROM dbo.BoxItem WHERE BoxId = @boxId
+            """,
+            attribution.With(new { boxId, replacementId }),
+            transaction,
+            cancellationToken: cancellationToken));
+
+        // A voided box is not on a shelf, and its cargo goes to the box that replaces it.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE dbo.BoxBayAssignment SET VacatedAt = SYSUTCDATETIME() WHERE BoxId = @boxId AND VacatedAt IS NULL",
+            new { boxId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.ConvoyVehicleBoxAllocation SET
+                BoxId = @replacementId,
+                AllocatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
+            WHERE BoxId = @boxId
+            """,
+            attribution.With(new { boxId, replacementId }),
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return replacementId;
     }
 
     public async Task<IReadOnlyList<BoxItemReadModel>> ListItemsAsync(int boxId, CancellationToken cancellationToken)

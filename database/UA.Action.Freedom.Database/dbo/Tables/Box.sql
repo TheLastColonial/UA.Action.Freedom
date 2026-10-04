@@ -26,6 +26,12 @@ CREATE TABLE [dbo].[Box] (
     [LocationId]          int              NULL,
     [ValidatedByPersonId] uniqueidentifier NULL,
     [ValidatedAt]         datetime2(0)     NULL,
+
+    -- An attested box is never edited: it is voided and a new box takes its place (ADR 0011). VoidedAt is
+    -- terminal and kept as the record of what was attested. ReplacesBoxId is on the NEW box and names the one
+    -- it replaced, so the lineage reads forwards and backwards.
+    [VoidedAt]            datetime2(0)     NULL,
+    [ReplacesBoxId]       int              NULL,
     [CreatedAt]           datetime2(0)     NOT NULL CONSTRAINT [DF_Box_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]           datetime2(0)     NOT NULL CONSTRAINT [DF_Box_UpdatedAt] DEFAULT SYSUTCDATETIME(),
     [LastChangedBy] uniqueidentifier NULL,
@@ -45,5 +51,13 @@ CREATE TABLE [dbo].[Box] (
     CONSTRAINT [CK_Box_ValidationIsWholeOrAbsent] CHECK (
         ([ValidatedByPersonId] IS NULL AND [ValidatedAt] IS NULL)
         OR ([ValidatedByPersonId] IS NOT NULL AND [ValidatedAt] IS NOT NULL)),
+    -- Only an attested box is ever voided: an unattested one is edited instead.
+    CONSTRAINT [CK_Box_VoidedWasAttested] CHECK ([VoidedAt] IS NULL OR [ValidatedAt] IS NOT NULL),
+    -- No cascade: deleting a box that replaced another must not take the lineage with it.
+    CONSTRAINT [FK_Box_ReplacesBox] FOREIGN KEY ([ReplacesBoxId]) REFERENCES [dbo].[Box] ([Id]),
     CONSTRAINT [FK_Box_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
+GO
+
+-- A box is replaced at most once, and this also indexes the self-reference.
+CREATE UNIQUE INDEX [UX_Box_ReplacesBoxId] ON [dbo].[Box] ([ReplacesBoxId]) WHERE [ReplacesBoxId] IS NOT NULL;

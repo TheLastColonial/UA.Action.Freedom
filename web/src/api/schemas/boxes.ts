@@ -15,6 +15,11 @@ export const boxReadModelSchema = z.object({
   validatedByPersonId: z.string().nullable(),
   validatedAt: z.string().nullable(),
   validated: z.boolean(),
+  // The replacement lineage (ADR 0011): a voided box was replaced; the replacement names the box it replaced.
+  voided: z.boolean(),
+  voidedAt: z.string().nullable(),
+  replacesBoxId: z.number().int().nullable(),
+  replacedByBoxId: z.number().int().nullable(),
 });
 export type BoxReadModel = z.infer<typeof boxReadModelSchema>;
 

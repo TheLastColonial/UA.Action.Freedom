@@ -22,7 +22,8 @@ public enum AllocateBoxResult
     AlreadyAllocated,
     VehicleNotOnConvoy,
     VehicleWithdrawn,
-    BoxNotFound
+    BoxNotFound,
+    BoxVoided
 }
 
 /// <summary>What <see cref="IConvoyVehicleRepository.AssignCrewAsync"/> found when it tried.</summary>

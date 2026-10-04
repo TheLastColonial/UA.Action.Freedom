@@ -300,7 +300,8 @@ Core resource endpoints:
   - `POST /boxes/{id}/validate` — Lock box weight and optional dimensions. **Refused with `409 box-has-expired-items`** while an item that has already expired is in the box
   - `POST|GET|DELETE /boxes/{id}/qr-code` — Issue / read / revoke the box's QR label (`boxes:write` to issue and revoke, `boxes:read` to read)
   - `GET /boxes/{id}/qr-code/image` (`?format=svg\|png`) — The QR image alone (`boxes:read`)
-  - `GET /boxes/{id}/label` — Printable SVG label: QR + box number, no receiver detail (`boxes:read`)
+  - `POST /boxes/{id}/replace` — **Replace an attested box** (`boxes:write`): it is voided, its label stops resolving, and a new unattested box with the same items (category, quantity, value, donor, expiry) and the same receiver and location takes its cargo allocation, all in one transaction. `201` with `{ boxId }`; `409 box-not-attested` for a box nobody has validated (edit it instead), `409 box-voided` for one already replaced, `409 load-frozen` while the vehicle's GMR exists (until plan 15). A voided box is terminal, takes no label (`409`), cannot be allocated, and counts in no total. `DELETE /boxes/{id}` is refused `409` for a validated box
+  - `GET /boxes/{id}/label` — Printable SVG label (`boxes:read`): QR, box number, **one line per item with its category in English and Ukrainian, quantity and expiry**, and who signed it (a signer code and first name with last initial). Never a receiver, region, address, description, property, value or donor
   - `GET /boxes/scan/{token}` — Resolve a scanned token to its box (`boxes:read`)
 - `GET /manifests` — The document pack for one vehicle on one convoy: border weight, GMR. Its cargo and ferry booking are on the same truck-list entry. **Created on its convoy** (above), not here
   - `PUT /manifests/{id}` — Notes only. The convoy and the vehicle are the manifest's identity, so there is no field for either
@@ -603,9 +604,18 @@ vehicle already on one convoy is never silently moved to another.
 - The QR image and the printable label are rendered synchronously with **QRCoder** (managed
   `SvgQRCode` / `PngByteQRCode`, no `System.Drawing`, so nothing native in the Linux image) —
   `QrCodeRenderer` / `BoxLabelRenderer` in `src/UA.Action.Freedom.Api/Boxes/`. Both are pure and
-  deterministic. The label renderer takes only a box id, a token and a date: it has no parameter
-  through which a receiver, region or address could reach the label, so the redaction is
-  structural (see `docs/domain/key-concepts.md` § Data Sensitivity).
+  deterministic. The label renderer takes a box id, a token, a date and a `BoxLabelContent`
+  (`Application/Boxes/BoxLabelContent.cs`): lines of category, quantity and expiry plus a signer.
+  That type has no receiver, region, address, free-text description, property, value or donor, and
+  the renderer must never take a box or item read model, so the redaction is structural (see
+  `docs/domain/key-concepts.md` § Data Sensitivity and `docs/security/0011-label-review.md`). The
+  Ukrainian line is the category's `NameUk`, which an Administrator edits (the English name stands
+  in when it is empty). **No machine translation is wired**: see `docs/spikes/0011-offline-translation.md`.
+- **A validated box is replaced, never edited or deleted** (ADR 0011). `dbo.Box.VoidedAt` and
+  `ReplacesBoxId` hold the lineage; `BoxRepository.ReplaceAsync` does the void, the label revoke, the
+  item copy, the bay vacate and the allocation move in one transaction. The signer code is a
+  one-way hash of the volunteer's `PersonId` (`SignerCode`), so it needs no column and survives an
+  erasure.
 - The QR encodes `{App:PublicBaseUrl}/boxes/scan/{token}`. `App:PublicBaseUrl` is
   environment-only config; when unset each request's own scheme + host are used (fine for
   `dotnet run`, wrong behind a proxy — the local simulation sets `App__PublicBaseUrl`

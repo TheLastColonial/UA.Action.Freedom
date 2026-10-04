@@ -233,4 +233,44 @@ public class DonorRepositoryTests
             await RemoveCategoryAsync(categoryId);
         }
     }
+
+    [Fact]
+    public async Task The_report_counts_a_replaced_boxs_items_once_because_the_voided_box_is_left_out()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (donors, donations) = await ConnectOrSkipAsync(cancellationToken);
+        var donorId = Guid.NewGuid();
+        await donors.AddAsync(ADonor(donorId, NewName()), cancellationToken);
+        var donationId = await donations.AddAsync(donorId, new DateOnly(2026, 9, 1), null, cancellationToken);
+        var categoryId = await AddCategoryAsync();
+        var volunteer = await AddVolunteerAsync();
+        var voidedBoxId = await AddBoxAsync();
+        var replacementId = await AddBoxAsync();
+        await ExecuteAsync(
+            """
+            UPDATE dbo.Box SET ValidatedByPersonId = @volunteer, ValidatedAt = SYSUTCDATETIME(), VoidedAt = SYSUTCDATETIME()
+            WHERE Id = @voided;
+            UPDATE dbo.Box SET ReplacesBoxId = @voided WHERE Id = @replacement;
+            INSERT INTO dbo.BoxItem (Id, BoxId, CategoryId, Description, DonationId, Quantity, ValueGbp, ValueSource)
+            VALUES (NEWID(), @voided, @category, 'Tins', @donation, 12, 30.00, 0),
+                   (NEWID(), @replacement, @category, 'Tins', @donation, 12, 30.00, 0)
+            """,
+            ("@volunteer", volunteer), ("@voided", voidedBoxId), ("@replacement", replacementId),
+            ("@category", categoryId), ("@donation", donationId));
+
+        try
+        {
+            var report = await donations.ReportItemsAsync(donorId, cancellationToken);
+
+            report.Should().ContainSingle().Which.Quantity.Should().Be(12);
+        }
+        finally
+        {
+            await ExecuteAsync("DELETE FROM dbo.Box WHERE Id = @id", ("@id", replacementId));
+            await ExecuteAsync("DELETE FROM dbo.Box WHERE Id = @id", ("@id", voidedBoxId));
+            await ExecuteAsync("DELETE FROM dbo.Person WHERE Id = @id", ("@id", volunteer));
+            await RemoveDonorAsync(donorId);
+            await RemoveCategoryAsync(categoryId);
+        }
+    }
 }

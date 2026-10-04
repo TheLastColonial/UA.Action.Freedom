@@ -143,7 +143,7 @@ public sealed class DonationRepository(IDbConnectionFactory connectionFactory, I
             JOIN dbo.BoxItem AS i ON i.DonationId = n.Id
             JOIN dbo.ItemCategory AS c ON c.Id = i.CategoryId
             JOIN dbo.Box AS b ON b.Id = i.BoxId
-            WHERE n.DonorId = @donorId
+            WHERE n.DonorId = @donorId AND b.VoidedAt IS NULL
             ORDER BY n.ReceivedOn, n.Id, c.NameEn, i.Id
             """,
             new { donorId },

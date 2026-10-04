@@ -118,7 +118,43 @@ public static class BoxEndpoints
             CancellationToken cancellationToken) =>
         {
             var outcome = await handler.HandleAsync(new DeleteBoxCommand(id), cancellationToken);
-            return outcome == DeleteBoxOutcome.NotFound ? Results.NotFound() : Results.NoContent();
+            return outcome switch
+            {
+                DeleteBoxOutcome.Deleted => Results.NoContent(),
+                DeleteBoxOutcome.NotFound => Results.NotFound(),
+                _ => Results.Problem(detail: ValidatedProblem, statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
+
+        boxes.MapPost("/{id:int}/replace", async (
+            int id,
+            ICommandHandler<ReplaceBoxCommand, ReplaceBoxResult> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new ReplaceBoxCommand(id), cancellationToken);
+
+            return result.Outcome switch
+            {
+                ReplaceBoxOutcome.Replaced => Results.Created(
+                    $"/boxes/{result.ReplacementBoxId}", new { boxId = result.ReplacementBoxId }),
+                ReplaceBoxOutcome.NotFound => Results.NotFound(),
+                ReplaceBoxOutcome.NotAttested => Results.Problem(
+                    type: "box-not-attested",
+                    title: "This box has not been validated.",
+                    detail: "Only a validated box is replaced. Edit this one instead.",
+                    statusCode: StatusCodes.Status409Conflict),
+                ReplaceBoxOutcome.AlreadyVoided => Results.Problem(
+                    type: "box-voided",
+                    title: "This box has already been replaced.",
+                    detail: "A voided box is terminal. Replace the box that took its place instead.",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.Problem(
+                    type: "load-frozen",
+                    title: "This box's vehicle has had its Goods Movement Reference created.",
+                    detail: "The load of that vehicle can no longer change.",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
         })
         .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
@@ -222,14 +258,23 @@ public static class BoxEndpoints
         // is refused on a validated box.
         boxes.MapPost("/{id:int}/qr-code", async (
             int id,
-            ICommandHandler<IssueBoxQrCodeCommand, BoxQrCodeReadModel?> handler,
+            ICommandHandler<IssueBoxQrCodeCommand, IssueBoxQrCodeResult> handler,
             CancellationToken cancellationToken) =>
         {
             // Re-issuing revokes whatever label the box had: the old token stops resolving here.
-            var code = await handler.HandleAsync(new IssueBoxQrCodeCommand(id), cancellationToken);
-            return code is null
-                ? Results.NotFound()
-                : Results.Created($"/boxes/scan/{code.Token}", null);
+            var result = await handler.HandleAsync(new IssueBoxQrCodeCommand(id), cancellationToken);
+
+            return result switch
+            {
+                { Outcome: IssueBoxQrCodeOutcome.Issued, Code: { } code } =>
+                    Results.Created($"/boxes/scan/{code.Token}", null),
+                { Outcome: IssueBoxQrCodeOutcome.NotFound } => Results.NotFound(),
+                _ => Results.Problem(
+                    type: "box-voided",
+                    title: "This box has been replaced.",
+                    detail: "A voided box takes no label. Print the label of the box that replaced it.",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
         })
         .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
@@ -350,6 +395,7 @@ public static class BoxEndpoints
             IOptions<AppOptions> app,
             IQueryHandler<GetBoxByIdQuery, BoxReadModel?> boxHandler,
             IQueryHandler<GetBoxQrCodeQuery, BoxQrCodeReadModel?> codeHandler,
+            IQueryHandler<GetBoxLabelContentQuery, BoxLabelContent?> contentHandler,
             CancellationToken cancellationToken) =>
         {
             var box = await boxHandler.HandleAsync(new GetBoxByIdQuery(id), cancellationToken);
@@ -364,7 +410,10 @@ public static class BoxEndpoints
                 return Results.Problem(detail: NoQrCodeProblem, statusCode: StatusCodes.Status409Conflict);
             }
 
-            var svg = BoxLabelRenderer.ToSvg(box.Id, code.Token, code.IssuedAt, PublicBaseUrl(http, app.Value));
+            // What goes on the label is composed into its own type, never a box or item read model.
+            var content = await contentHandler.HandleAsync(new GetBoxLabelContentQuery(id), cancellationToken)
+                ?? BoxLabelContent.None;
+            var svg = BoxLabelRenderer.ToSvg(box.Id, code.Token, code.IssuedAt, PublicBaseUrl(http, app.Value), content);
             return Results.Text(svg, "image/svg+xml");
         })
         .RequireBoxScope(BoxAccess.Read)

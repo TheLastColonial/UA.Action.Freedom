@@ -154,6 +154,64 @@ Scenario: A validated box cannot be moved or re-pointed
         """
     Then the response status is 409
 
+Scenario: An attested box cannot be deleted
+    Given I am authenticated as "admin"
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    Given I remember the box
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 18
+    Then the response status is 204
+    When I DELETE "/boxes/{id}" on the remembered box
+    Then the response status is 409
+    When I GET "/boxes/{id}" on the remembered box
+    Then the response status is 200
+
+Scenario: An attested box is replaced, the old label stops working and the replacement is not attested
+    Given I am authenticated as "admin"
+    And a category exists
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    Given I remember the box
+    When I POST "/boxes/{id}/items" on the remembered box with body:
+        """
+        { "description": "Blankets", "categoryId": {category}, "quantity": 4 }
+        """
+    Then the response status is 200
+    When I POST "/boxes/{id}/qr-code" on the remembered box
+    Then the response status is 201
+    Given I remember the issued QR token
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 18
+    Then the response status is 204
+    When I POST "/boxes/{id}/replace" on the remembered box
+    Then the response status is 201
+    Given I remember the replacement box
+    When I GET "/boxes/scan/{id}" for the remembered QR token
+    Then the response status is 404
+    When I GET "/boxes/{id}" on the remembered box
+    Then the response body field "voided" is "True"
+    When I GET "/boxes/{id}" on the remembered replacement box
+    Then the response body field "validated" is "False"
+    When I GET "/boxes/{id}/items" on the remembered replacement box
+    Then the response status is 200
+    And the response body lists an item described as "Blankets"
+
+Scenario: A box nobody has attested is edited, not replaced
+    Given I am authenticated as "admin"
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    Given I remember the box
+    When I POST "/boxes/{id}/replace" on the remembered box
+    Then the response status is 409
+
 Scenario: A validator named in the body is ignored, the caller signs
     Given I am authenticated as "operator"
     When I POST "/boxes" with body:

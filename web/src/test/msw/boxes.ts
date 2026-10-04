@@ -115,10 +115,61 @@ export function boxApi(
         validatedByPersonId: null,
         validatedAt: null,
         validated: false,
+        voided: false,
+        voidedAt: null,
+        replacesBoxId: null,
+        replacedByBoxId: null,
       });
       return new HttpResponse(null, {
         status: 201,
         headers: { Location: `/boxes/${String(mintedBox)}` },
+      });
+    }),
+
+    http.post('/boxes/:id/replace', ({ params }) => {
+      const id = idFrom(params['id']);
+      const box = db.get(id);
+      if (!box) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      if (box.voided) {
+        return problem(409, 'This box has already been replaced.');
+      }
+      if (!box.validated) {
+        return problem(409, 'Only a validated box is replaced. Edit this one instead.');
+      }
+      // Mirrors the API: void the old box, drop its label, copy the items, name the one it replaces.
+      mintedBox += 1;
+      const replacementId = mintedBox;
+      db.set(id, {
+        ...box,
+        voided: true,
+        voidedAt: '2026-05-02T09:00:00',
+        replacedByBoxId: replacementId,
+      });
+      qr.delete(id);
+      db.set(replacementId, {
+        ...box,
+        id: replacementId,
+        weightKg: 0,
+        widthCm: null,
+        depthCm: null,
+        heightCm: null,
+        validatedByPersonId: null,
+        validatedAt: null,
+        validated: false,
+        voided: false,
+        voidedAt: null,
+        replacesBoxId: id,
+        replacedByBoxId: null,
+      });
+      items.set(
+        replacementId,
+        (items.get(id) ?? []).map((item) => ({ ...item, id: `${item.id}-copy` })),
+      );
+      return new HttpResponse(null, {
+        status: 201,
+        headers: { Location: `/boxes/${String(replacementId)}` },
       });
     }),
 
@@ -147,11 +198,18 @@ export function boxApi(
       return new HttpResponse(null, { status: 204 });
     }),
 
-    http.delete('/boxes/:id', ({ params }) =>
-      db.delete(idFrom(params['id']))
-        ? new HttpResponse(null, { status: 204 })
-        : new HttpResponse(null, { status: 404 }),
-    ),
+    http.delete('/boxes/:id', ({ params }) => {
+      const id = idFrom(params['id']);
+      const box = db.get(id);
+      if (!box) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      if (box.validated) {
+        return problem(409, 'This box has been validated and can no longer be changed.');
+      }
+      db.delete(id);
+      return new HttpResponse(null, { status: 204 });
+    }),
 
     http.get('/boxes/:id/items', ({ params }) => {
       const id = idFrom(params['id']);
@@ -274,6 +332,9 @@ export function boxApi(
       if (!db.has(id)) {
         return new HttpResponse(null, { status: 404 });
       }
+      if (db.get(id)?.voided) {
+        return problem(409, 'A voided box takes no label.');
+      }
       // Re-issuing replaces the active code — the previous token stops resolving.
       mintedToken += 1;
       const token = `cccccccc-0000-0000-0000-${String(mintedToken).padStart(12, '0')}`;
@@ -301,11 +362,12 @@ export function boxApi(
       if (!qr.has(id)) {
         return problem(409, 'This box has no QR code. Issue one before printing a label.');
       }
-      // Mirrors the real label: a box number and the charity, never the destination.
+      // Mirrors the real label: the box number, the contents and the signer, never the destination.
       const svg =
-        `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="240">` +
+        `<svg xmlns="http://www.w3.org/2000/svg" width="560" height="300">` +
         `<text x="248" y="52">UKRAINIAN ACTION</text>` +
         `<text x="248" y="112">BOX #${String(id)}</text>` +
+        `<text x="16" y="270">Contents / Вміст</text>` +
         `</svg>`;
       return new HttpResponse(svg, {
         status: 200,

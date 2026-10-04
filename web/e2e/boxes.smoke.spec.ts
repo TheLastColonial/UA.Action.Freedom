@@ -101,3 +101,29 @@ test('@smoke a loader places a box in a bay and then finds it there', async ({ p
   await page.getByRole('button', { name: 'Vacate bay' }).click();
   await expect(page.getByText('Not currently in a bay.')).toBeVisible();
 });
+
+test('@smoke a loader replaces an attested box and prints the replacement label', async ({
+  page,
+}) => {
+  await signIn(page, 'operator');
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+  await nav.getByRole('link', { name: 'Boxes' }).click();
+  await page.getByRole('link', { name: 'New box' }).click();
+  await page.getByRole('button', { name: 'Create box' }).click();
+  await expect(page.getByRole('heading', { name: /Box #/ })).toBeVisible();
+
+  await page.getByLabel('Confirmed weight (kg)').fill('9');
+  await page.getByRole('button', { name: 'Validate box' }).click();
+  await expect(page.getByText('Validated', { exact: true })).toBeVisible();
+
+  // An attested box is never deleted or edited: it is replaced.
+  await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Replace box' }).click();
+
+  await expect(page.getByText('Open', { exact: true })).toBeVisible();
+  await expect(page.getByText('Replaces', { exact: false })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Issue label' }).click();
+  await expect(page.getByRole('img', { name: /QR label for box \d+/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Print label' })).toBeEnabled();
+});

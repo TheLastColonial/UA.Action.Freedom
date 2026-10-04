@@ -313,6 +313,32 @@ public class BoxEndpointTests
     }
 
     [Fact]
+    public async Task A_validated_box_cannot_be_deleted()
+    {
+        var boxes = new InMemoryBoxRepository(ABox(validated: true));
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync($"/boxes/{BoxId}", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        boxes.Box(BoxId).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task A_box_nobody_has_validated_is_deleted()
+    {
+        var boxes = new InMemoryBoxRepository(ABox());
+        await using var api = FreedomApi.WithBoxes(boxes, AKnownLoader(), roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync($"/boxes/{BoxId}", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        boxes.Box(BoxId).Should().BeNull();
+    }
+
+    [Fact]
     public async Task A_validated_box_cannot_be_pointed_at_another_receiver()
     {
         var boxes = new InMemoryBoxRepository(ABox(validated: true));

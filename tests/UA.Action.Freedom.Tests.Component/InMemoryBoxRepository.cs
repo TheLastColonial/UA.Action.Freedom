@@ -1,5 +1,6 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
 
 namespace UA.Action.Freedom.Tests.Component;
@@ -17,7 +18,8 @@ internal sealed class InMemoryBoxRepository : IBoxRepository, IRecordsWhoChanged
     private BoxReadModel Read(BoxReadModel box)
     {
         var (name, at) = changes.Of(box.Id);
-        return box with { LastChangedByName = name, LastChangedAt = at };
+        var replacement = boxes.Values.FirstOrDefault(other => other.ReplacesBoxId == box.Id);
+        return box with { LastChangedByName = name, LastChangedAt = at, ReplacedByBoxId = replacement?.Id };
     }
 
     private readonly Dictionary<int, BoxReadModel> boxes = [];
@@ -140,6 +142,53 @@ internal sealed class InMemoryBoxRepository : IBoxRepository, IRecordsWhoChanged
         changes.Stamp(id);
 
         return Task.FromResult(true);
+    }
+
+    /// <summary>The allocation ledger the convoy fake shares, so replacing a box moves its cargo as the SQL does.</summary>
+    internal BoxAllocationLedger? Cargo { get; set; }
+
+    public Task<int?> ReplaceAsync(int boxId, CancellationToken cancellationToken)
+    {
+        // Mirrors the SQL: conditional on the box being attested and not already voided.
+        if (!boxes.TryGetValue(boxId, out var box) || !box.Validated || box.Voided)
+        {
+            return Task.FromResult<int?>(null);
+        }
+
+        var replacementId = nextId++;
+        boxes[boxId] = box with { VoidedAt = DateTime.UtcNow };
+        changes.Stamp(boxId);
+
+        // The old label stops resolving at once; revoked rows are kept.
+        for (var i = 0; i < qrCodes.Count; i++)
+        {
+            if (qrCodes[i].BoxId == boxId && qrCodes[i].Active)
+            {
+                qrCodes[i] = qrCodes[i] with { RevokedAt = DateTime.UtcNow };
+            }
+        }
+
+        boxes[replacementId] = box with
+        {
+            Id = replacementId, WeightKg = 0, WidthCm = null, DepthCm = null, HeightCm = null,
+            ValidatedByPersonId = null, ValidatedAt = null, VoidedAt = null, ReplacesBoxId = boxId,
+        };
+        changes.Stamp(replacementId);
+
+        // The same donation described again: every item copies, with a new identity.
+        items[replacementId] = [.. items.GetValueOrDefault(boxId, []).Select(item => item with { Id = Guid.NewGuid() })];
+
+        for (var i = 0; i < bayAssignments.Count; i++)
+        {
+            if (bayAssignments[i].BoxId == boxId && bayAssignments[i].Active)
+            {
+                bayAssignments[i] = bayAssignments[i] with { VacatedAt = DateTime.UtcNow };
+            }
+        }
+
+        Cargo?.Replace(boxId, new ManifestBoxReadModel(replacementId, 0, Validated: false));
+
+        return Task.FromResult<int?>(replacementId);
     }
 
     public Task<IReadOnlyList<BoxItemReadModel>> ListItemsAsync(int boxId, CancellationToken cancellationToken) =>

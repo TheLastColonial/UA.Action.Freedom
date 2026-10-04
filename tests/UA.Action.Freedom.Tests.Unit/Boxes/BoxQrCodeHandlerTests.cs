@@ -38,14 +38,14 @@ public class BoxQrCodeHandlerTests
     public async Task Issuing_a_label_for_a_box_that_exists_mints_a_token()
     {
         var repository = Substitute.For<IBoxRepository>();
-        repository.ExistsAsync(BoxId, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
         repository.IssueQrCodeAsync(BoxId, Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(call => ACode(call.ArgAt<Guid>(1)));
         var handler = new IssueBoxQrCodeHandler(repository);
 
         var code = await handler.HandleAsync(new IssueBoxQrCodeCommand(BoxId), CancellationToken.None);
 
-        code.Should().NotBeNull();
+        code.Outcome.Should().Be(IssueBoxQrCodeOutcome.Issued);
         await repository.Received(1).IssueQrCodeAsync(
             BoxId, Arg.Is<Guid>(token => token != Guid.Empty), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
     }
@@ -54,12 +54,12 @@ public class BoxQrCodeHandlerTests
     public async Task Issuing_a_label_for_a_box_that_does_not_exist_mints_nothing()
     {
         var repository = Substitute.For<IBoxRepository>();
-        repository.ExistsAsync(BoxId, Arg.Any<CancellationToken>()).Returns(false);
+        
         var handler = new IssueBoxQrCodeHandler(repository);
 
         var code = await handler.HandleAsync(new IssueBoxQrCodeCommand(BoxId), CancellationToken.None);
 
-        code.Should().BeNull();
+        code.Outcome.Should().Be(IssueBoxQrCodeOutcome.NotFound);
         await repository.DidNotReceive().IssueQrCodeAsync(
             Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
     }
@@ -70,7 +70,7 @@ public class BoxQrCodeHandlerTests
         // The old label must stop resolving at the instant the new one starts. That is the
         // repository's transaction, not a revoke-then-issue the handler orchestrates.
         var repository = Substitute.For<IBoxRepository>();
-        repository.ExistsAsync(BoxId, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox());
         repository.IssueQrCodeAsync(BoxId, Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(call => ACode(call.ArgAt<Guid>(1)));
         var handler = new IssueBoxQrCodeHandler(repository);
@@ -87,7 +87,6 @@ public class BoxQrCodeHandlerTests
     {
         // The freeze protects the confirmed weight and contents. A label is neither.
         var repository = Substitute.For<IBoxRepository>();
-        repository.ExistsAsync(BoxId, Arg.Any<CancellationToken>()).Returns(true);
         repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ABox(validated: true));
         repository.IssueQrCodeAsync(BoxId, Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(call => ACode(call.ArgAt<Guid>(1)));
@@ -95,7 +94,23 @@ public class BoxQrCodeHandlerTests
 
         var code = await handler.HandleAsync(new IssueBoxQrCodeCommand(BoxId), CancellationToken.None);
 
-        code.Should().NotBeNull();
+        code.Outcome.Should().Be(IssueBoxQrCodeOutcome.Issued);
+    }
+
+    [Fact]
+    public async Task A_voided_box_cannot_be_given_a_label_that_would_resolve_again()
+    {
+        // Voiding revokes the label so a photograph of it stops working. Issuing another would undo that.
+        var repository = Substitute.For<IBoxRepository>();
+        repository.GetByIdAsync(BoxId, Arg.Any<CancellationToken>())
+            .Returns(ABox(validated: true) with { VoidedAt = new DateTime(2026, 8, 21, 9, 0, 0, DateTimeKind.Utc) });
+        var handler = new IssueBoxQrCodeHandler(repository);
+
+        var result = await handler.HandleAsync(new IssueBoxQrCodeCommand(BoxId), CancellationToken.None);
+
+        result.Outcome.Should().Be(IssueBoxQrCodeOutcome.Voided);
+        await repository.DidNotReceive().IssueQrCodeAsync(
+            Arg.Any<int>(), Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

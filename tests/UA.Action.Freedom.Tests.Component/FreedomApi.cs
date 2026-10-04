@@ -336,6 +336,12 @@ internal static class FreedomApi
         {
             ShareCargo(convoys, manifests);
 
+            // Replacing a box moves its cargo allocation, which both fakes read through the one ledger.
+            if (boxes is InMemoryBoxRepository replaceable)
+            {
+                replaceable.Cargo = convoys.Ledger;
+            }
+
             // A declaration's snapshot reads the boxes on the vehicle, their items and their receivers.
             services.Replace(boxes ?? new InMemoryBoxRepository());
             if (receivers is not null)
@@ -414,6 +420,7 @@ internal static class FreedomApi
                 EnsureBudgetIsFaked(services);
                 EnsureEquipmentIsFaked(services);
                 EnsureScopeIsFaked(services);
+                EnsureCargoIsFaked(services);
                 EnsureAccommodationIsFaked(services);
 
                 services
@@ -505,6 +512,28 @@ internal static class FreedomApi
         }
     }
 
+    /// <summary>
+    /// Replacing a box asks where its cargo is, and whether that vehicle's load is frozen, so a test that did not
+    /// supply a truck list and manifests gets empty ones, sharing one ledger as the SQL repositories share a table.
+    /// </summary>
+    private static void EnsureCargoIsFaked(IServiceCollection services)
+    {
+        var fake = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IConvoyVehicleRepository) && descriptor.ImplementationFactory is not null);
+
+        if (fake)
+        {
+            return;
+        }
+
+        var convoys = new InMemoryConvoyRepository();
+        var manifests = new InMemoryManifestRepository();
+        ShareCargo(convoys, manifests);
+        services.Replace<IConvoyRepository>(convoys);
+        services.Replace<IConvoyVehicleRepository>(convoys);
+        services.Replace<IManifestRepository>(manifests);    
+    }
+  
     /// <summary>Accommodation is read into the budget and the task list, so a test that did not supply a store gets an empty one.</summary>
     private static void EnsureAccommodationIsFaked(IServiceCollection services)
     {
