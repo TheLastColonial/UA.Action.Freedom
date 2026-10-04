@@ -272,6 +272,7 @@ app.MapFreedomMe();
 app.MapFreedomConvoys();
 app.MapFreedomBudget();
 app.MapFreedomEquipment();
+app.MapFreedomAccommodation();
 app.MapFreedomReceivers();
 app.MapFreedomBoxes();
 app.MapFreedomCategories();
