@@ -129,6 +129,10 @@ services:
       # the Customs Worker picks up is the shape it would be in production.
       Customs__HaulierEori: ${CUSTOMS_HAULIER_EORI:-GB123456789000}
       Customs__RouteId: ${CUSTOMS_ROUTE_ID:-20000}
+      # ADR 0006: filing is manual unless an authority is switched to automatic. The WireMock-backed stack
+      # (and the BDD suite) exist to prove the automatic path, so say so explicitly.
+      Customs__GmrSubmissionMode: ${CUSTOMS_GMR_SUBMISSION_MODE:-Automatic}
+      Customs__EloSubmissionMode: ${CUSTOMS_ELO_SUBMISSION_MODE:-Automatic}
 
       # What an ICS2 declaration needs that neither the manifest nor the convoy knows. Read only by
       # GET /manifests/{id}/ens/filing-sheet, which a Ground Officer transcribes into the portal —

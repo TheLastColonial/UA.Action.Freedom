@@ -15,8 +15,8 @@ Feature: Manifests API
     no longer be edited — the vehicle would otherwise reach a border carrying something HMRC
     was not told about.
 
-    Approval is the fork in docs/process.puml: it confirms the manifest, freezes it, and hands
-    the GMR to the customs worker. It is Administrator only, so the person who builds a
+    Approval is the Administrator's sign-off of the load: it confirms the manifest and freezes it,
+    and files nothing. It is Administrator only, so the person who builds a
     manifest is not the person who signs it off.
 
     These scenarios run against the running containers (the edge on
@@ -102,11 +102,6 @@ Scenario: An administrator approves a manifest, which freezes it
     Then the response status is 201
     When I POST "propose" on the remembered manifest
     Then the response status is 204
-    # Approval is refused without an ICS2 Entry Summary Declaration, because the French envelope
-    # pairs the crossing against its MRN (docs/adr/0003). Recorded as the Dispatcher, before the
-    # hand-over to the Administrator who signs the manifest off.
-    When I record an ICS2 declaration for the remembered manifest
-    Then the response status is 201
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     Then the response status is 204
@@ -122,11 +117,6 @@ Scenario: A frozen manifest cannot be edited or deleted
     Then the response status is 201
     When I POST "propose" on the remembered manifest
     Then the response status is 204
-    # Approval is refused without an ICS2 Entry Summary Declaration, because the French envelope
-    # pairs the crossing against its MRN (docs/adr/0003). Recorded as the Dispatcher, before the
-    # hand-over to the Administrator who signs the manifest off.
-    When I record an ICS2 declaration for the remembered manifest
-    Then the response status is 201
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     Then the response status is 204
@@ -146,11 +136,6 @@ Scenario: A frozen manifest still runs to delivery
     Then the response status is 201
     When I POST "propose" on the remembered manifest
     Then the response status is 204
-    # Approval is refused without an ICS2 Entry Summary Declaration, because the French envelope
-    # pairs the crossing against its MRN (docs/adr/0003). Recorded as the Dispatcher, before the
-    # hand-over to the Administrator who signs the manifest off.
-    When I record an ICS2 declaration for the remembered manifest
-    Then the response status is 201
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     Then the response status is 204
@@ -230,11 +215,6 @@ Scenario: A vehicle cannot depart once its insurance is gone
     When I POST a manifest for the insured vehicle on the remembered convoy
     Then the response status is 201
     When I POST "propose" on the remembered manifest
-    # Approval is refused without an ICS2 Entry Summary Declaration, because the French envelope
-    # pairs the crossing against its MRN (docs/adr/0003). Recorded as the Dispatcher, before the
-    # hand-over to the Administrator who signs the manifest off.
-    When I record an ICS2 declaration for the remembered manifest
-    Then the response status is 201
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     And I POST "prepare" on the remembered manifest
@@ -250,11 +230,6 @@ Scenario: A convoy arrives once its vehicles are delivered, and the vehicle is h
     And a manifest reference that is not yet used
     When I POST a manifest for the insured vehicle on the remembered convoy
     And I POST "propose" on the remembered manifest
-    # Approval is refused without an ICS2 Entry Summary Declaration, because the French envelope
-    # pairs the crossing against its MRN (docs/adr/0003). Recorded as the Dispatcher, before the
-    # hand-over to the Administrator who signs the manifest off.
-    When I record an ICS2 declaration for the remembered manifest
-    Then the response status is 201
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     And I POST "prepare" on the remembered manifest
@@ -275,11 +250,6 @@ Scenario: A driver is erased only once their convoy has arrived, and the history
     And a manifest reference that is not yet used
     When I POST a manifest for the insured vehicle on the remembered convoy
     And I POST "propose" on the remembered manifest
-    # Approval is refused without an ICS2 Entry Summary Declaration, because the French envelope
-    # pairs the crossing against its MRN (docs/adr/0003). Recorded as the Dispatcher, before the
-    # hand-over to the Administrator who signs the manifest off.
-    When I record an ICS2 declaration for the remembered manifest
-    Then the response status is 201
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     And I POST "prepare" on the remembered manifest

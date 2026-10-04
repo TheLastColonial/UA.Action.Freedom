@@ -39,3 +39,11 @@ GO
 CREATE UNIQUE INDEX [UX_Declaration_CurrentPerReceiver] ON [dbo].[Declaration] ([ConvoyId], [Vin], [Kind], [ReceiverRef])
     WHERE [ReceiverRef] IS NOT NULL AND [Status] <> 6;
 GO
+
+-- The two foreign keys to dbo.Person are checked by every Person delete; without an index each check
+-- scans this table under lock, which is how an erasure deadlocks against a declaration being filed.
+CREATE INDEX [IX_Declaration_RecordedBy] ON [dbo].[Declaration] ([RecordedBy]) WHERE [RecordedBy] IS NOT NULL;
+GO
+
+CREATE INDEX [IX_Declaration_LastChangedBy] ON [dbo].[Declaration] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO
