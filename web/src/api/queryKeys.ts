@@ -38,6 +38,7 @@ export const qk = {
     list: (params: PageParams) => ['convoys', 'list', params] as const,
     detail: (id: number) => ['convoys', 'detail', id] as const,
     route: (id: number) => ['convoys', id, 'route'] as const,
+    leader: (id: number) => ['convoys', id, 'leader'] as const,
     vehicles: (id: number) => ['convoys', id, 'vehicles'] as const,
     vehicleCrew: (id: number, vin: string) => ['convoys', id, 'vehicles', vin, 'crew'] as const,
     insurance: (id: number, vin: string) => ['convoys', id, 'vehicles', vin, 'insurance'] as const,

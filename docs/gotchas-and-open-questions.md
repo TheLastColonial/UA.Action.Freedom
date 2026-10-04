@@ -219,6 +219,28 @@ from the truck list on the way out — and `Manifest.(ConvoyId, Vin)` is `NOT NU
 foreign key and unique. **Do not add a convoy column back to `dbo.Vehicle`**, and do not relax that
 uniqueness.
 
+### The route is merged, not replaced, and the id is the point
+
+`PUT /convoys/{id}/route` used to delete every stop and insert the new ones. A route point now has a stable
+`RoutePointId` (the `IDENTITY` primary key of `dbo.ConvoyRouteStop`, with `UQ (ConvoyId, Sequence)`), so
+`ConvoyRepository.ReplaceRouteAsync` is a merge in one transaction: delete the points not sent, **park the survivors on
+negative sequences** (`Sequence = -RoutePointId`, because the unique key is checked row by row and a reorder would otherwise
+collide with itself), update the matched points, insert the new ones. Anything that will refer to a point must be
+reported through `IRoutePointReferences` (Application), which the handler asks before removing points (`409
+route-point-in-use`): the default answers "nothing", plan 11 and plan 18 replace it, and each should also add a real foreign key to
+`RoutePointId`. A test double must keep the same rule (`InMemoryConvoyRepository.ReferenceRoutePoint`). A Border point has an
+authority and no other kind does; that is validated in the API, not by a CHECK that spans two columns, because SQL Server
+normalises such a check and every publish would recreate it.
+
+### The Convoy Leader is a nomination with history, and the crew cannot silently lose them
+
+`dbo.ConvoyLeaderAssignment` holds one open row per convoy (`UX_ConvoyLeaderAssignment_OpenPerConvoy`, filtered on
+`Until IS NULL`). `NominateAsync` checks, under lock and in the same transaction, that the person is a **Driver** crewed on
+the convoy, closes the open row and opens the new one. Removing the current leader from the crew is refused
+(`409 convoy-leader-on-crew`) until another leader is nominated: the check is in `UnassignCrewFromVehicleHandler`, not in SQL,
+so a nomination and a removal racing each other could still slip through; plan 13 makes "leader assigned" a blocking readiness
+requirement, which catches it before departure.
+
 ### There is one crew record, and the manifest reads it
 
 `dbo.ConvoyVehicleCrew` (was `dbo.VehicleDriver`) carries a `Role` (there are no journey legs), and

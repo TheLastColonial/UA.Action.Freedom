@@ -24,6 +24,7 @@ test('@smoke operator plans a convoy, adds a route stop and publishes the truck 
 
   await page.getByRole('tab', { name: 'Route' }).click();
   await page.getByRole('button', { name: 'Add stop' }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Manchester depot');
   await page.getByLabel('Postcode').fill('M1 1AA');
   await page.getByRole('button', { name: 'Save route' }).click();
 
@@ -92,6 +93,7 @@ test('@smoke a convoy is planned to readiness: passed vehicle, a driver, a passe
 
   await page.getByRole('tab', { name: 'Route' }).click();
   await page.getByRole('button', { name: 'Add stop' }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Manchester depot');
   await page.getByLabel('Postcode').fill('M1 1AA');
   await page.getByRole('button', { name: 'Save route' }).click();
 
@@ -147,4 +149,80 @@ test('@smoke a convoy is planned to readiness: passed vehicle, a driver, a passe
   await ferry.getByLabel('Sailing').fill('2026-07-02T07:30');
   await ferry.getByRole('button', { name: 'Book ferry' }).click();
   await expect(page.getByText(/Booked with P&O Ferries/)).toBeVisible();
+});
+
+test('@smoke editing a route keeps its point ids, and the Dispatcher nominates a leader', async ({
+  page,
+}) => {
+  const stamp = String(Date.now());
+  const vin = `E2L${stamp}`;
+  const driver = `Leader Driver${stamp}`;
+
+  await signIn(page, 'admin');
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+  await nav.getByRole('link', { name: 'Volunteers' }).click();
+  await page.getByRole('link', { name: 'New volunteer' }).click();
+  await page.getByLabel('First name').fill('Leader');
+  await page.getByLabel('Last name').fill(`Driver${stamp}`);
+  await page.getByLabel('Date of birth').fill('1985-01-01');
+  await page.getByLabel('Volunteers to drive').check();
+  await page.getByRole('button', { name: 'Create volunteer' }).click();
+  await expect(page.getByRole('heading', { name: driver })).toBeVisible();
+
+  await signIn(page, 'operator');
+  await nav.getByRole('link', { name: 'Vehicles' }).click();
+  await page.getByRole('link', { name: 'New vehicle' }).click();
+  await page.getByLabel('VIN').fill(vin);
+  await page.getByLabel('Number plate').fill('E2E 003');
+  await page.getByLabel('Year').fill('2016');
+  await page.getByLabel('Kerb weight (kg)').fill('2100');
+  await page.getByRole('button', { name: 'Create vehicle' }).click();
+  await page.getByRole('link', { name: 'Servicing' }).click();
+  await page.getByLabel('Inspection status').selectOption('Passed');
+  await page.getByRole('button', { name: 'Save inspection' }).click();
+  await expect(page.getByRole('status')).toHaveText('Inspection saved.');
+
+  await nav.getByRole('link', { name: 'Convoys' }).click();
+  await page.getByRole('link', { name: 'New convoy' }).click();
+  await page.getByLabel('Departs').fill('2026-08-01T08:00');
+  await page.getByLabel('Expected arrival').fill('2026-08-06T20:00');
+  await page.getByRole('button', { name: 'Create convoy' }).click();
+  await expect(page.getByRole('heading', { name: /Convoy #/ })).toBeVisible();
+
+  // Two points, then swap them: the ids go with the points, not the positions.
+  await page.getByRole('tab', { name: 'Route' }).click();
+  for (const [index, name] of ['Coventry depot', 'Dover port'].entries()) {
+    await page.getByRole('button', { name: 'Add stop' }).click();
+    await page.getByLabel('Name', { exact: true }).nth(index).fill(name);
+    await page.getByLabel('Postcode').nth(index).fill('M1 1AA');
+  }
+  const saved = page.waitForResponse(
+    (r) => r.url().includes('/route') && r.request().method() === 'PUT',
+  );
+  await page.getByRole('button', { name: 'Save route' }).click();
+  const before = (await (await saved).json()) as { routePointId: number; name: string }[];
+
+  await page.getByRole('button', { name: 'Move up' }).nth(1).click();
+  const resaved = page.waitForResponse(
+    (r) => r.url().includes('/route') && r.request().method() === 'PUT',
+  );
+  await page.getByRole('button', { name: 'Save route' }).click();
+  const after = (await (await resaved).json()) as { routePointId: number; name: string }[];
+
+  expect(after.map((p) => p.name)).toEqual(['Dover port', 'Coventry depot']);
+  expect(after.map((p) => p.routePointId)).toEqual(before.map((p) => p.routePointId).reverse());
+
+  await page.getByRole('tab', { name: 'Vehicles' }).click();
+  await page.getByRole('combobox', { name: 'Vehicle' }).fill(vin);
+  await page.getByRole('option', { name: new RegExp(vin) }).click();
+  await expect(page.getByRole('cell', { name: vin })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Crew' }).click();
+  await page.getByLabel('Add driver to E2E 003').selectOption({ label: driver });
+  await page.getByRole('button', { name: 'Assign' }).click();
+  await expect(page.getByRole('cell', { name: driver, exact: true }).first()).toBeVisible();
+
+  await page.getByLabel('Nominate leader').selectOption({ label: driver });
+  await page.getByRole('button', { name: 'Nominate' }).click();
+  await expect(page.getByText(`${driver} leads this convoy.`)).toBeVisible();
 });

@@ -54,16 +54,76 @@ Scenario: A convoy's route is stored in the order it was sent
     When I PUT "/convoys/{id}/route" with body:
         """
         { "stops": [
-            { "house": "Unit 4", "street": "Cross Road", "city": "Coventry", "country": "United Kingdom", "postcode": "CV1 2AB" },
-            { "street": "Trasa Katowicka", "city": "Warszawa", "country": "Poland", "postcode": "80-180" }
+            { "name": "Coventry depot", "kind": "Hub", "house": "Unit 4", "street": "Cross Road", "city": "Coventry", "country": "United Kingdom", "postcode": "CV1 2AB" },
+            { "name": "Warsaw hub", "street": "Trasa Katowicka", "city": "Warszawa", "country": "Poland", "postcode": "80-180" }
         ] }
         """
-    Then the response status is 204
+    Then the response status is 200
     When I GET "/convoys/{id}/route"
     Then the response status is 200
     And the response body lists a route of 2 stops
     And route stop 1 is in "Coventry"
     And route stop 2 is in "Warszawa"
+
+Scenario: Editing a route keeps the ids of its points
+    Given I am authenticated as "operator"
+    When I POST "/convoys" with body:
+        """
+        { "start": "2026-09-01T06:00:00Z", "expectedEnd": "2026-09-05T18:00:00Z" }
+        """
+    Then the response status is 201
+    Given I remember the convoy
+    When I PUT "/convoys/{id}/route" on the remembered convoy with body:
+        """
+        { "stops": [
+            { "name": "Coventry depot", "kind": "Hub", "city": "Coventry", "postcode": "CV1 2AB" },
+            { "name": "Dover port", "kind": "Border", "authority": "UK", "city": "Dover", "postcode": "CT16 1JA" }
+        ] }
+        """
+    Then the response status is 200
+    When I reverse the route of the remembered convoy keeping the point ids
+    Then the response status is 200
+    And the route points keep the ids they had, in the new order
+
+Scenario: A dispatcher nominates a driver crewed on the convoy as its leader
+    Given I am authenticated as "operator"
+    When I POST "/convoys" with body:
+        """
+        { "start": "2026-09-01T06:00:00Z", "expectedEnd": "2026-09-05T18:00:00Z" }
+        """
+    Then the response status is 201
+    Given I remember the convoy
+    And no vehicle exists with VIN "WDB9066331S0BDL01"
+    And a vehicle exists with VIN "WDB9066331S0BDL01"
+    And the vehicle "WDB9066331S0BDL01" has passed its inspection
+    And a driver exists
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDL01" on the remembered convoy
+    Then the response status is 204
+    When I nominate the driver as the leader of the remembered convoy
+    Then the response status is 422
+    When I PUT "/convoys/{id}/vehicles/WDB9066331S0BDL01/crew/{driver}" on the remembered convoy for the driver
+    Then the response status is 204
+    When I nominate the driver as the leader of the remembered convoy
+    Then the response status is 200
+    And the convoy leader is the driver
+    When I GET "/convoys/{id}/leader" on the remembered convoy
+    Then the response status is 200
+    And the convoy leader is the driver
+    When I DELETE "/convoys/{id}/vehicles/WDB9066331S0BDL01/crew/{driver}" on the remembered convoy for the driver
+    Then the response status is 409
+
+Scenario: A Ground Officer may not nominate a convoy leader
+    Given I am authenticated as "operator"
+    When I POST "/convoys" with body:
+        """
+        { "start": "2026-09-01T06:00:00Z", "expectedEnd": "2026-09-05T18:00:00Z" }
+        """
+    Then the response status is 201
+    Given I remember the convoy
+    And a driver exists
+    And I am authenticated as "groundofficer"
+    When I nominate the driver as the leader of the remembered convoy
+    Then the response status is 403
 
 Scenario: A convoy with no route planned yet has an empty route, not a missing one
     Given I am authenticated as "operator"

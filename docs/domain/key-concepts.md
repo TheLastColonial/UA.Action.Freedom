@@ -97,6 +97,14 @@ The Ground Officer is the only role that sees full [Receiver](#receiver) detail.
 A volunteer who drives a vehicle on a convoy. Drivers are notified of their allocation and receive
 their manifest, but do not administer the system. A driver may be *committed* to a convoy or merely available.
 
+### Convoy Leader
+
+The one [Driver](#driver) crewed on a convoy who leads it ([D8](decisions.md#d8), [P7](decisions.md#p7)). The Dispatcher or
+Administrator nominates them and is the only one who reassigns ([D17](decisions.md#d17), [P14](decisions.md#p14)); every
+earlier leader is kept in the history with the dates. A leader is a fact about the convoy for now, not a login capability:
+the leader's own permissions arrive with scoped permissions. A leader cannot be taken off the crew until another is
+nominated, so a convoy is never left silently without one.
+
 ### Volunteer erasure
 
 A volunteer who leaves can ask to be erased, and UK data protection gives them that right. Freedom **deletes their
@@ -260,6 +268,12 @@ There is one record now.
 ### Route
 
 The ordered list of [Addresses](#address) a convoy will pass through, from UK departure to Ukrainian delivery.
+
+Each point on it is a **route point**: it has an identity of its own that survives an edit of the route (accommodation,
+progress marks and crossings point at it), a name, and a kind: `Stop`, `Overnight`, `Border` or `Hub`. A point is an
+overnight stop only because the Dispatcher flagged it ([P15](decisions.md#p15)): the service never calculates routes or
+times. A `Border` point is a crossing for one named customs authority (UK, EU or Ukraine) and no other kind has an
+authority. Saving a route merges by id rather than rewriting it, and a point something refers to cannot be removed.
 
 ### Address
 

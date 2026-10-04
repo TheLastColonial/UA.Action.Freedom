@@ -1,4 +1,5 @@
 using FluentValidation;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Convoys;
 
@@ -44,6 +45,16 @@ public sealed class ReplaceConvoyRouteRequestValidator : AbstractValidator<Repla
 
         RuleForEach(r => r.Stops).ChildRules(stop =>
         {
+            stop.RuleFor(s => s.Name).NotEmpty().MaximumLength(100);
+            stop.RuleFor(s => s.Kind).IsInEnum();
+            stop.RuleFor(s => s.Authority).IsInEnum().When(s => s.Authority is not null);
+            stop.RuleFor(s => s.Authority).NotNull()
+                .When(s => s.Kind == RoutePointKind.Border)
+                .WithMessage("A border point needs the customs authority it is a crossing for.");
+            stop.RuleFor(s => s.Authority).Null()
+                .When(s => s.Kind != RoutePointKind.Border)
+                .WithMessage("Only a border point has a customs authority.");
+            stop.RuleFor(s => s.RoutePointId).GreaterThan(0).When(s => s.RoutePointId is not null);
             stop.RuleFor(s => s.Postcode).NotEmpty().MaximumLength(20);
             stop.RuleFor(s => s.House).MaximumLength(100);
             stop.RuleFor(s => s.Street).MaximumLength(200);

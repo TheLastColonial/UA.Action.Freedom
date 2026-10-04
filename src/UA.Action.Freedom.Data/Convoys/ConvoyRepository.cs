@@ -27,7 +27,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, ICh
         $"({(int)ManifestStatus.Delivered}, {(int)ManifestStatus.Lost}, {(int)ManifestStatus.Returned})";
 
     private const string StopColumns =
-        "Sequence, House, Street, City, Country, Postcode, CountryCode";
+        "Sequence, House, Street, City, Country, Postcode, CountryCode, RoutePointId, Name, Kind, Authority";
 
     public async Task<ConvoyReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
@@ -179,40 +179,81 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, ICh
         await using var connection = connectionFactory.Create();
         await connection.OpenAsync(cancellationToken);
 
-        // A route is meaningful only as a whole journey. Deleting the old stops and failing part-way through inserting the new
-        // ones would leave the convoy with a truncated route that still looks valid.
+        // A route is meaningful only as a whole journey, and it is merged rather than rewritten: a
+        // point keeps its id so that whatever refers to it keeps pointing at it. All of it is one
+        // transaction, so a failure part-way leaves the old route, not a truncated one.
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        var keptIds = stops.Where(stop => stop.RoutePointId != 0).Select(stop => stop.RoutePointId).ToList();
+
         await connection.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM dbo.ConvoyRouteStop WHERE ConvoyId = @convoyId",
+            """
+            DELETE FROM dbo.ConvoyRouteStop
+            WHERE ConvoyId = @convoyId AND RoutePointId NOT IN (SELECT value FROM OPENJSON(@keptIds) WITH (value int '$'))
+            """,
+            new { convoyId, keptIds = System.Text.Json.JsonSerializer.Serialize(keptIds) },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        // UQ (ConvoyId, Sequence) is checked row by row, so a reorder would collide with itself.
+        // Park the surviving points on negative sequences (ids are unique, so these are too), then
+        // give each its place.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE dbo.ConvoyRouteStop SET Sequence = -RoutePointId WHERE ConvoyId = @convoyId",
             new { convoyId },
             transaction,
             cancellationToken: cancellationToken));
 
-        if (stops.Count > 0)
+        var existing = stops.Where(stop => stop.RoutePointId != 0).ToList();
+        if (existing.Count > 0)
         {
             await connection.ExecuteAsync(new CommandDefinition(
-                $"""
-                 INSERT INTO dbo.ConvoyRouteStop (ConvoyId, {StopColumns}, LastChangedBy, LastChangedAt)
-                 VALUES (@ConvoyId, @Sequence, @House, @Street, @City, @Country, @Postcode, @CountryCode, @changedBy, SYSUTCDATETIME())
-                 """,
-                stops.Select(stop => attribution.With(new
-                {
-                    ConvoyId = convoyId,
-                    stop.Sequence,
-                    stop.House,
-                    stop.Street,
-                    stop.City,
-                    stop.Country,
-                    stop.CountryCode,
-                    stop.Postcode,
-                })).ToList(),
+                """
+                UPDATE dbo.ConvoyRouteStop SET
+                    Sequence = @Sequence, Name = @Name, Kind = @Kind, Authority = @Authority,
+                    House = @House, Street = @Street, City = @City, Country = @Country,
+                    CountryCode = @CountryCode, Postcode = @Postcode,
+                    LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
+                WHERE RoutePointId = @RoutePointId AND ConvoyId = @ConvoyId
+                """,
+                existing.Select(stop => Parameters(convoyId, stop)).ToList(),
+                transaction,
+                cancellationToken: cancellationToken));
+        }
+
+        var added = stops.Where(stop => stop.RoutePointId == 0).ToList();
+        if (added.Count > 0)
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO dbo.ConvoyRouteStop
+                    (ConvoyId, Sequence, Name, Kind, Authority, House, Street, City, Country, CountryCode, Postcode, LastChangedBy, LastChangedAt)
+                VALUES
+                    (@ConvoyId, @Sequence, @Name, @Kind, @Authority, @House, @Street, @City, @Country, @CountryCode, @Postcode, @changedBy, SYSUTCDATETIME())
+                """,
+                added.Select(stop => Parameters(convoyId, stop)).ToList(),
                 transaction,
                 cancellationToken: cancellationToken));
         }
 
         await transaction.CommitAsync(cancellationToken);
     }
+
+    private Dapper.DynamicParameters Parameters(int convoyId, RouteStopReadModel stop) => attribution.With(new
+    {
+        ConvoyId = convoyId,
+        stop.RoutePointId,
+        stop.Sequence,
+        stop.Name,
+        Kind = (int)stop.Kind,
+        Authority = stop.Authority is null ? (int?)null : (int)stop.Authority,
+        stop.House,
+        stop.Street,
+        stop.City,
+        stop.Country,
+        stop.CountryCode,
+        stop.Postcode,
+    });
 
     public async Task<bool> PublishTruckListAsync(int convoyId, DateTime publishedAt, CancellationToken cancellationToken)
     {

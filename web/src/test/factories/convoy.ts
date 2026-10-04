@@ -32,6 +32,11 @@ export function makeRouteStop(overrides: Partial<RouteStopReadModel> = {}): Rout
     city: null,
     country: null,
     postcode: 'M1 1AA',
+    countryCode: null,
+    routePointId: 1,
+    name: 'Stop',
+    kind: 'Stop',
+    authority: null,
     ...overrides,
   };
 }

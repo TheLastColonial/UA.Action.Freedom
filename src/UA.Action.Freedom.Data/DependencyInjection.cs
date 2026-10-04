@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IDonationRepository, DonationRepository>();
         services.AddScoped<IConvoyRepository, ConvoyRepository>();
         services.AddScoped<IConvoyVehicleRepository, ConvoyVehicleRepository>();
+        services.AddScoped<IConvoyLeaderRepository, ConvoyLeaderRepository>();
         services.AddScoped<IReceiverRepository, ReceiverRepository>();
         services.AddScoped<IBoxRepository, BoxRepository>();
         services.AddScoped<IItemCategoryRepository, ItemCategoryRepository>();

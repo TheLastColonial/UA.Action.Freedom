@@ -15,6 +15,13 @@ export const convoyReadModelSchema = z.object({
 });
 export type ConvoyReadModel = z.infer<typeof convoyReadModelSchema>;
 
+// src/UA.Action.Freedom.Domain/RoutePoint.cs. Only a Border point has an authority.
+export const routePointKindSchema = z.enum(['Stop', 'Overnight', 'Border', 'Hub']);
+export type RoutePointKind = z.infer<typeof routePointKindSchema>;
+export const customsAuthoritySchema = z.enum(['UK', 'EU', 'UA']);
+export type CustomsAuthority = z.infer<typeof customsAuthoritySchema>;
+
+// `routePointId` is stable across edits of the route; send it back to keep the point.
 export const routeStopReadModelSchema = z.object({
   sequence: z.number().int(),
   house: z.string().nullable(),
@@ -22,6 +29,11 @@ export const routeStopReadModelSchema = z.object({
   city: z.string().nullable(),
   country: z.string().nullable(),
   postcode: z.string(),
+  countryCode: z.string().nullable(),
+  routePointId: z.number().int(),
+  name: z.string(),
+  kind: routePointKindSchema,
+  authority: customsAuthoritySchema.nullable(),
 });
 export type RouteStopReadModel = z.infer<typeof routeStopReadModelSchema>;
 
@@ -75,11 +87,38 @@ export interface CreateConvoyRequest {
 export type UpdateConvoyRequest = CreateConvoyRequest;
 
 export interface RouteStopRequest {
+  routePointId?: number;
+  name: string;
+  kind: RoutePointKind;
+  authority?: CustomsAuthority;
+  countryCode?: string;
   house?: string;
   street?: string;
   city?: string;
   country?: string;
   postcode: string;
+}
+
+// src/UA.Action.Freedom.Application/Convoys/IConvoyLeaderRepository.cs. History is newest first.
+export const convoyLeaderAssignmentSchema = z.object({
+  id: z.number().int(),
+  convoyId: z.number().int(),
+  personId: z.string(),
+  personName: z.string(),
+  from: z.string(),
+  until: z.string().nullable(),
+  ...lastChangedShape,
+});
+export type ConvoyLeaderAssignment = z.infer<typeof convoyLeaderAssignmentSchema>;
+
+export const convoyLeaderSchema = z.object({
+  current: convoyLeaderAssignmentSchema.nullable(),
+  history: z.array(convoyLeaderAssignmentSchema),
+});
+export type ConvoyLeader = z.infer<typeof convoyLeaderSchema>;
+
+export interface NominateLeaderRequest {
+  personId: string;
 }
 
 export interface ReplaceConvoyRouteRequest {

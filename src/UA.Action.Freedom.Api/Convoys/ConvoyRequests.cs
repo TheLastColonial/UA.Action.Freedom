@@ -42,13 +42,21 @@ public sealed record UpdateConvoyRequest(
 /// routing as codes, and EU customs cannot complete its pre-arrival risk assessment without every
 /// country the goods pass through — so it is supplied rather than inferred from free text.
 /// </param>
+/// <param name="RoutePointId">
+/// Present when the point already exists: the edit then updates it in place and its id is kept. Absent means a new point.
+/// </param>
+/// <param name="Kind">Only a <see cref="RoutePointKind.Border"/> carries an <paramref name="Authority"/>, and it must.</param>
 public sealed record RouteStopRequest(
     string? House,
     string? Street,
     string? City,
     string? Country,
     string Postcode,
-    string? CountryCode = null);
+    string? CountryCode = null,
+    int? RoutePointId = null,
+    string Name = "",
+    RoutePointKind Kind = RoutePointKind.Stop,
+    CustomsAuthority? Authority = null);
 
 /// <summary>
 /// Body of <c>PUT /convoys/{id}/route</c> — the whole journey, replaced in one go.
@@ -63,7 +71,18 @@ public sealed record ReplaceConvoyRouteRequest(IReadOnlyList<RouteStopRequest> S
         convoyId,
         [.. Stops.Select((stop, index) => new RouteStopReadModel(
             index + 1, stop.House, stop.Street, stop.City, stop.Country, stop.Postcode,
-            stop.CountryCode))]);
+            stop.CountryCode, stop.RoutePointId ?? 0, stop.Name, stop.Kind, stop.Authority))]);
+}
+
+/// <summary>Body of <c>PUT /convoys/{id}/leader</c>: the volunteer to lead the convoy.</summary>
+public sealed record NominateLeaderRequest(Guid PersonId);
+
+public sealed class NominateLeaderRequestValidator : AbstractValidator<NominateLeaderRequest>
+{
+    public NominateLeaderRequestValidator()
+    {
+        RuleFor(r => r.PersonId).NotEmpty();
+    }
 }
 
 /// <summary>
