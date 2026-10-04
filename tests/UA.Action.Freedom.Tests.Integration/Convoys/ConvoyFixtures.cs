@@ -88,6 +88,11 @@ internal static class ConvoyFixtures
         """,
         ("@id", id));
 
+    /// <summary>Removes the convoy's bookings (their guests cascade) and self-accommodation flags, which name people.</summary>
+    internal static Task RemoveAccommodationAsync(int convoyId) => ExecuteAsync(
+        "DELETE FROM dbo.SelfAccommodation WHERE ConvoyId = @id; DELETE FROM dbo.AccommodationBooking WHERE ConvoyId = @id",
+        ("@id", convoyId));
+
     internal static Task<Guid> AddDriverAsync(string firstName, string lastName) =>
         AddVolunteerAsync(firstName, lastName, isDriver: true);
 
@@ -101,7 +106,7 @@ internal static class ConvoyFixtures
         foreach (var id in ids)
         {
             await ExecuteAsync(
-                "DELETE FROM dbo.ConvoyVehicleCrew WHERE PersonId = @id; DELETE FROM dbo.Person WHERE Id = @id",
+                "DELETE FROM dbo.ConvoyVehicleCrew WHERE PersonId = @id; DELETE FROM dbo.AccommodationBookingGuest WHERE PersonId = @id; DELETE FROM dbo.SelfAccommodation WHERE PersonId = @id; DELETE FROM dbo.Person WHERE Id = @id",
                 ("@id", id));
         }
     }
