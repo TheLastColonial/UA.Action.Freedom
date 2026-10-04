@@ -118,12 +118,14 @@ SET @convoy = SCOPE_IDENTITY();
 -- CountryCode is the ISO alpha-2 an ENS declares its countries of routing as. Country stays free
 -- text, because a dispatcher writes it; missing a transit country stops EU customs completing its
 -- pre-arrival risk assessment, so the seeded route names every one it passes through.
-INSERT INTO dbo.ConvoyRouteStop (ConvoyId, Sequence, City, Country, Postcode, CountryCode)
-VALUES (@convoy, 1, N'Coventry', N'United Kingdom', N'CV1 0AA',  'GB'),
-       (@convoy, 2, N'Dover',    N'United Kingdom', N'CT16 0AA', 'GB'),
-       (@convoy, 3, N'Calais',   N'France',         N'',         'FR'),
-       (@convoy, 4, N'Poznan',   N'Poland',         N'',         'PL'),
-       (@convoy, 5, N'Lviv',     N'Ukraine',        N'',         'UA');
+-- Kind is 0 Stop, 1 Overnight, 2 Border, 3 Hub; Authority (a Border point only) is 0 UK, 1 EU, 2 UA. Each point keeps its
+-- RoutePointId when the route is edited, which is what accommodation and progress marks will point at.
+INSERT INTO dbo.ConvoyRouteStop (ConvoyId, Sequence, Name, Kind, Authority, City, Country, Postcode, CountryCode)
+VALUES (@convoy, 1, N'Coventry depot',    3, NULL, N'Coventry', N'United Kingdom', N'CV1 0AA',  'GB'),
+       (@convoy, 2, N'Dover port',        2, 0,    N'Dover',    N'United Kingdom', N'CT16 0AA', 'GB'),
+       (@convoy, 3, N'Calais',            2, 1,    N'Calais',   N'France',         N'',         'FR'),
+       (@convoy, 4, N'Poznan overnight',  1, NULL, N'Poznan',   N'Poland',         N'',         'PL'),
+       (@convoy, 5, N'Lviv handover',     2, 2,    N'Lviv',     N'Ukraine',        N'',         'UA');
 
 -- Vehicles. Transmission: 1 Manual, 2 Automatic. Fuel: 2 Diesel. InspectionStatus: 0 Pending,
 -- 2 Passed — only a Passed vehicle may join a convoy.
@@ -143,6 +145,13 @@ VALUES (@convoy, 'SEEDVIN0000000001', @aidHospital),
 INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId, [Role])
 SELECT @convoy, 'SEEDVIN0000000001', p.Id, 0
 FROM (SELECT TOP 2 Id FROM @people WHERE IsDriver = 1 ORDER BY LastName) AS p;
+
+-- The first of those drivers leads the convoy: one open assignment, nominated by nobody in particular.
+INSERT INTO dbo.ConvoyLeaderAssignment (ConvoyId, PersonId, [From])
+SELECT TOP 1 @convoy, crew.PersonId, SYSUTCDATETIME()
+FROM dbo.ConvoyVehicleCrew AS crew
+WHERE crew.ConvoyId = @convoy
+ORDER BY crew.PersonId;
 
 -- Boxes waiting at the depots, not yet validated, each addressed to a registered receiver.
 INSERT INTO dbo.Box (WeightKg, LocationId, ReceiverRef)

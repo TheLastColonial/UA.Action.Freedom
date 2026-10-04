@@ -3,13 +3,22 @@ import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { z } from 'zod';
 
 import type { CreatedResource, ParentMissing } from './client';
-import { delete204, getCollection, getJson, postCreate, postTransition, put204 } from './http';
+import {
+  delete204,
+  getCollection,
+  getJson,
+  postCreate,
+  postTransition,
+  put204,
+  putJson,
+} from './http';
 import { ApiNotFound } from './problem';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
 import { manifestBoxReadModelSchema } from './schemas/manifests';
 import type { CreateConvoyVehicleManifestRequest, ManifestBoxReadModel } from './schemas/manifests';
 import {
+  convoyLeaderSchema,
   convoyReadModelSchema,
   convoyReadinessReadModelSchema,
   convoyVehicleReadModelSchema,
@@ -19,12 +28,14 @@ import {
   vehicleInsuranceReadModelSchema,
 } from './schemas/convoys';
 import type {
+  ConvoyLeader,
   ConvoyReadModel,
   ConvoyReadinessReadModel,
   ConvoyVehicleReadModel,
   CreateConvoyRequest,
   CrewRole,
   FerryBookingReadModel,
+  NominateLeaderRequest,
   RecordFerryBookingRequest,
   RecordInsuranceRequest,
   ReplaceConvoyRouteRequest,
@@ -67,8 +78,23 @@ export function fetchConvoyRoute(
   return getCollection(`${idPath(id)}/route`, routeStopReadModelSchema);
 }
 
-export function replaceConvoyRoute(id: number, body: ReplaceConvoyRouteRequest): Promise<void> {
-  return put204(`${idPath(id)}/route`, body);
+// Answers with the saved points and their ids.
+export function replaceConvoyRoute(
+  id: number,
+  body: ReplaceConvoyRouteRequest,
+): Promise<readonly RouteStopReadModel[]> {
+  return putJson(`${idPath(id)}/route`, body, z.array(routeStopReadModelSchema));
+}
+
+export function fetchConvoyLeader(id: number): Promise<ConvoyLeader> {
+  return getJson(`${idPath(id)}/leader`, convoyLeaderSchema);
+}
+
+export function nominateConvoyLeader(
+  id: number,
+  body: NominateLeaderRequest,
+): Promise<ConvoyLeader> {
+  return putJson(`${idPath(id)}/leader`, body, convoyLeaderSchema);
 }
 
 export function fetchConvoyVehicles(
@@ -263,11 +289,25 @@ export function useDeleteConvoy(): UseMutationResult<void, Error, number> {
 
 export function useReplaceConvoyRoute(
   id: number,
-): UseMutationResult<void, Error, ReplaceConvoyRouteRequest> {
+): UseMutationResult<readonly RouteStopReadModel[], Error, ReplaceConvoyRouteRequest> {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: ReplaceConvoyRouteRequest) => replaceConvoyRoute(id, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.route(id) }),
+  });
+}
+
+export function useConvoyLeader(id: number): UseQueryResult<ConvoyLeader> {
+  return useQuery({ queryKey: qk.convoys.leader(id), queryFn: () => fetchConvoyLeader(id) });
+}
+
+export function useNominateConvoyLeader(
+  id: number,
+): UseMutationResult<ConvoyLeader, Error, NominateLeaderRequest> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: NominateLeaderRequest) => nominateConvoyLeader(id, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.leader(id) }),
   });
 }
 

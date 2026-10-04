@@ -1,13 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { JSX } from 'react';
 import { useEffect } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 
 import { useConvoyRoute, useReplaceConvoyRoute } from '../../api/convoys';
 import { ApiDomainProblem } from '../../api/problem';
+import { customsAuthoritySchema, routePointKindSchema } from '../../api/schemas/convoys';
 import { Button } from '../../components/Button';
 import { PageSkeleton } from '../../components/PageSkeleton';
-import { TextField } from '../../components/form/fields';
+import { SelectField, TextField } from '../../components/form/fields';
 import {
   emptyRouteStop,
   routeFormSchema,
@@ -15,6 +16,12 @@ import {
   routeStopsToFormValues,
 } from './routeModel';
 import type { RouteFormValues } from './routeModel';
+
+const KIND_OPTIONS = routePointKindSchema.options.map((kind) => ({ value: kind, label: kind }));
+const AUTHORITY_OPTIONS = [
+  { value: '', label: 'Select an authority' },
+  ...customsAuthoritySchema.options.map((authority) => ({ value: authority, label: authority })),
+];
 
 interface RouteEditorProps {
   convoyId: number;
@@ -37,6 +44,7 @@ export function RouteEditor({ convoyId, disabled }: RouteEditorProps): JSX.Eleme
   });
 
   const { fields, append, remove, move } = useFieldArray({ control, name: 'stops' });
+  const stops = useWatch({ control, name: 'stops' });
 
   useEffect(() => {
     if (query.isSuccess && !('parentMissing' in query.data)) {
@@ -80,10 +88,33 @@ export function RouteEditor({ convoyId, disabled }: RouteEditorProps): JSX.Eleme
           <li key={field.id}>
             <fieldset disabled={disabled}>
               <legend>Stop {index + 1}</legend>
+              <TextField
+                label="Name"
+                error={errors.stops?.[index]?.name?.message}
+                {...register(`stops.${index}.name`)}
+              />
+              <SelectField
+                label="Kind"
+                options={KIND_OPTIONS}
+                {...register(`stops.${index}.kind`)}
+              />
+              {stops[index]?.kind === 'Border' ? (
+                <SelectField
+                  label="Customs authority"
+                  options={AUTHORITY_OPTIONS}
+                  error={errors.stops?.[index]?.authority?.message}
+                  {...register(`stops.${index}.authority`)}
+                />
+              ) : null}
               <TextField label="House" {...register(`stops.${index}.house`)} />
               <TextField label="Street" {...register(`stops.${index}.street`)} />
               <TextField label="City" {...register(`stops.${index}.city`)} />
               <TextField label="Country" {...register(`stops.${index}.country`)} />
+              <TextField
+                label="Country code"
+                error={errors.stops?.[index]?.countryCode?.message}
+                {...register(`stops.${index}.countryCode`)}
+              />
               <TextField
                 label="Postcode"
                 error={errors.stops?.[index]?.postcode?.message}

@@ -25,17 +25,37 @@ public sealed class GetConvoyRouteHandler(IConvoyRepository repository)
 }
 
 /// <summary>
-/// Replace a convoy's whole route. The order of <see cref="Stops"/> is the journey.
+/// Asks whether anything refers to route points that an edit would remove. Later features (accommodation, progress
+/// marks, crossings) answer it; until one does, nothing refers to a point.
+/// </summary>
+public interface IRoutePointReferences
+{
+    Task<bool> AnyAsync(int convoyId, IReadOnlyCollection<int> routePointIds, CancellationToken cancellationToken);
+}
+
+/// <summary>The default answer: nothing refers to a route point yet.</summary>
+public sealed class NoRoutePointReferences : IRoutePointReferences
+{
+    public Task<bool> AnyAsync(int convoyId, IReadOnlyCollection<int> routePointIds, CancellationToken cancellationToken) =>
+        Task.FromResult(false);
+}
+
+/// <summary>
+/// Edit a convoy's route. The order of <see cref="Stops"/> is the journey. A stop with a
+/// <see cref="RouteStopReadModel.RoutePointId"/> is that existing point; one without is new; an existing point left out
+/// is removed.
 /// </summary>
 public sealed record ReplaceConvoyRouteCommand(int ConvoyId, IReadOnlyList<RouteStopReadModel> Stops);
 
 public enum ReplaceConvoyRouteOutcome
 {
     Replaced,
-    NotFound
+    NotFound,
+    UnknownPoint,
+    PointInUse
 }
 
-public sealed class ReplaceConvoyRouteHandler(IConvoyRepository repository)
+public sealed class ReplaceConvoyRouteHandler(IConvoyRepository repository, IRoutePointReferences references)
     : ICommandHandler<ReplaceConvoyRouteCommand, ReplaceConvoyRouteOutcome>
 {
     public async Task<ReplaceConvoyRouteOutcome> HandleAsync(
@@ -44,6 +64,22 @@ public sealed class ReplaceConvoyRouteHandler(IConvoyRepository repository)
         if (!await repository.ExistsAsync(command.ConvoyId, cancellationToken))
         {
             return ReplaceConvoyRouteOutcome.NotFound;
+        }
+
+        var existing = (await repository.GetRouteAsync(command.ConvoyId, cancellationToken))
+            .Select(stop => stop.RoutePointId)
+            .ToHashSet();
+        var kept = command.Stops.Where(stop => stop.RoutePointId != 0).Select(stop => stop.RoutePointId).ToList();
+
+        if (kept.Any(id => !existing.Contains(id)))
+        {
+            return ReplaceConvoyRouteOutcome.UnknownPoint;
+        }
+
+        var removed = existing.Except(kept).ToList();
+        if (removed.Count > 0 && await references.AnyAsync(command.ConvoyId, removed, cancellationToken))
+        {
+            return ReplaceConvoyRouteOutcome.PointInUse;
         }
 
         // Renumber into a dense 1..n sequence in list order. Whatever the caller put in the

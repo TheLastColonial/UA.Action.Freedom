@@ -92,10 +92,12 @@ public enum UnassignCrewOutcome
     ConvoyNotFound,
     NotOnThisConvoy,
     NotAssigned,
-    ConvoyArrived
+    ConvoyArrived,
+    IsConvoyLeader
 }
 
-public sealed class UnassignCrewFromVehicleHandler(IConvoyRepository convoys, IConvoyVehicleRepository truckList)
+public sealed class UnassignCrewFromVehicleHandler(
+    IConvoyRepository convoys, IConvoyVehicleRepository truckList, IConvoyLeaderRepository leaders)
     : ICommandHandler<UnassignCrewFromVehicleCommand, UnassignCrewOutcome>
 {
     public async Task<UnassignCrewOutcome> HandleAsync(
@@ -115,6 +117,12 @@ public sealed class UnassignCrewFromVehicleHandler(IConvoyRepository convoys, IC
         if (await truckList.GetAsync(command.ConvoyId, command.Vin, cancellationToken) is null)
         {
             return UnassignCrewOutcome.NotOnThisConvoy;
+        }
+
+        // A convoy is never left silently without its leader: nominate someone else first.
+        if (await leaders.IsCurrentLeaderAsync(command.ConvoyId, command.PersonId, cancellationToken))
+        {
+            return UnassignCrewOutcome.IsConvoyLeader;
         }
 
         return await truckList.UnassignCrewAsync(

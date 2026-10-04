@@ -26,7 +26,7 @@ public class ConvoyRouteHandlerTests
     {
         var repository = Substitute.For<IConvoyRepository>();
         repository.ExistsAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(true);
-        var handler = new ReplaceConvoyRouteHandler(repository);
+        var handler = new ReplaceConvoyRouteHandler(repository, Substitute.For<IRoutePointReferences>());
 
         var outcome = await handler.HandleAsync(
             new ReplaceConvoyRouteCommand(ConvoyTestData.Id, TwoStops), CancellationToken.None);
@@ -43,7 +43,7 @@ public class ConvoyRouteHandlerTests
     {
         var repository = Substitute.For<IConvoyRepository>();
         repository.ExistsAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(false);
-        var handler = new ReplaceConvoyRouteHandler(repository);
+        var handler = new ReplaceConvoyRouteHandler(repository, Substitute.For<IRoutePointReferences>());
 
         var outcome = await handler.HandleAsync(
             new ReplaceConvoyRouteCommand(ConvoyTestData.Id, TwoStops), CancellationToken.None);
@@ -60,7 +60,7 @@ public class ConvoyRouteHandlerTests
         // what is stored is 1..n in list order.
         var repository = Substitute.For<IConvoyRepository>();
         repository.ExistsAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(true);
-        var handler = new ReplaceConvoyRouteHandler(repository);
+        var handler = new ReplaceConvoyRouteHandler(repository, Substitute.For<IRoutePointReferences>());
 
         RouteStopReadModel[] jumbled =
         [
@@ -87,7 +87,7 @@ public class ConvoyRouteHandlerTests
         // A convoy being replanned may legitimately have no route for a while.
         var repository = Substitute.For<IConvoyRepository>();
         repository.ExistsAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(true);
-        var handler = new ReplaceConvoyRouteHandler(repository);
+        var handler = new ReplaceConvoyRouteHandler(repository, Substitute.For<IRoutePointReferences>());
 
         var outcome = await handler.HandleAsync(
             new ReplaceConvoyRouteCommand(ConvoyTestData.Id, []), CancellationToken.None);
@@ -97,6 +97,91 @@ public class ConvoyRouteHandlerTests
             ConvoyTestData.Id,
             Arg.Is<IReadOnlyList<RouteStopReadModel>>(stops => stops.Count == 0),
             Arg.Any<CancellationToken>());
+    }
+
+    private static (IConvoyRepository Repository, IRoutePointReferences References, ReplaceConvoyRouteHandler Handler)
+        AConvoyWithRoute(params RouteStopReadModel[] existing)
+    {
+        var repository = Substitute.For<IConvoyRepository>();
+        repository.ExistsAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetRouteAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<RouteStopReadModel>>(existing));
+        var references = Substitute.For<IRoutePointReferences>();
+        return (repository, references, new ReplaceConvoyRouteHandler(repository, references));
+    }
+
+    [Fact]
+    public async Task Refuses_a_point_id_that_does_not_belong_to_the_convoy_and_writes_nothing()
+    {
+        var (repository, _, handler) = AConvoyWithRoute(ConvoyTestData.AStop(1) with { RoutePointId = 10 });
+
+        var outcome = await handler.HandleAsync(
+            new ReplaceConvoyRouteCommand(ConvoyTestData.Id, [ConvoyTestData.AStop(1) with { RoutePointId = 99 }]),
+            CancellationToken.None);
+
+        outcome.Should().Be(ReplaceConvoyRouteOutcome.UnknownPoint);
+        await repository.DidNotReceive().ReplaceRouteAsync(
+            Arg.Any<int>(), Arg.Any<IReadOnlyList<RouteStopReadModel>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Refuses_to_remove_a_point_something_else_refers_to_and_writes_nothing()
+    {
+        var (repository, references, handler) = AConvoyWithRoute(
+            ConvoyTestData.AStop(1) with { RoutePointId = 10 },
+            ConvoyTestData.AStop(2) with { RoutePointId = 11 });
+        references.AnyAsync(ConvoyTestData.Id, Arg.Is<IReadOnlyCollection<int>>(ids => ids.SequenceEqual(new[] { 11 })), Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var outcome = await handler.HandleAsync(
+            new ReplaceConvoyRouteCommand(ConvoyTestData.Id, [ConvoyTestData.AStop(1) with { RoutePointId = 10 }]),
+            CancellationToken.None);
+
+        outcome.Should().Be(ReplaceConvoyRouteOutcome.PointInUse);
+        await repository.DidNotReceive().ReplaceRouteAsync(
+            Arg.Any<int>(), Arg.Any<IReadOnlyList<RouteStopReadModel>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Reordering_keeps_every_point_and_asks_nothing_about_references()
+    {
+        var (repository, references, handler) = AConvoyWithRoute(
+            ConvoyTestData.AStop(1) with { RoutePointId = 10 },
+            ConvoyTestData.AStop(2) with { RoutePointId = 11 });
+
+        var outcome = await handler.HandleAsync(
+            new ReplaceConvoyRouteCommand(ConvoyTestData.Id,
+            [
+                ConvoyTestData.AStop(1) with { RoutePointId = 11 },
+                ConvoyTestData.AStop(2) with { RoutePointId = 10 },
+            ]),
+            CancellationToken.None);
+
+        outcome.Should().Be(ReplaceConvoyRouteOutcome.Replaced);
+        await references.DidNotReceive().AnyAsync(
+            Arg.Any<int>(), Arg.Any<IReadOnlyCollection<int>>(), Arg.Any<CancellationToken>());
+        await repository.Received(1).ReplaceRouteAsync(
+            ConvoyTestData.Id,
+            Arg.Is<IReadOnlyList<RouteStopReadModel>>(stops =>
+                stops[0].RoutePointId == 11 && stops[0].Sequence == 1
+                && stops[1].RoutePointId == 10 && stops[1].Sequence == 2),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Removing_a_point_nothing_refers_to_is_allowed()
+    {
+        var (repository, _, handler) = AConvoyWithRoute(
+            ConvoyTestData.AStop(1) with { RoutePointId = 10 },
+            ConvoyTestData.AStop(2) with { RoutePointId = 11 });
+
+        var outcome = await handler.HandleAsync(
+            new ReplaceConvoyRouteCommand(ConvoyTestData.Id, [ConvoyTestData.AStop(1) with { RoutePointId = 10 }]),
+            CancellationToken.None);
+
+        outcome.Should().Be(ReplaceConvoyRouteOutcome.Replaced);
+        await repository.Received(1).ReplaceRouteAsync(
+            ConvoyTestData.Id, Arg.Any<IReadOnlyList<RouteStopReadModel>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -226,7 +226,7 @@ public class VehicleCrewHandlerTests
 
     private static Task<UnassignCrewOutcome> UnassignAsync(
         IConvoyRepository convoys, IConvoyVehicleRepository truckList) =>
-        new UnassignCrewFromVehicleHandler(convoys, truckList).HandleAsync(
+        new UnassignCrewFromVehicleHandler(convoys, truckList, Substitute.For<IConvoyLeaderRepository>()).HandleAsync(
             new UnassignCrewFromVehicleCommand(ConvoyTestData.Id, Vin, PersonId),
             TestContext.Current.CancellationToken);
 

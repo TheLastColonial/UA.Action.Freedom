@@ -216,6 +216,7 @@ token lacking the role is **403**.
 | `convoys:read` | ✓ | ✓ | ✓ | ✓ | | |
 | `convoys:write` | ✓ | ✓ | | | | |
 | `convoys:assign-drivers` | | ✓ | | | | |
+| `convoys:lead-assign` | ✓ | ✓ | | | | |
 | `boxes:read` | ✓ | ✓ | ✓ | ✓ | | |
 | `boxes:write` | ✓ | ✓ | ✓ | | | |
 | `boxes:validate` | ✓ | | ✓ | | | |
@@ -241,6 +242,8 @@ A few rows are worth understanding rather than memorising:
 - **`convoys:write` also covers a vehicle's insurance, opening a manifest against a truck-list
   entry, and marking a convoy arrived** — all of it the Dispatcher's (and Administrator's)
   coordination work. Crewing stays narrower, `convoys:assign-drivers`, and it is one seat per person per convoy.
+  Nominating or reassigning the Convoy Leader is `convoys:lead-assign`, Administrator and Dispatcher (P14). A leader is a fact
+  about the convoy, not yet a login capability: their own permissions arrive with scoped permissions (plan 17).
 - **`people:write` is also volunteer erasure.** `DELETE /people/{id}` permanently deletes the
   volunteer's personal data (UK data protection); it is refused while they are crewing a convoy
   that has not arrived, or a vehicle whose load is not yet delivered, lost or returned.
