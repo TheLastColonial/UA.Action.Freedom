@@ -172,6 +172,8 @@ export const convoyReadinessReadModelSchema = z.object({
   routePlanned: z.boolean(),
   reasons: z.array(z.string()),
   vehicles: z.array(vehicleReadinessReadModelSchema),
+  // Budget advice (O37): no budget set, or a line over its plan. Never a reason.
+  advisories: z.array(z.string()).default([]),
 });
 export type ConvoyReadinessReadModel = z.infer<typeof convoyReadinessReadModelSchema>;
 
@@ -197,4 +199,88 @@ export interface RecordFerryBookingRequest {
   sailingAt: string;
   ticketDetails?: string;
   costGbp?: number;
+}
+
+// src/UA.Action.Freedom.Domain/Budget.cs — CostType. Fuel and Other are entered; the rest are
+// read from their booking or policy, so they are never entered twice.
+export const costTypeSchema = z.enum(['Fuel', 'Ferry', 'Hotel', 'Insurance', 'Other']);
+export type CostType = z.infer<typeof costTypeSchema>;
+export const COST_TYPES: readonly CostType[] = costTypeSchema.options;
+export const ENTERED_COST_TYPES: readonly CostType[] = ['Fuel', 'Other'];
+
+// src/UA.Action.Freedom.Application/Convoys/IConvoyBudgetRepository.cs
+export const budgetLineReadModelSchema = z.object({
+  type: costTypeSchema,
+  plannedGbp: z.number(),
+  lastChangedByName: z.string().nullable(),
+  lastChangedAt: z.string().nullable(),
+});
+export type BudgetLineReadModel = z.infer<typeof budgetLineReadModelSchema>;
+
+// Body of PUT /convoys/{id}/budget — the whole budget; a cost type left out has no line.
+export interface SetBudgetRequest {
+  lines: { type: CostType; plannedGbp: number }[];
+}
+
+export const convoyCostReadModelSchema = z.object({
+  id: z.number().int(),
+  convoyId: z.number().int(),
+  type: costTypeSchema,
+  amountGbp: z.number(),
+  vin: z.string().nullable(),
+  note: z.string().nullable(),
+  lastChangedByName: z.string().nullable(),
+  lastChangedAt: z.string().nullable(),
+});
+export type ConvoyCostReadModel = z.infer<typeof convoyCostReadModelSchema>;
+
+// Body of POST /convoys/{id}/costs. Who entered it comes from the caller's login.
+export interface AddCostRequest {
+  type: CostType;
+  amountGbp: number;
+  vin?: string;
+  note?: string;
+}
+
+// src/UA.Action.Freedom.Application/Convoys/BudgetUseCases.cs — BudgetSummaryReadModel.
+export const budgetSummaryReadModelSchema = z.object({
+  budgetSet: z.boolean(),
+  lines: z.array(
+    z.object({
+      type: costTypeSchema,
+      plannedGbp: z.number().nullable(),
+      actualGbp: z.number(),
+      overBudget: z.boolean(),
+    }),
+  ),
+  plannedTotalGbp: z.number(),
+  actualTotalGbp: z.number(),
+  equipmentGbp: z.number(),
+  anyOverBudget: z.boolean(),
+});
+export type BudgetSummaryReadModel = z.infer<typeof budgetSummaryReadModelSchema>;
+
+// src/UA.Action.Freedom.Application/Convoys/IVehicleEquipmentRepository.cs (O13): bought for the
+// vehicle, no donor, never part of the value delivered.
+export const equipmentItemReadModelSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  unitCostGbp: z.number().nullable(),
+});
+export type EquipmentItemReadModel = z.infer<typeof equipmentItemReadModelSchema>;
+
+export const vehicleEquipmentReadModelSchema = z.object({
+  vin: z.string(),
+  equipmentItemId: z.number().int(),
+  name: z.string(),
+  quantity: z.number().int(),
+  unitCostGbp: z.number().nullable(),
+  costGbp: z.number().nullable(),
+  countedCostGbp: z.number(),
+});
+export type VehicleEquipmentReadModel = z.infer<typeof vehicleEquipmentReadModelSchema>;
+
+// Body of PUT /convoys/{id}/vehicles/{vin}/equipment — everything on the vehicle.
+export interface SetVehicleEquipmentRequest {
+  lines: { equipmentItemId: number; quantity: number; costGbp?: number }[];
 }

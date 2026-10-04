@@ -132,6 +132,17 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RecordFerryBookingCommand, RecordFerryBookingOutcome>, RecordFerryBookingHandler>();
         services.AddScoped<ICommandHandler<RemoveFerryBookingCommand, RemoveFerryBookingOutcome>, RemoveFerryBookingHandler>();
         services.AddScoped<IQueryHandler<GetFerryBookingQuery, FerryBookingReadModel?>, GetFerryBookingHandler>();
+        services.AddScoped<BudgetPosition>();
+        services.AddScoped<ICommandHandler<SetBudgetCommand, SetBudgetOutcome>, SetBudgetHandler>();
+        services.AddScoped<IQueryHandler<GetBudgetQuery, IReadOnlyList<BudgetLineReadModel>?>, GetBudgetHandler>();
+        services.AddScoped<ICommandHandler<AddCostCommand, AddCostResult>, AddCostHandler>();
+        services.AddScoped<ICommandHandler<DeleteCostCommand, DeleteCostOutcome>, DeleteCostHandler>();
+        services.AddScoped<IQueryHandler<ListCostsQuery, IReadOnlyList<ConvoyCostReadModel>?>, ListCostsHandler>();
+        services.AddScoped<IQueryHandler<GetBudgetSummaryQuery, BudgetSummaryReadModel?>, GetBudgetSummaryHandler>();
+        services.AddScoped<IQueryHandler<ListEquipmentItemsQuery, IReadOnlyList<EquipmentItemReadModel>>, ListEquipmentItemsHandler>();
+        services.AddScoped<ICommandHandler<AddEquipmentItemCommand, AddEquipmentItemResult>, AddEquipmentItemHandler>();
+        services.AddScoped<IQueryHandler<GetVehicleEquipmentQuery, IReadOnlyList<VehicleEquipmentReadModel>?>, GetVehicleEquipmentHandler>();
+        services.AddScoped<ICommandHandler<SetVehicleEquipmentCommand, SetVehicleEquipmentOutcome>, SetVehicleEquipmentHandler>();
         services.AddScoped<ICommandHandler<RemoveBoxAllocationCommand, RemoveBoxAllocationOutcome>, RemoveBoxAllocationHandler>();
         services.AddScoped<IQueryHandler<ListVehicleBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListVehicleBoxesHandler>();
         services.AddScoped<IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>, GetManifestWeightHandler>();

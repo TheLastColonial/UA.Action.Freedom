@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. The insurance part (removing a driver keeps cover, an added driver is uncovered) is implemented by [plan 01](../plans/01-crew-without-legs.md); the rest is not yet implemented. Amends [ADR 0001](0001-truck-list-as-a-table.md).
+Accepted. The insurance part (removing a driver keeps cover, an added driver is uncovered) is implemented by [plan 01](../plans/01-crew-without-legs.md); the budget advisories (O37: no budget set, a line over budget) are implemented by [plan 12](../plans/12-budget-equipment.md); the rest is not yet implemented. Amends [ADR 0001](0001-truck-list-as-a-table.md).
 
 ## Context
 

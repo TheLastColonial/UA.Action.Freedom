@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Implemented by [plan 05](../plans/05-item-classification-value.md), apart from the donor ([plan 06](../plans/06-donors-donations.md)), the value report ([plan 14](../plans/14-outcomes-closing.md)) and the Ukrainian name on the label ([plan 16](../plans/16-box-replacement-label.md)).
+Accepted. Implemented by [plan 05](../plans/05-item-classification-value.md), with vehicle equipment (O13: no donor, outside the value delivered) implemented by [plan 12](../plans/12-budget-equipment.md), apart from the donor ([plan 06](../plans/06-donors-donations.md)), the value report ([plan 14](../plans/14-outcomes-closing.md)) and the Ukrainian name on the label ([plan 16](../plans/16-box-replacement-label.md)).
 
 ## Context
 

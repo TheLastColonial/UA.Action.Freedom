@@ -44,6 +44,11 @@ export const qk = {
     insurance: (id: number, vin: string) => ['convoys', id, 'vehicles', vin, 'insurance'] as const,
     vehicleBoxes: (id: number, vin: string) => ['convoys', id, 'vehicles', vin, 'boxes'] as const,
     ferry: (id: number, vin: string) => ['convoys', id, 'vehicles', vin, 'ferry'] as const,
+    budget: (id: number) => ['convoys', id, 'budget'] as const,
+    costs: (id: number) => ['convoys', id, 'costs'] as const,
+    budgetSummary: (id: number) => ['convoys', id, 'budget', 'summary'] as const,
+    equipment: (id: number, vin: string) => ['convoys', id, 'vehicles', vin, 'equipment'] as const,
+    equipmentItems: ['equipment-items'] as const,
     readiness: (id: number) => ['convoys', id, 'readiness'] as const,
   },
   receivers: {

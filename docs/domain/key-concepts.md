@@ -265,6 +265,14 @@ The crew is a property of the vehicle within the convoy. A manifest used to carr
 manifest could name a crew the insurance had never heard of, while the insurance is what actually gates departure.
 There is one record now.
 
+### Budget, costs and vehicle equipment
+
+A convoy may have a **budget**: one planned amount for each cost type (fuel, ferry, hotel, insurance, other). It is a step in creating a convoy and it is **never required to depart** - a convoy with no budget, or a line over its plan, is only advice on the readiness read (O12, O37).
+
+- **Costs entered** are fuel and other, by the Dispatcher until the Convoy Leader's checklist exists. A ferry, hotel or insurance cost is **held on its booking or policy** and the summary reads it from there, so it is never entered twice.
+- **Vehicle equipment** is what the charity buys for a vehicle, such as warning triangles, chosen from a catalogue and added per vehicle on the truck-list entry. It has no donor, is accounted for apart from donations, **is not part of the value delivered**, and its cost counts under *Other* (O13).
+- Reimbursing volunteers is out of scope (O10): there is no payee or bank field.
+
 ### Route
 
 The ordered list of [Addresses](#address) a convoy will pass through, from UK departure to Ukrainian delivery.

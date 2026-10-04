@@ -10,16 +10,26 @@ import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
+import { ConvoyBudgetPanel } from './ConvoyBudgetPanel';
 import { ConvoyCargoPanel } from './ConvoyCargoPanel';
 import { ConvoyDriversPanel } from './ConvoyDriversPanel';
 import { ConvoyLeaderPanel } from './ConvoyLeaderPanel';
+import { ConvoyEquipmentPanel } from './ConvoyEquipmentPanel';
 import { ConvoyReadinessPanel } from './ConvoyReadinessPanel';
 import { ConvoyRedeclareTasks } from './ConvoyRedeclareTasks';
 import { ConvoyVehiclesPanel } from './ConvoyVehiclesPanel';
 import { RouteEditor } from './RouteEditor';
 
-type Tab = 'overview' | 'route' | 'vehicles' | 'drivers' | 'cargo';
-const TABS: readonly Tab[] = ['overview', 'route', 'vehicles', 'drivers', 'cargo'];
+type Tab = 'overview' | 'route' | 'vehicles' | 'drivers' | 'cargo' | 'budget' | 'equipment';
+const TABS: readonly Tab[] = [
+  'overview',
+  'route',
+  'vehicles',
+  'drivers',
+  'cargo',
+  'budget',
+  'equipment',
+];
 
 export function ConvoyDetailPage(): JSX.Element {
   const { id = '' } = useParams();
@@ -74,6 +84,8 @@ export function ConvoyDetailPage(): JSX.Element {
           { id: 'vehicles', label: 'Vehicles' },
           { id: 'drivers', label: 'Crew' },
           { id: 'cargo', label: 'Cargo and ferry' },
+          { id: 'budget', label: 'Budget' },
+          { id: 'equipment', label: 'Equipment' },
         ]}
         active={tab}
         onChange={selectTab}
@@ -161,6 +173,16 @@ export function ConvoyDetailPage(): JSX.Element {
       {tab === 'cargo' ? (
         <TabPanel id="cargo">
           <ConvoyCargoPanel convoyId={convoy.id} />
+        </TabPanel>
+      ) : null}
+      {tab === 'budget' ? (
+        <TabPanel id="budget">
+          <ConvoyBudgetPanel convoyId={convoy.id} />
+        </TabPanel>
+      ) : null}
+      {tab === 'equipment' ? (
+        <TabPanel id="equipment">
+          <ConvoyEquipmentPanel convoyId={convoy.id} />
         </TabPanel>
       ) : null}
     </section>

@@ -270,6 +270,8 @@ app.MapFreedomPeople();
 app.MapFreedomDonations();
 app.MapFreedomMe();
 app.MapFreedomConvoys();
+app.MapFreedomBudget();
+app.MapFreedomEquipment();
 app.MapFreedomReceivers();
 app.MapFreedomBoxes();
 app.MapFreedomCategories();
