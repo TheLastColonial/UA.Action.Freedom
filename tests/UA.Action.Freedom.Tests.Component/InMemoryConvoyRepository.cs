@@ -353,8 +353,11 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     /// <summary>Stands in for a later feature (accommodation, a progress mark) that refers to a route point.</summary>
     public void ReferenceRoutePoint(int routePointId) => referencedRoutePoints.Add(routePointId);
 
+    /// <summary>Another fake that refers to route points (the accommodation fake, as its foreign keys do).</summary>
+    public Func<int, IReadOnlyCollection<int>, bool>? AlsoReferenced { get; set; }
+
     public Task<bool> AnyAsync(int convoyId, IReadOnlyCollection<int> routePointIds, CancellationToken cancellationToken) =>
-        Task.FromResult(routePointIds.Any(referencedRoutePoints.Contains));
+        Task.FromResult(routePointIds.Any(referencedRoutePoints.Contains) || AlsoReferenced?.Invoke(convoyId, routePointIds) is true);
 
     public Task ReplaceRouteAsync(
         int convoyId, IReadOnlyList<RouteStopReadModel> stops, CancellationToken cancellationToken)

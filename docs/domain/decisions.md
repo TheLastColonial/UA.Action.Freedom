@@ -259,7 +259,6 @@ per-vehicle anchor.
 | Area | Before | After |
 |---|---|---|
 | `Manifest` | cargo, GMR, ELO, ENS, ferry and status | load sign-off only. Documents are generated. |
-| Accommodation, fuel | not modelled | per-person stays linked to route points; fuel budget and entries |
 | Readiness | advisory: route, crew, insurance | requirement checklist, with blocking requirements |
 | Delivery | manifest status | per box, rolled up per vehicle |
 | Convoy Leader | not modelled | one per convoy, with a scoped checklist page |

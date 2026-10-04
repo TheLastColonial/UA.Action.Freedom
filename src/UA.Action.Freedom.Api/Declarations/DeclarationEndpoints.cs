@@ -2,6 +2,7 @@ using FluentValidation;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Api.Manifests;
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Declarations;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
@@ -126,12 +127,12 @@ public static class DeclarationEndpoints
                 new WithdrawDeclarationCommand(id, vin, declarationId), cancellationToken)))
         .RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
 
-        // The Dispatcher's re-declare tasks (D13): derived from the stale declarations, shown on screen.
+        // The Dispatcher's tasks (D13, P16): re-declare tasks derived from the stale declarations, and leftover\r\n        // accommodation bookings, shown on screen. Each carries a "type" so one list can hold both.
         app.MapGet("/convoys/{id:int}/tasks", async (
             int id,
-            IQueryHandler<ListRedeclareTasksQuery, IReadOnlyList<RedeclareTaskReadModel>?> handler,
+            IQueryHandler<ListConvoyTasksQuery, IReadOnlyList<object>?> handler,
             CancellationToken cancellationToken) =>
-            await handler.HandleAsync(new ListRedeclareTasksQuery(id), cancellationToken) is { } tasks
+            await handler.HandleAsync(new ListConvoyTasksQuery(id), cancellationToken) is { } tasks
                 ? Results.Ok(tasks)
                 : Results.NotFound())
         .WithTags("Declarations")

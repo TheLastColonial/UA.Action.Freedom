@@ -273,6 +273,15 @@ A convoy may have a **budget**: one planned amount for each cost type (fuel, fer
 - **Vehicle equipment** is what the charity buys for a vehicle, such as warning triangles, chosen from a catalogue and added per vehicle on the truck-list entry. It has no donor, is accounted for apart from donations, **is not part of the value delivered**, and its cost counts under *Other* (O13).
 - Reimbursing volunteers is out of scope (O10): there is no payee or bank field.
 
+### Accommodation
+
+Crew sleep in **bookings made at route points**, and **every crew member must be covered at every overnight stop** (P2, P8). Only a point the Dispatcher flagged **Overnight** needs anything.
+
+- A **booking** is at one route point and covers one or more crew who share. It names its guests by person id only, so erasing a volunteer leaves nothing of them in it. Its optional cost is read into the budget's **Hotel** line, so it is never entered twice. Cancelling a booking is a stamp, not a delete: it covers nobody afterwards and its cost no longer counts.
+- A crew member can be flagged as **arranging their own** stay (for example with family) at one overnight stop, which covers that person at that stop only (O4, O30).
+- **Coverage** is derived on read, never stored: per crew member per overnight stop it is `Booked`, `SelfArranged` or `Missing` (a booking wins over a flag). "Crew" means seated on a vehicle still travelling with the convoy.
+- **If a crew member leaves, their booking stays** and is reported as a **warning and a Dispatcher task** until it is cancelled or migrated to a replacement who is crewed (P13, P16). A shared booking is not left over while any guest is still crewed. It never blocks. Coverage itself does not block departure until plan 13.
+
 ### Route
 
 The ordered list of [Addresses](#address) a convoy will pass through, from UK departure to Ukrainian delivery.

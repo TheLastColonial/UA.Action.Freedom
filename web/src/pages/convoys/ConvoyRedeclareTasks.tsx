@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 
-import { useRedeclareTasks } from '../../api/declarations';
+import { useRedeclareTasks } from '../../api/tasks';
 import type { DeclarationKind, RedeclareResolution } from '../../api/schemas/declarations';
 import { DetailCard } from '../../components/DetailCard';
 

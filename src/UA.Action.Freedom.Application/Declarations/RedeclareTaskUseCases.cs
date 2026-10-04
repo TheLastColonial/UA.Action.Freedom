@@ -31,7 +31,11 @@ public sealed record RedeclareTaskReadModel(
     DeclarationKind Kind,
     Guid? ReceiverRef,
     string? Reference,
-    RedeclareResolution Resolution);
+    RedeclareResolution Resolution)
+{
+    /// <summary>What kind of task this is, so one list can carry tasks of more than one kind.</summary>
+    public string Type => "redeclare";
+}
 
 public static class RedeclareResolutions
 {
