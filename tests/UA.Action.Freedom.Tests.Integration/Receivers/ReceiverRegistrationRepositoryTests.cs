@@ -213,7 +213,7 @@ public class ReceiverRegistrationRepositoryTests
             boxId = await boxes.AddAsync(
                 new BoxReadModel(0, 0, null, null, null, receiverRef, null, null, null), CancellationToken.None);
             await ExecuteAsync(
-                "INSERT INTO dbo.Manifest (Id, ConvoyId, Vin) VALUES (@m, @c, @vin); INSERT INTO dbo.ManifestBox (BoxId, ManifestId) VALUES (@b, @m)",
+                "INSERT INTO dbo.Manifest (Id, ConvoyId, Vin) VALUES (@m, @c, @vin); INSERT INTO dbo.ConvoyVehicleBoxAllocation (BoxId, ConvoyId, Vin) VALUES (@b, @c, @vin)",
                 ("@m", manifestId), ("@c", convoyId), ("@vin", vin), ("@b", boxId));
 
             var usage = await Receivers().GetUsageAsync(receiverRef, CancellationToken.None);

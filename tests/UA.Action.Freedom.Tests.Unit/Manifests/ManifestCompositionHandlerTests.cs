@@ -69,34 +69,32 @@ public class ManifestCompositionHandlerTests
             Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task A_frozen_manifest_will_not_take_or_release_cargo()
+    private static IConvoyVehicleRepository CargoOf(IReadOnlyList<ManifestBoxReadModel> boxes)
     {
-        // Cargo is what the GMR describes, so it is the last thing that may change.
-        var repository = ARepositoryHolding(AManifest(frozen: true));
-
-        (await new AddManifestBoxHandler(repository)
-                .HandleAsync(new AddManifestBoxCommand(Id, 7), CancellationToken.None))
-            .Should().Be(ManifestBoxOutcome.Frozen);
-
-        (await new RemoveManifestBoxHandler(repository)
-                .HandleAsync(new RemoveManifestBoxCommand(Id, 7), CancellationToken.None))
-            .Should().Be(ManifestBoxOutcome.Frozen);
-
-        await repository.DidNotReceive().AddBoxAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
-        await repository.DidNotReceive().RemoveBoxAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+        var truckList = Substitute.For<IConvoyVehicleRepository>();
+        truckList.ListBoxesAsync(ConvoyId, Vin, Arg.Any<CancellationToken>()).Returns(boxes);
+        return truckList;
     }
 
     [Fact]
-    public async Task Reports_the_box_missing_when_there_is_no_such_box()
+    public async Task Lists_the_cargo_allocated_to_the_manifests_vehicle()
     {
-        var repository = ARepositoryHolding(AManifest());
-        repository.AddBoxAsync(Id, 7, Arg.Any<CancellationToken>()).Returns(false);
-        var handler = new AddManifestBoxHandler(repository);
+        var boxes = new List<ManifestBoxReadModel> { new(1, 30, Validated: true) };
 
-        var outcome = await handler.HandleAsync(new AddManifestBoxCommand(Id, 7), CancellationToken.None);
+        var listed = await new ListManifestBoxesHandler(ARepositoryHolding(AManifest()), CargoOf(boxes))
+            .HandleAsync(new ListManifestBoxesQuery(Id), TestContext.Current.CancellationToken);
 
-        outcome.Should().Be(ManifestBoxOutcome.BoxNotFound);
+        listed.Should().BeEquivalentTo(boxes);
+    }
+
+    [Fact]
+    public async Task There_is_no_cargo_for_a_manifest_that_does_not_exist()
+    {
+        var listed = await new ListManifestBoxesHandler(
+                ARepositoryHolding(null), Substitute.For<IConvoyVehicleRepository>())
+            .HandleAsync(new ListManifestBoxesQuery(Id), TestContext.Current.CancellationToken);
+
+        listed.Should().BeNull();
     }
 
     [Fact]
@@ -105,15 +103,14 @@ public class ManifestCompositionHandlerTests
         // 200 kg for two drivers and their bags, 45 kg fuel. A deliberate border-check estimate
         // that docs/domain/key-concepts.md says explicitly is not a bug.
         var repository = ARepositoryHolding(AManifest());
-        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
         repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
-        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+        var truckList = CargoOf(
             new List<ManifestBoxReadModel>
             {
                 new(1, 30, Validated: true),
                 new(2, 12, Validated: true),
             });
-        var handler = new GetManifestWeightHandler(repository);
+        var handler = new GetManifestWeightHandler(repository, truckList);
 
         var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
 
@@ -132,13 +129,12 @@ public class ManifestCompositionHandlerTests
     public async Task Flags_the_cargo_as_overweight_against_the_vehicles_stated_capacity()
     {
         var repository = ARepositoryHolding(AManifest());
-        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
         repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
-        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+        var truckList = CargoOf(
             new List<ManifestBoxReadModel> { new(1, 30, Validated: true), new(2, 12, Validated: true) });
         repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
             .Returns(new VehicleCargoCapacityReadModel(40m, null, null, null));
-        var handler = new GetManifestWeightHandler(repository);
+        var handler = new GetManifestWeightHandler(repository, truckList);
 
         var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
 
@@ -150,13 +146,12 @@ public class ManifestCompositionHandlerTests
     public async Task Does_not_flag_cargo_within_the_vehicles_stated_capacity()
     {
         var repository = ARepositoryHolding(AManifest());
-        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
         repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
-        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+        var truckList = CargoOf(
             new List<ManifestBoxReadModel> { new(1, 30, Validated: true), new(2, 12, Validated: true) });
         repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
             .Returns(new VehicleCargoCapacityReadModel(100m, null, null, null));
-        var handler = new GetManifestWeightHandler(repository);
+        var handler = new GetManifestWeightHandler(repository, truckList);
 
         var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
 
@@ -167,9 +162,8 @@ public class ManifestCompositionHandlerTests
     public async Task Flags_a_box_that_does_not_fit_the_vehicles_cargo_space()
     {
         var repository = ARepositoryHolding(AManifest());
-        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
         repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
-        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+        var truckList = CargoOf(
             new List<ManifestBoxReadModel>
             {
                 new(1, 30, Validated: true, WidthCm: 200m, DepthCm: 50m, HeightCm: 50m),
@@ -177,7 +171,7 @@ public class ManifestCompositionHandlerTests
             });
         repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
             .Returns(new VehicleCargoCapacityReadModel(null, 150m, 100m, 100m));
-        var handler = new GetManifestWeightHandler(repository);
+        var handler = new GetManifestWeightHandler(repository, truckList);
 
         var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
 
@@ -193,16 +187,15 @@ public class ManifestCompositionHandlerTests
         // fits once turned on its side — which is why the comparison sorts both sets of
         // dimensions rather than assuming a fixed width/depth/height mapping.
         var repository = ARepositoryHolding(AManifest());
-        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
         repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
-        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+        var truckList = CargoOf(
             new List<ManifestBoxReadModel>
             {
                 new(1, 30, Validated: true, WidthCm: 100m, DepthCm: 40m, HeightCm: 30m),
             });
         repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
             .Returns(new VehicleCargoCapacityReadModel(null, 100m, 100m, 30m));
-        var handler = new GetManifestWeightHandler(repository);
+        var handler = new GetManifestWeightHandler(repository, truckList);
 
         var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
 
@@ -213,13 +206,12 @@ public class ManifestCompositionHandlerTests
     public async Task A_box_with_no_recorded_dimensions_is_never_flagged_as_oversized()
     {
         var repository = ARepositoryHolding(AManifest());
-        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
         repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
-        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+        var truckList = CargoOf(
             new List<ManifestBoxReadModel> { new(1, 30, Validated: false) });
         repository.GetVehicleCargoCapacityAsync(Id, Arg.Any<CancellationToken>())
             .Returns(new VehicleCargoCapacityReadModel(null, 1m, 1m, 1m));
-        var handler = new GetManifestWeightHandler(repository);
+        var handler = new GetManifestWeightHandler(repository, truckList);
 
         var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
 
@@ -232,15 +224,14 @@ public class ManifestCompositionHandlerTests
         // An unvalidated box weighs zero until a Loader says otherwise, so a total containing
         // one is provisional. Reporting the count is what stops it reading as a confirmed figure.
         var repository = ARepositoryHolding(AManifest());
-        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
         repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
-        repository.ListBoxesAsync(Id, Arg.Any<CancellationToken>()).Returns(
+        var truckList = CargoOf(
             new List<ManifestBoxReadModel>
             {
                 new(1, 30, Validated: true),
                 new(2, 0, Validated: false),
             });
-        var handler = new GetManifestWeightHandler(repository);
+        var handler = new GetManifestWeightHandler(repository, truckList);
 
         var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
 
@@ -252,8 +243,7 @@ public class ManifestCompositionHandlerTests
     public async Task The_weight_of_an_unknown_manifest_is_nothing_at_all()
     {
         var repository = ARepositoryHolding(null);
-        repository.ExistsAsync(Id, Arg.Any<CancellationToken>()).Returns(false);
-        var handler = new GetManifestWeightHandler(repository);
+        var handler = new GetManifestWeightHandler(repository, Substitute.For<IConvoyVehicleRepository>());
 
         var weight = await handler.HandleAsync(new GetManifestWeightQuery(Id), CancellationToken.None);
 

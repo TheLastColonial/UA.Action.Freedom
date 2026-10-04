@@ -21,6 +21,17 @@ internal sealed class BoxAllocationLedger
 
     public void KnowBox(ManifestBoxReadModel box) => boxes[box.BoxId] = box;
 
+    /// <summary>Takes in everything another ledger holds, so two fakes seeded apart end up sharing one.</summary>
+    public void Absorb(BoxAllocationLedger other)
+    {
+        foreach (var box in other.boxes.Values)
+        {
+            boxes[box.BoxId] = box;
+        }
+
+        allocations = [.. allocations, .. other.allocations.Where(a => allocations.All(x => x.BoxId != a.BoxId))];
+    }
+
     public bool Knows(int boxId) => boxes.ContainsKey(boxId);
 
     public BoxAllocation? AllocationOf(int boxId) => allocations.FirstOrDefault(a => a.BoxId == boxId);

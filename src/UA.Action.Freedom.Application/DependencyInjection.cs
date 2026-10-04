@@ -122,9 +122,10 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<TransitionManifestCommand, TransitionManifestOutcome>, TransitionManifestHandler>();
         services.AddScoped<ICommandHandler<ApproveManifestCommand, TransitionManifestOutcome>, ApproveManifestHandler>();
         services.AddScoped<IQueryHandler<ListManifestCrewQuery, IReadOnlyList<VehicleCrewReadModel>?>, ListManifestCrewHandler>();
-        services.AddScoped<ICommandHandler<AddManifestBoxCommand, ManifestBoxOutcome>, AddManifestBoxHandler>();
-        services.AddScoped<ICommandHandler<RemoveManifestBoxCommand, ManifestBoxOutcome>, RemoveManifestBoxHandler>();
         services.AddScoped<IQueryHandler<ListManifestBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListManifestBoxesHandler>();
+        services.AddScoped<ICommandHandler<AllocateBoxCommand, AllocateBoxOutcome>, AllocateBoxHandler>();
+        services.AddScoped<ICommandHandler<RemoveBoxAllocationCommand, RemoveBoxAllocationOutcome>, RemoveBoxAllocationHandler>();
+        services.AddScoped<IQueryHandler<ListVehicleBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListVehicleBoxesHandler>();
         services.AddScoped<IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>, GetManifestWeightHandler>();
         services.AddScoped<IQueryHandler<GetManifestEloQuery, EloEnvelopeReadModel?>, GetManifestEloHandler>();
         services.AddScoped<IQueryHandler<GetManifestEloDocumentQuery, byte[]?>, GetManifestEloDocumentHandler>();

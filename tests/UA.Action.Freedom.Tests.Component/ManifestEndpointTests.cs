@@ -332,17 +332,13 @@ public class ManifestEndpointTests
     [Fact]
     public async Task A_frozen_manifest_cannot_be_edited_reloaded_or_deleted()
     {
-        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Confirmed, frozen: true))
-            .WithKnownBox(7);
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Confirmed, frozen: true));
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Administrator");
         using var client = api.CreateClient();
         var cancellationToken = TestContext.Current.CancellationToken;
 
         (await client.PutAsJsonAsync($"/manifests/{Id}", new { deliveryNotes = "changed" }, cancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Conflict);
-
-        (await client.PutAsync($"/manifests/{Id}/boxes/7", content: null, cancellationToken))
             .StatusCode.Should().Be(HttpStatusCode.Conflict);
 
         (await client.DeleteAsync($"/manifests/{Id}", cancellationToken))
@@ -357,8 +353,7 @@ public class ManifestEndpointTests
         // Not because the edit is refused — because there is nowhere to put it. The convoy and
         // the vehicle are the manifest's identity, so PUT /manifests/{id} has no field for them
         // and the UPDATE never names those columns.
-        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Preparing))
-            .WithKnownBox(7);
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Preparing));
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
         using var client = api.CreateClient();
@@ -476,18 +471,23 @@ public class ManifestEndpointTests
         weight.GetProperty("oversizedBoxIds").EnumerateArray().Should().BeEmpty();
     }
 
-    [Fact]
-    public async Task Putting_an_unknown_box_on_a_manifest_is_a_404()
+    [Theory]
+    [InlineData("PUT")]
+    [InlineData("DELETE")]
+    public async Task Writing_cargo_to_a_manifest_is_gone_and_points_at_the_truck_list_entry(string method)
     {
         var manifests = new InMemoryManifestRepository(AManifest());
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
         using var client = api.CreateClient();
 
-        var response = await client.PutAsync(
-            $"/manifests/{Id}/boxes/999", content: null, TestContext.Current.CancellationToken);
+        var response = await client.SendAsync(
+            new HttpRequestMessage(new HttpMethod(method), $"/manifests/{Id}/boxes/7"),
+            TestContext.Current.CancellationToken);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        problem.GetProperty("detail").GetString().Should().Contain("/convoys/{id}/vehicles/{vin}/boxes/{boxId}");
     }
 
     [Fact]
