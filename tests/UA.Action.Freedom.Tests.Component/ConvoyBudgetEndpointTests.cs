@@ -180,6 +180,23 @@ public class ConvoyBudgetEndpointTests
     }
 
     [Fact]
+    public async Task Readiness_advises_when_no_budget_is_set_and_when_a_line_is_over_but_never_blocks()
+    {
+        await using var api = FreedomApi.WithConvoyBudget(AConvoy(), new InMemoryConvoyBudgetRepository(), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        var unset = await client.GetFromJsonAsync<JsonElement>($"/convoys/{ConvoyId}/readiness", TestContext.Current.CancellationToken);
+        await client.PutAsJsonAsync(Budget, AFuelBudget(1_000m), TestContext.Current.CancellationToken);
+        await client.PostAsJsonAsync(Costs, new { type = "Fuel", amountGbp = 1_100m }, TestContext.Current.CancellationToken);
+        var over = await client.GetFromJsonAsync<JsonElement>($"/convoys/{ConvoyId}/readiness", TestContext.Current.CancellationToken);
+
+        unset.GetProperty("advisories").EnumerateArray().Select(a => a.GetString()).Should().Equal("No budget set");
+        over.GetProperty("advisories").EnumerateArray().Select(a => a.GetString()).Should().Equal("Fuel is over budget");
+        over.GetProperty("reasons").EnumerateArray().Select(a => a.GetString()).Should().NotContain(
+            reason => reason!.Contains("budget", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task The_summary_of_a_convoy_without_a_budget_says_so()
     {
         await using var api = FreedomApi.WithConvoyBudget(AConvoy(), new InMemoryConvoyBudgetRepository(), roles: "Dispatcher");

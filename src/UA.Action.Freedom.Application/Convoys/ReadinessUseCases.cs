@@ -17,7 +17,11 @@ public sealed record ConvoyReadinessReadModel(
     bool Ready,
     bool RoutePlanned,
     IReadOnlyList<string> Reasons,
-    IReadOnlyList<VehicleReadinessReadModel> Vehicles);
+    IReadOnlyList<VehicleReadinessReadModel> Vehicles)
+{
+    /// <summary>Advice that does not change <see cref="Ready"/>: no budget set, or a budget line over its plan (O37).</summary>
+    public IReadOnlyList<string> Advisories { get; init; } = [];
+}
 
 /// <summary>
 /// The readiness rules, as one pure function so they can be read and tested in one place.
@@ -93,7 +97,8 @@ public static class ConvoyReadiness
 public sealed record GetConvoyReadinessQuery(int ConvoyId);
 
 /// <summary>The convoy's readiness, or null when there is no such convoy.</summary>
-public sealed class GetConvoyReadinessHandler(IConvoyRepository convoys, IConvoyVehicleRepository truckList)
+public sealed class GetConvoyReadinessHandler(
+    IConvoyRepository convoys, IConvoyVehicleRepository truckList, BudgetPosition? budget = null)
     : IQueryHandler<GetConvoyReadinessQuery, ConvoyReadinessReadModel?>
 {
     public async Task<ConvoyReadinessReadModel?> HandleAsync(
@@ -115,6 +120,9 @@ public sealed class GetConvoyReadinessHandler(IConvoyRepository convoys, IConvoy
             withPolicies.Add((vehicle, await truckList.GetInsuranceAsync(query.ConvoyId, vehicle.Vin, cancellationToken)));
         }
 
-        return ConvoyReadiness.Assess(convoy.Start, route.Count > 0, withPolicies);
+        var readiness = ConvoyReadiness.Assess(convoy.Start, route.Count > 0, withPolicies);
+        var position = budget is null ? null : await budget.OfAsync(query.ConvoyId, cancellationToken);
+
+        return position is null ? readiness : readiness with { Advisories = BudgetAdvisories.For(position) };
     }
 }

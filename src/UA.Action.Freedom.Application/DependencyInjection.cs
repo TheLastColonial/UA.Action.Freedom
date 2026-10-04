@@ -132,6 +132,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RecordFerryBookingCommand, RecordFerryBookingOutcome>, RecordFerryBookingHandler>();
         services.AddScoped<ICommandHandler<RemoveFerryBookingCommand, RemoveFerryBookingOutcome>, RemoveFerryBookingHandler>();
         services.AddScoped<IQueryHandler<GetFerryBookingQuery, FerryBookingReadModel?>, GetFerryBookingHandler>();
+        services.AddScoped<BudgetPosition>();
         services.AddScoped<ICommandHandler<SetBudgetCommand, SetBudgetOutcome>, SetBudgetHandler>();
         services.AddScoped<IQueryHandler<GetBudgetQuery, IReadOnlyList<BudgetLineReadModel>?>, GetBudgetHandler>();
         services.AddScoped<ICommandHandler<AddCostCommand, AddCostResult>, AddCostHandler>();

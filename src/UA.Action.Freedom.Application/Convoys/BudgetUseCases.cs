@@ -199,3 +199,15 @@ public sealed class GetBudgetSummaryHandler(
     public Task<BudgetSummaryReadModel?> HandleAsync(GetBudgetSummaryQuery query, CancellationToken cancellationToken) =>
         new BudgetPosition(convoys, truckList, budget, equipment).OfAsync(query.ConvoyId, cancellationToken);
 }
+
+/// <summary>
+/// What the budget adds to the readiness read (O37, P17). Advice only: a budget is not required to depart, so none of
+/// this makes a convoy not ready.
+/// </summary>
+public static class BudgetAdvisories
+{
+    public static IReadOnlyList<string> For(BudgetSummaryReadModel summary) =>
+        summary.BudgetSet
+            ? summary.Lines.Where(line => line.OverBudget).Select(line => $"{line.Type} is over budget").ToList()
+            : ["No budget set"];
+}
