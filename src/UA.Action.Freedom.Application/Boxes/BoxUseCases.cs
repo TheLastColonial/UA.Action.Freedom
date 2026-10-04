@@ -148,8 +148,11 @@ public sealed class GetBoxByIdHandler(IBoxRepository repository)
         => repository.GetByIdAsync(query.Id, cancellationToken);
 }
 
-/// <summary>A page of boxes. Page size is clamped to 1..200.</summary>
-public sealed record ListBoxesQuery(int Page, int PageSize);
+/// <summary>
+/// A page of boxes. Page size is clamped to 1..200. <paramref name="Visibility"/> has no default, so a caller has to
+/// decide which locations it may see (ADR 0010).
+/// </summary>
+public sealed record ListBoxesQuery(int Page, int PageSize, LocationVisibility Visibility);
 
 public sealed class ListBoxesHandler(IBoxRepository repository)
     : IQueryHandler<ListBoxesQuery, IReadOnlyList<BoxReadModel>>
@@ -162,7 +165,7 @@ public sealed class ListBoxesHandler(IBoxRepository repository)
         var page = query.Page < 1 ? 1 : query.Page;
         var pageSize = query.PageSize is < 1 or > MaxPageSize ? DefaultPageSize : query.PageSize;
 
-        return repository.ListAsync(page, pageSize, cancellationToken);
+        return repository.ListAsync(page, pageSize, query.Visibility, cancellationToken);
     }
 }
 

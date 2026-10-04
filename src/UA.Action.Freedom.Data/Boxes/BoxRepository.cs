@@ -61,17 +61,28 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
             cancellationToken: cancellationToken));
     }
 
-    public async Task<IReadOnlyList<BoxReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<BoxReadModel>> ListAsync(
+        int page, int pageSize, LocationVisibility visibility, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
         var rows = await connection.QueryAsync<BoxReadModel>(new CommandDefinition(
             $"""
              SELECT {Columns} FROM {From}
+             WHERE @all = 1
+                OR b.LocationId IN @locationIds
+                OR (@unlocated = 1 AND b.LocationId IS NULL)
              ORDER BY b.Id
              OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY
              """,
-            new { skip = (page - 1) * pageSize, take = pageSize },
+            new
+            {
+                skip = (page - 1) * pageSize,
+                take = pageSize,
+                all = visibility.IsAll,
+                locationIds = visibility.LocationIds,
+                unlocated = visibility.IncludeUnlocated,
+            },
             cancellationToken: cancellationToken));
 
         return rows.ToList();

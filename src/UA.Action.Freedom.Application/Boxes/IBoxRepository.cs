@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Abstractions;
 namespace UA.Action.Freedom.Application.Boxes;
 
 /// <summary>
@@ -7,7 +8,9 @@ public interface IBoxRepository
 {
     Task<BoxReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<BoxReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken);
+    /// <summary>A page of the boxes <paramref name="visibility"/> allows: at a visible location, or unlocated where it says so.</summary>
+    Task<IReadOnlyList<BoxReadModel>> ListAsync(
+        int page, int pageSize, LocationVisibility visibility, CancellationToken cancellationToken);
 
     Task<bool> ExistsAsync(int id, CancellationToken cancellationToken);
 

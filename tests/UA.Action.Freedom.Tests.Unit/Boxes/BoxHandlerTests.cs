@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Abstractions;
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Boxes;
@@ -398,13 +399,26 @@ public class BoxHandlerTests
     public async Task List_clamps_a_nonsense_page_and_page_size_to_the_defaults()
     {
         var repository = Substitute.For<IBoxRepository>();
-        repository.ListAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+        repository.ListAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<LocationVisibility>(), Arg.Any<CancellationToken>())
             .Returns(new List<BoxReadModel>());
         var handler = new ListBoxesHandler(repository);
 
-        await handler.HandleAsync(new ListBoxesQuery(Page: 0, PageSize: 100_000), CancellationToken.None);
+        await handler.HandleAsync(new ListBoxesQuery(Page: 0, PageSize: 100_000, LocationVisibility.All), CancellationToken.None);
 
-        await repository.Received(1).ListAsync(1, 50, Arg.Any<CancellationToken>());
+        await repository.Received(1).ListAsync(1, 50, LocationVisibility.All, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task List_asks_the_repository_only_for_the_locations_the_caller_may_see()
+    {
+        var repository = Substitute.For<IBoxRepository>();
+        repository.ListAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<LocationVisibility>(), Arg.Any<CancellationToken>())
+            .Returns(new List<BoxReadModel>());
+        var visibility = LocationVisibility.Only([3, 7], includeUnlocated: true);
+
+        await new ListBoxesHandler(repository).HandleAsync(new ListBoxesQuery(1, 50, visibility), CancellationToken.None);
+
+        await repository.Received(1).ListAsync(1, 50, visibility, Arg.Any<CancellationToken>());
     }
 
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);

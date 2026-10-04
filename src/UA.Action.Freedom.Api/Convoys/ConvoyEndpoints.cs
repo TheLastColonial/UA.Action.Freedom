@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Api.Configuration;
+using UA.Action.Freedom.Api.Configuration.Scope;
 using UA.Action.Freedom.Api.Receivers;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
@@ -46,7 +47,8 @@ public static class ConvoyEndpoints
             var convoy = await handler.HandleAsync(new GetConvoyByIdQuery(id), cancellationToken);
             return convoy is null ? Results.NotFound() : Results.Ok(convoy);
         })
-        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+        .RequireConvoyScope()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysReadLed);
 
         convoys.MapPost("/", async (
             CreateConvoyRequest request,
@@ -97,7 +99,8 @@ public static class ConvoyEndpoints
             var route = await handler.HandleAsync(new GetConvoyRouteQuery(id), cancellationToken);
             return route is null ? Results.NotFound() : Results.Ok(route);
         })
-        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+        .RequireConvoyScope()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysReadLed);
 
         convoys.MapPut("/{id:int}/route", async (
             int id,
@@ -172,7 +175,8 @@ public static class ConvoyEndpoints
             var vehicles = await handler.HandleAsync(new ListConvoyVehiclesQuery(id), cancellationToken);
             return vehicles is null ? Results.NotFound() : Results.Ok(vehicles);
         })
-        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+        .RequireConvoyScope()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysReadLed);
 
         convoys.MapPut("/{id:int}/vehicles/{vin}", async (
             int id,
@@ -316,7 +320,8 @@ public static class ConvoyEndpoints
             var boxes = await handler.HandleAsync(new ListVehicleBoxesQuery(id, vin), cancellationToken);
             return boxes is null ? Results.NotFound() : Results.Ok(boxes);
         })
-        .RequireAuthorization(AuthenticationExtensions.BoxesRead);
+        .RequireConvoyScope()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysReadLed);
 
         convoys.MapPut("/{id:int}/vehicles/{vin}/boxes/{boxId:int}", async (
             int id,
@@ -343,6 +348,7 @@ public static class ConvoyEndpoints
                 _ => LoadFrozen(),
             };
         })
+        .RequireBoxScope(BoxAccess.Write, "boxId")
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
         convoys.MapDelete("/{id:int}/vehicles/{vin}/boxes/{boxId:int}", async (
@@ -366,6 +372,7 @@ public static class ConvoyEndpoints
                 _ => LoadFrozen(),
             };
         })
+        .RequireBoxScope(BoxAccess.Write, "boxId")
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
         convoys.MapGet("/{id:int}/vehicles/{vin}/crew", async (

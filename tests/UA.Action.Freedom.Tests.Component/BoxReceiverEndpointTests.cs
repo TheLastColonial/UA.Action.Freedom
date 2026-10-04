@@ -79,7 +79,7 @@ public class BoxReceiverEndpointTests
     public async Task An_open_box_can_be_pointed_at_a_registered_receiver()
     {
         var boxes = new InMemoryBoxRepository(ABox());
-        await using var api = FreedomApi.WithBoxes(boxes, Receivers(), roles: "Loader");
+        await using var api = FreedomApi.WithBoxes(boxes, Receivers(), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync("/boxes/1", new { receiverRef = Registered }, TestContext.Current.CancellationToken);
@@ -92,7 +92,7 @@ public class BoxReceiverEndpointTests
     public async Task An_open_box_cannot_be_pointed_at_a_pending_receiver()
     {
         var boxes = new InMemoryBoxRepository(ABox());
-        await using var api = FreedomApi.WithBoxes(boxes, Receivers(), roles: "Loader");
+        await using var api = FreedomApi.WithBoxes(boxes, Receivers(), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync("/boxes/1", new { receiverRef = Pending }, TestContext.Current.CancellationToken);
@@ -105,7 +105,7 @@ public class BoxReceiverEndpointTests
     public async Task An_open_box_cannot_be_pointed_at_a_receiver_that_does_not_exist()
     {
         var boxes = new InMemoryBoxRepository(ABox());
-        await using var api = FreedomApi.WithBoxes(boxes, Receivers(), roles: "Loader");
+        await using var api = FreedomApi.WithBoxes(boxes, Receivers(), roles: "Dispatcher");
         using var client = api.CreateClient();
 
         var response = await client.PutAsJsonAsync("/boxes/1", new { receiverRef = Unknown }, TestContext.Current.CancellationToken);

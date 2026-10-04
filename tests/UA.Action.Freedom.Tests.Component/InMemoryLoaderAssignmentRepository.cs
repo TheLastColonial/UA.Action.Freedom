@@ -16,6 +16,21 @@ internal sealed class InMemoryLoaderAssignmentRepository : ILoaderAssignmentRepo
     public InMemoryLoaderAssignmentRepository(Func<Guid, string>? nameOf = null) =>
         this.nameOf = nameOf ?? (_ => "Test Loader");
 
+    /// <summary>
+    /// The default for a test that is not about scope: the test caller manages every location a test is likely to use, so
+    /// a Loader is not narrowed by accident. A test about scope builds its own, with exactly the assignments it means.
+    /// </summary>
+    public static InMemoryLoaderAssignmentRepository ForTheTestCaller()
+    {
+        var loaders = new InMemoryLoaderAssignmentRepository();
+        foreach (var locationId in Enumerable.Range(1, 50))
+        {
+            loaders.Managing(InMemoryPersonRepository.TestUserId, locationId);
+        }
+
+        return loaders;
+    }
+
     /// <summary>Seeds an open assignment, as an Administrator's earlier act.</summary>
     public InMemoryLoaderAssignmentRepository Managing(Guid personId, int locationId)
     {

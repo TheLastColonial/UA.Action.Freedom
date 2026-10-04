@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using UA.Action.Freedom.Api.Configuration;
+using UA.Action.Freedom.Api.Configuration.Scope;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Api.Receivers;
 using UA.Action.Freedom.Application.Boxes;
@@ -34,13 +35,16 @@ public static class BoxEndpoints
 
         boxes.MapGet("/", async (
             IQueryHandler<ListBoxesQuery, IReadOnlyList<BoxReadModel>> handler,
+            IScopeGuard guard,
             CancellationToken cancellationToken,
             int? page,
             int? pageSize) =>
         {
-            var result = await handler.HandleAsync(new ListBoxesQuery(page ?? 1, pageSize ?? 50), cancellationToken);
+            var visibility = await guard.LocationVisibilityAsync(cancellationToken);
+            var result = await handler.HandleAsync(new ListBoxesQuery(page ?? 1, pageSize ?? 50, visibility), cancellationToken);
             return Results.Ok(result);
         })
+        .ScopeExempt("a list: narrowed in the query by the caller's LocationVisibility")
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 
         boxes.MapGet("/{id:int}", async (
@@ -51,13 +55,21 @@ public static class BoxEndpoints
             var box = await handler.HandleAsync(new GetBoxByIdQuery(id), cancellationToken);
             return box is null ? Results.NotFound() : Results.Ok(box);
         })
+        .RequireBoxScope(BoxAccess.Read)
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 
         boxes.MapPost("/", async (
             CreateBoxRequest request,
+            IScopeGuard guard,
             ICommandHandler<CreateBoxCommand, CreateBoxResult> handler,
             CancellationToken cancellationToken) =>
         {
+            // A scoped Loader may create a box at a location they manage, or an expected box with no location yet (O22).
+            if (!await guard.CanAccessLocationAsync(request.LocationId, allowUnlocated: true, cancellationToken))
+            {
+                return await guard.RefusalAsync(cancellationToken);
+            }
+
             var result = await handler.HandleAsync(request.ToCommand(), cancellationToken);
 
             return result.Outcome switch
@@ -67,15 +79,24 @@ public static class BoxEndpoints
                 _ => ReceiverProblems.NotRegistered(),
             };
         })
+        .ScopeExempt("the body locationId is checked in the route: assigned, or null for an expected box")
         .AddEndpointFilter<ValidationFilter<CreateBoxRequest>>()
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
         boxes.MapPut("/{id:int}", async (
             int id,
             UpdateBoxRequest request,
+            IScopeGuard guard,
             ICommandHandler<UpdateBoxCommand, UpdateBoxOutcome> handler,
             CancellationToken cancellationToken) =>
         {
+            // The source was checked by the filter (an unlocated box is the check-in). The destination must be a
+            // location the caller manages: a scoped Loader cannot move a box out of reach, or to no location.
+            if (!await guard.CanAccessLocationAsync(request.LocationId, allowUnlocated: false, cancellationToken))
+            {
+                return await guard.RefusalAsync(cancellationToken);
+            }
+
             var outcome = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
 
             return outcome switch
@@ -87,6 +108,7 @@ public static class BoxEndpoints
                 _ => Results.Problem(detail: ValidatedProblem, statusCode: StatusCodes.Status409Conflict),
             };
         })
+        .RequireBoxScope(BoxAccess.Move)
         .AddEndpointFilter<ValidationFilter<UpdateBoxRequest>>()
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
@@ -98,6 +120,7 @@ public static class BoxEndpoints
             var outcome = await handler.HandleAsync(new DeleteBoxCommand(id), cancellationToken);
             return outcome == DeleteBoxOutcome.NotFound ? Results.NotFound() : Results.NoContent();
         })
+        .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
         boxes.MapPost("/{id:int}/validate", async (
@@ -132,6 +155,7 @@ public static class BoxEndpoints
             };
         })
         .AddEndpointFilter<ValidationFilter<ValidateBoxRequest>>()
+        .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesValidate);
 
         boxes.MapGet("/{id:int}/items", async (
@@ -143,6 +167,7 @@ public static class BoxEndpoints
             var items = await handler.HandleAsync(new ListBoxItemsQuery(id), cancellationToken);
             return items is null ? Results.NotFound() : Results.Ok(items);
         })
+        .RequireBoxScope(BoxAccess.Read)
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 
         boxes.MapPost("/{id:int}/items", async (
@@ -171,6 +196,7 @@ public static class BoxEndpoints
             };
         })
         .AddEndpointFilter<ValidationFilter<AddBoxItemRequest>>()
+        .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
         boxes.MapDelete("/{id:int}/items/{itemId:guid}", async (
@@ -188,6 +214,7 @@ public static class BoxEndpoints
                 _ => Results.Problem(detail: ValidatedProblem, statusCode: StatusCodes.Status409Conflict),
             };
         })
+        .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
         // QR labels. Issuing and revoking are ordinary box writes; reading, the image and the
@@ -204,6 +231,7 @@ public static class BoxEndpoints
                 ? Results.NotFound()
                 : Results.Created($"/boxes/scan/{code.Token}", null);
         })
+        .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
         boxes.MapGet("/{id:int}/qr-code", async (
@@ -214,6 +242,7 @@ public static class BoxEndpoints
             var code = await handler.HandleAsync(new GetBoxQrCodeQuery(id), cancellationToken);
             return code is null ? Results.NotFound() : Results.Ok(code);
         })
+        .RequireBoxScope(BoxAccess.Read)
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 
         boxes.MapDelete("/{id:int}/qr-code", async (
@@ -224,6 +253,7 @@ public static class BoxEndpoints
             var outcome = await handler.HandleAsync(new RevokeBoxQrCodeCommand(id), cancellationToken);
             return outcome == RevokeBoxQrCodeOutcome.Revoked ? Results.NoContent() : Results.NotFound();
         })
+        .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
         boxes.MapGet("/{id:int}/qr-code/image", async (
@@ -245,6 +275,7 @@ public static class BoxEndpoints
                 ? Results.Bytes(QrCodeRenderer.ToPng(code.Token, baseUrl), "image/png")
                 : Results.Text(QrCodeRenderer.ToSvg(code.Token, baseUrl), "image/svg+xml");
         })
+        .RequireBoxScope(BoxAccess.Read)
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 
         // Bay allocation. Placing or moving a box is Loader-only — narrower than boxes:write —
@@ -277,6 +308,7 @@ public static class BoxEndpoints
             };
         })
         .AddEndpointFilter<ValidationFilter<AssignBoxBayRequest>>()
+        .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesAllocateBay);
 
         boxes.MapGet("/{id:int}/bay", async (
@@ -287,6 +319,7 @@ public static class BoxEndpoints
             var assignment = await handler.HandleAsync(new GetBoxBayQuery(id), cancellationToken);
             return assignment is null ? Results.NotFound() : Results.Ok(assignment);
         })
+        .RequireBoxScope(BoxAccess.Read)
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 
         boxes.MapDelete("/{id:int}/bay", async (
@@ -297,6 +330,7 @@ public static class BoxEndpoints
             var outcome = await handler.HandleAsync(new VacateBoxBayCommand(id), cancellationToken);
             return outcome == VacateBoxBayOutcome.Vacated ? Results.NoContent() : Results.NotFound();
         })
+        .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesAllocateBay);
 
         boxes.MapGet("/{id:int}/bay/history", async (
@@ -307,6 +341,7 @@ public static class BoxEndpoints
             var history = await handler.HandleAsync(new GetBoxBayHistoryQuery(id), cancellationToken);
             return Results.Ok(history);
         })
+        .RequireBoxScope(BoxAccess.Read)
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 
         boxes.MapGet("/{id:int}/label", async (
@@ -332,16 +367,23 @@ public static class BoxEndpoints
             var svg = BoxLabelRenderer.ToSvg(box.Id, code.Token, code.IssuedAt, PublicBaseUrl(http, app.Value));
             return Results.Text(svg, "image/svg+xml");
         })
+        .RequireBoxScope(BoxAccess.Read)
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 
         boxes.MapGet("/scan/{token:guid}", async (
             Guid token,
+            IScopeGuard guard,
             IQueryHandler<ResolveBoxByQrCodeQuery, BoxReadModel?> handler,
             CancellationToken cancellationToken) =>
         {
             var box = await handler.HandleAsync(new ResolveBoxByQrCodeQuery(token), cancellationToken);
-            return box is null ? Results.NotFound() : Results.Ok(box);
+
+            // An out-of-scope box answers exactly as an unknown token does, so a label is not an oracle.
+            return box is null || !await guard.CanAccessLocationAsync(box.LocationId, allowUnlocated: true, cancellationToken)
+                ? Results.NotFound()
+                : Results.Ok(box);
         })
+        .ScopeExempt("scoped after the token resolves, answering 404 for an out-of-scope box")
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
 
         return app;

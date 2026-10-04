@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Api.Configuration;
+using UA.Action.Freedom.Api.Configuration.Scope;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Locations;
 
@@ -17,13 +18,16 @@ public static class LocationEndpoints
 
         locations.MapGet("/", async (
             IQueryHandler<ListLocationsQuery, IReadOnlyList<LocationReadModel>> handler,
+            IScopeGuard guard,
             CancellationToken cancellationToken,
             int? page,
             int? pageSize) =>
         {
-            var result = await handler.HandleAsync(new ListLocationsQuery(page ?? 1, pageSize ?? 50), cancellationToken);
+            var visibility = await guard.LocationVisibilityAsync(cancellationToken);
+            var result = await handler.HandleAsync(new ListLocationsQuery(page ?? 1, pageSize ?? 50, visibility), cancellationToken);
             return Results.Ok(result);
         })
+        .ScopeExempt("a list: narrowed in the query by the caller's LocationVisibility")
         .RequireAuthorization(AuthenticationExtensions.LocationsRead);
 
         locations.MapGet("/{id:int}", async (
@@ -34,6 +38,7 @@ public static class LocationEndpoints
             var location = await handler.HandleAsync(new GetLocationByIdQuery(id), cancellationToken);
             return location is null ? Results.NotFound() : Results.Ok(location);
         })
+        .RequireLocationScope()
         .RequireAuthorization(AuthenticationExtensions.LocationsRead);
 
         locations.MapPost("/", async (
@@ -77,6 +82,7 @@ public static class LocationEndpoints
             var bays = await handler.HandleAsync(new ListBaysQuery(id), cancellationToken);
             return bays is null ? Results.NotFound() : Results.Ok(bays);
         })
+        .RequireLocationScope()
         .RequireAuthorization(AuthenticationExtensions.LocationsRead);
 
         locations.MapPost("/{id:int}/bays", async (
