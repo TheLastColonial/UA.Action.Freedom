@@ -5,7 +5,6 @@ Date: 2026-10-02
 ## Status
 
 **Accepted** on 2026-10-04, on the owner's sign-off of the mechanism (see *Accepted mechanism* below). The need is decided ([X12](../domain/decisions.md#x12), [O14](../domain/decisions.md#o14)). Built by [plan 17](../plans/17-scoped-permissions.md), on top of the groundwork [plan 02](../plans/02-login-person-link.md) built: a login is linked to a person ([O34](../domain/decisions.md#o34)) and an unlinked login is refused on any write that records who did it ([O35](../domain/decisions.md#o35)).
-mechanism below is a recommendation that has not been agreed. Not yet implemented, except the groundwork [plan 02](../plans/02-login-person-link.md) built: a login is linked to a person ([O34](../domain/decisions.md#o34)) and an unlinked login is refused on any write that records who did it ([O35](../domain/decisions.md#o35)).
 
 ## Context
 
