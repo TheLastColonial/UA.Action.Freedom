@@ -265,7 +265,6 @@ per-vehicle anchor.
 | Convoy Leader | not modelled | one per convoy, with a scoped checklist page |
 | Box outcomes | delivered, lost or returned | delivered, accepted, seized, returned to a hub, or undeliverable ([O2](#o2), [O5](#o5), [O9](#o9)) |
 | Convoy end | arrival | arrival, then closing with a report ([O10](#o10)) |
-| Budget | not modelled | a budget line per cost type, with actuals ([O12](#o12)) |
 | Vehicle value | no value | price paid, included in the value report ([O11](#o11)) |
 | Loader | sees every location | sees only the locations they manage ([O14](#o14)) |
 | Item classification | free text and properties | category, mapped to each authority's codes ([O16](#o16)) |
