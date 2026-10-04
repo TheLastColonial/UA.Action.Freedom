@@ -99,6 +99,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RevokeBoxQrCodeCommand, RevokeBoxQrCodeOutcome>, RevokeBoxQrCodeHandler>();
         services.AddScoped<IQueryHandler<GetBoxQrCodeQuery, BoxQrCodeReadModel?>, GetBoxQrCodeHandler>();
         services.AddScoped<IQueryHandler<ResolveBoxByQrCodeQuery, BoxReadModel?>, ResolveBoxByQrCodeHandler>();
+        services.AddScoped<IQueryHandler<GetBoxLabelContentQuery, BoxLabelContent?>, GetBoxLabelContentHandler>();
         services.AddScoped<ICommandHandler<AssignBoxBayCommand, AssignBoxBayOutcome>, AssignBoxBayHandler>();
         services.AddScoped<ICommandHandler<VacateBoxBayCommand, VacateBoxBayOutcome>, VacateBoxBayHandler>();
         services.AddScoped<IQueryHandler<GetBoxBayQuery, BoxBayAssignmentReadModel?>, GetBoxBayHandler>();

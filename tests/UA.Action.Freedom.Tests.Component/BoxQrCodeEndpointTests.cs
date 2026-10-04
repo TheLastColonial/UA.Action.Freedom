@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Categories;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Component;
 
@@ -13,7 +15,7 @@ namespace UA.Action.Freedom.Tests.Component;
 /// <remarks>
 /// A QR label ties the cardboard to its record: a scan of an active token resolves to the box.
 /// Re-labelling revokes the previous token, so a lost label stops working. The printable label
-/// crosses borders, so it carries a box number and nothing about the receiver — these tests
+/// crosses borders, so it lists the contents and the signer and says nothing about the receiver — these tests
 /// pin that (docs/domain/key-concepts.md § Box, § Data Sensitivity).
 /// </remarks>
 public class BoxQrCodeEndpointTests
@@ -174,6 +176,34 @@ public class BoxQrCodeEndpointTests
         var svg = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         svg.Should().StartWith("<svg").And.Contain($"BOX #{BoxId}").And.Contain("UKRAINIAN ACTION");
         svg.Should().NotContain("Coventry").And.NotContain("Cross Road").And.NotContain(receiver.ToString());
+    }
+
+    [Fact]
+    public async Task The_printable_label_lists_the_items_in_both_languages_with_the_signer_and_still_no_receiver()
+    {
+        var receiver = Guid.NewGuid();
+        var signer = InMemoryPersonRepository.TestUserId;
+        var boxes = new InMemoryBoxRepository(ABox(validated: true, receiverRef: receiver) with { ValidatedByPersonId = signer })
+            .WithItem(
+                BoxId,
+                new BoxItemReadModel(
+                    Guid.NewGuid(), "Blankets for Hospital 4, Lviv", new Dictionary<string, string>(),
+                    InMemoryItemCategoryRepository.MedicineId, Quantity: 6, ValueGbp: 987.65m,
+                    ValueSource: ValueSource.Donor, ExpiresOn: new DateOnly(2027, 3, 31)));
+        var categories = new InMemoryItemCategoryRepository(
+            new ItemCategoryReadModel(
+                InMemoryItemCategoryRepository.MedicineId, "Medicine", "Ліки", IsFixed: true, null, true, false, 180));
+        await using var api = FreedomApi.WithBoxes(
+            boxes, InMemoryPersonRepository.WithLinkedTestUser(), categories: categories, roles: "Loader");
+        using var client = api.CreateClient();
+        await client.PostAsync($"/boxes/{BoxId}/qr-code", null, TestContext.Current.CancellationToken);
+
+        var svg = await client.GetStringAsync($"/boxes/{BoxId}/label", TestContext.Current.CancellationToken);
+
+        svg.Should().Contain("Medicine").And.Contain("Ліки").And.Contain("×6").And.Contain("2027-03-31");
+        svg.Should().Contain("Test U.").And.Contain(UA.Action.Freedom.Application.Boxes.SignerCode.For(signer));
+        svg.Should().NotContain("Hospital").And.NotContain("Lviv").And.NotContain("987.65")
+            .And.NotContain(receiver.ToString()).And.NotContain("Coventry");
     }
 
     [Fact]

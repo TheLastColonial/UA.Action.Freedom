@@ -90,8 +90,8 @@ public sealed record BoxItemReadModel(
 /// deleted, so a label found in the wild can always be told from an unknown one.
 ///
 /// The token is the only identifier that ever appears on the physical label. The label may be
-/// inspected at a border, so it carries no receiver, address or contents
-/// (docs/domain/key-concepts.md § Data Sensitivity).
+/// inspected at a border, so it lists the box's items by category and quantity and names its signer, and carries no
+/// receiver, region or address (docs/domain/key-concepts.md § Data Sensitivity, <see cref="BoxLabelContent"/>).
 /// </remarks>
 public sealed record BoxQrCodeReadModel(
     Guid Token,

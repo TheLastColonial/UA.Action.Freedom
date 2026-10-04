@@ -7,7 +7,8 @@ Feature: Box QR codes
     The label ties the cardboard to its record and is the only thing a scanner needs. A box can
     be re-labelled: issuing a new code revokes the previous one, so a label that fell off in
     transit can be replaced and the old one stops working. The label crosses borders, so it
-    carries a box number and nothing about where the box is going.
+    lists what is in the box and who signed it, in English and Ukrainian, and says nothing about
+    where the box is going.
 
     These scenarios run against the running containers (the edge on
     http://localhost:8080, Keycloak on http://localhost:8081) and skip themselves
@@ -68,6 +69,48 @@ Scenario: The printable label does not carry the box's location
     When I GET "/boxes/{id}/label" on the remembered box
     Then the response status is 200
     And the response body does not mention "BDD Depot"
+
+Scenario: The label lists the items in both languages and the signer, and still has no location
+    Given I am authenticated as "admin"
+    And a location exists
+    And a category exists
+    When I POST "/boxes" at the remembered location
+    Then the response status is 201
+    Given I remember the box
+    When I POST "/boxes/{id}/items" on the remembered box with body:
+        """
+        { "description": "Blankets for Hospital 4, Lviv", "categoryId": {category}, "quantity": 5 }
+        """
+    Then the response status is 200
+    When I POST "/boxes/{id}/qr-code" on the remembered box
+    Then the response status is 201
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 12
+    Then the response status is 204
+    When I GET "/boxes/{id}/label" on the remembered box
+    Then the response status is 200
+    And the response body mentions "BDD Category"
+    And the response body mentions "Contents"
+    And the response body mentions "Вміст"
+    And the response body mentions "×5"
+    And the response body mentions "Checked by"
+    And the response body does not mention "BDD Depot"
+    And the response body does not mention "Hospital"
+    And the response body does not mention "Lviv"
+
+Scenario: A voided box takes no new label
+    Given I am authenticated as "admin"
+    When I POST "/boxes" with body:
+        """
+        {}
+        """
+    Then the response status is 201
+    Given I remember the box
+    When I POST "/boxes/{id}/validate" on the remembered box weighing 12
+    Then the response status is 204
+    When I POST "/boxes/{id}/replace" on the remembered box
+    Then the response status is 201
+    When I POST "/boxes/{id}/qr-code" on the remembered box
+    Then the response status is 409
 
 Scenario: A label needs a QR code first
     Given I am authenticated as "operator"

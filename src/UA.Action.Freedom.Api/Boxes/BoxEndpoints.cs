@@ -360,6 +360,7 @@ public static class BoxEndpoints
             IOptions<AppOptions> app,
             IQueryHandler<GetBoxByIdQuery, BoxReadModel?> boxHandler,
             IQueryHandler<GetBoxQrCodeQuery, BoxQrCodeReadModel?> codeHandler,
+            IQueryHandler<GetBoxLabelContentQuery, BoxLabelContent?> contentHandler,
             CancellationToken cancellationToken) =>
         {
             var box = await boxHandler.HandleAsync(new GetBoxByIdQuery(id), cancellationToken);
@@ -374,7 +375,10 @@ public static class BoxEndpoints
                 return Results.Problem(detail: NoQrCodeProblem, statusCode: StatusCodes.Status409Conflict);
             }
 
-            var svg = BoxLabelRenderer.ToSvg(box.Id, code.Token, code.IssuedAt, PublicBaseUrl(http, app.Value));
+            // What goes on the label is composed into its own type, never a box or item read model.
+            var content = await contentHandler.HandleAsync(new GetBoxLabelContentQuery(id), cancellationToken)
+                ?? BoxLabelContent.None;
+            var svg = BoxLabelRenderer.ToSvg(box.Id, code.Token, code.IssuedAt, PublicBaseUrl(http, app.Value), content);
             return Results.Text(svg, "image/svg+xml");
         })
         .RequireAuthorization(AuthenticationExtensions.BoxesRead);
