@@ -1,0 +1,106 @@
+# Hot-reload override. Layer it over the substrate:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait
+#
+# `scripts/agent/agent.ps1 up` (and agent.sh) do this for you. The three .NET services run
+# `dotnet watch` against the bind-mounted worktree instead of the baked images, so saving a
+# .cs file rebuilds and restarts that one process in seconds — no `docker compose build`.
+#
+# The baked images (docker-compose.yml alone) are still what CI tests and publishes; this
+# file is for the inner loop only.
+#
+# Things that are NOT hot-reloadable: the database schema (run `agent.ps1 db`), Keycloak
+# realm / blob containers / queues (`tofu apply`), and anything in this directory.
+
+x-dotnet-watch: &dotnet-watch
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  # The SDK image's default user is root, which is what a bind mount on Docker Desktop wants.
+  working_dir: /src
+  restart: unless-stopped
+  environment: &dotnet-watch-env
+    # Windows (and macOS) bind mounts do not deliver inotify events.
+    DOTNET_USE_POLLING_FILE_WATCHER: "1"
+    DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER: "1"
+    DOTNET_WATCH_RESTART_ON_RUDE_EDIT: "true"
+    DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    DOTNET_NOLOGO: "1"
+    NUGET_PACKAGES: /nuget
+  # Source is bind-mounted; bin/obj go to a named volume per service (MSBuild ArtifactsPath)
+  # so the container never writes Linux build output into the host checkout. NuGet caches are
+  # per service too (see the volumes at the bottom).
+
+services:
+
+  app:
+    <<: *dotnet-watch
+    build: !reset null
+    volumes:
+      - ../..:/src
+      - nuget-app:/nuget
+      - artifacts-app:/artifacts
+    environment:
+      <<: *dotnet-watch-env
+      ArtifactsPath: /artifacts
+    # `dotnet watch` prints "Started" lines the health probe does not care about; the probe
+    # is /health/live. First start restores + compiles the whole graph, hence the long grace.
+    command: ["dotnet", "watch", "run", "--project", "src/UA.Action.Freedom.Api/UA.Action.Freedom.Api.csproj", "--no-launch-profile"]
+    healthcheck:
+      start_period: 240s
+
+  customs-worker:
+    <<: *dotnet-watch
+    build: !reset null
+    volumes:
+      - ../..:/src
+      - nuget-customs-worker:/nuget
+      - artifacts-customs-worker:/artifacts
+    environment:
+      <<: *dotnet-watch-env
+      ArtifactsPath: /artifacts
+    command: ["dotnet", "watch", "run", "--project", "src/UA.Action.Freedom.CustomsWorker/UA.Action.Freedom.CustomsWorker.csproj", "--no-launch-profile"]
+
+  manifest-worker:
+    <<: *dotnet-watch
+    build: !reset null
+    volumes:
+      - ../..:/src
+      - nuget-manifest-worker:/nuget
+      - artifacts-manifest-worker:/artifacts
+    environment:
+      <<: *dotnet-watch-env
+      ArtifactsPath: /artifacts
+    command: ["dotnet", "watch", "run", "--project", "src/UA.Action.Freedom.ManifestWorker/UA.Action.Freedom.ManifestWorker.csproj", "--no-launch-profile"]
+
+  # The operator SPA on the Vite dev server (HMR). The baked image serves the built bundle
+  # under /app; in this mode the API image is the SDK, which has no bundle, so use this.
+  web:
+    image: node:24-bookworm-slim
+    container_name: ${FREEDOM_PREFIX:-freedom}-web
+    restart: unless-stopped
+    working_dir: /src/web
+    command: ["sh", "-c", "npm ci --no-audit --no-fund && exec npx vite --host 0.0.0.0 --port 5173 --strictPort"]
+    environment:
+      VITE_API_PROXY_TARGET: http://app:8080
+      VITE_OIDC_AUTHORITY: http://localhost:${KEYCLOAK_PORT:-8081}/realms/freedom
+      # Same reason as the .NET watcher: no inotify over a Windows bind mount.
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "${VITE_PORT:-5173}:5173"
+    volumes:
+      - ../..:/src
+      # Linux node_modules must not land in (or be read from) the Windows checkout.
+      - web-node-modules:/src/web/node_modules
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  # One NuGet cache per service: three concurrent first-start restores into one shared cache raced
+  # ("Could not find file /nuget/.../xyz.tmp") and left `dotnet watch` waiting on a broken restore.
+  nuget-app:
+  nuget-customs-worker:
+  nuget-manifest-worker:
+  artifacts-app:
+  artifacts-customs-worker:
+  artifacts-manifest-worker:
+  web-node-modules:

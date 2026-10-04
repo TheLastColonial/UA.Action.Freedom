@@ -10,10 +10,10 @@ output "environment" {
     public_website = "${var.edge_url}/site"
     identity       = "${var.keycloak_url}/realms/${var.realm_name}"
     identity_admin = "${var.keycloak_url}/admin"
-    hmrc_stubs     = "http://localhost:8082/__admin/mappings"
-    telemetry      = "http://localhost:3000"
-    inbox          = "http://localhost:8025"
-    edge_dashboard = "http://localhost:8090/dashboard/"
+    hmrc_stubs     = "http://localhost:${var.wiremock_port}/__admin/mappings"
+    telemetry      = "http://localhost:${var.grafana_port}"
+    inbox          = "http://localhost:${var.mailpit_port}"
+    edge_dashboard = "http://localhost:${var.edge_dashboard_port}/dashboard/"
   }
 }
 

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pwsh -NoProfile -File scripts/agent/agent.ps1 *)",
+      "Bash(pwsh scripts/agent/agent.ps1 *)",
+      "Bash(bash scripts/agent/agent.sh *)",
+      "Bash(scripts/agent/agent.sh *)",
+      "Bash(git worktree list)"
+    ]
+  }
+}

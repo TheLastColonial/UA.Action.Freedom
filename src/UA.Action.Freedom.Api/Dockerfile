@@ -14,6 +14,9 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+# Baked into the bundle: the browser-facing Keycloak URL. Defaults to the main stack's port; a
+# per-agent stack passes its own (iac/local/docker-compose.yml build.args).
+ARG VITE_OIDC_AUTHORITY=http://localhost:8081/realms/freedom
 RUN npx vite build
 
 # ---- build ----------------------------------------------------------------

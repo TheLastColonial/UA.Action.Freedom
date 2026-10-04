@@ -18,6 +18,23 @@ repository root for the working rules.
 
 ## 1. Tooling and environment
 
+### Parallel agents: several traps live in the generated files
+
+Full guide: [`parallel-agents.md`](parallel-agents.md). The ones that cost time:
+
+- A worktree has **no `.env`** (it is gitignored) and a `.git` *file*, not a directory.
+  `agent.ps1 new` generates `iac/local/.env` from the main checkout's; a hand-made worktree has none.
+- Compose reads `iac/local/.env` from the directory you run it in. Running bare `docker compose` in the main
+  checkout while thinking you are in your worktree starts (or tears down) the **wrong stack**.
+- Integration/BDD/Playwright tests default to the main stack's ports (`localhost:1433/8080/8081`);
+  without `. ./.agent/env.ps1` an agent silently tests another agent's database.
+- A PowerShell function parameter `$Path` shadows a caller's `$path` (variables are case-insensitive and
+  dynamically scoped); `agent.ps1` once recorded the registry file as the worktree path because of it.
+- Three full stacks on a 16 GB Docker VM run it out of memory; the symptom is `IOException: Cannot allocate memory` from `dotnet watch`'s file poll and restart loops, not a watcher bug (see `parallel-agents.md` Troubleshooting).
+- The Azure SDK drops the container from a blob URL when the connection string names a *hostname* (`localhost`, `host.docker.internal`) on a non-default port, so `/ens/x.json` is requested as `/x.json` and Azurite answers `ContainerNotFound`. Always give Azurite an IP (`127.0.0.1`) in connection strings for non-default ports; the generated `.agent/env.*` and `terraform.tfvars` do.
+- `dotnet watch` on a bind mount needs `DOTNET_USE_POLLING_FILE_WATCHER=1`, and `node_modules` and `bin/obj`
+  must live on named volumes, or Linux output pollutes the Windows checkout.
+
 ### `dotnet test` uses Microsoft.Testing.Platform verbs
 
 `global.json` opts into MTP, because the .NET 10 SDK dropped the VSTest bridge `xunit.v3` relied
