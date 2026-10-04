@@ -127,7 +127,7 @@ public interface IManifestWorkQueue
     /// Asks for a French customs logistics envelope (ELO) for the vehicle this manifest covers.
     /// </summary>
     /// <remarks>
-    /// The other prong of the fork in <c>docs/process.puml</c>. France requires an envelope per
+    /// Enqueued when the vehicle's ELO declaration is filed in automatic mode. France requires an envelope per
     /// transport unit at the Smart Border, and it is what pairs the lorry's customs formalities with
     /// its physical crossing — no envelope, no sailing.
     /// </remarks>

@@ -142,3 +142,5 @@ Added 2026-10-02. The original text above is kept as it was decided.
 | Its own queue, disposition table, and the worker having no database | **Stands unchanged.** These govern automatic mode. |
 | "The crossing profile is domain, not configuration" | **Stands unchanged.** |
 | A changed load means a new envelope | **New.** An envelope cannot gain or lose a declaration after creation, so a stale one is replaced and the old one is kept as history ([ADR 0005](0005-declarations-are-per-vehicle-with-derived-staleness.md)). |
+
+**Implemented by [plan 08](../plans/08-declarations-filing.md):** approval no longer enqueues the envelope; `POST /convoys/{id}/vehicles/{vin}/declarations/elo/file` does, in automatic mode only, and refuses until the vehicle has an accepted ENS.

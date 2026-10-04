@@ -8,6 +8,7 @@ using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Declarations;
 using UA.Action.Freedom.Application.Donations;
 using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Application.Manifests;
@@ -240,7 +241,9 @@ internal static class FreedomApi
         IPersonRepository people,
         IManifestWorkQueue queue,
         IEloEnvelopeStore? envelopes = null,
-        IEnsDeclarationStore? declarations = null,
+        InMemoryDeclarationRepository? declarations = null,
+        IEnsDeclarationStore? ensDetails = null,
+        DeclarationSubmissionModes? submissionModes = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
@@ -256,9 +259,11 @@ internal static class FreedomApi
             // what a manifest looks like before the Customs Worker has got to it.
             services.Replace(envelopes ?? new InMemoryEloEnvelopeStore());
 
-            // The ICS2 declaration. Empty unless a test says otherwise, which is the state in which
-            // approving a manifest is refused — so a test that approves has to seed one.
-            services.Replace(declarations ?? new InMemoryEnsDeclarationStore());
+            // A vehicle's declarations. Empty unless a test says otherwise: no ENS is accepted, so an ELO is
+            // refused until a test seeds one. Manual submission is the default, as in production (ADR 0006).
+            services.Replace<IDeclarationRepository>(declarations ?? new InMemoryDeclarationRepository(convoys));
+            services.Replace(ensDetails ?? new InMemoryEnsDeclarationStore());
+            services.AddSingleton(submissionModes ?? new DeclarationSubmissionModes());
         });
 
     /// <summary>

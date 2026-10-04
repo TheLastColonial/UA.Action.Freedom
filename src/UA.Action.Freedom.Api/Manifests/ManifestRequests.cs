@@ -1,4 +1,5 @@
 using FluentValidation;
+using UA.Action.Freedom.Application.Declarations;
 using UA.Action.Freedom.Application.Manifests;
 
 namespace UA.Action.Freedom.Api.Manifests;
@@ -40,8 +41,8 @@ public sealed class UpdateManifestRequestValidator : AbstractValidator<UpdateMan
 public sealed record RecordEnsRequest(
     string Mrn, DateTimeOffset AcceptedAt, string FiledBy, string? FilingReference)
 {
-    public RecordEnsDeclarationCommand ToCommand(string id) =>
-        new(id, Mrn, AcceptedAt, FiledBy, FilingReference);
+    public RecordEnsDeclarationCommand ToCommand(int convoyId, string vin) =>
+        new(convoyId, vin, Mrn, AcceptedAt, FiledBy, FilingReference);
 }
 
 public sealed class RecordEnsRequestValidator : AbstractValidator<RecordEnsRequest>

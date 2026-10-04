@@ -274,11 +274,17 @@ Core resource endpoints:
   - `PUT /manifests/{id}` — Notes only. The convoy and the vehicle are the manifest's identity, so there is no field for either
   - `GET /manifests/{id}/crew` — Who is travelling with its vehicle. A **read**: crewing happens once, on the truck-list entry
   - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo is read through the vehicle's allocations. `PUT`/`DELETE` here answer **410 Gone**: put boxes on the vehicle with `PUT /convoys/{id}/vehicles/{vin}/boxes/{boxId}`
-  - `GET /manifests/{id}/elo` — The French logistics envelope for this vehicle: its `jeton`, `numeroDossier` and `statut`. **Read-only** — an envelope is requested by approving the manifest, never by a `POST` here — and `404` until the Customs Worker has obtained one (`manifests:read`)
+  - `GET /manifests/{id}/elo` — The French logistics envelope for this vehicle: its `jeton`, `numeroDossier` and `statut`. **Read-only** — an envelope is requested by filing the vehicle's ELO declaration, never by a `POST` here — and `404` until the Customs Worker has obtained one (`manifests:read`)
   - `GET /manifests/{id}/elo/document` — The barcode PDF a driver presents at the French Smart Border, streamed through the authenticated API rather than as a blob URL (`manifests:read`)
-  - `GET /manifests/{id}/ens/filing-sheet` — Everything an **ICS2 Entry Summary Declaration** asks for that Freedom can know, plus a `missing` list of what it cannot. An item is declared under its own commodity code, or else the EU code of its category; a gap names the category to fix. Deliberately carries **no delivery address**: the filer is a Ground Officer and holds it already (`manifests:read`)
-  - `GET|PUT|DELETE /manifests/{id}/ens` — The ENS MRN this crossing was accepted under. **Recorded, not submitted** — Freedom does not talk to ICS2 — and **write-once**: `DELETE` withdraws it (keeping it) so a refiled declaration can be recorded. `PUT`/`DELETE` are `manifests:declare`, Administrator and Dispatcher
-  - `POST /manifests/{id}/{transition}` — State transitions: `propose`, `approve`, `reject`, `prepare`, `ready`, `depart`, `deliver`, `lose`, `return`. **`approve` is Administrator-only and hands off three things at once**: the UK Goods Movement Reference, the document that travels with the vehicle, and the French logistics envelope. It is **refused with 409 unless an ENS MRN has been recorded**, and refused *before* anything is frozen
+  - `POST /manifests/{id}/document` — Request the document that travels with the vehicle. **Explicit, once the load is signed off** (`409` before approval): it used to be a side effect of approving (`manifests:write`)
+  - `GET|PUT|DELETE /manifests/{id}/ens` and `GET /manifests/{id}/ens/filing-sheet` — **`410 Gone`**: the ENS moved onto the vehicle's declarations (below). Removed in [plan 15](docs/plans/15-manifest-signoff-lifecycle.md)
+  - `POST /manifests/{id}/{transition}` — State transitions: `propose`, `approve`, `reject`, `prepare`, `ready`, `depart`, `deliver`, `lose`, `return`. **`approve` is Administrator-only and signs off the load: it confirms and freezes the manifest and files nothing** ([ADR 0004](docs/adr/0004-the-manifest-is-the-load-sign-off.md), [ADR 0006](docs/adr/0006-filing-is-manual-by-default.md)). It no longer needs an ENS
+- `GET /convoys/{id}/vehicles/{vin}/declarations` — A vehicle's customs declarations ([ADR 0005](docs/adr/0005-declarations-are-per-vehicle-with-derived-staleness.md)): GMR, ENS, ELO and one Ukrainian goods list per receiver, withdrawn ones kept as history (`manifests:read`). Writes are `manifests:declare`, Administrator and Dispatcher
+  - `POST /convoys/{id}/vehicles/{vin}/declarations/{gmr|elo|goods-list}/record` — **Manual filing**: record the reference obtained in the authority's portal, `{ "reference", "receiverRef"? }` (the receiver for a goods list only). **Write-once** — a second reference is `409`. An ELO is `409` until the vehicle has an accepted ENS. The ENS has its own route, below
+  - `POST /convoys/{id}/vehicles/{vin}/declarations/{kind}/refused` — Record a refusal with a **bounded reason code only** (`data-error`, `goods-mismatch`, `missing-document`, `technical`, `other`); the authority's free text can quote the declaration, so it is never stored. A refused declaration can then be recorded afresh
+  - `POST /convoys/{id}/vehicles/{vin}/declarations/{gmr|elo}/file` — **Automatic filing**, only where that authority's submission mode is `Automatic`; in manual mode (the default) it is `409` and says to record the reference instead. Needs the load signed off; the ELO needs an accepted ENS. Enqueues for the Customs Worker and marks the declaration `Filed` — the workers have no database, so *filed* means *enqueued*
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/declarations/ens` — The ENS MRN this crossing was accepted under. **Recorded, not submitted** — Freedom does not talk to ICS2 — and **write-once**: `DELETE` withdraws it (keeping it as history) so a refiled declaration can be recorded
+  - `GET /convoys/{id}/vehicles/{vin}/declarations/ens/filing-sheet` — Everything an **ICS2 Entry Summary Declaration** asks for that Freedom can know, plus a `missing` list of what it cannot. Deliberately carries **no delivery address**: the Ground Officer enters it in the portal (`consigneeAddressSource`)
 - `GET|POST /categories` — The categories donated items are sorted into, each with its hazard class, whether it is sensitive or not carried, how close to expiry an item counts as short-dated, and the customs code it maps to per authority (`ukCode`, `euCode`, `uaCode`). Reads are `categories:read` (every operational role); writes are **Administrator only** (`categories:write`)
   - `GET|PUT /categories/{id}` — Read a category, or change its names, flags and shelf-life rule. A built-in category stays built in
   - `PUT /categories/{id}/codes/{UK|EU|UA}` — Map a category to the code an authority wants; a `null` code clears it. Six to ten digits
@@ -298,13 +304,16 @@ See `docs/local-authentication.md` for the full role/policy matrix.
 
 The **operator UI (`web/`) covers every endpoint above** — all nine slices (donors, their donations and the printable donor report included, and the Administrator page for item categories and their customs codes included), every sub-resource
 (convoy route/truck list/crew/insurance, box items/validate/bay, box QR label issue/print/revoke,
-location bays, manifest crew/boxes/weight, the ICS2 declaration a manifest's approval now requires),
+location bays, manifest crew/boxes/weight, the vehicle's declarations),
 all nine manifest transitions, and the reason-gated receiver-detail flow — with nav and actions
-gated by the same policy matrix (the API stays the enforcement point). The manifest's **Status**
-tab records and withdraws the ENS MRN (`manifests:declare`, Administrator and Dispatcher) before
-offering Approve, which is refused without one (`docs/adr/0003`); the two ELO reads and the ENS
-filing sheet remain without UI, read via `GET /manifests/{id}/elo`, `GET /manifests/{id}/elo/document`
-and `GET /manifests/{id}/ens/filing-sheet` by hand. The box detail page's **QR label** panel issues
+gated by the same policy matrix (the API stays the enforcement point). The manifest's **Declarations**
+tab shows the vehicle's GMR, ENS, ELO and goods lists, and records the reference a Dispatcher obtained
+in each portal, marks a filed one refused with a bounded reason, files the GMR or ELO automatically
+where that mode is on, and records and withdraws the ENS MRN (`manifests:declare`, Administrator and
+Dispatcher). Approval no longer asks for any of it. The two ELO reads and the ENS filing sheet remain
+without UI, read via `GET /manifests/{id}/elo`, `GET /manifests/{id}/elo/document` and
+`GET /convoys/{id}/vehicles/{vin}/declarations/ens/filing-sheet` by hand.
+The box detail page's **QR label** panel issues
 a label, shows it inline and prints it (a print stylesheet reveals the label alone);
 `/boxes/scan/{token}` is consumed by whatever scans the printed label, not the operator UI.
 
@@ -345,8 +354,8 @@ domain, recorded in [ADRs 0004–0017](docs/adr/README.md) and **not yet impleme
 
 | Area | As built | Target |
 | --- | --- | --- |
-| Manifest | Ten states; approval freezes it and hands off the paperwork | The Administrator's **load sign-off** only; a load change needs re-approval ([ADR 0004](docs/adr/0004-the-manifest-is-the-load-sign-off.md)) |
-| Customs paperwork | GMR, ELO and ENS hung off the manifest; submitted automatically on approval | One per-vehicle **Declaration** with derived staleness; **manual filing by default** ([ADRs 0005](docs/adr/0005-declarations-are-per-vehicle-with-derived-staleness.md), [0006](docs/adr/0006-filing-is-manual-by-default.md)) |
+| Manifest | Ten states; approval confirms and freezes it and files nothing (plan 08) | The Administrator's **load sign-off** only; a load change needs re-approval ([ADR 0004](docs/adr/0004-the-manifest-is-the-load-sign-off.md)) |
+| Customs paperwork | One per-vehicle **Declaration** per instrument, **manual filing by default**; staleness is not derived yet (plan 09) | One per-vehicle **Declaration** with derived staleness; **manual filing by default** ([ADRs 0005](docs/adr/0005-declarations-are-per-vehicle-with-derived-staleness.md), [0006](docs/adr/0006-filing-is-manual-by-default.md)) |
 | Departure | Advisory readiness; only insurance is checked | Blocking requirements, **no override**, one convoy depart action ([ADR 0008](docs/adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md)) |
 | Roles | Six global roles | Adds a **Convoy Leader** scoped to one convoy, with audited, time-limited address access, and Loaders scoped to their locations ([ADRs 0009](docs/adr/0009-convoy-leader-reads-destination-addresses.md), [0010](docs/adr/0010-resource-scoped-permissions.md)) |
 | Boxes and items | Validation freezes a box; free-form item properties | Attested boxes are **replaced, never edited**, with a bilingual label; categories mapped to customs codes; GBP values; donors as an erasable split identity ([ADRs 0011](docs/adr/0011-attested-boxes-are-replaced-not-edited.md), [0013](docs/adr/0013-donors-are-a-split-identity.md), [0014](docs/adr/0014-items-are-classified-by-category-and-valued-in-gbp.md)) |
@@ -386,20 +395,27 @@ As built, manifests follow a 10-state model (the as-built diagram is in git hist
 
 ### Border paperwork, and how it is obtained
 
-As built, approving a manifest is the fork in the earlier version of `docs/process.puml` (git `f659eed`; the file
-now shows the target, where approval only signs off and filing is manual by default —
-[plan 08](docs/plans/08-declarations-filing.md)). Today it freezes the manifest and then hands off
-three things, each onto a durable queue rather than by calling out inside the HTTP request:
+Approving a manifest **only signs off the load** — it files, enqueues and hands off nothing
+([ADR 0004](docs/adr/0004-the-manifest-is-the-load-sign-off.md)). The paperwork is a vehicle's
+**declarations** ([ADR 0005](docs/adr/0005-declarations-are-per-vehicle-with-derived-staleness.md)), one
+`dbo.Declaration` per vehicle per instrument on a single lifecycle (`Draft → ReadyToFile → Filed →
+Accepted | Refused`, plus `Stale`, `Withdrawn` and `Closed`, which later plans set), and **filing is manual
+by default** ([ADR 0006](docs/adr/0006-filing-is-manual-by-default.md)): a Dispatcher files in the
+authority's portal and records the reference. Each authority that has a client has a **submission mode**,
+`Customs__GmrSubmissionMode` and `Customs__EloSubmissionMode`, `Manual` unless set to `Automatic`; the ENS
+and the Ukrainian goods list can never be automatic. In automatic mode, `POST .../declarations/{gmr|elo}/file`
+puts the submission on a durable queue rather than calling out inside the HTTP request:
 
 | What | Queue | Obtained by | Stored in |
 | --- | --- | --- | --- |
 | **GMR** — the UK Goods Movement Reference | `customs-work` | Customs Worker → HMRC GVMS | `gmr` container |
-| **Manifest document** — travels with the vehicle | `manifest-documents` | Manifest Worker | `manifests` container |
+| **Manifest document** — travels with the vehicle | `manifest-documents` | Manifest Worker, on `POST /manifests/{id}/document` | `manifests` container |
 | **ELO** — the French logistics envelope | `elo-envelopes` | Customs Worker → French customs | `elo` container |
 
-The freeze happens **before** the hand-offs, deliberately: a failed hand-off leaves a frozen manifest
-with paperwork that was never requested, which is visible and retryable, where the reverse would
-leave an editable manifest whose GMR was already on its way.
+The declaration is stamped `Filed` **after** the message is enqueued, and a failed enqueue leaves it
+unfiled, so a retry is safe. Note what *filed* means here: the workers have no database, so in automatic
+mode it means *enqueued*, not *accepted by the authority*. The local compose stack sets both modes to
+`Automatic`, so the WireMock-backed environment and the BDD suite keep proving that path.
 
 An **ELO** (*Enveloppe Logistique Obligatoire*) is required per transport unit at the French Smart
 Border. It is not a goods declaration — it carries no cargo, weights, consignor, consignee or even a
@@ -431,23 +447,23 @@ than a coding one.
 
 Three things fall out of that and are worth knowing before touching this slice:
 
-- **`GET /manifests/{id}/ens/filing-sheet` is deliberately incomplete.** It composes the declarant and
+- **`GET /convoys/{id}/vehicles/{vin}/declarations/ens/filing-sheet` is deliberately incomplete.** It composes the declarant and
   carrier EORI, consignor, office of first entry, mode of transport, active and passive means of
   transport, countries of routing, goods items with commodity codes, package counts and gross mass — and
   the consignee at **organisation and region only**. The delivery address lives in the `sensitive`
   schema, the sheet is composed on a connection that is `DENY SELECT`'d there, and a sheet listing
-  Ukrainian addresses would be a targeting document. It sets `consigneeAddressWithheld` and names
-  `GET /receivers/{ref}/detail` instead, so a filer cannot conclude there is none. The sheet also
+  Ukrainian addresses would be a targeting document. It sets `consigneeAddressWithheld` and says the Ground Officer enters the address
+  in the portal, so a filer cannot conclude there is none. The sheet also
   reports its own gaps in `missing` — an unclassified item by description, a route stop with no ISO
   code, a ferry with no vessel IMO, boxes nobody has validated — because a gap found here costs a phone
   call and one found at the border costs a convoy.
-- **Approval refuses *before* it freezes**, the one exception to freeze-then-enqueue. A manifest frozen
-  with no declaration is frozen for ever against an envelope French customs will never issue.
-- **A recorded MRN is write-once, enforced by blob storage.** `SaveAsync` creates with
-  `IfNoneMatch = ETag.All`, which is the blob equivalent of the conditional `UPDATE` behind
-  `Manifest.GmrSubmittedAt`, and the withdrawal path copies before it deletes — several ENS fields are
-  non-amendable, so invalidate-and-refile is the normal correction and the withdrawn MRN is what a
-  customs query months later is about.
+- **An ELO needs an accepted ENS.** Approval is no longer gated on the ENS; the envelope is. Recording or
+  filing an ELO is `409` until the vehicle has an `Accepted` ENS, and the envelope request names that MRN.
+- **A recorded MRN is write-once, twice over.** The declaration row's reference is stamped by a
+  conditional `UPDATE`, and the detail (who filed it, when ICS2 accepted it) is a blob at
+  `declarations/{declarationId}.json` created with `IfNoneMatch = ETag.All`. A withdrawn declaration keeps
+  its row and its blob, so the old MRN stays as history; its replacement is a new declaration with a new
+  id. Several ENS fields are non-amendable, so invalidate-and-refile is the normal correction.
 
 `dbo.Convoy` gained `CrossingMode` and `VesselImo` for this: mode of transport describes the **crossing**,
 not the vehicle — a ferry sailing is maritime (1), a LeShuttle crossing is road (3), and rail is not
@@ -623,8 +639,8 @@ Three exist — the GMR, the manifest document and the ELO envelope — and they
 1. A method on `IManifestWorkQueue` and a request record, in the Application. Keep the record
    narrow: a queue message is durable and widely readable, so anything it cannot carry is
    something that cannot leak.
-2. A `HandOff(stage, …)` in the handler that causes it. Freeze or commit **first**, enqueue
-   second.
+2. A `HandOff(stage, …)` in the handler that causes it — today `FileDeclarationHandler`, behind the
+   authority's submission mode. Stamp the declaration **after** the enqueue, never before.
 3. A queue name in `QueueNames`, a storage queue and its poison queue in
    `iac/tofu/storage.tf` (append to `local.queues` — keep the single sequenced resource, because
    parallel `for_each` breaks Azurite), and the env vars on both containers in
@@ -672,7 +688,7 @@ Unset, nothing is exported. Sampling is the SDK's own (`OTEL_TRACES_SAMPLER`, 10
   recorded it, so an operator can quote it back and find the request in Tempo.
 - **Health checks** on `/health/live` and `/health/ready` (SQL, Blob, both work queues, the ICS2
   declaration store, OIDC). The declaration store has its own check because it is the one container
-  the API *writes*: without it no ENS can be recorded and no manifest can be approved.
+  the API *writes*: without it no ENS can be recorded, so no ELO can be filed.
   Probes are not traced or counted in the HTTP metrics.
 
 ## Known Issues & Gotchas

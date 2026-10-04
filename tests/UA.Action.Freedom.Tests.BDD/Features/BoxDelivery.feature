@@ -1,20 +1,20 @@
 Feature: A box, packed to delivered
     The whole road one box travels, end to end against the deployed containers: packed by a
     Loader, validated and weighed, loaded onto a vehicle's manifest, approved — which is what
-    releases the border paperwork — then prepared, readied, departed and delivered.
+    signs off the load — its declarations filed, then prepared, readied, departed and delivered.
 
     The point of walking it in one scenario is that every slice has its own feature already,
     and none of them proves the slices join up. The joins are where this system goes wrong: a
     box on a manifest whose convoy never published its truck list, a vehicle that departs
     without insurance, a manifest frozen with paperwork that was never handed off.
 
-    The French logistics envelope is part of that road now. France requires one per transport
-    unit at the Smart Border, so approval asks for it and the Customs Worker obtains it
+    The French logistics envelope is part of that road. France requires one per transport
+    unit at the Smart Border, so filing the ELO asks for it and the Customs Worker obtains it
     asynchronously — which is why the scenario waits for it rather than asserting immediately.
 
-    The ICS2 Entry Summary Declaration comes before all of it, because the envelope pairs the
-    crossing against its MRN — so there is nothing to generate without one, and approval is
-    refused outright. Freedom does not submit the declaration: a Ground Officer files it in the
+    The ICS2 Entry Summary Declaration comes before the envelope, because it pairs the
+    crossing against its MRN — so an ELO is refused until an ENS is accepted. Approval is not
+    gated on it any more. Freedom does not submit the declaration: a Ground Officer files it in the
     EU Customs Trader Portal and the MRN is recorded here. See docs/adr/0003.
 
     Note what is NOT proven here: the MRN is invented, and real French customs checks it against
@@ -65,46 +65,58 @@ Scenario: A validated box travels on an approved manifest and is delivered
     Then the response status is 204
 
     # The filing sheet is what a Ground Officer takes to the portal. It is deliberately
-    # incomplete: the Ukrainian delivery address is not on it, because the filer already holds
-    # it under the one policy allowed to read it.
-    When I GET the filing sheet for the remembered manifest
+    # incomplete: the Ukrainian delivery address is not on it, because the Ground Officer enters
+    # it in the portal themselves.
+    When I GET the filing sheet for the remembered vehicle
     Then the response status is 200
     And the filing sheet declares a mode of transport and a gross mass
 
     # The item carries no code of its own, so the category supplies it (ADR 0014).
     And the filing sheet declares commodity code "300490" for "Blankets"
-    And the filing sheet withholds the delivery address and says where to get it
+    And the filing sheet withholds the delivery address and says who enters it
 
-    # Approving before the declaration exists is refused, and nothing is frozen — the one check
-    # on approval that happens before the freeze, because a manifest frozen with no declaration
-    # is frozen for ever against an envelope customs will never issue.
-    Given I am authenticated as "admin"
-    When I POST "approve" on the remembered manifest
-    Then the response status is 409
-    When I GET the remembered manifest
-    Then the response body field "frozen" is "False"
-    And the response body field "status" is "Proposed"
-
-    # Record what came back from ICS2. Write-once, because the envelope names it.
-    Given I am authenticated as "operator"
-    When I record an ICS2 declaration for the remembered manifest
-    Then the response status is 201
-    When I record the same ICS2 declaration again
-    Then the response status is 409
-    When I GET the ICS2 declaration for the remembered manifest
-    Then the response status is 200
-    And the recorded declaration is the one I filed
-
-    # Approval freezes the manifest and releases three things at once: the GMR, the document
-    # that travels with the vehicle, and the French envelope. Administrator only.
+    # Approval signs off the load and nothing else (ADR 0004, ADR 0006): no ENS is needed to approve,
+    # and nothing is filed or enqueued by it, so there is no envelope afterwards.
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     Then the response status is 204
     When I GET the remembered manifest
     Then the response body field "status" is "Confirmed"
     And the response body field "frozen" is "True"
+    When I GET "/elo" on the remembered manifest
+    Then the response status is 404
 
-    # Obtained by the Customs Worker off a queue, so it arrives a poll cycle later.
+    # Filing is a separate act. The ELO is created from the ENS MRN, so it is refused until an ENS
+    # is accepted.
+    Given I am authenticated as "operator"
+    When I POST "/elo/file" on the remembered vehicle's declarations
+    Then the response status is 409
+
+    # Record what came back from ICS2. Write-once, because the envelope names it.
+    When I record an ICS2 declaration for the remembered vehicle
+    Then the response status is 201
+    When I record the same ICS2 declaration again
+    Then the response status is 409
+    When I GET the ICS2 declaration for the remembered vehicle
+    Then the response status is 200
+    And the recorded declaration is the one I filed
+
+    # A GMR filed by hand is recorded, not submitted, and its reference is write-once too.
+    When I POST "/gmr/record" on the remembered vehicle's declarations with body:
+        """
+        { "reference": "GMR-BDD-1" }
+        """
+    Then the response status is 204
+    When I POST "/gmr/record" on the remembered vehicle's declarations with body:
+        """
+        { "reference": "GMR-BDD-2" }
+        """
+    Then the response status is 409
+
+    # The compose stack runs the ELO in automatic mode, so filing it enqueues the envelope, which the
+    # Customs Worker obtains off the queue a poll cycle later.
+    When I POST "/elo/file" on the remembered vehicle's declarations
+    Then the response status is 202
     Then within 60 seconds the remembered manifest has a French logistics envelope
     And the envelope names a declaration and is closed but not yet paired
     And the envelope names the declaration I recorded

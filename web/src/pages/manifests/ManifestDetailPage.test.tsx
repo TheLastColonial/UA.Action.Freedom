@@ -4,6 +4,7 @@ import { expect, test } from 'vitest';
 import { makeConvoy } from '../../test/factories/convoy';
 import { makeManifest } from '../../test/factories/manifest';
 import { convoyApi } from '../../test/msw/convoys';
+import { declarationApi } from '../../test/msw/declarations';
 import { manifestApi } from '../../test/msw/manifests';
 import { personApi } from '../../test/msw/people';
 import { worker } from '../../test/msw/worker';
@@ -123,4 +124,20 @@ test('a manifest says who last changed it and when', async () => {
   await expect
     .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
     .toBeInTheDocument();
+});
+
+test('the Declarations tab shows the vehicle declarations, filed separately from approval', async () => {
+  worker.use(
+    ...manifestApi([makeManifest({ id: 'D3', vin: 'VIN9', convoyId: 5 })]).handlers,
+    ...declarationApi().handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/manifests/D3?tab=declarations',
+    roles: ['Dispatcher'],
+  });
+
+  await expect.element(screen.getByRole('tab', { name: 'Declarations' })).toBeInTheDocument();
+  await expect.element(screen.getByText('GMR: not filed.')).toBeInTheDocument();
 });

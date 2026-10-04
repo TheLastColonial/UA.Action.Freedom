@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using UA.Action.Freedom.Application.Declarations;
+using UA.Action.Freedom.Data.Declarations;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
@@ -39,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IBoxRepository, BoxRepository>();
         services.AddScoped<IItemCategoryRepository, ItemCategoryRepository>();
         services.AddScoped<IManifestRepository, ManifestRepository>();
+        services.AddScoped<IDeclarationRepository, DeclarationRepository>();
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<IBayRepository, BayRepository>();
 

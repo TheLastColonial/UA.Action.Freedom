@@ -18,8 +18,8 @@ namespace UA.Action.Freedom.Tests.Component;
 /// A manifest may only be proposed against a convoy whose truck list is published
 /// (docs/process.puml), and once its Goods Movement Reference exists nothing about it may change
 /// (recommendations §5.2) — the vehicle would otherwise arrive at a border carrying something
-/// HMRC was not told about. Approval is where the freeze happens and where the submission is
-/// handed off, and it is Administrator only.
+/// HMRC was not told about. Approval is where the freeze happens and it is Administrator only; it
+/// files nothing, because declarations are filed afterwards from the vehicle (ADR 0006).
 /// </remarks>
 public class ManifestEndpointTests
 {
@@ -75,14 +75,6 @@ public class ManifestEndpointTests
     /// <summary>The ICS2 MRN the crossing was accepted under.</summary>
     private const string Mrn = "25FR17551780961AT5";
 
-    /// <summary>
-    /// A manifest whose ENS has been recorded. Approval refuses without one, so every test that
-    /// gets past `propose` has to seed it — the default store is empty, which is what a manifest
-    /// looks like before anyone has filed.
-    /// </summary>
-    private static InMemoryEnsDeclarationStore AnEnsDeclaration() =>
-        new InMemoryEnsDeclarationStore().With(Id, Mrn);
-
     [Fact]
     public async Task Reading_manifests_without_a_token_is_unauthorized()
     {
@@ -133,7 +125,7 @@ public class ManifestEndpointTests
         var queue = new RecordingManifestWorkQueue();
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), queue,
-            declarations: AnEnsDeclaration(), roles: "Administrator");
+            roles: "Administrator");
         using var client = api.CreateClient();
 
         foreach (var (step, expected) in new (string Step, ManifestStatus Expected)[]
@@ -220,13 +212,15 @@ public class ManifestEndpointTests
     }
 
     [Fact]
-    public async Task Approving_freezes_the_manifest_and_queues_exactly_one_submission()
+    public async Task Approving_freezes_the_manifest_and_queues_nothing()
     {
+        // Approval signs off the load and nothing else (ADR 0004, ADR 0006): the GMR, the envelope and
+        // the document are separate, explicit acts afterwards.
         var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Proposed));
         var queue = new RecordingManifestWorkQueue();
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), queue,
-            declarations: AnEnsDeclaration(), roles: "Administrator");
+            roles: "Administrator");
         using var client = api.CreateClient();
 
         var response = await client.PostAsync(
@@ -234,33 +228,30 @@ public class ManifestEndpointTests
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         manifests.Manifest(Id)!.Frozen.Should().BeTrue();
-
-        var submission = queue.Submissions.Should().ContainSingle().Subject;
-        submission.ManifestId.Should().Be(Id);
-
-        // The plate, not the VIN. It is what a border officer reads off the front of the vehicle,
-        // and what HMRC matches the movement against.
-        submission.VehicleRegistration.Should().Be("AB12CDE");
-        submission.VehicleRegistration.Should().NotBe(Vin);
-        submission.DepartsAt.Should().Be(Departs);
+        queue.Submissions.Should().BeEmpty();
+        queue.Envelopes.Should().BeEmpty();
+        queue.Documents.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task Approving_also_queues_the_document_that_travels_with_the_vehicle()
+    public async Task The_document_that_travels_with_the_vehicle_is_requested_after_approval()
     {
-        // The other half of the fork in docs/process.puml. Composed here, where the database is,
-        // so the worker that renders it needs no database access at all.
+        // Composed here, where the database is, so the worker that renders it needs no database access.
         var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Proposed))
             .WithVehicleWeight(1_400)
             .WithBoxOn(Id, new ManifestBoxReadModel(1, 30, Validated: true));
         var queue = new RecordingManifestWorkQueue();
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), queue,
-            declarations: AnEnsDeclaration(), roles: "Administrator");
+            roles: ["Administrator", "Dispatcher"]);
         using var client = api.CreateClient();
 
+        var before = await client.PostAsync($"/manifests/{Id}/document", null, TestContext.Current.CancellationToken);
         await client.PostAsync($"/manifests/{Id}/approve", content: null, TestContext.Current.CancellationToken);
+        var after = await client.PostAsync($"/manifests/{Id}/document", null, TestContext.Current.CancellationToken);
 
+        before.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        after.StatusCode.Should().Be(HttpStatusCode.Accepted);
         var document = queue.Documents.Should().ContainSingle().Subject;
         document.ManifestId.Should().Be(Id);
         document.VehicleWeightKg.Should().Be(1_400);
@@ -269,6 +260,23 @@ public class ManifestEndpointTests
         document.Lines.Should().ContainSingle().Which.ReceiverRegion.Should().Be("Kharkiv oblast");
     }
 
+    [Fact]
+    public async Task The_old_ens_routes_say_the_declaration_has_moved()
+    {
+        await using var api = FreedomApi.WithManifests(
+            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
+            new RecordingManifestWorkQueue(), roles: "Dispatcher");
+        using var client = api.CreateClient();
+
+        (await client.GetAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.Gone);
+        (await client.GetAsync($"/manifests/{Id}/ens/filing-sheet", TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.Gone);
+        (await client.PutAsJsonAsync($"/manifests/{Id}/ens", new { mrn = Mrn }, TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.Gone);
+        (await client.DeleteAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.Gone);
+    }
     [Fact]
     public void The_queued_document_has_nowhere_to_put_a_delivery_address()
     {
@@ -503,446 +511,11 @@ public class ManifestEndpointTests
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    // ---- The ICS2 Entry Summary Declaration ---------------------------------------------------
-    //
-    // Recorded, not submitted. ICS2's Shared Trader Interface speaks eDelivery AS4, and an always-on
-    // inbound access point is what recommendations §4.1 declines, so a Ground Officer files in the EU
-    // Customs Trader Portal and the MRN is recorded here (docs/adr/0003).
-
-    private static StringContent AnEnsBody(string mrn = Mrn, string filedBy = "groundofficer") =>
-        new(
-            $$"""
-              { "mrn": "{{mrn}}", "acceptedAt": "2026-08-24T09:30:00+00:00",
-                "filedBy": "{{filedBy}}", "filingReference": "STP-2026-0001" }
-              """,
-            System.Text.Encoding.UTF8,
-            "application/json");
-
-    [Fact]
-    public async Task Recording_a_declaration_keeps_the_json_contract()
-    {
-        var declarations = new InMemoryEnsDeclarationStore();
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), declarations: declarations, roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var recorded = await client.PutAsync(
-            $"/manifests/{Id}/ens", AnEnsBody(), TestContext.Current.CancellationToken);
-        var read = await client.GetAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken);
-
-        recorded.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        var declaration = JsonDocument.Parse(
-            await read.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).RootElement;
-
-        declaration.GetProperty("manifestId").GetString().Should().Be(Id);
-        declaration.GetProperty("mrn").GetString().Should().Be(Mrn);
-        declaration.GetProperty("acceptedAt").GetDateTimeOffset()
-            .Should().Be(new DateTimeOffset(2026, 8, 24, 9, 30, 0, TimeSpan.Zero));
-        declaration.GetProperty("filedBy").GetString().Should().Be("groundofficer");
-        declaration.GetProperty("filingReference").GetString().Should().Be("STP-2026-0001");
-    }
-
-    /// <summary>
-    /// A declaration says which formality the crossing was accepted under. It says nothing about the
-    /// consignment, and the JSON is where that has to be true — the record is stored durably, so a
-    /// field added later would persist.
-    /// </summary>
-    [Fact]
-    public async Task A_recorded_declaration_says_nothing_about_where_the_load_is_going()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), declarations: AnEnsDeclaration(), roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.GetAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken);
-
-        var declaration = JsonDocument.Parse(
-            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).RootElement;
-
-        declaration.EnumerateObject().Select(property => property.Name).Should().BeEquivalentTo(
-            "manifestId", "mrn", "acceptedAt", "filedBy", "filingReference");
-    }
-
-    [Fact]
-    public async Task A_manifest_with_no_declaration_yet_reports_that_it_has_none()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.GetAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    /// <summary>
-    /// A malformed MRN is refused at the door. Recorded, it would reach French customs inside an
-    /// envelope and come back as FONC-ERR-004 — by which time the manifest is frozen and the convoy
-    /// is loading.
-    /// </summary>
-    [Theory]
-    [InlineData("nonsense")]
-    [InlineData("25fr17551780961at5")]
-    [InlineData("25FR17551780961AT")]
-    public async Task A_declaration_that_is_not_shaped_like_an_mrn_is_refused(string mrn)
-    {
-        var declarations = new InMemoryEnsDeclarationStore();
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), declarations: declarations, roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.PutAsync(
-            $"/manifests/{Id}/ens", AnEnsBody(mrn), TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        (await client.GetAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    /// <summary>
-    /// Write-once, the same shape as the GMR stamp and the truck-list publication. The envelope names
-    /// the MRN, so replacing one silently would leave French customs pairing a crossing against a
-    /// formality Freedom no longer believes in.
-    /// </summary>
-    [Fact]
-    public async Task A_second_declaration_is_refused_and_the_first_survives()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), declarations: new InMemoryEnsDeclarationStore(),
-            roles: "Dispatcher");
-        using var client = api.CreateClient();
-        await client.PutAsync($"/manifests/{Id}/ens", AnEnsBody(), TestContext.Current.CancellationToken);
-
-        var second = await client.PutAsync(
-            $"/manifests/{Id}/ens", AnEnsBody("26GB99999999999ZZ9"), TestContext.Current.CancellationToken);
-        var read = await client.GetAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken);
-
-        second.StatusCode.Should().Be(HttpStatusCode.Conflict);
-
-        var declaration = JsonDocument.Parse(
-            await read.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).RootElement;
-
-        declaration.GetProperty("mrn").GetString().Should().Be(Mrn);
-    }
-
-    /// <summary>
-    /// Invalidate-and-refile: several ENS fields are non-amendable, so correcting one means
-    /// withdrawing the declaration in ICS2 and filing a new one. The withdrawn MRN is kept.
-    /// </summary>
-    [Fact]
-    public async Task A_withdrawn_declaration_makes_room_for_the_refiled_one_and_is_kept()
-    {
-        var declarations = new InMemoryEnsDeclarationStore();
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), declarations: declarations, roles: "Dispatcher");
-        using var client = api.CreateClient();
-        await client.PutAsync($"/manifests/{Id}/ens", AnEnsBody(), TestContext.Current.CancellationToken);
-
-        var withdrawn = await client.DeleteAsync(
-            $"/manifests/{Id}/ens", TestContext.Current.CancellationToken);
-        var refiled = await client.PutAsync(
-            $"/manifests/{Id}/ens", AnEnsBody("26GB99999999999ZZ9"), TestContext.Current.CancellationToken);
-
-        withdrawn.StatusCode.Should().Be(HttpStatusCode.NoContent);
-        refiled.StatusCode.Should().Be(HttpStatusCode.Created);
-        declarations.Superseded.Should().ContainSingle().Which.Mrn.Should().Be(Mrn);
-    }
-
-    [Fact]
-    public async Task Withdrawing_a_declaration_that_was_never_recorded_is_not_found()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.DeleteAsync(
-            $"/manifests/{Id}/ens", TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    /// <summary>
-    /// The envelope of a frozen manifest already names its declaration, so withdrawing it would
-    /// strand the crossing.
-    /// </summary>
-    [Fact]
-    public async Task The_declaration_of_a_frozen_manifest_cannot_be_withdrawn()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest(ManifestStatus.Confirmed, frozen: true)),
-            AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
-            declarations: AnEnsDeclaration(), roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.DeleteAsync(
-            $"/manifests/{Id}/ens", TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
-    }
-
-    [Fact]
-    public async Task Recording_a_declaration_against_a_manifest_that_does_not_exist_is_not_found()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), declarations: new InMemoryEnsDeclarationStore(),
-            roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.PutAsync(
-            "/manifests/NOSUCH/ens", AnEnsBody(), TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    /// <summary>
-    /// <c>manifests:declare</c> is Administrator and Dispatcher. A Loader may read a declaration
-    /// like any other manifest detail and may not record one; a Ground Officer — who is the person
-    /// who actually files it — is refused here, because GroundOfficer is excluded from every
-    /// manifest policy and that isolation runs both ways.
-    /// </summary>
-    [Theory]
-    [InlineData("Administrator", HttpStatusCode.Created)]
-    [InlineData("Dispatcher", HttpStatusCode.Created)]
-    [InlineData("Loader", HttpStatusCode.Forbidden)]
-    [InlineData("Purchaser", HttpStatusCode.Forbidden)]
-    [InlineData("Mechanic", HttpStatusCode.Forbidden)]
-    [InlineData("GroundOfficer", HttpStatusCode.Forbidden)]
-    public async Task Only_an_administrator_or_dispatcher_may_record_a_declaration(
-        string role, HttpStatusCode expected)
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), declarations: new InMemoryEnsDeclarationStore(),
-            roles: role);
-        using var client = api.CreateClient();
-
-        var response = await client.PutAsync(
-            $"/manifests/{Id}/ens", AnEnsBody(), TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(expected);
-    }
-
-    [Theory]
-    [InlineData("Administrator", HttpStatusCode.NoContent)]
-    [InlineData("Dispatcher", HttpStatusCode.NoContent)]
-    [InlineData("Loader", HttpStatusCode.Forbidden)]
-    [InlineData("GroundOfficer", HttpStatusCode.Forbidden)]
-    public async Task Only_an_administrator_or_dispatcher_may_withdraw_a_declaration(
-        string role, HttpStatusCode expected)
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), declarations: AnEnsDeclaration(), roles: role);
-        using var client = api.CreateClient();
-
-        var response = await client.DeleteAsync(
-            $"/manifests/{Id}/ens", TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(expected);
-    }
-
-    [Fact]
-    public async Task A_ground_officer_cannot_even_read_a_declaration()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), declarations: AnEnsDeclaration(), roles: "GroundOfficer");
-        using var client = api.CreateClient();
-
-        var response = await client.GetAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task Recording_a_declaration_without_a_token_is_unauthorized()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), authenticated: false);
-        using var client = api.CreateClient();
-
-        var response = await client.PutAsync(
-            $"/manifests/{Id}/ens", AnEnsBody(), TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// The filing sheet over HTTP. It is a read of the manifest, so every operational role may see it
-    /// — the person filing needs it, and so does the dispatcher who has to close its gaps.
-    /// </summary>
-    [Fact]
-    public async Task The_filing_sheet_keeps_the_json_contract()
-    {
-        var manifests = new InMemoryManifestRepository(AManifest())
-            .WithVehicleWeight(1_400)
-            .WithBoxOn(Id, new ManifestBoxReadModel(1, 30, Validated: true));
-        await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Loader");
-        using var client = api.CreateClient();
-
-        var response = await client.GetAsync(
-            $"/manifests/{Id}/ens/filing-sheet", TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var sheet = JsonDocument.Parse(
-            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).RootElement;
-
-        sheet.GetProperty("manifestId").GetString().Should().Be(Id);
-        sheet.GetProperty("modeOfTransportCode").GetInt32().Should().Be(EnsTransportMode.Maritime);
-        sheet.GetProperty("passiveMeansOfTransport").GetString().Should().Be("AB12CDE");
-        sheet.GetProperty("grossMassKg").GetInt32().Should().Be(ManifestWeight.Total(1_400, 30));
-        sheet.GetProperty("consigneeAddressSource").GetString().Should().Be("GET /receivers/{ref}/detail");
-
-        var consignment = sheet.GetProperty("consignments").EnumerateArray().Should().ContainSingle().Subject;
-        consignment.GetProperty("packageTypeCode").GetString().Should().Be(EnsPackaging.Box);
-        consignment.GetProperty("consigneeAddressWithheld").GetBoolean().Should().BeTrue();
-        consignment.GetProperty("goodsItems").EnumerateArray().Should().ContainSingle();
-    }
-
-    /// <summary>
-    /// The redaction, asserted on the serialised body rather than the type — the sheet is what a
-    /// filer reads, and a Ukrainian address on it would be a targeting document. It says where to get
-    /// the address instead, so a filer cannot conclude there is none.
-    /// </summary>
-    [Fact]
-    public async Task The_filing_sheet_says_nothing_about_where_the_load_is_going()
-    {
-        var manifests = new InMemoryManifestRepository(AManifest())
-            .WithBoxOn(Id, new ManifestBoxReadModel(1, 30, Validated: true));
-        await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.GetAsync(
-            $"/manifests/{Id}/ens/filing-sheet", TestContext.Current.CancellationToken);
-        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-
-        foreach (var forbidden in new[] { "street", "postcode", "addressLine", "contactPhone", "contactName" })
-        {
-            body.Should().NotContainEquivalentOf(forbidden);
-        }
-    }
-
-    [Fact]
-    public async Task A_filing_sheet_for_a_manifest_that_does_not_exist_is_not_found()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.GetAsync(
-            "/manifests/NOSUCH/ens/filing-sheet", TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    /// <summary>
-    /// A manifest with no cargo cannot be declared, and the sheet says so rather than returning an
-    /// empty shell that looks filable.
-    /// </summary>
-    [Fact]
-    public async Task The_filing_sheet_reports_what_is_still_missing()
-    {
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), roles: "Dispatcher");
-        using var client = api.CreateClient();
-
-        var response = await client.GetAsync(
-            $"/manifests/{Id}/ens/filing-sheet", TestContext.Current.CancellationToken);
-
-        var sheet = JsonDocument.Parse(
-            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).RootElement;
-
-        sheet.GetProperty("complete").GetBoolean().Should().BeFalse();
-        sheet.GetProperty("missing").EnumerateArray().Should().NotBeEmpty();
-    }
-
-    [Fact]
-    public async Task A_ground_officer_cannot_read_a_filing_sheet()
-    {
-        // The one role that actually files the declaration is refused the sheet, because
-        // GroundOfficer is excluded from every manifest policy and the isolation runs both ways. The
-        // sheet reaches them through a Dispatcher, which is the same hand-off the MRN comes back on.
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
-            new RecordingManifestWorkQueue(), roles: "GroundOfficer");
-        using var client = api.CreateClient();
-
-        var response = await client.GetAsync(
-            $"/manifests/{Id}/ens/filing-sheet", TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
     // ---- The French logistics envelope -------------------------------------------------------
     //
-    // Requested by approving the manifest, the same way a GMR is, and obtained by the Customs
-    // Worker — so over HTTP it is read-only, and its absence is as meaningful as its presence.
+    // Requested by filing the ELO declaration (plan 08) and obtained by the Customs Worker, so over HTTP
+    // the envelope is read-only and its absence is as meaningful as its presence.
 
-    [Fact]
-    public async Task Approving_a_manifest_asks_for_a_french_logistics_envelope()
-    {
-        var queue = new RecordingManifestWorkQueue();
-        await using var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(AManifest(ManifestStatus.Proposed)), AConvoy(), ARosterOfDrivers(), queue,
-            declarations: AnEnsDeclaration(), roles: "Administrator");
-        using var client = api.CreateClient();
-
-        var response = await client.PostAsync(
-            $"/manifests/{Id}/approve", content: null, TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-        var envelope = queue.Envelopes.Should().ContainSingle().Subject;
-        envelope.ManifestId.Should().Be(Id);
-        envelope.Profile.Should().Be(EloCrossingProfile.HumanitarianAidToUkraine);
-
-        // The point of the ICS2 integration: the envelope names the declaration the crossing was
-        // accepted under, not the placeholder identifier real French customs refuses.
-        envelope.DeclarationIdentifiers.Should().Equal(Mrn);
-    }
-
-    /// <summary>
-    /// The gate that makes the whole slice worth having. France pairs the crossing against the ENS at
-    /// the Smart Border, so a manifest with none is refused — and refused before anything is frozen,
-    /// so it can still be approved once the MRN arrives.
-    /// </summary>
-    [Fact]
-    public async Task Approving_a_manifest_with_no_declaration_is_refused_and_freezes_nothing()
-    {
-        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Proposed));
-        var queue = new RecordingManifestWorkQueue();
-        await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), ARosterOfDrivers(), queue, roles: "Administrator");
-        using var client = api.CreateClient();
-
-        var response = await client.PostAsync(
-            $"/manifests/{Id}/approve", content: null, TestContext.Current.CancellationToken);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        manifests.Manifest(Id)!.Frozen.Should().BeFalse();
-        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Proposed);
-        queue.Envelopes.Should().BeEmpty();
-        queue.Submissions.Should().BeEmpty();
-        queue.Documents.Should().BeEmpty();
-
-        // The refusal has to be actionable: a dispatcher reading it must learn what to do next.
-        var problem = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        problem.Should().Contain("/manifests/{id}/ens");
-    }
 
     /// <summary>
     /// A manifest that has been approved but whose envelope has not come back yet. Not an error —

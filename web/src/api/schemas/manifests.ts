@@ -44,17 +44,6 @@ export const manifestWeightReadModelSchema = z.object({
 });
 export type ManifestWeightReadModel = z.infer<typeof manifestWeightReadModelSchema>;
 
-// The ICS2 Entry Summary Declaration this crossing was accepted under — recorded, not submitted
-// (docs/adr/0003). Approval will not proceed without one.
-export const ensDeclarationReadModelSchema = z.object({
-  manifestId: z.string(),
-  mrn: z.string(),
-  acceptedAt: z.string(),
-  filedBy: z.string(),
-  filingReference: z.string().nullable(),
-});
-export type EnsDeclarationReadModel = z.infer<typeof ensDeclarationReadModelSchema>;
-
 // Request shapes — src/UA.Action.Freedom.Api/Manifests/ManifestRequests.cs.
 //
 // A manifest is opened on its truck-list entry, POST /convoys/{id}/vehicles/{vin}/manifest, so
@@ -66,13 +55,4 @@ export interface CreateConvoyVehicleManifestRequest {
 
 export interface UpdateManifestRequest {
   deliveryNotes?: string;
-}
-
-// Body of PUT /manifests/{id}/ens — RecordEnsRequest. AcceptedAt is ICS2's own timestamp, supplied
-// rather than stamped, because Freedom did not submit the declaration.
-export interface RecordEnsRequest {
-  mrn: string;
-  acceptedAt: string;
-  filedBy: string;
-  filingReference?: string;
 }

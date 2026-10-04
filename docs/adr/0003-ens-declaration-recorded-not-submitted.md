@@ -228,3 +228,5 @@ up.
 Added 2026-10-02. [Decision O32](../domain/decisions.md#o32): **the Ground Officer enters the consignee address field**
 in the EU portal, alongside the Dispatcher who files the ENS. Freedom keeps withholding the address from the
 Dispatcher. It remains a process rule that the system cannot enforce.
+
+**Implemented by [plan 08](../plans/08-declarations-filing.md):** the ENS is the vehicle's `Ens` declaration at `/convoys/{id}/vehicles/{vin}/declarations/ens`. Approval is **no longer gated** on it; an ELO is. The filing sheet's `consigneeAddressSource` now says the Ground Officer enters the address in the portal ([O32](../domain/decisions.md#o32)). `IEnsDeclarationStore` is keyed by declaration and has no supersede: a withdrawn declaration keeps its blob.

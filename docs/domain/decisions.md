@@ -260,7 +260,6 @@ per-vehicle anchor.
 |---|---|---|
 | `Manifest` | cargo, GMR, ELO, ENS, ferry and status | load sign-off only. Documents are generated. |
 | Accommodation, fuel | not modelled | per-person stays linked to route points; fuel budget and entries |
-| Customs | GMR, ELO and ENS as special cases | one `Declaration` shape |
 | Readiness | advisory: route, crew, insurance | requirement checklist, with blocking requirements |
 | Delivery | manifest status | per box, rolled up per vehicle |
 | Convoy Leader | not modelled | one per convoy, with a scoped checklist page |
@@ -277,8 +276,6 @@ per-vehicle anchor.
 - **A new capability for a driver:** marking a route point reached and entering fuel, **on one convoy only**. All
   roles so far are global.
 - **A new amendment path** for the GMR, ENS and ELO, which today are written once.
-- **Existing automatic hand-off becomes opt-in** ([X5](#x5)): `ApproveManifestHandler` enqueues the GMR and ELO on
-  approval today.
 - **The rule that nothing may reopen a confirmed manifest is reversed** ([X3](#x3)), and would be recorded in an ADR.
 
 ### Documents outside `docs/domain/` still to amend

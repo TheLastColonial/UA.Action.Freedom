@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented. Builds on [ADR 0004](0004-the-manifest-is-the-load-sign-off.md), and generalises
+Accepted. The entity and its lifecycle are implemented by [plan 08](../plans/08-declarations-filing.md); the snapshot and derived staleness are [plan 09](../plans/09-declaration-staleness.md) and closing at a crossing is [plan 18](../plans/18-leader-checklist-progress.md), so those two states are defined but never set yet. Builds on [ADR 0004](0004-the-manifest-is-the-load-sign-off.md), and generalises
 [ADR 0002](0002-elo-envelope-on-manifest-approval.md) and [ADR 0003](0003-ens-declaration-recorded-not-submitted.md).
 
 ## Context
@@ -100,3 +100,22 @@ objected to, so it is never stored or logged, which is the rule `EloEnvelopeProc
 
 **The Receiver's registration matters here too.** A Receiver ceasing to be `registered` makes the declarations that
 name it stale ([ADR 0012](0012-receiver-registration-gates-convoys-and-boxes.md)).
+
+## Implementation notes
+
+Added by plan 08. The decision above stands; these are choices the implementation made inside it.
+
+- **One table, `dbo.Declaration`**, with a foreign key to the truck-list entry and a filtered unique index per
+  scope and kind that is not `Withdrawn` (one for a goods list, which also keys on the receiver, one for the
+  rest). A withdrawn declaration is kept as history.
+- **The lifecycle is data**, `DeclarationTransitions`, pinned edge by edge in a unit test. `Stale` and `Closed` are
+  in it and nothing takes those edges yet.
+- **The ENS has no separate "filed" state**: recording an MRN goes straight to `Accepted`, because an MRN exists
+  only on acceptance. Its detail (who filed it and when) stays in blob storage at
+  `declarations/{declarationId}.json`, keyed by the declaration, so the write-once `IfNoneMatch` rule survives. A
+  withdrawn ENS keeps its blob under its own id, which is how the old MRN stays as history, rather than being copied
+  to a `superseded-*` name as before.
+- **Invalidating** an ENS runs `Accepted → Stale → Withdrawn` in one transaction: invalidate-and-refile is the
+  resolution of a stale declaration, and nothing may observe the half-way state.
+- **A refusal keeps a bounded reason code only**, and the validator rejects anything else, so the authority's free
+  text is never stored.

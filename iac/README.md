@@ -219,11 +219,26 @@ Drop `declarationIdentifiers` to watch the worker refuse it before calling custo
 (ENV_CTR_RG08 — a loaded lorry must name at least one formality) and move it to
 `elo-envelopes-poison`.
 
-Putting a message on the queue by hand is now the *only* way to reach either refusal path, and that is
-the point: since ICS2 landed, `POST /manifests/{id}/approve` refuses a manifest with no declaration
-before it freezes anything, and the request validator refuses an MRN that is not shaped like one. Use
+Putting a message on the queue by hand is the *only* way to reach either refusal path, and that is
+the point: the ELO declaration endpoints refuse an envelope that has no accepted ENS before they enqueue
+anything, and the request validator refuses an MRN that is not shaped like one. Use
 `"declarationIdentifiers": ["REFUSE-ME"]` for the 400 from
 `elo-create-envelope-rejected.json`.
+
+### Submission mode: manual by default, automatic here
+
+Approval files nothing ([ADR 0006](../docs/adr/0006-filing-is-manual-by-default.md)). Filing is a separate
+act per vehicle, and each authority with a client has a mode, set by environment variable:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `Customs__GmrSubmissionMode` | `Manual` | `Automatic` lets `POST /convoys/{id}/vehicles/{vin}/declarations/gmr/file` enqueue the GMR for the Customs Worker. `Manual` answers `409` and says to record the reference instead |
+| `Customs__EloSubmissionMode` | `Manual` | The same, for the French logistics envelope |
+
+The ENS and the Ukrainian goods list have no variable because they can never be automatic. **`docker-compose.yml`
+sets both to `Automatic`** (override with `CUSTOMS_GMR_SUBMISSION_MODE` / `CUSTOMS_ELO_SUBMISSION_MODE` in
+`.env`), because this environment exists to prove the WireMock-backed automatic path and the BDD suite
+assumes it. To rehearse the manual path, set them to `Manual` and record the references by hand.
 
 ### The ICS2 declaration has no stub, because there is nothing to call
 
@@ -232,21 +247,25 @@ AS4, which needs the always-on inbound access point `docs/recommendations.md` §
 whole path is Freedom's own, and there is no WireMock mapping for it:
 
 ```bash
-# Approving without a declaration is refused, and nothing is frozen.
-curl -i -X POST http://localhost:8080/manifests/MAN-0001/approve -H "Authorization: Bearer $TOKEN"
+# A vehicle's declarations hang off its truck-list entry: /convoys/{id}/vehicles/{vin}/declarations.
+# Approving a manifest no longer needs one, and files nothing.
+
+# An ELO is refused until the vehicle has an accepted ENS.
+curl -i -X POST http://localhost:8080/convoys/1/vehicles/VIN123/declarations/elo/record -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"reference":"ELO-1"}'
 
 # Record what a Ground Officer got back from the EU Customs Trader Portal.
-curl -i -X PUT http://localhost:8080/manifests/MAN-0001/ens   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"mrn":"25FR17551780961AT5","acceptedAt":"2026-08-24T09:30:00Z","filedBy":"groundofficer"}'
+curl -i -X PUT http://localhost:8080/convoys/1/vehicles/VIN123/declarations/ens   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"mrn":"25FR17551780961AT5","acceptedAt":"2026-08-24T09:30:00Z","filedBy":"groundofficer"}'
 
-az storage blob list --container-name ens -o table    # MAN-0001.json
+az storage blob list --container-name ens -o table    # declarations/{declarationId}.json
 
-# Now approval succeeds, and the envelope names the real MRN rather than a placeholder.
-curl -s http://localhost:8080/manifests/MAN-0001/ens/filing-sheet -H "Authorization: Bearer $TOKEN"
+# Now the ELO can be filed, and the envelope names the real MRN rather than a placeholder.
+curl -s http://localhost:8080/convoys/1/vehicles/VIN123/declarations/ens/filing-sheet -H "Authorization: Bearer $TOKEN"
 ```
 
-`PUT` it twice for the 409 — a recorded declaration is write-once, enforced by a conditional blob
-create. `DELETE` then `PUT` again to rehearse invalidate-and-refile, and the withdrawn one stays in the
-`ens` container under `MAN-0001/`.
+`PUT` it twice for the 409 — a recorded declaration is write-once, enforced by a conditional
+`UPDATE` on the declaration and a conditional blob create for its detail. `DELETE` then `PUT` again to
+rehearse invalidate-and-refile: the withdrawn declaration keeps its row and its blob, so the old MRN stays
+as history, and the replacement is a new declaration with a new id.
 
 ### Changing a customs stub
 

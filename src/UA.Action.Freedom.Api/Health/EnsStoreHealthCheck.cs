@@ -11,8 +11,8 @@ namespace UA.Action.Freedom.Api.Health;
 /// <remarks>
 /// Worth its own check rather than folding into <see cref="DocumentStoreHealthCheck"/>, because this
 /// is the one container the API <em>writes</em>. A missing one does not degrade a read: it stops a
-/// dispatcher recording an ENS, which stops every manifest on the convoy being approved, which stops
-/// the convoy. Better to learn that from <c>/health/ready</c> than from the first 500 on the day of a
+/// dispatcher recording an ENS, which stops its vehicle's ELO being filed, which stops
+/// the crossing. Better to learn that from <c>/health/ready</c> than from the first 500 on the day of a
 /// crossing.
 /// </remarks>
 public sealed class EnsStoreHealthCheck(
@@ -40,7 +40,7 @@ public sealed class EnsStoreHealthCheck(
                 ? HealthCheckResult.Healthy($"Container '{_storage.EnsContainer}' is reachable.")
                 : HealthCheckResult.Unhealthy(
                     $"Container '{_storage.EnsContainer}' does not exist, so no ICS2 declaration can be "
-                    + "recorded and no manifest can be approved. Has `tofu apply` run?");
+                    + "recorded and no ELO can be filed. Has `tofu apply` run?");
         }
         catch (Exception exception)
         {

@@ -245,7 +245,7 @@ public class EnsFilingSheetHandlerTests
         consignment.ReceiverOrganisation.Should().Be("Kharkiv Regional Aid");
         consignment.ReceiverRegion.Should().Be("Kharkiv oblast");
         consignment.ConsigneeAddressWithheld.Should().BeTrue();
-        sheet.ConsigneeAddressSource.Should().Be("GET /receivers/{ref}/detail");
+        sheet.ConsigneeAddressSource.Should().Be("Entered by the Ground Officer in the portal");
     }
 
     /// <summary>

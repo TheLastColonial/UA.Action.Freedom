@@ -19,13 +19,7 @@ public enum TransitionManifestOutcome
     IllegalTransition,
     Frozen,
     TruckListNotPublished,
-    NotInsured,
-
-    /// <summary>
-    /// Approval only: no ICS2 Entry Summary Declaration has been recorded for this manifest, so the
-    /// French logistics envelope it would ask for has no formality to name (ENV_CTR_RG08).
-    /// </summary>
-    EnsNotFiled
+    NotInsured
 }
 
 /// <summary>
@@ -143,30 +137,20 @@ public sealed class TransitionManifestHandler(
 }
 
 /// <summary>
-/// Approve a manifest: confirm it, freeze it, and hand its border paperwork off — the UK Goods
-/// Movement Reference, the document that travels with the vehicle, and the French logistics
-/// envelope.
+/// Approve a manifest: confirm it and freeze it. Approval is the Administrator's sign-off of the load
+/// and nothing more (ADR 0004, ADR 0006).
 /// </summary>
 /// <remarks>
-/// This is the fork in <c>docs/process.puml</c> — approval is what releases the paperwork — and
-/// it is the moment a manifest stops being editable.
-///
-/// <para>
-/// It is also the one gate that will not open without an ICS2 Entry Summary Declaration. That check
-/// happens <em>before</em> the freeze, unlike everything else here, because the alternative is a
-/// manifest frozen for ever against an envelope French customs will never issue — which is what the
-/// placeholder declaration identifier used to produce (<c>docs/adr/0003</c>).
-/// </para>
+/// It no longer hands any paperwork off. The GMR and the French envelope are filed afterwards, as
+/// explicit acts on the vehicle's declarations; the document that travels with the vehicle is requested
+/// with <see cref="RequestManifestDocumentCommand"/>. A load can still change before it is declared, so
+/// declaring is never a by-product of signing off.
 /// </remarks>
 public sealed record ApproveManifestCommand(string Id);
 
 public sealed class ApproveManifestHandler(
     IManifestRepository repository,
-    IConvoyRepository convoys,
-    IManifestWorkQueue queue,
-    IEnsDeclarationStore declarations,
-    FreedomMetrics? metrics = null,
-    ILogger<ApproveManifestHandler>? logger = null)
+    FreedomMetrics? metrics = null)
     : ICommandHandler<ApproveManifestCommand, TransitionManifestOutcome>
 {
     private readonly FreedomMetrics _metrics = metrics ?? FreedomMetrics.Unobserved;
@@ -200,93 +184,74 @@ public sealed class ApproveManifestHandler(
             return TransitionManifestOutcome.IllegalTransition;
         }
 
-        // Read the declaration before anything is written. Under ENV_CTR_RG08 a loaded TIR/ATA lorry's
-        // envelope must name exactly one formality, and the ENS is it — so approving without one
-        // would freeze the manifest against an envelope French customs refuses with FONC-ERR-004.
-        // Refusing here leaves the manifest exactly as it was, approvable again once the MRN arrives.
-        var profile = EloCrossingProfile.HumanitarianAidToUkraine;
-        var declaration = await declarations.GetAsync(command.Id, cancellationToken);
-
-        if (profile.RequiresADeclaration && declaration is null)
-        {
-            return TransitionManifestOutcome.EnsNotFiled;
-        }
-
-        // Freeze first, enqueue second, and deliberately in that order. If the enqueue fails the
-        // manifest is frozen with no GMR — visible, and an operator can retry the submission.
-        // The other order risks an unfrozen manifest whose GMR is already on its way, which is
-        // precisely what §5.2 rules out.
-        if (await repository.ConfirmAndFreezeAsync(command.Id, manifest.Status, cancellationToken) is null)
-        {
-            return TransitionManifestOutcome.IllegalTransition;
-        }
-
-        // From here the manifest is frozen. A failure in either hand-off below leaves it frozen
-        // with paperwork that will never be produced — visible and retryable, but only if someone
-        // is told, so each is counted and logged before it propagates.
-        // What the border reads off the front of the vehicle, not the chassis number. Both the GMR
-        // submission and the printed document were being handed the VIN despite both saying
-        // "registration"; the plate lives on dbo.Vehicle and was never read.
-        var plate = await repository.GetVehiclePlateAsync(command.Id, cancellationToken) ?? string.Empty;
-
-        await HandOff("gmr", command.Id, async () =>
-        {
-            // HMRC needs a crossing time and the convoy is what knows it.
-            var convoy = await convoys.GetByIdAsync(manifest.ConvoyId, cancellationToken);
-
-            // The message carries the reference, the plate and the departure. No receiver, no
-            // address: the worker talks to HMRC, and where in Ukraine the load is going is none of
-            // its business — and a queue message is durable and widely readable (§4.4). The ENS MRN
-            // is not here either, for a reason GmrSubmissionRequest states.
-            await queue.EnqueueGmrSubmissionAsync(
-                new GmrSubmissionRequest(command.Id, plate, convoy?.Start),
-                cancellationToken);
-        });
-
-        // The other half of the fork in docs/process.puml: the document that travels with the
-        // vehicle. Composed here, where the database is, so the worker that renders it needs no
-        // database access — and therefore cannot read a delivery address even in principle.
-        await HandOff("document", command.Id, async () =>
-            await queue.EnqueueDocumentAsync(
-                await ComposeDocument(command.Id, plate, cancellationToken), cancellationToken));
-
-        // The third prong: France requires a logistics envelope per transport unit at the Smart
-        // Border, and approval is what releases it (docs/process.puml). The envelope says nothing
-        // about the load — only which way the lorry is crossing, under what regime, and which
-        // formalities it is being paired to — so there is nothing here to compose and nothing to
-        // withhold. The identifiers are a list because the envelope's field is; under TIR/ATA it
-        // holds exactly the one ENS, and the guard above is what guarantees there is one.
-        await HandOff("elo", command.Id, async () =>
-            await queue.EnqueueEloEnvelopeAsync(
-                new EloEnvelopeRequest(
-                    command.Id,
-                    profile,
-                    declaration is null ? [] : [declaration.Mrn]),
-                cancellationToken));
-
-        return TransitionManifestOutcome.Transitioned;
+        // Status and the freeze stamp in one statement, so a manifest that is Confirmed but editable
+        // never exists (§5.2). It remains the freeze signal until plan 15.
+        return await repository.ConfirmAndFreezeAsync(command.Id, manifest.Status, cancellationToken) is null
+            ? TransitionManifestOutcome.IllegalTransition
+            : TransitionManifestOutcome.Transitioned;
     }
+}
 
-    private async Task HandOff(string stage, string manifestId, Func<Task> handOff)
+/// <summary>Ask for the document that travels with an approved vehicle to be rendered.</summary>
+public sealed record RequestManifestDocumentCommand(string Id);
+
+public enum RequestManifestDocumentOutcome
+{
+    Requested,
+    NotFound,
+    NotApproved,
+}
+
+/// <summary>
+/// Composes the travelling document here, where the database is, and puts it on the queue, so the
+/// worker that renders it needs no database access and cannot read a delivery address even in principle.
+/// </summary>
+public sealed class RequestManifestDocumentHandler(
+    IManifestRepository repository,
+    IManifestWorkQueue queue,
+    FreedomMetrics? metrics = null,
+    ILogger<RequestManifestDocumentHandler>? logger = null)
+    : ICommandHandler<RequestManifestDocumentCommand, RequestManifestDocumentOutcome>
+{
+    private readonly FreedomMetrics _metrics = metrics ?? FreedomMetrics.Unobserved;
+
+    public async Task<RequestManifestDocumentOutcome> HandleAsync(
+        RequestManifestDocumentCommand command, CancellationToken cancellationToken)
     {
+        var manifest = await repository.GetByIdAsync(command.Id, cancellationToken);
+
+        if (manifest is null)
+        {
+            return RequestManifestDocumentOutcome.NotFound;
+        }
+
+        // The document describes a signed-off load; before approval the load can still change.
+        if (!manifest.Frozen)
+        {
+            return RequestManifestDocumentOutcome.NotApproved;
+        }
+
         try
         {
-            await handOff();
+            await queue.EnqueueDocumentAsync(await ComposeDocument(command.Id, cancellationToken), cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            _metrics.ApproveFailedAfterFreeze(stage);
+            _metrics.ApproveFailedAfterFreeze("document");
             logger?.LogWarning(
-                "Manifest {ManifestId} was frozen but its {Stage} hand-off failed ({ExceptionType}); an operator must retry it.",
-                manifestId, stage, exception.GetType().Name);
+                "Manifest {ManifestId} could not enqueue its document ({ExceptionType}); an operator must retry it.",
+                command.Id, exception.GetType().Name);
 
             throw;
         }
+
+        return RequestManifestDocumentOutcome.Requested;
     }
 
-    private async Task<ManifestDocumentRequest> ComposeDocument(
-        string id, string plate, CancellationToken cancellationToken)
+    private async Task<ManifestDocumentRequest> ComposeDocument(string id, CancellationToken cancellationToken)
     {
+        // What the border reads off the front of the vehicle: the plate, not the chassis number.
+        var plate = await repository.GetVehiclePlateAsync(id, cancellationToken) ?? string.Empty;
         var vehicleKg = await repository.GetVehicleWeightKgAsync(id, cancellationToken);
         var lines = await repository.GetDocumentLinesAsync(id, cancellationToken);
         var cargoKg = lines.Sum(line => line.WeightKg);

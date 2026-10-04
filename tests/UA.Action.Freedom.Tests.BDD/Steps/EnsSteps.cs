@@ -27,10 +27,26 @@ public sealed class EnsSteps(FreedomApiClient api, ScenarioState state)
 {
     private const string ManifestKey = "manifest";
 
+    // The truck-list entry the declarations hang off, pinned by ManifestsSteps when it opens the manifest.
+    private const string ConvoyKey = "convoy-for-manifest";
+
+    private const string VehicleKey = "vehicle-for-manifest";
+
     private const string MrnKey = "ens-mrn";
 
     private string EnsPath(string suffix = "") =>
-        $"/manifests/{state.Pinned(ManifestKey)}/ens{suffix}";
+        $"{DeclarationsPath}/ens{suffix}";
+
+    private string DeclarationsPath =>
+        $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{state.Pinned(VehicleKey)}/declarations";
+
+    [When("I POST \"(.*)\" on the remembered vehicle's declarations")]
+    public Task WhenIPostOnTheDeclarations(string suffix) =>
+        api.SendAsync(HttpMethod.Post, DeclarationsPath + suffix, state.CurrentToken, null);
+
+    [When("I POST \"(.*)\" on the remembered vehicle's declarations with body:")]
+    public Task WhenIPostOnTheDeclarationsWithBody(string suffix, string body) =>
+        api.SendAsync(HttpMethod.Post, DeclarationsPath + suffix, state.CurrentToken, body);
 
     /// <summary>
     /// A well-formed MRN, unique per scenario so parallel runs cannot read each other's.
@@ -48,7 +64,7 @@ public sealed class EnsSteps(FreedomApiClient api, ScenarioState state)
     /// component test as well, because this is the only place it is composed from a real database
     /// across three slices — manifest, convoy and boxes.
     /// </summary>
-    [When("I GET the filing sheet for the remembered manifest")]
+    [When("I GET the filing sheet for the remembered vehicle")]
     public Task WhenIGetTheFilingSheet() =>
         api.SendAsync(HttpMethod.Get, EnsPath("/filing-sheet"), state.CurrentToken, null);
 
@@ -57,13 +73,13 @@ public sealed class EnsSteps(FreedomApiClient api, ScenarioState state)
     /// says where to get it, because the filer is a Ground Officer and holds it already. A sheet
     /// listing Ukrainian delivery addresses would be a targeting document.
     /// </summary>
-    [Then("the filing sheet withholds the delivery address and says where to get it")]
+    [Then("the filing sheet withholds the delivery address and says who enters it")]
     public void ThenTheFilingSheetWithholdsTheAddress()
     {
         var sheet = JsonDocument.Parse(api.LastBody).RootElement;
 
         sheet.GetProperty("consigneeAddressSource").GetString()
-            .Should().Be("GET /receivers/{ref}/detail");
+            .Should().Be("Entered by the Ground Officer in the portal");
 
         foreach (var consignment in sheet.GetProperty("consignments").EnumerateArray())
         {
@@ -90,7 +106,7 @@ public sealed class EnsSteps(FreedomApiClient api, ScenarioState state)
         sheet.GetProperty("passiveMeansOfTransport").GetString().Should().NotBeNullOrWhiteSpace();
     }
 
-    [When("I record an ICS2 declaration for the remembered manifest")]
+    [When("I record an ICS2 declaration for the remembered vehicle")]
     public async Task WhenIRecordADeclaration()
     {
         var mrn = NewMrn();
@@ -117,7 +133,7 @@ public sealed class EnsSteps(FreedomApiClient api, ScenarioState state)
                 "filedBy": "groundofficer", "filingReference": "STP-BDD" }
               """);
 
-    [When("I record a malformed ICS2 declaration for the remembered manifest")]
+    [When("I record a malformed ICS2 declaration for the remembered vehicle")]
     public Task WhenIRecordAMalformedDeclaration() =>
         api.SendAsync(
             HttpMethod.Put,
@@ -128,11 +144,11 @@ public sealed class EnsSteps(FreedomApiClient api, ScenarioState state)
               "filedBy": "groundofficer" }
             """);
 
-    [When("I withdraw the ICS2 declaration for the remembered manifest")]
+    [When("I withdraw the ICS2 declaration for the remembered vehicle")]
     public Task WhenIWithdrawTheDeclaration() =>
         api.SendAsync(HttpMethod.Delete, EnsPath(), state.CurrentToken, null);
 
-    [When("I GET the ICS2 declaration for the remembered manifest")]
+    [When("I GET the ICS2 declaration for the remembered vehicle")]
     public Task WhenIGetTheDeclaration() =>
         api.SendAsync(HttpMethod.Get, EnsPath(), state.CurrentToken, null);
 

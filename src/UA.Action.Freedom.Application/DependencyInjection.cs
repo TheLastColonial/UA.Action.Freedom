@@ -5,6 +5,7 @@ using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Categories;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Locations;
+using UA.Action.Freedom.Application.Declarations;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.Donations;
 using UA.Action.Freedom.Application.People;
@@ -134,8 +135,14 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetManifestEloDocumentQuery, byte[]?>, GetManifestEloDocumentHandler>();
         services.AddScoped<ICommandHandler<RecordEnsDeclarationCommand, RecordEnsOutcome>, RecordEnsDeclarationHandler>();
         services.AddScoped<ICommandHandler<SupersedeEnsDeclarationCommand, SupersedeEnsOutcome>, SupersedeEnsDeclarationHandler>();
-        services.AddScoped<IQueryHandler<GetManifestEnsQuery, EnsDeclarationReadModel?>, GetManifestEnsHandler>();
         services.AddScoped<IQueryHandler<GetEnsFilingSheetQuery, EnsFilingSheetReadModel?>, GetEnsFilingSheetHandler>();
+        services.AddScoped<IQueryHandler<GetEnsDeclarationQuery, EnsDeclarationReadModel?>, GetEnsDeclarationHandler>();
+        services.AddScoped<IQueryHandler<GetVehicleEnsFilingSheetQuery, EnsFilingSheetReadModel?>, GetVehicleEnsFilingSheetHandler>();
+        services.AddScoped<ICommandHandler<RequestManifestDocumentCommand, RequestManifestDocumentOutcome>, RequestManifestDocumentHandler>();
+        services.AddScoped<IQueryHandler<ListDeclarationsQuery, IReadOnlyList<DeclarationReadModel>?>, ListDeclarationsHandler>();
+        services.AddScoped<ICommandHandler<RecordDeclarationCommand, RecordDeclarationOutcome>, RecordDeclarationHandler>();
+        services.AddScoped<ICommandHandler<RefuseDeclarationCommand, RefuseDeclarationOutcome>, RefuseDeclarationHandler>();
+        services.AddScoped<ICommandHandler<FileDeclarationCommand, FileDeclarationOutcome>, FileDeclarationHandler>();
 
         return services.AddInstrumentedCommandHandlers();
     }

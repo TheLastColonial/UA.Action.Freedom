@@ -59,7 +59,7 @@ export function availableTransitions(ctx: TransitionContext): TransitionOption[]
       if (ctx.frozen && (edge.verb === 'propose' || edge.verb === 'reject')) {
         return false;
       }
-      // Approval releases the GMR and freezes the manifest — Administrator alone.
+      // Approval signs off the load and freezes the manifest — Administrator alone. It files nothing.
       if (edge.verb === 'approve' && !ctx.canApprove) {
         return false;
       }

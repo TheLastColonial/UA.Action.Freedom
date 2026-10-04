@@ -77,11 +77,12 @@ internal static class ConvoyFixtures
 
     /// <summary>Deletes the vehicle, which cascades its truck-list rows and their crew and insurance.</summary>
     internal static Task RemoveVehicleAsync(string vin) =>
-        ExecuteAsync("DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
+        ExecuteAsync("DELETE FROM dbo.Declaration WHERE Vin = @vin; DELETE FROM dbo.Vehicle WHERE Vin = @vin", ("@vin", vin));
 
     /// <summary>Takes the truck list out before the convoy, because the foreign key is NO ACTION.</summary>
     internal static Task RemoveConvoyAsync(int id) => ExecuteAsync(
         """
+        DELETE FROM dbo.Declaration WHERE ConvoyId = @id;
         DELETE FROM dbo.ConvoyVehicle WHERE ConvoyId = @id;
         DELETE FROM dbo.Convoy WHERE Id = @id;
         """,
