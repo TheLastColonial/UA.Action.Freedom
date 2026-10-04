@@ -441,7 +441,12 @@ What the code does today (plan 08):
   separately.
 - **A reference is write-once**, and a refusal keeps a **bounded reason code** only, never the authority's text.
 - **An ELO needs an accepted ENS.** The ENS goes straight to accepted: an MRN exists only on acceptance.
-- **Not yet built:** staleness derived from a snapshot of the load (plan 09), closing at a crossing (plan 18), and
+- **Staleness is derived (plan 09).** When a declaration is marked ready to file (or recorded straight to filed) it
+  stores a **snapshot** of the vehicle's load: its boxes, their weights, Receivers and items. A filed or accepted
+  declaration reads **Stale** whenever the load now differs, and the Dispatcher gets a **re-declare task** on screen.
+  Withdrawing it keeps the record and its reference as history and starts a new draft. Nothing is stored on read and
+  nobody sets the flag.
+- **Not yet built:** closing at a crossing (plan 18), and
   departure refusing a stale declaration (plan 13).
 
 ### Truck List

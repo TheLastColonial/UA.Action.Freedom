@@ -119,3 +119,17 @@ Added by plan 08. The decision above stands; these are choices the implementatio
   resolution of a stale declaration, and nothing may observe the half-way state.
 - **A refusal keeps a bounded reason code only**, and the validator rejects anything else, so the authority's free
   text is never stored.
+
+### Added by plan 09
+
+- **The snapshot is `Domain.LoadSnapshot`**, stored as JSON on `dbo.Declaration` (`SnapshotJson`, `SnapshotVersion`)
+  when the declaration is marked ready to file, or, for one recorded straight to filed, when it is recorded. It holds
+  opaque identifiers and customs figures only: the vehicle, its withdrawn flag, per box its id, weight, Receiver and
+  whether that Receiver was registered, and per item its category, quantity, value and commodity code. There is no
+  box version yet; plan 16's replacement gives a new box a new id, which makes the load differ.
+- **Staleness is `Staleness.IsStale`, a pure function** compared on the fields the snapshot's version has. It is
+  applied when declarations are listed and when tasks are derived, and **`Stale` is never written by a read**.
+- **A re-declare task is derived** (`GET /convoys/{id}/tasks`), so there is nothing to close. `withdraw` clears it and
+  starts a new draft in one transaction.
+- **Not yet:** "declarations current" does not block departure (plan 13), and a closed declaration is not yet
+  excluded from the comparison (plan 18).

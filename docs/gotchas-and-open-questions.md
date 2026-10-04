@@ -699,6 +699,25 @@ stops on the list in § Observability below — not on a bounded-set tag.
 
 ---
 
+### Declaration staleness is derived on read, and the snapshot is versioned (plan 09)
+
+- **`Stale` is never written by a read.** `ListDeclarationsHandler` swaps `Filed`/`Accepted` for `Stale` in the read
+  model when `Staleness.IsStale(snapshot, currentLoad)`; the row keeps its stored status until `withdraw`. So code that
+  asks the *repository* for a declaration (the ELO's "accepted ENS" check, `RecordReferenceAsync`) sees the stored
+  status, not the derived one. Plan 13 must judge currency with `DeclarationStaleness`, not by reading `Status`.
+- **A snapshot is compared on the fields its `SnapshotVersion` has.** Adding a field to `LoadSnapshot` means a new
+  `Version` and a new branch in `Staleness.Fingerprint`; the older branch stays untouched. Otherwise every filed
+  declaration goes stale the day the field ships. Unknown JSON properties are ignored on read for the same reason.
+- **The first snapshot stands.** `StoreSnapshotAsync` only writes where `SnapshotJson IS NULL`, and `MarkReadyAsync`
+  refreshes it only while the declaration is Draft or ReadyToFile. A refused declaration recorded afresh has its
+  snapshot cleared in the same `UPDATE` (otherwise it would be compared with a load from before the correction).
+- **A box missing from the box repository is skipped by `VehicleLoadReader`**, which in the component tests means a
+  ledger-only box is not part of the load. Seed both `InMemoryBoxRepository` and the convoy fake's ledger.
+- **The tasks and the staleness read cost** one load read per vehicle (allocation, then box, items and Receiver per
+  box). At roughly ten vehicles a convoy ([O23](domain/decisions.md#o23)) this is deliberate; do not cache it.
+- **A stale declaration has no `ReadyToFile` state to fall back to.** `withdraw` starts a `Draft`; marking it ready (or
+  recording a reference) snapshots the load again.
+
 ## 6. Testing
 
 ### Reqnroll matches step text globally
