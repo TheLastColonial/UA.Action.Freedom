@@ -131,7 +131,8 @@ public sealed class BudgetPosition(
     IConvoyRepository convoys,
     IConvoyVehicleRepository truckList,
     IConvoyBudgetRepository budget,
-    IVehicleEquipmentRepository equipment)
+    IVehicleEquipmentRepository equipment,
+    IAccommodationRepository? accommodation = null)
 {
     /// <summary>The position, or null when there is no such convoy.</summary>
     public async Task<BudgetSummaryReadModel?> OfAsync(int convoyId, CancellationToken cancellationToken)
@@ -152,7 +153,8 @@ public sealed class BudgetPosition(
             .Select(line => new ActualCost(CostType.Other, line.CountedCostGbp, line.Vin, line.Name, Derived: true))
             .ToList();
 
-        var actuals = entered.Concat(await DerivedAsync(convoyId, cancellationToken)).Concat(equipmentCosts).ToList();
+        var hotelCosts = await HotelAsync(convoyId, cancellationToken);
+        var actuals = entered.Concat(await DerivedAsync(convoyId, cancellationToken)).Concat(equipmentCosts).Concat(hotelCosts).ToList();
         var comparison = Budget.Compare(lines, actuals);
 
         return new BudgetSummaryReadModel(
@@ -163,6 +165,14 @@ public sealed class BudgetPosition(
             equipmentCosts.Sum(cost => cost.AmountGbp),
             comparison.Any(line => line.OverBudget));
     }
+
+    /// <summary>The cost held on each standing booking. A cancelled one is settled by cancelling it, so it counts for nothing.</summary>
+    private async Task<IReadOnlyList<ActualCost>> HotelAsync(int convoyId, CancellationToken cancellationToken) =>
+        accommodation is null
+            ? []
+            : [.. (await accommodation.ListBookingsAsync(convoyId, cancellationToken))
+                .Where(booking => !booking.Cancelled && booking.CostGbp is not null)
+                .Select(booking => new ActualCost(CostType.Hotel, booking.CostGbp!.Value, null, booking.Provider, Derived: true))];
 
     private async Task<IReadOnlyList<ActualCost>> DerivedAsync(int convoyId, CancellationToken cancellationToken)
     {
@@ -193,11 +203,12 @@ public sealed class GetBudgetSummaryHandler(
     IConvoyRepository convoys,
     IConvoyVehicleRepository truckList,
     IConvoyBudgetRepository budget,
-    IVehicleEquipmentRepository equipment)
+    IVehicleEquipmentRepository equipment,
+    IAccommodationRepository? accommodation = null)
     : IQueryHandler<GetBudgetSummaryQuery, BudgetSummaryReadModel?>
 {
     public Task<BudgetSummaryReadModel?> HandleAsync(GetBudgetSummaryQuery query, CancellationToken cancellationToken) =>
-        new BudgetPosition(convoys, truckList, budget, equipment).OfAsync(query.ConvoyId, cancellationToken);
+        new BudgetPosition(convoys, truckList, budget, equipment, accommodation).OfAsync(query.ConvoyId, cancellationToken);
 }
 
 /// <summary>
