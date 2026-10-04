@@ -48,14 +48,23 @@ public static class DeclarationRefusalReasons
 /// <summary>Every declaration on a vehicle's truck-list entry, or null when it is not on the convoy.</summary>
 public sealed record ListDeclarationsQuery(int ConvoyId, string Vin);
 
-public sealed class ListDeclarationsHandler(IConvoyVehicleRepository truckList, IDeclarationRepository declarations)
+public sealed class ListDeclarationsHandler(
+    IConvoyVehicleRepository truckList, IDeclarationRepository declarations, IVehicleLoadReader loads)
     : IQueryHandler<ListDeclarationsQuery, IReadOnlyList<DeclarationReadModel>?>
 {
     public async Task<IReadOnlyList<DeclarationReadModel>?> HandleAsync(
-        ListDeclarationsQuery query, CancellationToken cancellationToken) =>
-        await truckList.GetAsync(query.ConvoyId, query.Vin, cancellationToken) is null
-            ? null
-            : await declarations.ListAsync(query.ConvoyId, query.Vin, cancellationToken);
+        ListDeclarationsQuery query, CancellationToken cancellationToken)
+    {
+        if (await truckList.GetAsync(query.ConvoyId, query.Vin, cancellationToken) is null)
+        {
+            return null;
+        }
+
+        var stored = await declarations.ListAsync(query.ConvoyId, query.Vin, cancellationToken);
+        var current = await loads.ReadAsync(query.ConvoyId, query.Vin, cancellationToken);
+
+        return [.. stored.Select(declaration => DeclarationStaleness.Derive(declaration, current))];
+    }
 }
 
 /// <summary>

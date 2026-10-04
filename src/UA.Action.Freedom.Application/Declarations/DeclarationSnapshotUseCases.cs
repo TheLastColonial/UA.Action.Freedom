@@ -160,3 +160,23 @@ public sealed class MarkDeclarationReadyHandler(IDeclarationRepository declarati
             };
     }
 }
+
+/// <summary>
+/// Staleness as a declaration is read (ADR 0005). Derived, never stored: this only changes what a
+/// read model says, so nobody can forget to flag a declaration and nothing is written by looking.
+/// </summary>
+public static class DeclarationStaleness
+{
+    /// <summary>Only a declaration the authority has been told about can have gone out of date.</summary>
+    public static bool CanGoStale(DeclarationStatus status) =>
+        status is DeclarationStatus.Filed or DeclarationStatus.Accepted;
+
+    public static bool IsStale(DeclarationReadModel declaration, LoadSnapshot? current) =>
+        current is not null
+        && CanGoStale(declaration.Status)
+        && LoadSnapshotJson.Read(declaration.SnapshotJson, declaration.SnapshotVersion) is { } snapshot
+        && Staleness.IsStale(snapshot, current);
+
+    public static DeclarationReadModel Derive(DeclarationReadModel declaration, LoadSnapshot? current) =>
+        IsStale(declaration, current) ? declaration with { Status = DeclarationStatus.Stale } : declaration;
+}

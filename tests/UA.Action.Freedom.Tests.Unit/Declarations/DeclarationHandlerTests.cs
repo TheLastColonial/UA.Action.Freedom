@@ -436,7 +436,7 @@ public class DeclarationHandlerTests
     {
         var truckList = Substitute.For<IConvoyVehicleRepository>();
 
-        var read = await new ListDeclarationsHandler(truckList, Substitute.For<IDeclarationRepository>())
+        var read = await new ListDeclarationsHandler(truckList, Substitute.For<IDeclarationRepository>(), Substitute.For<IVehicleLoadReader>())
             .HandleAsync(new ListDeclarationsQuery(42, Vin), TestContext.Current.CancellationToken);
 
         read.Should().BeNull();

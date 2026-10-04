@@ -156,4 +156,80 @@ public class DeclarationStalenessEndpointTests
 
         response.StatusCode.Should().Be(expected);
     }
+
+    // ---- increment 3: staleness is visible --------------------------------------------------------
+
+    [Fact]
+    public async Task Moving_a_box_to_another_vehicle_makes_both_vehicles_declarations_stale()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await client.PutAsync(BoxOn(VinA), content: null, TestContext.Current.CancellationToken);
+        await client.PostAsync($"{Declarations(VinA)}/gmr/ready", content: null, TestContext.Current.CancellationToken);
+        await client.PostAsync($"{Declarations(VinB)}/gmr/ready", content: null, TestContext.Current.CancellationToken);
+        await RecordGmr(client, VinA, "GMR-A");
+        await RecordGmr(client, VinB, "GMR-B");
+        StatusOf(await ListAsync(client, VinA), "Gmr").Should().Be("Filed");
+        StatusOf(await ListAsync(client, VinB), "Gmr").Should().Be("Filed");
+
+        await client.PutAsync(BoxOn(VinB), content: null, TestContext.Current.CancellationToken);
+
+        StatusOf(await ListAsync(client, VinA), "Gmr").Should().Be("Stale");
+        StatusOf(await ListAsync(client, VinB), "Gmr").Should().Be("Stale");
+    }
+
+    [Fact]
+    public async Task A_declaration_recorded_without_being_marked_ready_still_goes_stale()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await client.PutAsync(BoxOn(VinA), content: null, TestContext.Current.CancellationToken);
+        await RecordGmr(client, VinA);
+
+        await client.DeleteAsync(BoxOn(VinA), TestContext.Current.CancellationToken);
+
+        StatusOf(await ListAsync(client, VinA), "Gmr").Should().Be("Stale");
+    }
+
+    [Fact]
+    public async Task A_load_that_has_not_changed_leaves_the_declaration_as_it_was()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await client.PutAsync(BoxOn(VinA), content: null, TestContext.Current.CancellationToken);
+        await RecordGmr(client, VinA);
+
+        StatusOf(await ListAsync(client, VinA), "Gmr").Should().Be("Filed");
+    }
+
+    [Fact]
+    public async Task Changing_the_items_in_a_filed_load_makes_the_declaration_stale()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await client.PutAsync(BoxOn(VinA), content: null, TestContext.Current.CancellationToken);
+        await RecordGmr(client, VinA);
+
+        await world.Boxes.AddItemAsync(
+            BoxId,
+            new BoxItemReadModel(Guid.NewGuid(), "Blankets", new Dictionary<string, string>(), 4, Quantity: 2),
+            TestContext.Current.CancellationToken);
+
+        StatusOf(await ListAsync(client, VinA), "Gmr").Should().Be("Stale");
+    }
+
+    // ---- increment 4: a Receiver losing registration ----------------------------------------------
+
+    [Fact]
+    public async Task A_receiver_that_stops_being_registered_makes_the_declarations_naming_it_stale()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await client.PutAsync(BoxOn(VinA), content: null, TestContext.Current.CancellationToken);
+        await RecordGmr(client, VinA);
+
+        await world.Receivers.SetStatusAsync(ReceiverRef, ReceiverStatus.Suspended, TestContext.Current.CancellationToken);
+
+        StatusOf(await ListAsync(client, VinA), "Gmr").Should().Be("Stale");
+    }
 }
