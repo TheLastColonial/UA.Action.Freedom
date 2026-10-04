@@ -293,7 +293,11 @@ export function useReplaceConvoyRoute(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: ReplaceConvoyRouteRequest) => replaceConvoyRoute(id, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.convoys.route(id) }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.route(id) });
+      // The overnight stops are the grid's columns.
+      await queryClient.invalidateQueries({ queryKey: qk.accommodation.all(id) });
+    },
   });
 }
 
@@ -395,6 +399,9 @@ async function invalidateCrew(
   await queryClient.invalidateQueries({ queryKey: qk.convoys.vehicles(id) });
   await queryClient.invalidateQueries({ queryKey: qk.convoys.insurance(id, vin) });
   await queryClient.invalidateQueries({ queryKey: qk.convoys.readiness(id) });
+  // Who is crewed decides who needs a bed, and who is left with a booking.
+  await queryClient.invalidateQueries({ queryKey: qk.accommodation.all(id) });
+  await queryClient.invalidateQueries({ queryKey: qk.declarations.tasks(id) });
 }
 
 export function useCreateManifestForVehicle(
