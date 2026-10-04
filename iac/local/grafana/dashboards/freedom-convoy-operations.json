@@ -1583,8 +1583,8 @@
     {
       "type": "timeseries",
       "id": 30,
-      "title": "Boxes loaded onto manifests",
-      "description": "Changed, or why not: Frozen (the manifest's GMR exists), BoxNotFound, ManifestNotFound.",
+      "title": "Boxes allocated to vehicles",
+      "description": "Allocated, Moved or AlreadyAllocated, or why not: Frozen (the manifest GMR exists), VehicleWithdrawn, BoxNotFound, VehicleNotOnConvoy.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1633,7 +1633,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (outcome) (increase(freedom_handler_invocations_total{job=\"freedom-app\", handler=\"AddManifestBox\"}[$__rate_interval]))",
+          "expr": "sum by (outcome) (increase(freedom_handler_invocations_total{job=\"freedom-app\", handler=\"AllocateBox\"}[$__rate_interval]))",
           "legendFormat": "{{outcome}}"
         }
       ]

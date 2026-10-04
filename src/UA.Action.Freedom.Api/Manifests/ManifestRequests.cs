@@ -13,9 +13,9 @@ namespace UA.Action.Freedom.Api.Manifests;
 /// a truck on a different convoy, or none. A vehicle that leaves mid-journey is withdrawn from the
 /// truck list (<c>DELETE /convoys/{id}/vehicles/{vin}</c>), which keeps this manifest intact.
 /// </remarks>
-public sealed record UpdateManifestRequest(string? DeliveryNotes, bool FerryBookingComplete)
+public sealed record UpdateManifestRequest(string? DeliveryNotes)
 {
-    public UpdateManifestCommand ToCommand(string id) => new(id, DeliveryNotes, FerryBookingComplete);
+    public UpdateManifestCommand ToCommand(string id) => new(id, DeliveryNotes);
 }
 
 public sealed class UpdateManifestRequestValidator : AbstractValidator<UpdateManifestRequest>

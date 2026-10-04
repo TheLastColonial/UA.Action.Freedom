@@ -94,11 +94,27 @@ internal static class FreedomApi
             services.Replace<IConvoyRepository>(repository);
             services.Replace<IConvoyVehicleRepository>(repository);
             services.Replace(people ?? InMemoryPersonRepository.WithLinkedTestUser());
+            var manifestFake = manifests ?? new InMemoryManifestRepository();
+            ShareCargo(repository, manifestFake);
 
             // Opening a manifest is a convoy route now — POST /convoys/{id}/vehicles/{vin}/manifest
             // — so the convoy tests need somewhere for it to land.
-            services.Replace(manifests ?? new InMemoryManifestRepository());
+            services.Replace(manifestFake);
         });
+
+    /// <summary>
+    /// The two SQL repositories read and write one allocation table; their fakes share one ledger.
+    /// </summary>
+    private static void ShareCargo(InMemoryConvoyRepository convoys, IManifestRepository manifests)
+    {
+        if (manifests is not InMemoryManifestRepository fake)
+        {
+            return;
+        }
+
+        convoys.Ledger.Absorb(fake.Ledger);
+        fake.Ledger = convoys.Ledger;
+    }
 
     /// <summary>As above, with the receivers a vehicle handover is checked against.</summary>
     internal static WebApplicationFactory<Program> WithConvoys(
@@ -229,6 +245,7 @@ internal static class FreedomApi
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
         {
+            ShareCargo(convoys, manifests);
             services.Replace(manifests);
             services.Replace<IConvoyRepository>(convoys);
             services.Replace<IConvoyVehicleRepository>(convoys);

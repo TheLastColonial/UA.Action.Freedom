@@ -49,11 +49,6 @@ public class Manifest
     public string? DeliveryNotes { get; init; }
 
     /// <summary>
-    /// Completed Ferry Booking
-    /// </summary>
-    public bool FerryBookingComplete { get; init; }
-
-    /// <summary>
     /// When the Goods Movement Reference was submitted to HMRC, if it has been.
     /// </summary>
     /// <remarks>

@@ -32,7 +32,6 @@ public sealed record ManifestReadModel(
     string Vin,
     ManifestStatus Status,
     string? DeliveryNotes,
-    bool FerryBookingComplete,
     DateTime? GmrSubmittedAt,
     string? LastChangedByName = null,
     DateTime? LastChangedAt = null)

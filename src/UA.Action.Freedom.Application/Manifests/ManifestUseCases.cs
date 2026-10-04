@@ -20,7 +20,7 @@ namespace UA.Action.Freedom.Application.Manifests;
 /// </para>
 /// </remarks>
 public sealed record CreateManifestCommand(
-    string Id, int ConvoyId, string Vin, string? DeliveryNotes, bool FerryBookingComplete);
+    string Id, int ConvoyId, string Vin, string? DeliveryNotes);
 
 public enum CreateManifestOutcome
 {
@@ -79,7 +79,6 @@ public sealed class CreateManifestHandler(IManifestRepository repository, IConvo
                 command.Vin,
                 ManifestStatus.Created,
                 command.DeliveryNotes,
-                command.FerryBookingComplete,
                 GmrSubmittedAt: null),
             cancellationToken);
 
@@ -96,7 +95,7 @@ public sealed class CreateManifestHandler(IManifestRepository repository, IConvo
 /// a different vehicle is not an edit: the Goods Movement Reference named a crossing. A vehicle
 /// that leaves the convoy is withdrawn from the truck list, which keeps this manifest intact.
 /// </remarks>
-public sealed record UpdateManifestCommand(string Id, string? DeliveryNotes, bool FerryBookingComplete);
+public sealed record UpdateManifestCommand(string Id, string? DeliveryNotes);
 
 public enum UpdateManifestOutcome
 {
@@ -129,7 +128,6 @@ public sealed class UpdateManifestHandler(IManifestRepository repository)
             manifest with
             {
                 DeliveryNotes = command.DeliveryNotes,
-                FerryBookingComplete = command.FerryBookingComplete,
             },
             cancellationToken);
 

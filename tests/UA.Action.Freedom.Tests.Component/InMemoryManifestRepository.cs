@@ -22,8 +22,8 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
     }
 
     private readonly Dictionary<string, ManifestReadModel> manifests = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, List<ManifestBoxReadModel>> boxes = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<int> knownBoxes = [];
+    /// <summary>Standing in for the allocations the SQL joins; shared with the convoy fake.</summary>
+    internal BoxAllocationLedger Ledger { get; set; } = new();
 
     private int vehicleWeightKg;
     private string? vehiclePlate = "AB12CDE";
@@ -55,25 +55,19 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
         return this;
     }
 
-    public InMemoryManifestRepository WithKnownBox(int boxId)
-    {
-        knownBoxes.Add(boxId);
-        return this;
-    }
-
+    /// <summary>Allocates a box to the vehicle this manifest is the paperwork for.</summary>
     public InMemoryManifestRepository WithBoxOn(string manifestId, ManifestBoxReadModel box)
     {
-        knownBoxes.Add(box.BoxId);
-        boxes.TryAdd(manifestId, []);
-        boxes[manifestId].Add(box);
+        var manifest = manifests[manifestId];
+        Ledger.KnowBox(box);
+        Ledger.Allocate(
+            new ConvoyVehicle { ConvoyId = new ConvoyId(manifest.ConvoyId), Vin = manifest.Vin }, box.BoxId);
         return this;
     }
 
     public int Count => manifests.Count;
 
     public ManifestReadModel? Manifest(string id) => manifests.GetValueOrDefault(id);
-
-    public IReadOnlyList<ManifestBoxReadModel> Boxes(string id) => boxes.GetValueOrDefault(id, []);
 
     public Task<ManifestReadModel?> GetByIdAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult(manifests.TryGetValue(id, out var manifest) ? Read(manifest) : null);
@@ -118,7 +112,6 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
         manifests[manifest.Id] = existing with
         {
             DeliveryNotes = manifest.DeliveryNotes,
-            FerryBookingComplete = manifest.FerryBookingComplete,
         };
         changes.Stamp(manifest.Id);
 
@@ -127,7 +120,6 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
 
     public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken)
     {
-        boxes.Remove(id);
         changes.Forget(id);
         return Task.FromResult(manifests.Remove(id));
     }
@@ -159,31 +151,6 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
         return Task.FromResult<DateTime?>(stamped);
     }
 
-    public Task<IReadOnlyList<ManifestBoxReadModel>> ListBoxesAsync(string id, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<ManifestBoxReadModel>>(boxes.GetValueOrDefault(id, []));
-
-    public Task<bool> AddBoxAsync(string id, int boxId, CancellationToken cancellationToken)
-    {
-        if (!knownBoxes.Contains(boxId))
-        {
-            return Task.FromResult(false);
-        }
-
-        // A box travels on at most one manifest, so this moves it.
-        foreach (var cargo in boxes.Values)
-        {
-            cargo.RemoveAll(box => box.BoxId == boxId);
-        }
-
-        boxes.TryAdd(id, []);
-        boxes[id].Add(new ManifestBoxReadModel(boxId, 0, Validated: false));
-
-        return Task.FromResult(true);
-    }
-
-    public Task<bool> RemoveBoxAsync(string id, int boxId, CancellationToken cancellationToken) =>
-        Task.FromResult(boxes.TryGetValue(id, out var cargo) && cargo.RemoveAll(box => box.BoxId == boxId) > 0);
-
     public Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult(vehicleWeightKg);
 
@@ -193,10 +160,13 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
     public Task<VehicleCargoCapacityReadModel> GetVehicleCargoCapacityAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult(vehicleCargoCapacity);
 
+    private IReadOnlyList<ManifestBoxReadModel> CargoOf(string id) =>
+        manifests.TryGetValue(id, out var manifest) ? Ledger.BoxesOn(manifest.ConvoyId, manifest.Vin) : [];
+
     public Task<IReadOnlyList<ManifestDocumentLineReadModel>> GetDocumentLinesAsync(
         string id, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<ManifestDocumentLineReadModel>>(
-            boxes.GetValueOrDefault(id, [])
+            CargoOf(id)
                 .Select(box => new ManifestDocumentLineReadModel(
                     box.BoxId, box.WeightKg, ItemCount: 0, "Kharkiv Regional Hospital", "Kharkiv oblast"))
                 .ToList());
@@ -217,7 +187,7 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
     public Task<IReadOnlyList<EnsGoodsLineReadModel>> GetEnsGoodsLinesAsync(
         string id, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<EnsGoodsLineReadModel>>(
-            boxes.GetValueOrDefault(id, [])
+            CargoOf(id)
                 .Select(box => new EnsGoodsLineReadModel(
                     box.BoxId, box.WeightKg, box.Validated, Receiver,
                     "Kharkiv Regional Hospital", "Kharkiv oblast",

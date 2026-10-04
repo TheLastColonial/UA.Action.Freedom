@@ -26,14 +26,6 @@ public sealed class EloSteps(FreedomApiClient api, ScenarioState state)
     /// </summary>
     private static readonly TimeSpan PollEvery = TimeSpan.FromSeconds(2);
 
-    [When("I put the remembered box on the remembered manifest")]
-    public Task WhenIPutTheRememberedBoxOnTheRememberedManifest() =>
-        api.SendAsync(
-            HttpMethod.Put,
-            $"/manifests/{state.Pinned(ManifestKey)}/boxes/{state.Pinned("box")}",
-            state.CurrentToken,
-            null);
-
     /// <summary>
     /// Waits for the envelope rather than asserting it immediately.
     /// </summary>

@@ -30,7 +30,6 @@ CREATE TABLE [dbo].[Manifest] (
     [Vin]                  varchar(32)    NOT NULL,
     [Status]               int            NOT NULL CONSTRAINT [DF_Manifest_Status] DEFAULT 0,
     [DeliveryNotes]        nvarchar(2000) NULL,
-    [FerryBookingComplete] bit            NOT NULL CONSTRAINT [DF_Manifest_Ferry] DEFAULT 0,
     [GmrSubmittedAt]       datetime2(0)   NULL,
     [CreatedAt]            datetime2(0)   NOT NULL CONSTRAINT [DF_Manifest_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]            datetime2(0)   NOT NULL CONSTRAINT [DF_Manifest_UpdatedAt] DEFAULT SYSUTCDATETIME(),

@@ -158,8 +158,9 @@ created last time still exist and skips them, which is a *second* way to not tes
 | `ConvoyRouteStop → Convoy` | `ON DELETE CASCADE` | A route has no life without its convoy. |
 | `BoxItem → Box` | `ON DELETE CASCADE` | Items have no life outside their box. |
 | `BoxQrCode → Box` | `ON DELETE CASCADE` | A label has no life outside its box; a stray one must not outlive it. |
-| `ManifestBox → Manifest` | `ON DELETE CASCADE` | Removes the *link*, not the box. |
-| `ManifestBox → Box` | `ON DELETE CASCADE` | Deleting a box takes it off the manifest. |
+| `ConvoyVehicleBoxAllocation → ConvoyVehicle` | `ON DELETE CASCADE` | Removing an unpublished truck-list entry takes its cargo allocations, not the boxes. The Box and the Vehicle are different roots, so the two cascades are not a multiple-path clash. |
+| `ConvoyVehicleBoxAllocation → Box` | `ON DELETE CASCADE` | Deleting a box takes it off its vehicle (plan 16 adds the guard for attested boxes). |
+| `ConvoyVehicleFerryBooking → ConvoyVehicle` | `ON DELETE CASCADE` | A booking has no life without the vehicle's entry; withdrawal keeps it. |
 | `Manifest → ConvoyVehicle` | no action | Composite, on `(ConvoyId, Vin)`. A manifest is the record of what a vehicle carried across a border, so neither cancelling a convoy nor deleting a vehicle may erase it — and a manifest cannot name a truck that is not on the convoy. |
 | `Box → Person` (validator) | no action | A volunteer who leaves must not take the record of what they signed for. |
 | `ReceiverDetail → Receiver` | no action | Makes "delete the reference, keep the address" impossible. |
@@ -231,10 +232,15 @@ both documented as "the plate the border expects to see", and both were being ha
 — the chassis number, which is not on the front of the vehicle. `IManifestRepository` grew a
 `GetVehiclePlateAsync` for it. If you add another hand-off that names a vehicle, use the plate.
 
-### `dbo.ManifestBox` is keyed on `BoxId`, not the pair
+### `dbo.ConvoyVehicleBoxAllocation` is keyed on `BoxId`, not the pair
 
-A box travels on **at most one** manifest. The same box on two manifests would be declared twice
-at a border and arrive once. `AddBoxAsync` therefore *moves* a box rather than duplicating it.
+A box is on **at most one** truck-list entry. The same box on two vehicles would be declared twice
+at a border and arrive once. `AllocateBoxAsync` therefore *moves* a box rather than duplicating it, in one
+transaction that locks the entry (`UPDLOCK`) and the box's existing allocation (`UPDLOCK, HOLDLOCK`) so two
+dispatchers racing for one box take turns. It replaced `dbo.ManifestBox`, which was keyed the same way against the
+manifest. A local database built before plan 07 keeps the old table and the `Manifest.FerryBookingComplete` column
+(a publish does not drop them), and the `LastChangedGuardTests` then fail on `dbo.ManifestBox`: drop them by hand or
+reset the database.
 
 ### `BoxRepository.IssueQrCodeAsync` and `AssignBayAsync` also hold a transaction
 

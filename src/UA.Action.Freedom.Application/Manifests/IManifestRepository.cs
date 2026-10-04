@@ -54,14 +54,6 @@ public interface IManifestRepository
     /// </remarks>
     Task<DateTime?> ConfirmAndFreezeAsync(string id, ManifestStatus from, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<ManifestBoxReadModel>> ListBoxesAsync(string id, CancellationToken cancellationToken);
-
-    /// <summary>Returns false when there is no box with that identifier.</summary>
-    Task<bool> AddBoxAsync(string id, int boxId, CancellationToken cancellationToken);
-
-    /// <summary>Returns false when that box is not on this manifest.</summary>
-    Task<bool> RemoveBoxAsync(string id, int boxId, CancellationToken cancellationToken);
-
     /// <summary>The kerb weight of the manifest's vehicle.</summary>
     Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken);
 

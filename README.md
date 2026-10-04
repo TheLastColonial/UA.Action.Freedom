@@ -255,6 +255,8 @@ Core resource endpoints:
   - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/crew/{personId}` — Vehicle crew: an optional `{ "role": "Driver" | "Passenger" }` body (default Driver); a person takes one seat per convoy (**Dispatcher only** for `PUT`/`DELETE`; `GET` is in `convoys:read`)
   - `POST /convoys/{id}/vehicles/{vin}/manifest` — **Open the manifest for this vehicle on this convoy.** There is no `POST /manifests`: a manifest is the paperwork for a truck-list entry, and `(ConvoyId, Vin)` is a composite foreign key to it (`convoys:write`)
   - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/insurance` — The vehicle's insurance for this convoy. It names the drivers it covers (`uncoveredDrivers` lists crew drivers added since); removing a driver keeps it in cover, and a manifest cannot depart without it covering every driver (`convoys:write`)
+  - `GET /convoys/{id}/vehicles/{vin}/boxes`, `PUT|DELETE /convoys/{id}/vehicles/{vin}/boxes/{boxId}` — The vehicle's **cargo**: the boxes allocated to its truck-list entry. A box is on at most one vehicle, so `PUT` on a second one *moves* it. Refused `409` for a withdrawn vehicle or one whose manifest has a GMR (until plan 15). Read is `boxes:read`, write is `boxes:write` (Administrator, Dispatcher, Loader)
+  - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/ferry` — The vehicle's outbound ferry booking (operator, reference, sailing, ticket details, optional cost) — per vehicle, outbound only, because vehicles are handed over rather than driven back (`convoys:write`)
   - `GET /convoys/{id}/readiness` — Advisory readiness: **one driver per vehicle required, two advised**, insurance naming every driver, and a route. Withdrawn vehicles are skipped (`convoys:read`)
   - `POST /convoys/{id}/arrive` — Mark arrived once every vehicle still travelling has a finished manifest; Delivered/Lost vehicles are handed over for good (`convoys:write`)
   - `POST /convoys/{id}/publish-truck-list` — Close the truck list to additions
@@ -268,10 +270,10 @@ Core resource endpoints:
   - `GET /boxes/{id}/qr-code/image` (`?format=svg\|png`) — The QR image alone (`boxes:read`)
   - `GET /boxes/{id}/label` — Printable SVG label: QR + box number, no receiver detail (`boxes:read`)
   - `GET /boxes/scan/{token}` — Resolve a scanned token to its box (`boxes:read`)
-- `GET /manifests` — The document pack for one vehicle on one convoy: cargo, border weight, GMR, ferry booking. **Created on its convoy** (above), not here
-  - `PUT /manifests/{id}` — Notes and ferry booking only. The convoy and the vehicle are the manifest's identity, so there is no field for either
+- `GET /manifests` — The document pack for one vehicle on one convoy: border weight, GMR. Its cargo and ferry booking are on the same truck-list entry. **Created on its convoy** (above), not here
+  - `PUT /manifests/{id}` — Notes only. The convoy and the vehicle are the manifest's identity, so there is no field for either
   - `GET /manifests/{id}/crew` — Who is travelling with its vehicle. A **read**: crewing happens once, on the truck-list entry
-  - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo assignment
+  - `GET|PUT|DELETE /manifests/{id}/boxes/{boxId}` — Cargo is read through the vehicle's allocations. `PUT`/`DELETE` here answer **410 Gone**: put boxes on the vehicle with `PUT /convoys/{id}/vehicles/{vin}/boxes/{boxId}`
   - `GET /manifests/{id}/elo` — The French logistics envelope for this vehicle: its `jeton`, `numeroDossier` and `statut`. **Read-only** — an envelope is requested by approving the manifest, never by a `POST` here — and `404` until the Customs Worker has obtained one (`manifests:read`)
   - `GET /manifests/{id}/elo/document` — The barcode PDF a driver presents at the French Smart Border, streamed through the authenticated API rather than as a blob URL (`manifests:read`)
   - `GET /manifests/{id}/ens/filing-sheet` — Everything an **ICS2 Entry Summary Declaration** asks for that Freedom can know, plus a `missing` list of what it cannot. An item is declared under its own commodity code, or else the EU code of its category; a gap names the category to fix. Deliberately carries **no delivery address**: the filer is a Ground Officer and holds it already (`manifests:read`)

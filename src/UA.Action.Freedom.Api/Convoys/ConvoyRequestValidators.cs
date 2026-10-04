@@ -91,3 +91,15 @@ public sealed class RecordInsuranceRequestValidator : AbstractValidator<RecordIn
         RuleFor(r => r.CostGbp).GreaterThanOrEqualTo(0).When(r => r.CostGbp is not null);
     }
 }
+
+public sealed class RecordFerryBookingRequestValidator : AbstractValidator<RecordFerryBookingRequest>
+{
+    public RecordFerryBookingRequestValidator()
+    {
+        RuleFor(r => r.Operator).NotEmpty().MaximumLength(200);
+        RuleFor(r => r.Reference).NotEmpty().MaximumLength(100);
+        RuleFor(r => r.SailingAt).NotEmpty();
+        RuleFor(r => r.TicketDetails).MaximumLength(1000);
+        RuleFor(r => r.CostGbp).GreaterThanOrEqualTo(0).When(r => r.CostGbp is not null);
+    }
+}

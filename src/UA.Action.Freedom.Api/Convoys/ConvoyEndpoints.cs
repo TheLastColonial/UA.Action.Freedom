@@ -252,6 +252,69 @@ public static class ConvoyEndpoints
         .AddEndpointFilter<ValidationFilter<CreateConvoyVehicleManifestRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        // A vehicle's cargo is the boxes allocated to its truck-list entry (ADR 0004). A box is on at
+        // most one vehicle, so PUT on a second vehicle moves it.
+        convoys.MapGet("/{id:int}/vehicles/{vin}/boxes", async (
+            int id,
+            string vin,
+            IQueryHandler<ListVehicleBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var boxes = await handler.HandleAsync(new ListVehicleBoxesQuery(id, vin), cancellationToken);
+            return boxes is null ? Results.NotFound() : Results.Ok(boxes);
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesRead);
+
+        convoys.MapPut("/{id:int}/vehicles/{vin}/boxes/{boxId:int}", async (
+            int id,
+            string vin,
+            int boxId,
+            ICommandHandler<AllocateBoxCommand, AllocateBoxOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new AllocateBoxCommand(id, vin, boxId), cancellationToken);
+
+            return outcome switch
+            {
+                AllocateBoxOutcome.Allocated or AllocateBoxOutcome.Moved or AllocateBoxOutcome.AlreadyAllocated =>
+                    Results.NoContent(),
+                AllocateBoxOutcome.VehicleNotOnConvoy => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+                AllocateBoxOutcome.BoxNotFound => Results.Problem(
+                    detail: "There is no box with that ID.",
+                    statusCode: StatusCodes.Status404NotFound),
+                AllocateBoxOutcome.VehicleWithdrawn => Results.Problem(
+                    detail: $"Vehicle '{vin}' has been withdrawn from this convoy, so it takes no more cargo.",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => LoadFrozen(),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
+
+        convoys.MapDelete("/{id:int}/vehicles/{vin}/boxes/{boxId:int}", async (
+            int id,
+            string vin,
+            int boxId,
+            ICommandHandler<RemoveBoxAllocationCommand, RemoveBoxAllocationOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new RemoveBoxAllocationCommand(id, vin, boxId), cancellationToken);
+
+            return outcome switch
+            {
+                RemoveBoxAllocationOutcome.Removed => Results.NoContent(),
+                RemoveBoxAllocationOutcome.VehicleNotOnConvoy => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+                RemoveBoxAllocationOutcome.NotAllocated => Results.Problem(
+                    detail: "That box is not on this vehicle.",
+                    statusCode: StatusCodes.Status404NotFound),
+                _ => LoadFrozen(),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
+
         convoys.MapGet("/{id:int}/vehicles/{vin}/crew", async (
             int id,
             string vin,
@@ -385,6 +448,57 @@ public static class ConvoyEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        // The vehicle's outbound ferry booking (P1): reference and ticket details, per vehicle.
+        convoys.MapGet("/{id:int}/vehicles/{vin}/ferry", async (
+            int id,
+            string vin,
+            IQueryHandler<GetFerryBookingQuery, FerryBookingReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var booking = await handler.HandleAsync(new GetFerryBookingQuery(id, vin), cancellationToken);
+            return booking is null ? Results.NotFound() : Results.Ok(booking);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+
+        convoys.MapPut("/{id:int}/vehicles/{vin}/ferry", async (
+            int id,
+            string vin,
+            RecordFerryBookingRequest request,
+            ICommandHandler<RecordFerryBookingCommand, RecordFerryBookingOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(request.ToCommand(id, vin), cancellationToken);
+
+            return outcome switch
+            {
+                RecordFerryBookingOutcome.Recorded => Results.NoContent(),
+                RecordFerryBookingOutcome.ConvoyNotFound => Results.NotFound(),
+                RecordFerryBookingOutcome.ConvoyArrived => ConvoyArrived(),
+                _ => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' travelling on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+            };
+        })
+        .AddEndpointFilter<ValidationFilter<RecordFerryBookingRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
+        convoys.MapDelete("/{id:int}/vehicles/{vin}/ferry", async (
+            int id,
+            string vin,
+            ICommandHandler<RemoveFerryBookingCommand, RemoveFerryBookingOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new RemoveFerryBookingCommand(id, vin), cancellationToken);
+
+            return outcome switch
+            {
+                RemoveFerryBookingOutcome.Removed => Results.NoContent(),
+                RemoveFerryBookingOutcome.ConvoyArrived => ConvoyArrived(),
+                _ => Results.NotFound(),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
         convoys.MapGet("/{id:int}/readiness", async (
             int id,
             IQueryHandler<GetConvoyReadinessQuery, ConvoyReadinessReadModel?> handler,
@@ -441,6 +555,10 @@ public static class ConvoyEndpoints
 
         return app;
     }
+
+    private static IResult LoadFrozen() => Results.Problem(
+        detail: "A Goods Movement Reference has been created for this vehicle's manifest, so its load can no longer change.",
+        statusCode: StatusCodes.Status409Conflict);
 
     private static IResult ConvoyArrived() => Results.Problem(
         detail: "This convoy has arrived. Its crew and insurance are a record of the journey and can no longer change.",

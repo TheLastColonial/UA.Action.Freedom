@@ -135,3 +135,27 @@ export const convoyReadinessReadModelSchema = z.object({
   vehicles: z.array(vehicleReadinessReadModelSchema),
 });
 export type ConvoyReadinessReadModel = z.infer<typeof convoyReadinessReadModelSchema>;
+
+// src/UA.Action.Freedom.Application/Convoys/FerryBookingUseCases.cs — FerryBookingReadModel. A
+// vehicle's outbound crossing (P1); there is no return leg, because vehicles are handed over.
+export const ferryBookingReadModelSchema = z.object({
+  convoyId: z.number().int(),
+  vin: z.string(),
+  operator: z.string(),
+  reference: z.string(),
+  sailingAt: z.string(),
+  ticketDetails: z.string().nullable(),
+  costGbp: z.number().nullable(),
+  lastChangedByName: z.string().nullable(),
+  lastChangedAt: z.string().nullable(),
+});
+export type FerryBookingReadModel = z.infer<typeof ferryBookingReadModelSchema>;
+
+// Body of PUT /convoys/{id}/vehicles/{vin}/ferry — RecordFerryBookingRequest.
+export interface RecordFerryBookingRequest {
+  operator: string;
+  reference: string;
+  sailingAt: string;
+  ticketDetails?: string;
+  costGbp?: number;
+}

@@ -98,10 +98,10 @@ public sealed record AssignCrewRequest(CrewRole? Role = null);
 /// document reference and its contents are here.
 /// </summary>
 public sealed record CreateConvoyVehicleManifestRequest(
-    string Id, string? DeliveryNotes = null, bool FerryBookingComplete = false)
+    string Id, string? DeliveryNotes = null)
 {
     public CreateManifestCommand ToCommand(int convoyId, string vin) =>
-        new(Id, convoyId, vin, DeliveryNotes, FerryBookingComplete);
+        new(Id, convoyId, vin, DeliveryNotes);
 }
 
 /// <summary>
@@ -118,4 +118,19 @@ public sealed record RecordInsuranceRequest(
     public RecordInsuranceCommand ToCommand(int convoyId, string vin, Guid recordedBy) =>
         new(new VehicleInsuranceRecord(
             convoyId, vin, Insurer, PolicyNumber, CoverStart.Date, CoverEnd.Date, CostGbp, recordedBy));
+}
+
+/// <summary>
+/// Body of <c>PUT /convoys/{id}/vehicles/{vin}/ferry</c>: the vehicle's outbound crossing, which is
+/// the only one there is to book.
+/// </summary>
+public sealed record RecordFerryBookingRequest(
+    string Operator,
+    string Reference,
+    DateTime SailingAt,
+    string? TicketDetails = null,
+    decimal? CostGbp = null)
+{
+    public RecordFerryBookingCommand ToCommand(int convoyId, string vin) =>
+        new(new FerryBookingRecord(convoyId, vin, Operator, Reference, SailingAt, TicketDetails, CostGbp));
 }

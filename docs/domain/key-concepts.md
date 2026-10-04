@@ -376,11 +376,14 @@ place; the Administrator can see which boxes and live convoys it touches before 
 **The central document of the system**, and the document *pack* for one entry on a convoy's
 [Truck List](#truck-list): one vehicle, on one convoy. A manifest carries:
 
-- the [Boxes](#box) making up the cargo,
 - the border weight below,
 - its GMR and ELO paperwork,
-- the ferry booking status,
 - and free-text delivery notes.
+
+Its **cargo** and its **ferry booking** are no longer on the manifest. Both belong to the same truck-list entry: the cargo
+is the [Boxes](#box) allocated to the entry (a box is on at most one vehicle, so allocating it to a second moves it), and
+the ferry booking is that vehicle's outbound crossing, with a reference and ticket details. The manifest reads the cargo
+through the allocation.
 
 It is opened against that truck-list entry (`POST /convoys/{id}/vehicles/{vin}/manifest`) rather than created from
 nothing, and the pair is a composite foreign key: a manifest cannot name a truck that is not on the convoy, and one

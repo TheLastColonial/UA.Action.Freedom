@@ -137,4 +137,14 @@ test('@smoke a convoy is planned to readiness: passed vehicle, a driver, a passe
 
   await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.getByRole('heading', { name: 'Ready to travel' })).toBeVisible();
+
+  // Each vehicle has its own outbound ferry booking, made on the truck-list entry.
+  await page.getByRole('tab', { name: 'Cargo and ferry' }).click();
+  await expect(page.getByText('Ferry not booked')).toBeVisible();
+  const ferry = page.getByRole('form', { name: 'Ferry for E2E 002' });
+  await ferry.getByLabel('Ferry operator').fill('P&O Ferries');
+  await ferry.getByLabel('Booking reference').fill(`E2E-${stamp}`);
+  await ferry.getByLabel('Sailing').fill('2026-07-02T07:30');
+  await ferry.getByRole('button', { name: 'Book ferry' }).click();
+  await expect(page.getByText(/Booked with P&O Ferries/)).toBeVisible();
 });

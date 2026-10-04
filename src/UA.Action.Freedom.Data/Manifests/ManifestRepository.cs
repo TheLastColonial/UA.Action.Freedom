@@ -6,8 +6,8 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Data.Manifests;
 
 /// <summary>
-/// Dapper-backed <see cref="IManifestRepository"/> over <c>dbo.Manifest</c> and
-/// <c>dbo.ManifestBox</c>.
+/// Dapper-backed <see cref="IManifestRepository"/> over <c>dbo.Manifest</c>, and the cargo it reads through
+/// <c>dbo.ConvoyVehicleBoxAllocation</c>.
 /// </summary>
 /// <remarks>
 /// There is no driver-team table any more: crew is read from <c>dbo.ConvoyVehicleCrew</c> through
@@ -16,7 +16,7 @@ namespace UA.Action.Freedom.Data.Manifests;
 public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IManifestRepository
 {
     private static readonly string Columns =
-        $"m.Id, m.ConvoyId, m.Vin, m.Status, m.DeliveryNotes, m.FerryBookingComplete, m.GmrSubmittedAt, {ChangeStamp.ReadColumns("m")}";
+        $"m.Id, m.ConvoyId, m.Vin, m.Status, m.DeliveryNotes, m.GmrSubmittedAt, {ChangeStamp.ReadColumns("m")}";
 
     private static readonly string From = $"dbo.Manifest AS m {ChangeStamp.ReadJoin("m")}";
 
@@ -76,9 +76,9 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status, DeliveryNotes, FerryBookingComplete, LastChangedBy, LastChangedAt)
+            INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status, DeliveryNotes, LastChangedBy, LastChangedAt)
             VALUES (CAST(@Id AS varchar(32)), @ConvoyId, CAST(@Vin AS varchar(32)),
-                    @Status, @DeliveryNotes, @FerryBookingComplete, @changedBy, SYSUTCDATETIME())
+                    @Status, @DeliveryNotes, @changedBy, SYSUTCDATETIME())
             """,
             attribution.With(manifest),
             cancellationToken: cancellationToken));
@@ -96,7 +96,6 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
             """
             UPDATE dbo.Manifest SET
                 DeliveryNotes = @DeliveryNotes,
-                FerryBookingComplete = @FerryBookingComplete,
                 UpdatedAt = SYSUTCDATETIME(),
                 LastChangedBy = @changedBy,
                 LastChangedAt = SYSUTCDATETIME()
@@ -164,64 +163,6 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
             """,
             attribution.With(new { id = SqlKey.Of(id), from = (int)from, confirmed = (int)ManifestStatus.Confirmed }),
             cancellationToken: cancellationToken));
-    }
-
-    public async Task<IReadOnlyList<ManifestBoxReadModel>> ListBoxesAsync(
-        string id, CancellationToken cancellationToken)
-    {
-        await using var connection = connectionFactory.Create();
-
-        // The box's own weight and validation state come along, because a manifest weight built
-        // from anything else would be a number nobody had confirmed.
-        var rows = await connection.QueryAsync<ManifestBoxReadModel>(new CommandDefinition(
-            """
-            SELECT b.Id AS BoxId,
-                   b.WeightKg,
-                   CAST(CASE WHEN b.ValidatedAt IS NULL THEN 0 ELSE 1 END AS bit) AS Validated,
-                   b.WidthCm,
-                   b.DepthCm,
-                   b.HeightCm
-            FROM dbo.ManifestBox AS mb
-            INNER JOIN dbo.Box AS b ON b.Id = mb.BoxId
-            WHERE mb.ManifestId = @id
-            ORDER BY b.Id
-            """,
-            new { id = SqlKey.Of(id) },
-            cancellationToken: cancellationToken));
-
-        return rows.ToList();
-    }
-
-    public async Task<bool> AddBoxAsync(string id, int boxId, CancellationToken cancellationToken)
-    {
-        await using var connection = connectionFactory.Create();
-
-        // A box travels on at most one manifest, so this moves it rather than duplicating it.
-        // The same box counted on two manifests would be declared twice and arrive once.
-        var affected = await connection.ExecuteAsync(new CommandDefinition(
-            """
-            UPDATE dbo.ManifestBox SET ManifestId = @id WHERE BoxId = @boxId;
-
-            IF @@ROWCOUNT = 0 AND EXISTS (SELECT 1 FROM dbo.Box WHERE Id = @boxId)
-                INSERT INTO dbo.ManifestBox (BoxId, ManifestId) VALUES (@boxId, @id);
-            """,
-            new { id = SqlKey.Of(id), boxId },
-            cancellationToken: cancellationToken));
-
-        return affected > 0;
-    }
-
-    public async Task<bool> RemoveBoxAsync(string id, int boxId, CancellationToken cancellationToken)
-    {
-        await using var connection = connectionFactory.Create();
-
-        // Scoped to this manifest: taking a box off one it was never on is a caller mistake.
-        var affected = await connection.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM dbo.ManifestBox WHERE BoxId = @boxId AND ManifestId = @id",
-            new { id = SqlKey.Of(id), boxId },
-            cancellationToken: cancellationToken));
-
-        return affected > 0;
     }
 
     public async Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken)
@@ -292,10 +233,11 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
                    (SELECT COUNT(1) FROM dbo.BoxItem AS i WHERE i.BoxId = b.Id) AS ItemCount,
                    r.Organisation                                AS ReceiverOrganisation,
                    r.Region                                      AS ReceiverRegion
-            FROM dbo.ManifestBox AS mb
+            FROM dbo.Manifest AS m
+            INNER JOIN dbo.ConvoyVehicleBoxAllocation AS mb ON mb.ConvoyId = m.ConvoyId AND mb.Vin = m.Vin
             INNER JOIN dbo.Box AS b ON b.Id = mb.BoxId
             LEFT JOIN dbo.Receiver AS r ON r.ReceiverRef = b.ReceiverRef
-            WHERE mb.ManifestId = @id
+            WHERE m.Id = @id
             ORDER BY b.Id
             """,
             new { id = SqlKey.Of(id) },
@@ -333,13 +275,14 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
                    i.Description    AS ItemDescription,
                    COALESCE(i.CommodityCode, eu.Code) AS CommodityCode,
                    c.NameEn         AS CategoryName
-            FROM dbo.ManifestBox AS mb
+            FROM dbo.Manifest AS m
+            INNER JOIN dbo.ConvoyVehicleBoxAllocation AS mb ON mb.ConvoyId = m.ConvoyId AND mb.Vin = m.Vin
             INNER JOIN dbo.Box AS b ON b.Id = mb.BoxId
             INNER JOIN dbo.BoxItem AS i ON i.BoxId = b.Id
             INNER JOIN dbo.ItemCategory AS c ON c.Id = i.CategoryId
             LEFT JOIN dbo.CategoryCustomsCode AS eu ON eu.CategoryId = c.Id AND eu.Authority = 1
             LEFT JOIN dbo.Receiver AS r ON r.ReceiverRef = b.ReceiverRef
-            WHERE mb.ManifestId = @id
+            WHERE m.Id = @id
             ORDER BY b.Id, i.Description, i.Id
             """,
             new { id = SqlKey.Of(id) },

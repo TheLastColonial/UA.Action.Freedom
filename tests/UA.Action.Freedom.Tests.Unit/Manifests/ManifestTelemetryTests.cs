@@ -41,7 +41,7 @@ public sealed class ManifestTelemetryTests : IDisposable
     }
 
     private static ManifestReadModel AManifest(ManifestStatus status) => new(
-        Id, 42, "WVWZZZ1JZXW000001", status, null, FerryBookingComplete: false, GmrSubmittedAt: null);
+        Id, 42, "WVWZZZ1JZXW000001", status, null, GmrSubmittedAt: null);
 
     /// <summary>One substitute for both convoy ports — see ManifestTransitionHandlerTests.</summary>
     private static IConvoyRepository AConvoy()

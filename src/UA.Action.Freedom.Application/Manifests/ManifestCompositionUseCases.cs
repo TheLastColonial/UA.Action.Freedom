@@ -31,98 +31,41 @@ public sealed class ListManifestCrewHandler(IManifestRepository repository, ICon
     }
 }
 
-/// <summary>Put a box on the manifest.</summary>
-public sealed record AddManifestBoxCommand(string Id, int BoxId);
-
-public enum ManifestBoxOutcome
-{
-    Changed,
-    ManifestNotFound,
-    BoxNotFound,
-    Frozen
-}
-
-public sealed class AddManifestBoxHandler(IManifestRepository repository)
-    : ICommandHandler<AddManifestBoxCommand, ManifestBoxOutcome>
-{
-    public async Task<ManifestBoxOutcome> HandleAsync(
-        AddManifestBoxCommand command, CancellationToken cancellationToken)
-    {
-        var manifest = await repository.GetByIdAsync(command.Id, cancellationToken);
-
-        if (manifest is null)
-        {
-            return ManifestBoxOutcome.ManifestNotFound;
-        }
-
-        // Cargo is what the GMR describes, so it is the last thing that may change afterwards.
-        if (manifest.Frozen)
-        {
-            return ManifestBoxOutcome.Frozen;
-        }
-
-        return await repository.AddBoxAsync(command.Id, command.BoxId, cancellationToken)
-            ? ManifestBoxOutcome.Changed
-            : ManifestBoxOutcome.BoxNotFound;
-    }
-}
-
-/// <summary>Take a box off the manifest.</summary>
-public sealed record RemoveManifestBoxCommand(string Id, int BoxId);
-
-public sealed class RemoveManifestBoxHandler(IManifestRepository repository)
-    : ICommandHandler<RemoveManifestBoxCommand, ManifestBoxOutcome>
-{
-    public async Task<ManifestBoxOutcome> HandleAsync(
-        RemoveManifestBoxCommand command, CancellationToken cancellationToken)
-    {
-        var manifest = await repository.GetByIdAsync(command.Id, cancellationToken);
-
-        if (manifest is null)
-        {
-            return ManifestBoxOutcome.ManifestNotFound;
-        }
-
-        if (manifest.Frozen)
-        {
-            return ManifestBoxOutcome.Frozen;
-        }
-
-        return await repository.RemoveBoxAsync(command.Id, command.BoxId, cancellationToken)
-            ? ManifestBoxOutcome.Changed
-            : ManifestBoxOutcome.BoxNotFound;
-    }
-}
-
 /// <summary>The cargo on a manifest, or <c>null</c> if there is no such manifest.</summary>
 public sealed record ListManifestBoxesQuery(string Id);
 
-public sealed class ListManifestBoxesHandler(IManifestRepository repository)
+public sealed class ListManifestBoxesHandler(IManifestRepository repository, IConvoyVehicleRepository truckList)
     : IQueryHandler<ListManifestBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>
 {
     public async Task<IReadOnlyList<ManifestBoxReadModel>?> HandleAsync(
         ListManifestBoxesQuery query, CancellationToken cancellationToken)
-        => await repository.ExistsAsync(query.Id, cancellationToken)
-            ? await repository.ListBoxesAsync(query.Id, cancellationToken)
-            : null;
+    {
+        var manifest = await repository.GetByIdAsync(query.Id, cancellationToken);
+
+        return manifest is null
+            ? null
+            : await truckList.ListBoxesAsync(manifest.ConvoyId, manifest.Vin, cancellationToken) ?? [];
+    }
 }
 
 /// <summary>The total weight for a border check, or <c>null</c> if there is no such manifest.</summary>
 public sealed record GetManifestWeightQuery(string Id);
 
-public sealed class GetManifestWeightHandler(IManifestRepository repository)
+public sealed class GetManifestWeightHandler(IManifestRepository repository, IConvoyVehicleRepository truckList)
     : IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>
 {
     public async Task<ManifestWeightReadModel?> HandleAsync(
         GetManifestWeightQuery query, CancellationToken cancellationToken)
     {
-        if (!await repository.ExistsAsync(query.Id, cancellationToken))
+        var manifest = await repository.GetByIdAsync(query.Id, cancellationToken);
+
+        if (manifest is null)
         {
             return null;
         }
 
         var vehicleKg = await repository.GetVehicleWeightKgAsync(query.Id, cancellationToken);
-        var boxes = await repository.ListBoxesAsync(query.Id, cancellationToken);
+        var boxes = await truckList.ListBoxesAsync(manifest.ConvoyId, manifest.Vin, cancellationToken) ?? [];
         var capacity = await repository.GetVehicleCargoCapacityAsync(query.Id, cancellationToken);
 
         var cargoKg = boxes.Sum(box => box.WeightKg);
@@ -177,4 +120,15 @@ public sealed class GetManifestWeightHandler(IManifestRepository repository)
             && boxDimensions[1] <= cargoDimensions[1]
             && boxDimensions[2] <= cargoDimensions[2];
     }
+}
+
+public static class ManifestLoadExtensions
+{
+    /// <summary>
+    /// Whether the vehicle's manifest has had its Goods Movement Reference created, which still
+    /// freezes the load until plan 15 moves sign-off off that stamp.
+    /// </summary>
+    public static async Task<bool> IsLoadFrozenAsync(
+        this IManifestRepository manifests, int convoyId, string vin, CancellationToken cancellationToken) =>
+        await manifests.GetForVehicleAsync(convoyId, vin, cancellationToken) is { Frozen: true };
 }

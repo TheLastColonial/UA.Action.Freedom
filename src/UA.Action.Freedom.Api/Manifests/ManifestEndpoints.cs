@@ -110,20 +110,12 @@ public static class ManifestEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
 
-        manifests.MapPut("/{id}/boxes/{boxId:int}", async (
-            string id,
-            int boxId,
-            ICommandHandler<AddManifestBoxCommand, ManifestBoxOutcome> handler,
-            CancellationToken cancellationToken) =>
-            BoxResult(await handler.HandleAsync(new AddManifestBoxCommand(id, boxId), cancellationToken)))
+        // Cargo moved to the truck-list entry (ADR 0004, plan 07). These stay as a signpost until
+        // plan 15 removes them, so a stale client is told where to go rather than getting a 404.
+        manifests.MapPut("/{id}/boxes/{boxId:int}", (string id, int boxId) => BoxesMoved())
         .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
 
-        manifests.MapDelete("/{id}/boxes/{boxId:int}", async (
-            string id,
-            int boxId,
-            ICommandHandler<RemoveManifestBoxCommand, ManifestBoxOutcome> handler,
-            CancellationToken cancellationToken) =>
-            BoxResult(await handler.HandleAsync(new RemoveManifestBoxCommand(id, boxId), cancellationToken)))
+        manifests.MapDelete("/{id}/boxes/{boxId:int}", (string id, int boxId) => BoxesMoved())
         .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
 
         manifests.MapGet("/{id}/weight", async (
@@ -297,12 +289,10 @@ public static class ManifestEndpoints
             statusCode: StatusCodes.Status409Conflict),
     };
 
-    private static IResult BoxResult(ManifestBoxOutcome outcome) => outcome switch
-    {
-        ManifestBoxOutcome.Changed => Results.NoContent(),
-        ManifestBoxOutcome.ManifestNotFound or ManifestBoxOutcome.BoxNotFound => Results.NotFound(),
-        _ => Frozen(),
-    };
+    private static IResult BoxesMoved() => Results.Problem(
+        detail: "A vehicle's cargo is no longer kept on its manifest. Use PUT or DELETE "
+                + "/convoys/{id}/vehicles/{vin}/boxes/{boxId} on the truck-list entry instead.",
+        statusCode: StatusCodes.Status410Gone);
 
     private static IResult Frozen() => Results.Problem(
         detail: "A Goods Movement Reference has been created for this manifest, so it can no longer be changed.",

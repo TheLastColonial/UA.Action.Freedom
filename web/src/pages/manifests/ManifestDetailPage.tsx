@@ -92,8 +92,6 @@ export function ManifestDetailPage(): JSX.Element {
               <dd>{manifest.vin}</dd>
               <dt>Convoy</dt>
               <dd>{manifest.convoyId}</dd>
-              <dt>Ferry booking</dt>
-              <dd>{manifest.ferryBookingComplete ? 'Complete' : 'Outstanding'}</dd>
               <dt>Delivery notes</dt>
               <dd>{manifest.deliveryNotes ?? '—'}</dd>
             </dl>
@@ -148,7 +146,11 @@ export function ManifestDetailPage(): JSX.Element {
       ) : null}
       {tab === 'cargo' ? (
         <TabPanel id="cargo">
-          <ManifestBoxesPanel manifestId={manifest.id} frozen={manifest.frozen} />
+          <ManifestBoxesPanel
+            manifestId={manifest.id}
+            convoyId={manifest.convoyId}
+            vin={manifest.vin}
+          />
         </TabPanel>
       ) : null}
       {tab === 'weight' ? (

@@ -146,10 +146,9 @@ public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory, I
             FROM (
                 SELECT cv.ConvoyId FROM dbo.ConvoyVehicle AS cv WHERE cv.HandoverReceiverRef = @receiverRef
                 UNION
-                SELECT m.ConvoyId
+                SELECT a.ConvoyId
                 FROM dbo.Box AS b
-                INNER JOIN dbo.ManifestBox AS mb ON mb.BoxId = b.Id
-                INNER JOIN dbo.Manifest AS m ON m.Id = mb.ManifestId
+                INNER JOIN dbo.ConvoyVehicleBoxAllocation AS a ON a.BoxId = b.Id
                 WHERE b.ReceiverRef = @receiverRef
             ) AS touched
             INNER JOIN dbo.Convoy AS c ON c.Id = touched.ConvoyId

@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.Data.SqlClient;
 using UA.Action.Freedom.Application.Manifests;
+using UA.Action.Freedom.Data.Convoys;
 using UA.Action.Freedom.Data.Manifests;
 using UA.Action.Freedom.Domain;
 using static UA.Action.Freedom.Tests.Integration.SqlTestDatabase;
@@ -31,10 +32,14 @@ public class ManifestRepositoryTests
     private static async Task<ManifestRepository> ConnectOrSkipAsync(CancellationToken cancellationToken)
     {
         await SkipUnlessReachableAsync(
-            "SELECT COUNT(1) FROM dbo.Manifest; SELECT COUNT(1) FROM dbo.ManifestBox; SELECT COUNT(1) FROM dbo.ConvoyVehicle;",
+            "SELECT COUNT(1) FROM dbo.Manifest; SELECT COUNT(1) FROM dbo.ConvoyVehicleBoxAllocation; SELECT COUNT(1) FROM dbo.ConvoyVehicle;",
             cancellationToken);
         return new ManifestRepository(ConnectionFactory(), Unattributed);
     }
+
+    private static Task AllocateAsync(TruckListEntry entry, int boxId) => ExecuteAsync(
+        "INSERT INTO dbo.ConvoyVehicleBoxAllocation (BoxId, ConvoyId, Vin) VALUES (@box, @convoy, @vin)",
+        ("@box", boxId), ("@convoy", entry.ConvoyId), ("@vin", entry.Vin));
 
     private static string NewId() => "IT" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
 
@@ -45,7 +50,7 @@ public class ManifestRepositoryTests
 
     private static ManifestReadModel AManifest(string id, TruckListEntry on) => new(
         id, on.ConvoyId, on.Vin, ManifestStatus.Created,
-        DeliveryNotes: "Integration test", FerryBookingComplete: false, GmrSubmittedAt: null);
+        DeliveryNotes: "Integration test", GmrSubmittedAt: null);
 
     /// <summary>
     /// A convoy with one vehicle on its truck list. The capacity columns are optional — nothing
@@ -258,41 +263,6 @@ public class ManifestRepositoryTests
     }
 
     [Fact]
-    public async Task A_box_travels_on_at_most_one_manifest()
-    {
-        // Counted twice at a border and arriving once is the failure this prevents.
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var repository = await ConnectOrSkipAsync(cancellationToken);
-        var firstEntry = await ATruckListEntryAsync();
-        var secondEntry = await ATruckListEntryAsync();
-        var first = NewId();
-        var second = NewId();
-        var boxId = await AddBoxAsync(30, validated: false, validatedBy: null);
-
-        try
-        {
-            await repository.AddAsync(AManifest(first, firstEntry), cancellationToken);
-            await repository.AddAsync(AManifest(second, secondEntry), cancellationToken);
-
-            (await repository.AddBoxAsync(first, boxId, cancellationToken)).Should().BeTrue();
-            (await repository.AddBoxAsync(second, boxId, cancellationToken)).Should().BeTrue();
-
-            (await repository.ListBoxesAsync(first, cancellationToken)).Should().BeEmpty();
-            (await repository.ListBoxesAsync(second, cancellationToken)).Should().ContainSingle();
-
-            (await repository.AddBoxAsync(first, 999_999, cancellationToken)).Should().BeFalse();
-        }
-        finally
-        {
-            await RemoveManifestAsync(first);
-            await RemoveManifestAsync(second);
-            await RemoveBoxAsync(boxId);
-            await RemoveTruckListEntryAsync(firstEntry);
-            await RemoveTruckListEntryAsync(secondEntry);
-        }
-    }
-
-    [Fact]
     public async Task Cargo_reports_the_weight_and_validation_state_of_each_box()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -306,10 +276,11 @@ public class ManifestRepositoryTests
         try
         {
             await repository.AddAsync(AManifest(id, entry), cancellationToken);
-            await repository.AddBoxAsync(id, weighed, cancellationToken);
-            await repository.AddBoxAsync(id, unweighed, cancellationToken);
+            await AllocateAsync(entry, weighed);
+            await AllocateAsync(entry, unweighed);
 
-            var cargo = await repository.ListBoxesAsync(id, cancellationToken);
+            var cargo = (await new ConvoyVehicleRepository(ConnectionFactory(), Unattributed)
+                .ListBoxesAsync(entry.ConvoyId, entry.Vin, cancellationToken))!;
 
             cargo.Should().HaveCount(2);
             cargo.Single(box => box.BoxId == weighed).Validated.Should().BeTrue();
@@ -387,7 +358,7 @@ public class ManifestRepositoryTests
         try
         {
             await repository.AddAsync(AManifest(id, entry), cancellationToken);
-            await repository.AddBoxAsync(id, boxId, cancellationToken);
+            await AllocateAsync(entry, boxId);
 
             (await repository.DeleteAsync(id, cancellationToken)).Should().BeTrue();
 
@@ -426,7 +397,7 @@ public class ManifestRepositoryTests
         try
         {
             await repository.AddAsync(AManifest(id, entry), cancellationToken);
-            await repository.AddBoxAsync(id, boxId, cancellationToken);
+            await AllocateAsync(entry, boxId);
             await AddItemAsync(boxId, mapped, "A inherits", commodityCode: null);
             await AddItemAsync(boxId, mapped, "B overrides", commodityCode: "99190000");
             await AddItemAsync(boxId, unmapped, "C has nothing", commodityCode: null);
@@ -475,8 +446,8 @@ public class ManifestRepositoryTests
         try
         {
             await repository.AddAsync(AManifest(id, entry), cancellationToken);
-            await repository.AddBoxAsync(id, packed, cancellationToken);
-            await repository.AddBoxAsync(id, unpacked, cancellationToken);
+            await AllocateAsync(entry, packed);
+            await AllocateAsync(entry, unpacked);
             await AddItemAsync(packed, category, "Blankets", "99190000");
             await AddItemAsync(packed, category, "Sleeping bags", "99190000");
             await AddItemAsync(unpacked, category, "Assorted donations", commodityCode: null);

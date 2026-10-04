@@ -3,6 +3,7 @@ using Dapper;
 using Microsoft.Data.SqlClient;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Data.Convoys;
@@ -437,4 +438,215 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
 
         return affected > 0;
     }
+
+    public async Task<FerryBookingReadModel?> GetFerryBookingAsync(
+        int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<FerryBookingReadModel>(new CommandDefinition(
+            $"""
+            SELECT f.ConvoyId, f.Vin, f.Operator, f.Reference, f.SailingAt, f.TicketDetails, f.CostGbp,
+                   {ChangeStamp.ReadColumns("f")}
+            FROM dbo.ConvoyVehicleFerryBooking AS f {ChangeStamp.ReadJoin("f")}
+            WHERE f.ConvoyId = @convoyId AND f.Vin = @vin
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<bool> RecordFerryBookingAsync(FerryBookingRecord booking, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // Replace rather than accumulate, and only while the vehicle is travelling with the
+        // convoy: the MERGE source is empty for a withdrawn or unlisted vehicle, so nothing is written.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            MERGE dbo.ConvoyVehicleFerryBooking WITH (HOLDLOCK) AS target
+            USING (SELECT @ConvoyId AS ConvoyId, CAST(@Vin AS varchar(32)) AS Vin
+                   WHERE EXISTS (SELECT 1 FROM dbo.ConvoyVehicle
+                                 WHERE ConvoyId = @ConvoyId
+                                   AND Vin = CAST(@Vin AS varchar(32))
+                                   AND WithdrawnAt IS NULL)) AS source
+            ON target.ConvoyId = source.ConvoyId AND target.Vin = source.Vin
+            WHEN MATCHED THEN UPDATE SET
+                Operator = @Operator, Reference = @Reference, SailingAt = @SailingAt,
+                TicketDetails = @TicketDetails, CostGbp = @CostGbp,
+                LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN INSERT
+                (ConvoyId, Vin, Operator, Reference, SailingAt, TicketDetails, CostGbp, LastChangedBy, LastChangedAt)
+                VALUES (@ConvoyId, @Vin, @Operator, @Reference, @SailingAt, @TicketDetails, @CostGbp,
+                        @changedBy, SYSUTCDATETIME());
+            """,
+            attribution.With(booking),
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<bool> RemoveFerryBookingAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM dbo.ConvoyVehicleFerryBooking WHERE ConvoyId = @convoyId AND Vin = @vin",
+            new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<IReadOnlyList<ManifestBoxReadModel>?> ListBoxesAsync(
+        int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var onThisConvoy = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            """
+            SELECT CAST(CASE WHEN COUNT(1) > 0 THEN 1 ELSE 0 END AS bit)
+            FROM dbo.ConvoyVehicle WHERE ConvoyId = @convoyId AND Vin = @vin
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+
+        if (!onThisConvoy)
+        {
+            return null;
+        }
+
+        // The box's own weight and validation state come along, because a weight built from
+        // anything else would be a number nobody had confirmed.
+        var rows = await connection.QueryAsync<ManifestBoxReadModel>(new CommandDefinition(
+            """
+            SELECT b.Id AS BoxId,
+                   b.WeightKg,
+                   CAST(CASE WHEN b.ValidatedAt IS NULL THEN 0 ELSE 1 END AS bit) AS Validated,
+                   b.WidthCm,
+                   b.DepthCm,
+                   b.HeightCm
+            FROM dbo.ConvoyVehicleBoxAllocation AS a
+            INNER JOIN dbo.Box AS b ON b.Id = a.BoxId
+            WHERE a.ConvoyId = @convoyId AND a.Vin = @vin
+            ORDER BY b.Id
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+
+        return rows.ToList();
+    }
+
+    public async Task<BoxAllocation?> GetBoxAllocationAsync(int boxId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var row = await connection.QuerySingleOrDefaultAsync<AllocationRow>(new CommandDefinition(
+            "SELECT ConvoyId, Vin, AllocatedAt FROM dbo.ConvoyVehicleBoxAllocation WHERE BoxId = @boxId",
+            new { boxId },
+            cancellationToken: cancellationToken));
+
+        return row is null ? null : new BoxAllocation(new ConvoyId(row.ConvoyId), row.Vin, boxId, row.AllocatedAt);
+    }
+
+    public async Task<AllocateBoxResult> AllocateBoxAsync(
+        int convoyId, string vin, int boxId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // One transaction because the entry's state and the box's allocation are read together:
+        // UPDLOCK on the entry makes a concurrent withdrawal wait, and HOLDLOCK on the allocation
+        // makes two dispatchers racing for the same unallocated box take turns, so the primary key
+        // is the backstop and not the mechanism.
+        var entry = await connection.QuerySingleOrDefaultAsync<EntryState>(new CommandDefinition(
+            """
+            SELECT CAST(CASE WHEN WithdrawnAt IS NULL THEN 0 ELSE 1 END AS bit) AS Withdrawn
+            FROM dbo.ConvoyVehicle WITH (UPDLOCK)
+            WHERE ConvoyId = @convoyId AND Vin = @vin
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (entry is null)
+        {
+            return AllocateBoxResult.VehicleNotOnConvoy;
+        }
+
+        if (entry.Withdrawn)
+        {
+            return AllocateBoxResult.VehicleWithdrawn;
+        }
+
+        var boxExists = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "SELECT CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.Box WHERE Id = @boxId) THEN 1 ELSE 0 END AS bit)",
+            new { boxId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (!boxExists)
+        {
+            return AllocateBoxResult.BoxNotFound;
+        }
+
+        var current = await connection.QuerySingleOrDefaultAsync<AllocationRow>(new CommandDefinition(
+            """
+            SELECT ConvoyId, Vin, AllocatedAt
+            FROM dbo.ConvoyVehicleBoxAllocation WITH (UPDLOCK, HOLDLOCK)
+            WHERE BoxId = @boxId
+            """,
+            new { boxId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (current is not null
+            && current.ConvoyId == convoyId
+            && string.Equals(current.Vin, vin, StringComparison.OrdinalIgnoreCase))
+        {
+            return AllocateBoxResult.AlreadyAllocated;
+        }
+
+        var sql = current is null
+            ? """
+              INSERT INTO dbo.ConvoyVehicleBoxAllocation (BoxId, ConvoyId, Vin, LastChangedBy, LastChangedAt)
+              VALUES (@boxId, @convoyId, @vin, @changedBy, SYSUTCDATETIME())
+              """
+            : """
+              UPDATE dbo.ConvoyVehicleBoxAllocation SET
+                  ConvoyId = @convoyId,
+                  Vin = @vin,
+                  AllocatedAt = SYSUTCDATETIME(),
+                  LastChangedBy = @changedBy,
+                  LastChangedAt = SYSUTCDATETIME()
+              WHERE BoxId = @boxId
+              """;
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            attribution.With(new { convoyId, vin = SqlKey.Of(vin), boxId }),
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return current is null ? AllocateBoxResult.Allocated : AllocateBoxResult.Moved;
+    }
+
+    public async Task<bool> RemoveBoxAsync(int convoyId, string vin, int boxId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // Scoped to this vehicle: taking a box off one it was never on is a caller mistake.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM dbo.ConvoyVehicleBoxAllocation WHERE BoxId = @boxId AND ConvoyId = @convoyId AND Vin = @vin",
+            new { boxId, convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    private sealed record AllocationRow(int ConvoyId, string Vin, DateTime AllocatedAt);
+
+    private sealed record EntryState(bool Withdrawn);
 }

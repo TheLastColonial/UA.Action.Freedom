@@ -147,7 +147,7 @@ public class LastChangedEndpointTests
     public async Task A_manifest_a_dispatcher_edits_says_who_last_changed_it()
     {
         var manifest = new ManifestReadModel(
-            "MAN-0001", 42, Vin, ManifestStatus.Created, null, FerryBookingComplete: false, GmrSubmittedAt: null);
+            "MAN-0001", 42, Vin, ManifestStatus.Created, null, GmrSubmittedAt: null);
         await using var api = FreedomApi.WithManifests(
             new InMemoryManifestRepository(manifest),
             new InMemoryConvoyRepository(),
@@ -158,7 +158,7 @@ public class LastChangedEndpointTests
 
         await client.PutAsJsonAsync(
             "/manifests/MAN-0001",
-            new { deliveryNotes = "Leave at the gate", ferryBookingComplete = true },
+            new { deliveryNotes = "Leave at the gate" },
             TestContext.Current.CancellationToken);
         var stored = await JsonOf(await client.GetAsync("/manifests/MAN-0001", TestContext.Current.CancellationToken));
 

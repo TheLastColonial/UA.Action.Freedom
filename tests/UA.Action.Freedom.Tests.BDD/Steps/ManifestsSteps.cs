@@ -91,6 +91,40 @@ public sealed class ManifestsSteps(FreedomApiClient api, ScenarioState state)
         state.Pin(VehicleKey, vin);
     }
 
+    /// <summary>
+    /// Cargo is a box allocated to the vehicle's truck-list entry (ADR 0004), so it is put on the
+    /// vehicle on the convoy and not on the manifest.
+    /// </summary>
+    [When("I put the remembered box on the insured vehicle")]
+    public Task WhenIPutTheRememberedBoxOnTheInsuredVehicle() =>
+        api.SendAsync(
+            HttpMethod.Put,
+            $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{state.Pinned(VehicleKey)}/boxes/{state.Pinned("box")}",
+            state.CurrentToken,
+            null);
+
+    [When("I book a ferry for the insured vehicle")]
+    public Task WhenIBookAFerryForTheInsuredVehicle() =>
+        api.SendAsync(
+            HttpMethod.Put,
+            $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{state.Pinned(VehicleKey)}/ferry",
+            state.CurrentToken,
+            """
+            { "operator": "P&O Ferries", "reference": "BDD-FERRY-1", "sailingAt": "2026-09-02T07:30:00Z", "ticketDetails": "Freight, 2 occupants", "costGbp": 310.00 }
+            """);
+
+    [When("I GET the ferry booking of the insured vehicle")]
+    public Task WhenIGetTheFerryBookingOfTheInsuredVehicle() =>
+        api.SendAsync(
+            HttpMethod.Get,
+            $"/convoys/{state.Pinned(ConvoyKey)}/vehicles/{state.Pinned(VehicleKey)}/ferry",
+            state.CurrentToken,
+            null);
+
+    [When("I PUT \"(.*)\" on the remembered manifest")]
+    public Task WhenIPutOnTheRememberedManifest(string suffix) =>
+        api.SendAsync(HttpMethod.Put, ManifestPath(suffix), state.CurrentToken, null);
+
     [When("I POST a manifest for the insured vehicle on the remembered convoy")]
     public Task WhenIPostAManifestForTheInsuredVehicle() => PostManifest();
 
