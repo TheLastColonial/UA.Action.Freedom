@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Declarations;
@@ -18,13 +19,22 @@ public sealed record DeclarationReadModel(
     string? RecordedByName,
     DateTime? RecordedAt,
     string? LastChangedByName,
-    DateTime? LastChangedAt);
+    DateTime? LastChangedAt,
+    [property: JsonIgnore] string? SnapshotJson = null,
+    [property: JsonIgnore] int? SnapshotVersion = null);
 
 public enum RecordReferenceResult
 {
     Recorded,
     VehicleNotOnConvoy,
     AlreadyRecorded,
+}
+
+public enum MarkReadyResult
+{
+    Ready,
+    VehicleNotOnConvoy,
+    NotPreparable,
 }
 
 /// <summary>Persistence port for <c>dbo.Declaration</c>.</summary>
@@ -58,4 +68,20 @@ public interface IDeclarationRepository
     /// withdrawn in one transaction, and the record and its reference are kept. False when none was current.
     /// </summary>
     Task<bool> WithdrawAsync(int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Moves a draft (creating one if none is current) to ready to file and stores the load it was written
+    /// from; a declaration already ready has its snapshot refreshed. Once filed it is no longer preparable.
+    /// </summary>
+    Task<MarkReadyResult> MarkReadyAsync(
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, string snapshotJson, int snapshotVersion,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Stores the load against the current declaration only if it has no snapshot yet: the snapshot is the
+    /// load the declaration was written from, so the first one stands. False when it already had one.
+    /// </summary>
+    Task<bool> StoreSnapshotAsync(
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, string snapshotJson, int snapshotVersion,
+        CancellationToken cancellationToken);
 }

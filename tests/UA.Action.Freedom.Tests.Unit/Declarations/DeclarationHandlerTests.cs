@@ -61,7 +61,7 @@ public class DeclarationHandlerTests
         IManifestRepository? manifests = null,
         SubmissionMode gmr = SubmissionMode.Automatic,
         SubmissionMode elo = SubmissionMode.Automatic) =>
-        new(declarations, manifests ?? AnApprovedManifest(), AConvoy(), queue, new DeclarationSubmissionModes(gmr, elo));
+        new(declarations, manifests ?? AnApprovedManifest(), AConvoy(), queue, new DeclarationSubmissionModes(gmr, elo), Substitute.For<IDeclarationSnapshots>());
 
     // --- record -----------------------------------------------------------------------------------
 
@@ -72,7 +72,7 @@ public class DeclarationHandlerTests
     {
         var repository = ARepositoryWithAnAcceptedEns();
 
-        var outcome = await new RecordDeclarationHandler(repository).HandleAsync(
+        var outcome = await new RecordDeclarationHandler(repository, Substitute.For<IDeclarationSnapshots>()).HandleAsync(
             new RecordDeclarationCommand(42, Vin, kind, "REF-1"), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordDeclarationOutcome.Recorded);
@@ -86,7 +86,7 @@ public class DeclarationHandlerTests
         var receiver = Guid.NewGuid();
         var repository = ARepositoryWithAnAcceptedEns();
 
-        var outcome = await new RecordDeclarationHandler(repository).HandleAsync(
+        var outcome = await new RecordDeclarationHandler(repository, Substitute.For<IDeclarationSnapshots>()).HandleAsync(
             new RecordDeclarationCommand(42, Vin, DeclarationKind.GoodsList, "UA-77", receiver),
             TestContext.Current.CancellationToken);
 
@@ -96,9 +96,52 @@ public class DeclarationHandlerTests
     }
 
     [Fact]
+    public async Task A_reference_recorded_by_hand_stamps_the_load_it_was_filed_against()
+    {
+        var snapshots = Substitute.For<IDeclarationSnapshots>();
+
+        await new RecordDeclarationHandler(ARepositoryWithAnAcceptedEns(), snapshots).HandleAsync(
+            new RecordDeclarationCommand(42, Vin, DeclarationKind.Gmr, "REF-1"), TestContext.Current.CancellationToken);
+
+        await snapshots.Received(1).StampAsync(
+            42, Vin, DeclarationKind.Gmr, null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_reference_that_was_not_recorded_stamps_nothing()
+    {
+        var repository = ARepositoryWithAnAcceptedEns();
+        repository.RecordReferenceAsync(
+                Arg.Any<int>(), Arg.Any<string>(), Arg.Any<DeclarationKind>(), Arg.Any<Guid?>(),
+                Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(RecordReferenceResult.AlreadyRecorded);
+        var snapshots = Substitute.For<IDeclarationSnapshots>();
+
+        await new RecordDeclarationHandler(repository, snapshots).HandleAsync(
+            new RecordDeclarationCommand(42, Vin, DeclarationKind.Gmr, "REF-1"), TestContext.Current.CancellationToken);
+
+        await snapshots.DidNotReceive().StampAsync(
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<DeclarationKind>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_goods_list_is_stamped_against_its_receiver()
+    {
+        var receiver = Guid.NewGuid();
+        var snapshots = Substitute.For<IDeclarationSnapshots>();
+
+        await new RecordDeclarationHandler(ARepositoryWithAnAcceptedEns(), snapshots).HandleAsync(
+            new RecordDeclarationCommand(42, Vin, DeclarationKind.GoodsList, "UA-77", receiver),
+            TestContext.Current.CancellationToken);
+
+        await snapshots.Received(1).StampAsync(
+            42, Vin, DeclarationKind.GoodsList, receiver, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task A_goods_list_needs_its_receiver_and_no_other_kind_takes_one()
     {
-        var handler = new RecordDeclarationHandler(ARepositoryWithAnAcceptedEns());
+        var handler = new RecordDeclarationHandler(ARepositoryWithAnAcceptedEns(), Substitute.For<IDeclarationSnapshots>());
 
         (await handler.HandleAsync(
                 new RecordDeclarationCommand(42, Vin, DeclarationKind.GoodsList, "UA-77"),
@@ -113,7 +156,7 @@ public class DeclarationHandlerTests
     [Fact]
     public async Task The_ens_is_recorded_on_its_own_route_because_it_carries_more_than_a_reference()
     {
-        var outcome = await new RecordDeclarationHandler(ARepositoryWithAnAcceptedEns()).HandleAsync(
+        var outcome = await new RecordDeclarationHandler(ARepositoryWithAnAcceptedEns(), Substitute.For<IDeclarationSnapshots>()).HandleAsync(
             new RecordDeclarationCommand(42, Vin, DeclarationKind.Ens, Mrn), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordDeclarationOutcome.UseEnsRoute);
@@ -125,7 +168,7 @@ public class DeclarationHandlerTests
     {
         var repository = Substitute.For<IDeclarationRepository>();
 
-        var outcome = await new RecordDeclarationHandler(repository).HandleAsync(
+        var outcome = await new RecordDeclarationHandler(repository, Substitute.For<IDeclarationSnapshots>()).HandleAsync(
             new RecordDeclarationCommand(42, Vin, DeclarationKind.Elo, "ELO-1"), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordDeclarationOutcome.EnsNotAccepted);
@@ -142,7 +185,7 @@ public class DeclarationHandlerTests
                 42, Vin, DeclarationKind.Gmr, null, "G-2", Arg.Any<CancellationToken>())
             .Returns(RecordReferenceResult.AlreadyRecorded);
 
-        var outcome = await new RecordDeclarationHandler(repository).HandleAsync(
+        var outcome = await new RecordDeclarationHandler(repository, Substitute.For<IDeclarationSnapshots>()).HandleAsync(
             new RecordDeclarationCommand(42, Vin, DeclarationKind.Gmr, "G-2"), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordDeclarationOutcome.AlreadyRecorded);
@@ -156,7 +199,7 @@ public class DeclarationHandlerTests
                 42, Vin, DeclarationKind.Gmr, null, "G-1", Arg.Any<CancellationToken>())
             .Returns(RecordReferenceResult.VehicleNotOnConvoy);
 
-        var outcome = await new RecordDeclarationHandler(repository).HandleAsync(
+        var outcome = await new RecordDeclarationHandler(repository, Substitute.For<IDeclarationSnapshots>()).HandleAsync(
             new RecordDeclarationCommand(42, Vin, DeclarationKind.Gmr, "G-1"), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(RecordDeclarationOutcome.VehicleNotOnConvoy);

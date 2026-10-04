@@ -13,7 +13,8 @@ public sealed class DeclarationRepository(IDbConnectionFactory connectionFactory
     private static readonly string Select =
         $"""
         SELECT d.Id, d.ConvoyId, d.Vin, d.Kind, d.Status, d.ReceiverRef, d.Reference, d.ReasonCode,
-               recorder.DisplayName AS RecordedByName, d.RecordedAt, {ChangeStamp.ReadColumns("d")}
+               recorder.DisplayName AS RecordedByName, d.RecordedAt, {ChangeStamp.ReadColumns("d")},
+               d.SnapshotJson, d.SnapshotVersion
         FROM dbo.Declaration AS d
         LEFT JOIN dbo.PersonDisplay AS recorder ON recorder.PersonId = d.RecordedBy
         {ChangeStamp.ReadJoin("d")}
@@ -86,6 +87,8 @@ public sealed class DeclarationRepository(IDbConnectionFactory connectionFactory
         var updated = await connection.ExecuteAsync(new CommandDefinition(
             $"""
             UPDATE d SET Status = @target, Reference = @reference, ReasonCode = NULL,
+                SnapshotJson = CASE WHEN d.Status = @refused THEN NULL ELSE d.SnapshotJson END,
+                SnapshotVersion = CASE WHEN d.Status = @refused THEN NULL ELSE d.SnapshotVersion END,
                 RecordedBy = @changedBy, RecordedAt = SYSUTCDATETIME(),
                 LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
             FROM dbo.Declaration AS d
@@ -188,5 +191,93 @@ public sealed class DeclarationRepository(IDbConnectionFactory connectionFactory
 
         await transaction.CommitAsync(cancellationToken);
         return true;
+    }
+
+    public async Task<MarkReadyResult> MarkReadyAsync(
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, string snapshotJson, int snapshotVersion,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var onList = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT COUNT(1) FROM dbo.ConvoyVehicle WITH (UPDLOCK) WHERE ConvoyId = @convoyId AND Vin = @vin",
+            new { convoyId, vin = SqlKey.Of(vin) },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (onList == 0)
+        {
+            return MarkReadyResult.VehicleNotOnConvoy;
+        }
+
+        var scope = attribution.With(Scope(convoyId, vin, kind, receiverRef));
+        scope.Add("draft", (int)DeclarationStatus.Draft);
+        scope.Add("ready", (int)DeclarationStatus.ReadyToFile);
+        scope.Add("snapshotJson", snapshotJson);
+        scope.Add("snapshotVersion", snapshotVersion);
+
+        var updated = await connection.ExecuteAsync(new CommandDefinition(
+            $"""
+            UPDATE d SET Status = @ready, SnapshotJson = @snapshotJson, SnapshotVersion = @snapshotVersion,
+                LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
+            FROM dbo.Declaration AS d
+            WHERE {ScopeWhere} AND d.Status IN (@draft, @ready)
+            """,
+            scope,
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (updated == 0)
+        {
+            var exists = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+                $"SELECT COUNT(1) FROM dbo.Declaration AS d WHERE {ScopeWhere}",
+                scope,
+                transaction,
+                cancellationToken: cancellationToken));
+
+            if (exists > 0)
+            {
+                return MarkReadyResult.NotPreparable;
+            }
+
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO dbo.Declaration
+                    (ConvoyId, Vin, ReceiverRef, Kind, Status, SnapshotJson, SnapshotVersion, LastChangedBy, LastChangedAt)
+                VALUES (@convoyId, @vin, @receiverRef, @kind, @ready, @snapshotJson, @snapshotVersion, @changedBy,
+                        SYSUTCDATETIME())
+                """,
+                scope,
+                transaction,
+                cancellationToken: cancellationToken));
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return MarkReadyResult.Ready;
+    }
+
+    public async Task<bool> StoreSnapshotAsync(
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, string snapshotJson, int snapshotVersion,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var scope = attribution.With(Scope(convoyId, vin, kind, receiverRef));
+        scope.Add("snapshotJson", snapshotJson);
+        scope.Add("snapshotVersion", snapshotVersion);
+
+        var stored = await connection.ExecuteAsync(new CommandDefinition(
+            $"""
+            UPDATE d SET SnapshotJson = @snapshotJson, SnapshotVersion = @snapshotVersion,
+                LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
+            FROM dbo.Declaration AS d
+            WHERE {ScopeWhere} AND d.SnapshotJson IS NULL
+            """,
+            scope,
+            cancellationToken: cancellationToken));
+
+        return stored > 0;
     }
 }

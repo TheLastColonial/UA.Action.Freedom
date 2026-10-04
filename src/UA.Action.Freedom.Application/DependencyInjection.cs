@@ -139,6 +139,9 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetEnsDeclarationQuery, EnsDeclarationReadModel?>, GetEnsDeclarationHandler>();
         services.AddScoped<IQueryHandler<GetVehicleEnsFilingSheetQuery, EnsFilingSheetReadModel?>, GetVehicleEnsFilingSheetHandler>();
         services.AddScoped<ICommandHandler<RequestManifestDocumentCommand, RequestManifestDocumentOutcome>, RequestManifestDocumentHandler>();
+        services.AddScoped<IVehicleLoadReader, VehicleLoadReader>();
+        services.AddScoped<IDeclarationSnapshots, DeclarationSnapshots>();
+        services.AddScoped<ICommandHandler<MarkDeclarationReadyCommand, MarkDeclarationReadyOutcome>, MarkDeclarationReadyHandler>();
         services.AddScoped<IQueryHandler<ListDeclarationsQuery, IReadOnlyList<DeclarationReadModel>?>, ListDeclarationsHandler>();
         services.AddScoped<ICommandHandler<RecordDeclarationCommand, RecordDeclarationOutcome>, RecordDeclarationHandler>();
         services.AddScoped<ICommandHandler<RefuseDeclarationCommand, RefuseDeclarationOutcome>, RefuseDeclarationHandler>();

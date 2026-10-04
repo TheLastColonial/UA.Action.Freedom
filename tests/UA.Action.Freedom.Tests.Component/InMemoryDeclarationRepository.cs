@@ -72,7 +72,17 @@ internal sealed class InMemoryDeclarationRepository(InMemoryConvoyRepository con
             return Task.FromResult(RecordReferenceResult.AlreadyRecorded);
         }
 
-        _rows[index] = existing with { Status = target, Reference = reference, ReasonCode = null, LastChangedAt = DateTime.UtcNow };
+        // A refused declaration is recorded afresh, so the load it was written from is taken again.
+        var refused = existing.Status == DeclarationStatus.Refused;
+        _rows[index] = existing with
+        {
+            Status = target,
+            Reference = reference,
+            ReasonCode = null,
+            SnapshotJson = refused ? null : existing.SnapshotJson,
+            SnapshotVersion = refused ? null : existing.SnapshotVersion,
+            LastChangedAt = DateTime.UtcNow,
+        };
         return Task.FromResult(RecordReferenceResult.Recorded);
     }
 
@@ -100,6 +110,54 @@ internal sealed class InMemoryDeclarationRepository(InMemoryConvoyRepository con
         }
 
         _rows[index] = _rows[index] with { Status = DeclarationStatus.Withdrawn };
+        return Task.FromResult(true);
+    }
+
+    public Task<MarkReadyResult> MarkReadyAsync(
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, string snapshotJson, int snapshotVersion,
+        CancellationToken cancellationToken)
+    {
+        if (!convoys.IsOnTruckList(convoyId, vin))
+        {
+            return Task.FromResult(MarkReadyResult.VehicleNotOnConvoy);
+        }
+
+        var index = IndexOfCurrent(convoyId, vin, kind, receiverRef);
+
+        if (index < 0)
+        {
+            _rows.Add(Row(convoyId, vin, kind, receiverRef, DeclarationStatus.ReadyToFile, null)
+                with { SnapshotJson = snapshotJson, SnapshotVersion = snapshotVersion });
+            return Task.FromResult(MarkReadyResult.Ready);
+        }
+
+        if (_rows[index].Status is not (DeclarationStatus.Draft or DeclarationStatus.ReadyToFile))
+        {
+            return Task.FromResult(MarkReadyResult.NotPreparable);
+        }
+
+        _rows[index] = _rows[index] with
+        {
+            Status = DeclarationStatus.ReadyToFile,
+            SnapshotJson = snapshotJson,
+            SnapshotVersion = snapshotVersion,
+            LastChangedAt = DateTime.UtcNow,
+        };
+        return Task.FromResult(MarkReadyResult.Ready);
+    }
+
+    public Task<bool> StoreSnapshotAsync(
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, string snapshotJson, int snapshotVersion,
+        CancellationToken cancellationToken)
+    {
+        var index = IndexOfCurrent(convoyId, vin, kind, receiverRef);
+
+        if (index < 0 || _rows[index].SnapshotJson is not null)
+        {
+            return Task.FromResult(false);
+        }
+
+        _rows[index] = _rows[index] with { SnapshotJson = snapshotJson, SnapshotVersion = snapshotVersion };
         return Task.FromResult(true);
     }
 }

@@ -99,6 +99,21 @@ public static class DeclarationEndpoints
                 : Results.NotFound())
         .RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
 
+        // The declaration is written: the load it was written from is stored, and it is stale from then on
+        // whenever the load differs (ADR 0005). A goods list names its receiver in the query.
+        declarations.MapPost("/{kind}/ready", async (
+            int id,
+            string vin,
+            string kind,
+            Guid? receiverRef,
+            ICommandHandler<MarkDeclarationReadyCommand, MarkDeclarationReadyOutcome> handler,
+            CancellationToken cancellationToken) =>
+            ParseKind(kind) is not { } parsed
+                ? UnknownKind()
+                : ReadyResult(await handler.HandleAsync(
+                    new MarkDeclarationReadyCommand(id, vin, parsed, receiverRef), cancellationToken)))
+        .RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
+
         declarations.MapPost("/{kind}/record", async (
             int id,
             string vin,
@@ -194,6 +209,21 @@ public static class DeclarationEndpoints
         _ => Results.Problem(
             detail: "The ELO is created from the ENS MRN, so this vehicle needs an accepted ENS before its "
                     + "envelope can be recorded.",
+            statusCode: StatusCodes.Status409Conflict),
+    };
+
+    private static IResult ReadyResult(MarkDeclarationReadyOutcome outcome) => outcome switch
+    {
+        MarkDeclarationReadyOutcome.Ready => Results.NoContent(),
+        MarkDeclarationReadyOutcome.VehicleNotOnConvoy => Results.NotFound(),
+        MarkDeclarationReadyOutcome.ReceiverRequired => Results.Problem(
+            detail: "A Ukrainian goods list is one per receiver, so the receiver it is for is required "
+                    + "(?receiverRef=).",
+            statusCode: StatusCodes.Status400BadRequest),
+        MarkDeclarationReadyOutcome.ReceiverNotAllowed => Results.Problem(
+            detail: "Only a Ukrainian goods list names a receiver.", statusCode: StatusCodes.Status400BadRequest),
+        _ => Results.Problem(
+            detail: "Only a draft declaration can be marked ready: this one has been filed.",
             statusCode: StatusCodes.Status409Conflict),
     };
 
