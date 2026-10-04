@@ -156,6 +156,49 @@ public sealed class DeclarationRepository(IDbConnectionFactory connectionFactory
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        if (!await WithdrawCoreAsync(connection, transaction, convoyId, vin, kind, receiverRef, cancellationToken))
+        {
+            return false;
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> WithdrawAndRedraftAsync(
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        if (!await WithdrawCoreAsync(connection, transaction, convoyId, vin, kind, receiverRef, cancellationToken))
+        {
+            return false;
+        }
+
+        // The withdrawn row leaves the unique index, so the replacement draft can take its place in the
+        // same transaction: there is never a moment with the old one gone and no new one.
+        var scope = attribution.With(Scope(convoyId, vin, kind, receiverRef));
+        scope.Add("draft", (int)DeclarationStatus.Draft);
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO dbo.Declaration (ConvoyId, Vin, ReceiverRef, Kind, Status, LastChangedBy, LastChangedAt)
+            VALUES (@convoyId, @vin, @receiverRef, @kind, @draft, @changedBy, SYSUTCDATETIME())
+            """,
+            scope,
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
+    private async Task<bool> WithdrawCoreAsync(
+        System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction transaction,
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, CancellationToken cancellationToken)
+    {
         var scope = attribution.With(Scope(convoyId, vin, kind, receiverRef));
         scope.Add("filed", (int)DeclarationStatus.Filed);
         scope.Add("accepted", (int)DeclarationStatus.Accepted);
@@ -179,7 +222,7 @@ public sealed class DeclarationRepository(IDbConnectionFactory connectionFactory
         }
 
         await connection.ExecuteAsync(new CommandDefinition(
-            $"""
+            """
             UPDATE d SET Status = @withdrawn, LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
             FROM dbo.Declaration AS d
             WHERE d.ConvoyId = @convoyId AND d.Vin = @vin AND d.Kind = @kind AND d.Status = @stale
@@ -189,7 +232,6 @@ public sealed class DeclarationRepository(IDbConnectionFactory connectionFactory
             transaction,
             cancellationToken: cancellationToken));
 
-        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 

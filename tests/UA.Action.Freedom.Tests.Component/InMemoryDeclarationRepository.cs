@@ -160,4 +160,16 @@ internal sealed class InMemoryDeclarationRepository(InMemoryConvoyRepository con
         _rows[index] = _rows[index] with { SnapshotJson = snapshotJson, SnapshotVersion = snapshotVersion };
         return Task.FromResult(true);
     }
+
+    public async Task<bool> WithdrawAndRedraftAsync(
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, CancellationToken cancellationToken)
+    {
+        if (!await WithdrawAsync(convoyId, vin, kind, receiverRef, cancellationToken))
+        {
+            return false;
+        }
+
+        _rows.Add(Row(convoyId, vin, kind, receiverRef, DeclarationStatus.Draft, null));
+        return true;
+    }
 }

@@ -84,4 +84,11 @@ public interface IDeclarationRepository
     Task<bool> StoreSnapshotAsync(
         int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, string snapshotJson, int snapshotVersion,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Withdraws a filed or accepted declaration, keeping the record and its reference, and starts a new
+    /// draft for the same scope, in one transaction. False when none was current.
+    /// </summary>
+    Task<bool> WithdrawAndRedraftAsync(
+        int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, CancellationToken cancellationToken);
 }

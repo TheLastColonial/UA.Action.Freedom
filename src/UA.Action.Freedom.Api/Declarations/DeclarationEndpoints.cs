@@ -114,6 +114,29 @@ public static class DeclarationEndpoints
                     new MarkDeclarationReadyCommand(id, vin, parsed, receiverRef), cancellationToken)))
         .RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
 
+        // Withdrawing a stale declaration clears its task: the record and its reference are kept as history
+        // and a new draft starts for the same scope. For the ENS this is the supersede from plan 08.
+        declarations.MapPost("/{declarationId:int}/withdraw", async (
+            int id,
+            string vin,
+            int declarationId,
+            ICommandHandler<WithdrawDeclarationCommand, WithdrawDeclarationOutcome> handler,
+            CancellationToken cancellationToken) =>
+            WithdrawResult(await handler.HandleAsync(
+                new WithdrawDeclarationCommand(id, vin, declarationId), cancellationToken)))
+        .RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
+
+        // The Dispatcher's re-declare tasks (D13): derived from the stale declarations, shown on screen.
+        app.MapGet("/convoys/{id:int}/tasks", async (
+            int id,
+            IQueryHandler<ListRedeclareTasksQuery, IReadOnlyList<RedeclareTaskReadModel>?> handler,
+            CancellationToken cancellationToken) =>
+            await handler.HandleAsync(new ListRedeclareTasksQuery(id), cancellationToken) is { } tasks
+                ? Results.Ok(tasks)
+                : Results.NotFound())
+        .WithTags("Declarations")
+        .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
+
         declarations.MapPost("/{kind}/record", async (
             int id,
             string vin,
@@ -224,6 +247,15 @@ public static class DeclarationEndpoints
             detail: "Only a Ukrainian goods list names a receiver.", statusCode: StatusCodes.Status400BadRequest),
         _ => Results.Problem(
             detail: "Only a draft declaration can be marked ready: this one has been filed.",
+            statusCode: StatusCodes.Status409Conflict),
+    };
+
+    private static IResult WithdrawResult(WithdrawDeclarationOutcome outcome) => outcome switch
+    {
+        WithdrawDeclarationOutcome.Withdrawn => Results.NoContent(),
+        WithdrawDeclarationOutcome.NotFound => Results.NotFound(),
+        _ => Results.Problem(
+            detail: "Only a stale declaration can be withdrawn: this one still matches the load it was written from.",
             statusCode: StatusCodes.Status409Conflict),
     };
 

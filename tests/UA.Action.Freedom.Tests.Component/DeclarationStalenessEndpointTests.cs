@@ -232,4 +232,159 @@ public class DeclarationStalenessEndpointTests
 
         StatusOf(await ListAsync(client, VinA), "Gmr").Should().Be("Stale");
     }
+
+    // ---- increment 5: the re-declare task, and withdrawing ----------------------------------------
+
+    private static async Task<JsonElement> TasksAsync(HttpClient client) =>
+        await client.GetFromJsonAsync<JsonElement>($"/convoys/{ConvoyId}/tasks", TestContext.Current.CancellationToken);
+
+    private static async Task MoveTheBoxFromAToB(HttpClient client)
+    {
+        await client.PutAsync(BoxOn(VinA), content: null, TestContext.Current.CancellationToken);
+        await RecordGmr(client, VinA, "GMR-A");
+        await RecordGmr(client, VinB, "GMR-B");
+        await client.PutAsync(BoxOn(VinB), content: null, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Moving_a_box_raises_a_re_declare_task_for_each_vehicle()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+
+        await MoveTheBoxFromAToB(client);
+
+        var tasks = await TasksAsync(client);
+        tasks.EnumerateArray().Select(task => task.GetProperty("vin").GetString())
+            .Should().BeEquivalentTo(VinA, VinB);
+        tasks[0].GetProperty("kind").GetString().Should().Be("Gmr");
+        tasks[0].GetProperty("resolution").GetString().Should().Be("UpdateOrRecreate");
+    }
+
+    [Fact]
+    public async Task A_convoy_with_nothing_stale_has_no_tasks()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await client.PutAsync(BoxOn(VinA), content: null, TestContext.Current.CancellationToken);
+        await RecordGmr(client, VinA);
+
+        (await TasksAsync(client)).GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Tasks_for_a_convoy_that_does_not_exist_are_not_found()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+
+        var response = await client.GetAsync("/convoys/999/tasks", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_ground_officer_cannot_read_the_tasks()
+    {
+        await using var world = AWorld("GroundOfficer");
+        using var client = world.Api.CreateClient();
+
+        var response = await client.GetAsync($"/convoys/{ConvoyId}/tasks", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Withdrawing_a_stale_declaration_clears_its_task_and_starts_a_new_draft()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await MoveTheBoxFromAToB(client);
+        var stale = (await ListAsync(client, VinA)).EnumerateArray().Single();
+
+        var response = await client.PostAsync(
+            $"{Declarations(VinA)}/{stale.GetProperty("id").GetInt32()}/withdraw", content: null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await TasksAsync(client)).EnumerateArray().Select(task => task.GetProperty("vin").GetString())
+            .Should().BeEquivalentTo(VinB);
+        var history = (await ListAsync(client, VinA)).EnumerateArray().ToList();
+        history.Select(d => d.GetProperty("status").GetString()).Should().Equal("Withdrawn", "Draft");
+        history[0].GetProperty("reference").GetString().Should().Be("GMR-A");
+    }
+
+    [Fact]
+    public async Task Recording_a_new_reference_after_withdrawing_leaves_the_declaration_current()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await MoveTheBoxFromAToB(client);
+        var stale = (await ListAsync(client, VinA)).EnumerateArray().Single();
+        await client.PostAsync(
+            $"{Declarations(VinA)}/{stale.GetProperty("id").GetInt32()}/withdraw", content: null,
+            TestContext.Current.CancellationToken);
+
+        var record = await RecordGmr(client, VinA, "GMR-A2");
+
+        record.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        StatusOf(await ListAsync(client, VinA), "Gmr").Should().NotBe("Stale");
+        (await TasksAsync(client)).EnumerateArray().Select(task => task.GetProperty("vin").GetString())
+            .Should().BeEquivalentTo(VinB);
+    }
+
+    [Fact]
+    public async Task A_declaration_that_is_not_stale_cannot_be_withdrawn()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await client.PutAsync(BoxOn(VinA), content: null, TestContext.Current.CancellationToken);
+        await RecordGmr(client, VinA);
+        var declaration = (await ListAsync(client, VinA)).EnumerateArray().Single();
+
+        var response = await client.PostAsync(
+            $"{Declarations(VinA)}/{declaration.GetProperty("id").GetInt32()}/withdraw", content: null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Withdrawing_a_declaration_that_is_not_on_the_vehicle_is_not_found()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+
+        var response = await client.PostAsync(
+            $"{Declarations(VinA)}/999/withdraw", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Withdrawing_a_stale_ens_keeps_the_old_mrn_and_a_new_one_can_be_recorded()
+    {
+        await using var world = AWorld("Administrator");
+        using var client = world.Api.CreateClient();
+        await client.PutAsync(BoxOn(VinA), content: null, TestContext.Current.CancellationToken);
+        await client.PutAsJsonAsync(
+            $"{Declarations(VinA)}/ens",
+            new { mrn = "25FR17551780961AT5", acceptedAt = "2026-08-24T09:30:00+00:00", filedBy = "groundofficer" },
+            TestContext.Current.CancellationToken);
+        await client.DeleteAsync(BoxOn(VinA), TestContext.Current.CancellationToken);
+        var ens = (await ListAsync(client, VinA)).EnumerateArray().Single();
+        ens.GetProperty("status").GetString().Should().Be("Stale");
+
+        await client.PostAsync(
+            $"{Declarations(VinA)}/{ens.GetProperty("id").GetInt32()}/withdraw", content: null,
+            TestContext.Current.CancellationToken);
+        var refile = await client.PutAsJsonAsync(
+            $"{Declarations(VinA)}/ens",
+            new { mrn = "25FR17551780961AT6", acceptedAt = "2026-08-26T09:30:00+00:00", filedBy = "groundofficer" },
+            TestContext.Current.CancellationToken);
+
+        refile.StatusCode.Should().Be(HttpStatusCode.Created);
+        (await ListAsync(client, VinA)).EnumerateArray().Select(d => d.GetProperty("reference").GetString())
+            .Should().Equal("25FR17551780961AT5", "25FR17551780961AT6");
+    }
 }

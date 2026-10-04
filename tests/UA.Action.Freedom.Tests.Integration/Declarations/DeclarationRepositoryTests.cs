@@ -290,4 +290,56 @@ public class DeclarationRepositoryTests
             await RemoveConvoyAsync(convoyId);
         }
     }
+
+    [Fact]
+    public async Task Withdrawing_and_redrafting_keeps_one_current_declaration_and_the_old_reference_as_history()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, truckList, declarations) = await ConnectOrSkipAsync(cancellationToken);
+        var (convoyId, vin) = await AVehicleOnAConvoyAsync(convoys, truckList, cancellationToken);
+
+        try
+        {
+            await declarations.RecordReferenceAsync(convoyId, vin, DeclarationKind.Gmr, null, "GMR-1", cancellationToken);
+
+            (await declarations.WithdrawAndRedraftAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))
+                .Should().BeTrue();
+
+            var all = await declarations.ListAsync(convoyId, vin, cancellationToken);
+            all.Select(row => row.Status).Should().Equal(DeclarationStatus.Withdrawn, DeclarationStatus.Draft);
+            all[0].Reference.Should().Be("GMR-1");
+            (await declarations.GetCurrentAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))!
+                .Status.Should().Be(DeclarationStatus.Draft);
+
+            (await declarations.RecordReferenceAsync(convoyId, vin, DeclarationKind.Gmr, null, "GMR-2", cancellationToken))
+                .Should().Be(RecordReferenceResult.Recorded);
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(convoyId);
+        }
+    }
+
+    [Fact]
+    public async Task Nothing_is_withdrawn_or_redrafted_when_the_declaration_was_never_filed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, truckList, declarations) = await ConnectOrSkipAsync(cancellationToken);
+        var (convoyId, vin) = await AVehicleOnAConvoyAsync(convoys, truckList, cancellationToken);
+
+        try
+        {
+            await declarations.MarkReadyAsync(convoyId, vin, DeclarationKind.Gmr, null, "{}", 1, cancellationToken);
+
+            (await declarations.WithdrawAndRedraftAsync(convoyId, vin, DeclarationKind.Gmr, null, cancellationToken))
+                .Should().BeFalse();
+            (await declarations.ListAsync(convoyId, vin, cancellationToken)).Should().ContainSingle();
+        }
+        finally
+        {
+            await RemoveVehicleAsync(vin);
+            await RemoveConvoyAsync(convoyId);
+        }
+    }
 }
