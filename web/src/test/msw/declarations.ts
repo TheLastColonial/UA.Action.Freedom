@@ -8,6 +8,7 @@ import type {
   EnsDeclarationReadModel,
   RecordDeclarationRequest,
   RecordEnsRequest,
+  RedeclareTask,
   RefuseDeclarationRequest,
 } from '../../api/schemas/declarations';
 import { problem } from './problem';
@@ -22,6 +23,13 @@ export interface DeclarationApi {
   ens: Map<number, EnsDeclarationReadModel>;
   handlers: RequestHandler[];
 }
+
+const RESOLUTION: Record<DeclarationKind, RedeclareTask['resolution']> = {
+  Gmr: 'UpdateOrRecreate',
+  Ens: 'InvalidateAndRefile',
+  Elo: 'NewEnvelopeAgainstNewMrn',
+  GoodsList: 'PrepareNewListAndHoldAtHub',
+};
 
 const BASE = '/convoys/:convoyId/vehicles/:vin/declarations';
 
@@ -198,6 +206,44 @@ export function declarationApi(options: DeclarationApiOptions = {}): Declaration
       rows[index] = { ...existing, status: 'Refused', reasonCode: body.reasonCode };
       return new HttpResponse(null, { status: 204 });
     }),
+
+    http.post(`${BASE}/:declarationId/withdraw`, ({ params }) => {
+      const id = Number(params['declarationId']);
+      const index = rows.findIndex((declaration) => declaration.id === id);
+      const existing = index < 0 ? undefined : rows[index];
+      if (!existing) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      if (existing.status !== 'Stale') {
+        return problem(
+          409,
+          'Only a stale declaration can be withdrawn: this one still matches the load it was written from.',
+        );
+      }
+      rows[index] = { ...existing, status: 'Withdrawn' };
+      rows.push(
+        row(existing.convoyId, existing.vin, existing.kind, 'Draft', null, existing.receiverRef),
+      );
+      return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.get('/convoys/:convoyId/tasks', ({ params }) =>
+      HttpResponse.json(
+        rows
+          .filter(
+            (declaration) =>
+              declaration.convoyId === Number(params['convoyId']) && declaration.status === 'Stale',
+          )
+          .map((declaration) => ({
+            declarationId: declaration.id,
+            vin: declaration.vin,
+            kind: declaration.kind,
+            receiverRef: declaration.receiverRef,
+            reference: declaration.reference,
+            resolution: RESOLUTION[declaration.kind],
+          })),
+      ),
+    ),
 
     http.post(`${BASE}/:kind/file`, ({ params }) => {
       const convoyId = Number(params['convoyId']);

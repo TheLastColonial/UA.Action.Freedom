@@ -77,6 +77,7 @@ export const qk = {
     vehicle: (convoyId: number, vin: string) => ['declarations', convoyId, vin] as const,
     list: (convoyId: number, vin: string) => ['declarations', convoyId, vin, 'list'] as const,
     ens: (convoyId: number, vin: string) => ['declarations', convoyId, vin, 'ens'] as const,
+    tasks: (convoyId: number) => ['declaration-tasks', convoyId] as const,
   },
   manifests: {
     all: ['manifests'] as const,

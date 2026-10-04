@@ -13,6 +13,7 @@ import { TabPanel, Tabs } from '../../components/Tabs';
 import { ConvoyCargoPanel } from './ConvoyCargoPanel';
 import { ConvoyDriversPanel } from './ConvoyDriversPanel';
 import { ConvoyReadinessPanel } from './ConvoyReadinessPanel';
+import { ConvoyRedeclareTasks } from './ConvoyRedeclareTasks';
 import { ConvoyVehiclesPanel } from './ConvoyVehiclesPanel';
 import { RouteEditor } from './RouteEditor';
 
@@ -97,6 +98,10 @@ export function ConvoyDetailPage(): JSX.Element {
           </DetailCard>
 
           <ConvoyReadinessPanel convoyId={convoy.id} />
+
+          <Gate policy="manifests:declare">
+            <ConvoyRedeclareTasks convoyId={convoy.id} />
+          </Gate>
 
           <Gate policy="convoys:write">
             <span style={{ display: 'flex', gap: 'var(--space-3)' }}>

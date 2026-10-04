@@ -81,3 +81,23 @@ export const KIND_SEGMENT: Record<DeclarationKind, string> = {
   Elo: 'elo',
   GoodsList: 'goods-list',
 };
+
+// What the Dispatcher does about a stale declaration; mirrors Application RedeclareResolution.
+export const redeclareResolutionSchema = z.enum([
+  'UpdateOrRecreate',
+  'InvalidateAndRefile',
+  'NewEnvelopeAgainstNewMrn',
+  'PrepareNewListAndHoldAtHub',
+]);
+export type RedeclareResolution = z.infer<typeof redeclareResolutionSchema>;
+
+// A re-declare task (D13): derived from the stale declarations, identifiers only.
+export const redeclareTaskSchema = z.object({
+  declarationId: z.number().int(),
+  vin: z.string(),
+  kind: declarationKindSchema,
+  receiverRef: z.string().nullable(),
+  reference: z.string().nullable(),
+  resolution: redeclareResolutionSchema,
+});
+export type RedeclareTask = z.infer<typeof redeclareTaskSchema>;
