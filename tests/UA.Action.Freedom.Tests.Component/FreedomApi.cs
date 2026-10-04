@@ -109,6 +109,7 @@ internal static class FreedomApi
     internal static WebApplicationFactory<Program> WithConvoyBudget(
         InMemoryConvoyRepository convoys,
         InMemoryConvoyBudgetRepository budget,
+        InMemoryVehicleEquipmentRepository? equipment = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
@@ -116,6 +117,7 @@ internal static class FreedomApi
             services.Replace<IConvoyRepository>(convoys);
             services.Replace<IConvoyVehicleRepository>(convoys);
             services.Replace<IConvoyBudgetRepository>(budget);
+            services.Replace<IVehicleEquipmentRepository>(equipment ?? new InMemoryVehicleEquipmentRepository(convoys));
         });
 
     /// <summary>
@@ -344,6 +346,7 @@ internal static class FreedomApi
                 EnsureCategoriesAreFaked(services);
                 EnsureDonationsAreFaked(services);
                 EnsureBudgetIsFaked(services);
+                EnsureEquipmentIsFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -431,6 +434,18 @@ internal static class FreedomApi
         if (!fake)
         {
             services.Replace<IConvoyBudgetRepository>(new InMemoryConvoyBudgetRepository());
+        }
+    }
+
+    /// <summary>Equipment is read into the budget summary, so a test that did not supply a store gets an empty one.</summary>
+    private static void EnsureEquipmentIsFaked(IServiceCollection services)
+    {
+        var fake = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IVehicleEquipmentRepository) && descriptor.ImplementationFactory is not null);
+
+        if (!fake)
+        {
+            services.Replace<IVehicleEquipmentRepository>(new InMemoryVehicleEquipmentRepository());
         }
     }
 

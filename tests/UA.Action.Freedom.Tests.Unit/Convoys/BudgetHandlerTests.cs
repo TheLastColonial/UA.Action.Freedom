@@ -14,7 +14,10 @@ public class BudgetHandlerTests
     private const string Vin = "WVWZZZ1JZXW000001";
 
     private sealed record World(
-        IConvoyRepository Convoys, IConvoyVehicleRepository TruckList, IConvoyBudgetRepository Budget);
+        IConvoyRepository Convoys,
+        IConvoyVehicleRepository TruckList,
+        IConvoyBudgetRepository Budget,
+        IVehicleEquipmentRepository Equipment);
 
     private static World AWorld(bool convoyExists = true)
     {
@@ -27,7 +30,9 @@ public class BudgetHandlerTests
         truckList.GetAsync(ConvoyTestData.Id, Vin, Arg.Any<CancellationToken>())
             .Returns(ConvoyTestData.AVehicle(Vin));
         var budget = Substitute.For<IConvoyBudgetRepository>();
-        return new World(convoys, truckList, budget);
+        var equipment = Substitute.For<IVehicleEquipmentRepository>();
+        equipment.ListForConvoyAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns([]);
+        return new World(convoys, truckList, budget, equipment);
     }
 
     private static AddCostCommand AFuelCost(decimal amount = 100m, string? vin = Vin) =>
@@ -149,7 +154,7 @@ public class BudgetHandlerTests
             .Returns(new FerryBookingReadModel(
                 ConvoyTestData.Id, Vin, "P&O", "POF-1", ConvoyTestData.Start, null, 310m));
 
-        var summary = await new GetBudgetSummaryHandler(world.Convoys, world.TruckList, world.Budget).HandleAsync(
+        var summary = await new GetBudgetSummaryHandler(world.Convoys, world.TruckList, world.Budget, world.Equipment).HandleAsync(
             new GetBudgetSummaryQuery(ConvoyTestData.Id), TestContext.Current.CancellationToken);
 
         var ferry = summary!.Lines.Single(line => line.Type == CostType.Ferry);
@@ -174,7 +179,7 @@ public class BudgetHandlerTests
                 ConvoyTestData.Id, Vin, "Acme", "P-1", ConvoyTestData.Start, ConvoyTestData.ExpectedEnd,
                 180m, Guid.NewGuid(), ConvoyTestData.Start, null));
 
-        var summary = await new GetBudgetSummaryHandler(world.Convoys, world.TruckList, world.Budget).HandleAsync(
+        var summary = await new GetBudgetSummaryHandler(world.Convoys, world.TruckList, world.Budget, world.Equipment).HandleAsync(
             new GetBudgetSummaryQuery(ConvoyTestData.Id), TestContext.Current.CancellationToken);
 
         summary!.BudgetSet.Should().BeTrue();
@@ -189,7 +194,7 @@ public class BudgetHandlerTests
     {
         var world = AWorld(convoyExists: false);
 
-        var summary = await new GetBudgetSummaryHandler(world.Convoys, world.TruckList, world.Budget).HandleAsync(
+        var summary = await new GetBudgetSummaryHandler(world.Convoys, world.TruckList, world.Budget, world.Equipment).HandleAsync(
             new GetBudgetSummaryQuery(ConvoyTestData.Id), TestContext.Current.CancellationToken);
 
         summary.Should().BeNull();

@@ -120,6 +120,7 @@ public sealed record BudgetSummaryReadModel(
     IReadOnlyList<BudgetSummaryLine> Lines,
     decimal PlannedTotalGbp,
     decimal ActualTotalGbp,
+    decimal EquipmentGbp,
     bool AnyOverBudget);
 
 /// <summary>
@@ -127,7 +128,10 @@ public sealed record BudgetSummaryReadModel(
 /// ferry bookings and insurance policies of its vehicles, which are read rather than entered twice.
 /// </summary>
 public sealed class BudgetPosition(
-    IConvoyRepository convoys, IConvoyVehicleRepository truckList, IConvoyBudgetRepository budget)
+    IConvoyRepository convoys,
+    IConvoyVehicleRepository truckList,
+    IConvoyBudgetRepository budget,
+    IVehicleEquipmentRepository equipment)
 {
     /// <summary>The position, or null when there is no such convoy.</summary>
     public async Task<BudgetSummaryReadModel?> OfAsync(int convoyId, CancellationToken cancellationToken)
@@ -144,7 +148,11 @@ public sealed class BudgetPosition(
         var entered = (await budget.ListCostsAsync(convoyId, cancellationToken))
             .Select(cost => new ActualCost(cost.Type, cost.AmountGbp, cost.Vin, cost.Note));
 
-        var actuals = entered.Concat(await DerivedAsync(convoyId, cancellationToken)).ToList();
+        var equipmentCosts = (await equipment.ListForConvoyAsync(convoyId, cancellationToken))
+            .Select(line => new ActualCost(CostType.Other, line.CountedCostGbp, line.Vin, line.Name, Derived: true))
+            .ToList();
+
+        var actuals = entered.Concat(await DerivedAsync(convoyId, cancellationToken)).Concat(equipmentCosts).ToList();
         var comparison = Budget.Compare(lines, actuals);
 
         return new BudgetSummaryReadModel(
@@ -152,6 +160,7 @@ public sealed class BudgetPosition(
             comparison.Select(line => new BudgetSummaryLine(line.Type, line.PlannedGbp, line.ActualGbp, line.OverBudget)).ToList(),
             lines.Sum(line => line.PlannedGbp),
             comparison.Sum(line => line.ActualGbp),
+            equipmentCosts.Sum(cost => cost.AmountGbp),
             comparison.Any(line => line.OverBudget));
     }
 
@@ -181,9 +190,12 @@ public sealed class BudgetPosition(
 public sealed record GetBudgetSummaryQuery(int ConvoyId);
 
 public sealed class GetBudgetSummaryHandler(
-    IConvoyRepository convoys, IConvoyVehicleRepository truckList, IConvoyBudgetRepository budget)
+    IConvoyRepository convoys,
+    IConvoyVehicleRepository truckList,
+    IConvoyBudgetRepository budget,
+    IVehicleEquipmentRepository equipment)
     : IQueryHandler<GetBudgetSummaryQuery, BudgetSummaryReadModel?>
 {
     public Task<BudgetSummaryReadModel?> HandleAsync(GetBudgetSummaryQuery query, CancellationToken cancellationToken) =>
-        new BudgetPosition(convoys, truckList, budget).OfAsync(query.ConvoyId, cancellationToken);
+        new BudgetPosition(convoys, truckList, budget, equipment).OfAsync(query.ConvoyId, cancellationToken);
 }
