@@ -105,6 +105,19 @@ internal static class FreedomApi
             services.Replace(manifestFake);
         });
 
+    /// <summary>The convoy fake together with the budget fake, for the budget, cost and equipment routes.</summary>
+    internal static WebApplicationFactory<Program> WithConvoyBudget(
+        InMemoryConvoyRepository convoys,
+        InMemoryConvoyBudgetRepository budget,
+        bool authenticated = true,
+        params string[] roles) =>
+        WithFakes(authenticated, roles, services =>
+        {
+            services.Replace<IConvoyRepository>(convoys);
+            services.Replace<IConvoyVehicleRepository>(convoys);
+            services.Replace<IConvoyBudgetRepository>(budget);
+        });
+
     /// <summary>
     /// The two SQL repositories read and write one allocation table; their fakes share one ledger.
     /// </summary>
@@ -330,6 +343,7 @@ internal static class FreedomApi
                 EnsureReceiversAreFaked(services);
                 EnsureCategoriesAreFaked(services);
                 EnsureDonationsAreFaked(services);
+                EnsureBudgetIsFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -402,6 +416,21 @@ internal static class FreedomApi
             var donations = new InMemoryDonationRepository();
             services.Replace<IDonorRepository>(donations);
             services.Replace<IDonationRepository>(donations);
+        }
+    }
+
+    /// <summary>
+    /// The convoy routes that read the budget (readiness) get an empty one when a test did not supply its own,
+    /// rather than a route to a real database.
+    /// </summary>
+    private static void EnsureBudgetIsFaked(IServiceCollection services)
+    {
+        var fake = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IConvoyBudgetRepository) && descriptor.ImplementationFactory is not null);
+
+        if (!fake)
+        {
+            services.Replace<IConvoyBudgetRepository>(new InMemoryConvoyBudgetRepository());
         }
     }
 
