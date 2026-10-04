@@ -342,12 +342,16 @@ ever written by validation.
 
 A box carries a **QR label**: an opaque, non-enumerable token that a scan resolves back to the box's record
 (`GET /boxes/scan/{token}`). A box can be re-labelled — issuing a new code revokes the previous one, so a label
-lost in transit is replaced and the old one stops working. The label is printed by the system and contains a box
-number, the token and the charity name — and deliberately nothing else. It travels with the box and may be
-inspected at a border, so it names no [Receiver](#receiver), region or [Address](#address); see
+lost in transit is replaced and the old one stops working. The label is printed by the system and contains the box
+number, the token, the charity name, **one line per item (category in English and Ukrainian, quantity and expiry)**
+and **who signed the box (a signer code and first name with last initial)** ([D2](decisions.md#d2)). Never a free-text
+description, property, value, donor, [Receiver](#receiver), region or [Address](#address). It travels with the box and
+may be inspected at a border; see
 [Data Sensitivity](#data-sensitivity). Issuing or reprinting a label is allowed at any point in a box's life,
 including after validation — a label is not box contents, so the freeze that protects the confirmed weight does
-not apply to it.
+not apply to it. **A validated box is never edited or deleted: it is replaced** ([D3](decisions.md#d3)). The old box is
+voided (`VoidedAt`, terminal, its label revoked), a new unattested box names it (`ReplacesBoxId`) with the same items, and
+its cargo allocation moves to the new box. A voided box counts in no weight, report or declaration and takes no label.
 
 ### Location
 
@@ -607,8 +611,9 @@ model.** Documents that travel show cargo, weights and a region-level destinatio
 given only to the Convoy Leader, never to other drivers ([O1](decisions.md#o1), [X7](decisions.md#x7)). See
 [recommendations §4.4](../recommendations.md#44-treat-ukrainian-delivery-detail-as-the-most-sensitive-data-in-the-system).
 
-The same rule applies to a [Box](#box)'s **QR label**. Its renderer (`BoxLabelRenderer`) takes a box id, a token
-and a date — there is no parameter through which a receiver, region or address could reach it, so the redaction
+The same rule applies to a [Box](#box)'s **QR label**. Its renderer (`BoxLabelRenderer`) takes a box id, a token,
+a date and a purpose-built `BoxLabelContent` (category, quantity and expiry lines and a signer) — there is no parameter
+through which a receiver, region, address, description, value or donor could reach it, so the redaction
 is a property of the type rather than a rule a developer has to remember. Component and BDD tests assert the
 rendered label never contains the box's city, street or receiver reference.
 
