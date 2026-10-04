@@ -247,6 +247,10 @@ stock. They are **not** writable except by the move that checks them in.
 - It changes no existing policy's roles. `web/src/auth/policyMatrix.ts` gains `convoys:read-led`, `ConvoyLeader` as a derived role,
   and nothing else; the web hides out-of-scope actions, and the server is the control.
 
+### Implementation note (plan 17)
+
+Built: the handler and claims transformation, `dbo.LoaderLocationAssignment` and `GET|PUT|DELETE /locations/{id}/loaders`, Loader scope on every box and location route including lists, the leader reads and `GET /me`, the `loader` and `leader` seed logins, the policy matrix and an Administrator panel for assignments. **Not yet built, by design:** the leader's write routes (plans 14 and 18 declare `RequireConvoyScope` on theirs), the end of leader scope at convoy closing (plan 14's `ClosedAt`) and address reads (plan 19). The web has no leader screens yet, so the SPA does not turn `ledConvoyIds` into the `ConvoyLeader` role.
+
 ### Owner's answers at sign-off
 
 1. A Dispatcher **or** an Administrator marks a driver as Convoy Leader. Recorded in section 1: marking is the nomination, and the role is derived from it.

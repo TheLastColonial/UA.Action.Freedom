@@ -34,7 +34,7 @@ disagree, the domain document wins: raise it in the PR rather than building arou
 | 14 | [Outcomes and closing](14-outcomes-closing.md) | `feat/outcomes-closing` | [ADR 0015](../adr/0015-box-and-vehicle-outcomes-and-convoy-closing.md) | 08, 12, 13 | – | Not started |
 | 15 | [Manifest sign-off lifecycle](15-manifest-signoff-lifecycle.md) | `feat/manifest-signoff-lifecycle` | [ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md) (lifecycle), [X3](../domain/decisions.md#x3) | 13, 14 | – | Not started |
 | 16 | [Box replacement and bilingual label](16-box-replacement-label.md) | `feat/box-replacement-label` | [ADR 0011](../adr/0011-attested-boxes-are-replaced-not-edited.md) | 02, 05, 09 | **Spike + label review** | Not started |
-| 17 | [Scoped permissions](17-scoped-permissions.md) | `feat/scoped-permissions` | [ADR 0010](../adr/0010-resource-scoped-permissions.md) | 02, 10 | **Mechanism sign-off** | In review (Increment 0 only) |
+| 17 | [Scoped permissions](17-scoped-permissions.md) | `feat/scoped-permissions` | [ADR 0010](../adr/0010-resource-scoped-permissions.md) | 02, 10 | **Mechanism sign-off** | In review |
 | 18 | [Convoy Leader checklist and progress](18-leader-checklist-progress.md) | `feat/leader-checklist-progress` | [ADR 0016](../adr/0016-progress-is-reported-not-tracked.md), [X2](../domain/decisions.md#x2) | 09, 11, 12, 14, 17 | – | Not started |
 | 19 | [Convoy Leader address access](19-leader-address-access.md) | `feat/leader-address-access` | [ADR 0009](../adr/0009-convoy-leader-reads-destination-addresses.md) | 04, 18 | **Security review** | Not started |
 
