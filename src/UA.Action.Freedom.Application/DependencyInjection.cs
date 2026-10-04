@@ -163,6 +163,15 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<MarkDeclarationReadyCommand, MarkDeclarationReadyOutcome>, MarkDeclarationReadyHandler>();
         services.AddScoped<IQueryHandler<ListRedeclareTasksQuery, IReadOnlyList<RedeclareTaskReadModel>?>, ListRedeclareTasksHandler>();
         services.AddScoped<ICommandHandler<WithdrawDeclarationCommand, WithdrawDeclarationOutcome>, WithdrawDeclarationHandler>();
+        services.AddScoped<IQueryHandler<GetAccommodationQuery, AccommodationReadModel?>, GetAccommodationHandler>();
+        services.AddScoped<IQueryHandler<GetAccommodationCoverageQuery, AccommodationCoverageReadModel?>, GetAccommodationCoverageHandler>();
+        services.AddScoped<ICommandHandler<BookAccommodationCommand, BookAccommodationResult>, BookAccommodationHandler>();
+        services.AddScoped<ICommandHandler<ReplaceAccommodationCommand, ReplaceAccommodationOutcome>, ReplaceAccommodationHandler>();
+        services.AddScoped<ICommandHandler<CancelAccommodationCommand, CancelAccommodationOutcome>, CancelAccommodationHandler>();
+        services.AddScoped<ICommandHandler<MigrateAccommodationCommand, MigrateAccommodationOutcome>, MigrateAccommodationHandler>();
+        services.AddScoped<ICommandHandler<SetSelfAccommodationCommand, SetSelfAccommodationOutcome>, SetSelfAccommodationHandler>();
+        services.AddScoped<ICommandHandler<ClearSelfAccommodationCommand, ClearSelfAccommodationOutcome>, ClearSelfAccommodationHandler>();
+        services.AddScoped<IQueryHandler<ListConvoyTasksQuery, IReadOnlyList<object>?>, ListConvoyTasksHandler>();
         services.AddScoped<IQueryHandler<ListDeclarationsQuery, IReadOnlyList<DeclarationReadModel>?>, ListDeclarationsHandler>();
         services.AddScoped<ICommandHandler<RecordDeclarationCommand, RecordDeclarationOutcome>, RecordDeclarationHandler>();
         services.AddScoped<ICommandHandler<RefuseDeclarationCommand, RefuseDeclarationOutcome>, RefuseDeclarationHandler>();

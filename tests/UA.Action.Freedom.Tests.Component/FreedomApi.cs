@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -118,6 +118,30 @@ internal static class FreedomApi
             services.Replace<IConvoyVehicleRepository>(convoys);
             services.Replace<IConvoyBudgetRepository>(budget);
             services.Replace<IVehicleEquipmentRepository>(equipment ?? new InMemoryVehicleEquipmentRepository(convoys));
+        });
+
+    /// <summary>
+    /// The convoy fake together with the accommodation fake, for the accommodation, coverage and task routes. The
+    /// accommodation fake also tells the convoy fake which route points it stays at, as the foreign keys do.
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithAccommodation(
+        InMemoryConvoyRepository convoys,
+        InMemoryAccommodationRepository accommodation,
+        bool authenticated = true,
+        params string[] roles) =>
+        WithFakes(authenticated, roles, services =>
+        {
+            services.Replace<IConvoyRepository>(convoys);
+            services.Replace<IConvoyVehicleRepository>(convoys);
+            services.Replace<IRoutePointReferences>(convoys);
+            services.Replace<IConvoyLeaderRepository>(convoys);
+            services.Replace<IAccommodationRepository>(accommodation);
+            services.Replace(InMemoryPersonRepository.WithLinkedTestUser());
+            services.Replace(new InMemoryManifestRepository());
+
+            // The task list reads the declarations too, which read the boxes on each vehicle.
+            services.Replace(new InMemoryBoxRepository());
+            services.Replace<IDeclarationRepository>(new InMemoryDeclarationRepository(convoys));
         });
 
     /// <summary>
@@ -390,6 +414,7 @@ internal static class FreedomApi
                 EnsureBudgetIsFaked(services);
                 EnsureEquipmentIsFaked(services);
                 EnsureScopeIsFaked(services);
+                EnsureAccommodationIsFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -477,6 +502,18 @@ internal static class FreedomApi
         if (!fake)
         {
             services.Replace<IConvoyBudgetRepository>(new InMemoryConvoyBudgetRepository());
+        }
+    }
+
+    /// <summary>Accommodation is read into the budget and the task list, so a test that did not supply a store gets an empty one.</summary>
+    private static void EnsureAccommodationIsFaked(IServiceCollection services)
+    {
+        var fake = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IAccommodationRepository) && descriptor.ImplementationFactory is not null);
+
+        if (!fake)
+        {
+            services.Replace<IAccommodationRepository>(new InMemoryAccommodationRepository());
         }
     }
 

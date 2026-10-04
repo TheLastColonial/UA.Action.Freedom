@@ -9,7 +9,6 @@ import {
   KIND_SEGMENT,
   declarationReadModelSchema,
   ensDeclarationReadModelSchema,
-  redeclareTaskSchema,
 } from './schemas/declarations';
 import type {
   DeclarationKind,
@@ -17,7 +16,6 @@ import type {
   EnsDeclarationReadModel,
   RecordDeclarationRequest,
   RecordEnsRequest,
-  RedeclareTask,
   RefuseDeclarationRequest,
 } from './schemas/declarations';
 
@@ -168,18 +166,6 @@ export function useFileDeclaration(
   return useMutation({
     mutationFn: (kind: DeclarationKind) => fileDeclaration(convoyId, vin, kind),
     onSuccess: invalidate,
-  });
-}
-
-// The Dispatcher's re-declare tasks for a convoy: one per stale declaration, derived on read.
-export function fetchRedeclareTasks(convoyId: number): Promise<readonly RedeclareTask[]> {
-  return getJson(`/convoys/${convoyId}/tasks`, z.array(redeclareTaskSchema));
-}
-
-export function useRedeclareTasks(convoyId: number): UseQueryResult<readonly RedeclareTask[]> {
-  return useQuery({
-    queryKey: qk.declarations.tasks(convoyId),
-    queryFn: () => fetchRedeclareTasks(convoyId),
   });
 }
 

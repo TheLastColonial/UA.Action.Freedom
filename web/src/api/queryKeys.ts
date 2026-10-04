@@ -33,6 +33,11 @@ export const qk = {
     all: ['donations'] as const,
     list: (params: PageParams) => ['donations', 'list', params] as const,
   },
+  accommodation: {
+    all: (id: number) => ['accommodation', id] as const,
+    list: (id: number) => ['accommodation', id, 'list'] as const,
+    coverage: (id: number) => ['accommodation', id, 'coverage'] as const,
+  },
   convoys: {
     all: ['convoys'] as const,
     list: (params: PageParams) => ['convoys', 'list', params] as const,

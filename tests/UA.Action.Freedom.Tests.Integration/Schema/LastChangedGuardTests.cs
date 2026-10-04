@@ -23,6 +23,7 @@ public class LastChangedGuardTests
         ["dbo.Donor"] = "the anonymous key; a change to a donor is recorded on dbo.DonorDetail, which erasure deletes",
         ["dbo.ConvoyVehicleInsuranceDriver"] = "a link between an insurance and a driver, never updated",
         ["dbo.ConvoyVehicleInsurance"] = "RecordedByPersonId and RecordedAt already say who and when",
+        ["dbo.AccommodationBookingGuest"] = "a link between a booking and a guest; the booking row records who last changed it",
         ["dbo.BoxBayAssignment"] = "AssignedByPersonId and AssignedAt already say who and when",
         ["sensitive.ReceiverDetailAccessLog"] = "an append-only log whose PersonId is who",
     };

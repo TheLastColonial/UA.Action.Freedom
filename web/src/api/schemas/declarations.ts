@@ -93,6 +93,7 @@ export type RedeclareResolution = z.infer<typeof redeclareResolutionSchema>;
 
 // A re-declare task (D13): derived from the stale declarations, identifiers only.
 export const redeclareTaskSchema = z.object({
+  type: z.literal('redeclare'),
   declarationId: z.number().int(),
   vin: z.string(),
   kind: declarationKindSchema,

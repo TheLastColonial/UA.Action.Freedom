@@ -235,6 +235,7 @@ export function declarationApi(options: DeclarationApiOptions = {}): Declaration
               declaration.convoyId === Number(params['convoyId']) && declaration.status === 'Stale',
           )
           .map((declaration) => ({
+            type: 'redeclare',
             declarationId: declaration.id,
             vin: declaration.vin,
             kind: declaration.kind,
