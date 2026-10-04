@@ -266,6 +266,9 @@ Core resource endpoints:
 - `GET|POST /convoys` — Convoy groups with routes
   - `PUT /convoys/{id}/vehicles/{vin}/handover-receiver` — The registered Receiver a vehicle is handed over to in Ukraine (`convoys:write`; 409 not registered, 422 unknown). Shown as `handoverReceiverRef` on the truck list; departure does not require it yet
   - `PUT|GET /convoys/{id}/route` — Ordered stop list
+  - `PUT /convoys/{id}/route` answers `200` with the saved points: each has a stable `routePointId`, a `name`, a `kind` (`Stop`, `Overnight`, `Border`, `Hub`) and, for a `Border` point only, an `authority` (`UK`, `EU`, `UA`). Saving **merges** by id: a point sent with its id keeps it, one without is new, one left out is deleted (`422` for an id not on this convoy's route, `409` `route-point-in-use` when something refers to it). `convoys:write`
+  - `GET /convoys/{id}/leader` — The Convoy Leader now and the history, newest first (`convoys:read`)
+  - `PUT /convoys/{id}/leader` — `{ "personId" }`: nominate the leader, closing the previous assignment. They must be a **Driver crewed on the convoy** (`422`); the sitting leader again is `409`; a leader cannot be taken off the crew until another is nominated (`409`). **Dispatcher or Administrator** (`convoys:lead-assign`)
   - `GET /convoys/{id}/vehicles` — The truck list, withdrawn vehicles included (each entry says which it is)
   - `PUT /convoys/{id}/vehicles/{vin}` — Put a vehicle on the truck list; only one that has **Passed** its inspection, has not been handed over, and is not travelling with another convoy may join (409 otherwise)
   - `DELETE /convoys/{id}/vehicles/{vin}` (`?reason=`) — Before publication this takes the vehicle off the list with its crew and insurance. **Afterwards it is a withdrawal**: the entry, its crew, its insurance and its manifest all stay, because a vehicle that breaks down still has paperwork describing a real load (`convoys:write`)

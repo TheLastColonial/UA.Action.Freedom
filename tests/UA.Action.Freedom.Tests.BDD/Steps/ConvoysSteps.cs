@@ -136,6 +136,54 @@ public sealed class ConvoysSteps(FreedomApiClient api, ScenarioState state)
             .Select(member => member.GetProperty("personId").GetString())
             .Should().Contain(state.Pinned(DriverKey), "the body was: {0}", api.LastBody);
 
+    private const string RoutePointIdsKey = "routePointIds";
+
+    /// <summary>
+    /// Edits the route just read back by sending the same points in the opposite order, each with the id it was
+    /// given, and remembers those ids. A point that kept its id is the same point, wherever it now sits.
+    /// </summary>
+    [When("I reverse the route of the remembered convoy keeping the point ids")]
+    public async Task WhenIReverseTheRouteKeepingThePointIds()
+    {
+        var points = JsonDocument.Parse(api.LastBody).RootElement.EnumerateArray().Reverse().ToList();
+        state.Pin(RoutePointIdsKey, string.Join(",", points.Select(point => point.GetProperty("routePointId").GetInt32())));
+
+        var stops = points.Select(point => new Dictionary<string, object?>
+        {
+            ["routePointId"] = point.GetProperty("routePointId").GetInt32(),
+            ["name"] = point.GetProperty("name").GetString(),
+            ["kind"] = point.GetProperty("kind").GetString(),
+            ["authority"] = point.GetProperty("authority").GetString(),
+            ["city"] = point.GetProperty("city").GetString(),
+            ["postcode"] = point.GetProperty("postcode").GetString(),
+        });
+
+        await api.SendAsync(
+            HttpMethod.Put,
+            state.Recall("convoy", "/convoys/{id}/route"),
+            state.CurrentToken,
+            JsonSerializer.Serialize(new { stops }));
+    }
+
+    [Then("the route points keep the ids they had, in the new order")]
+    public void ThenTheRoutePointsKeepTheirIds() =>
+        string.Join(",", JsonDocument.Parse(api.LastBody).RootElement.EnumerateArray()
+                .Select(point => point.GetProperty("routePointId").GetInt32()))
+            .Should().Be(state.Pinned(RoutePointIdsKey), "the body was: {0}", api.LastBody);
+
+    [When("I nominate the driver as the leader of the remembered convoy")]
+    public Task WhenINominateTheDriverAsLeader() =>
+        api.SendAsync(
+            HttpMethod.Put,
+            state.Recall("convoy", "/convoys/{id}/leader"),
+            state.CurrentToken,
+            $$"""{ "personId": "{{state.Pinned(DriverKey)}}" }""");
+
+    [Then("the convoy leader is the driver")]
+    public void ThenTheConvoyLeaderIsTheDriver() =>
+        JsonDocument.Parse(api.LastBody).RootElement.GetProperty("current").GetProperty("personId").GetString()
+            .Should().Be(state.Pinned(DriverKey), "the body was: {0}", api.LastBody);
+
     [Then("the insurance does not yet cover the driver")]
     public void ThenTheInsuranceDoesNotYetCoverTheDriver() =>
         JsonDocument.Parse(api.LastBody).RootElement.GetProperty("uncoveredDrivers").EnumerateArray()

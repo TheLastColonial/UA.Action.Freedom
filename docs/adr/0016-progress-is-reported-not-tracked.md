@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented.
+Accepted. Not yet implemented, except the route-point groundwork [plan 10](../plans/10-route-points-convoy-leader.md) built: a route point has a stable id and a kind, and a border point names its authority.
 
 ## Context
 
