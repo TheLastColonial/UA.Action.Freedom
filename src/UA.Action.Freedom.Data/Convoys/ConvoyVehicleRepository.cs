@@ -527,7 +527,7 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
                    b.HeightCm
             FROM dbo.ConvoyVehicleBoxAllocation AS a
             INNER JOIN dbo.Box AS b ON b.Id = a.BoxId
-            WHERE a.ConvoyId = @convoyId AND a.Vin = @vin
+            WHERE a.ConvoyId = @convoyId AND a.Vin = @vin AND b.VoidedAt IS NULL
             ORDER BY b.Id
             """,
             new { convoyId, vin = SqlKey.Of(vin) },
@@ -547,6 +547,8 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
 
         return row is null ? null : new BoxAllocation(new ConvoyId(row.ConvoyId), row.Vin, boxId, row.AllocatedAt);
     }
+
+    private sealed record BoxState(bool Voided);
 
     public async Task<AllocateBoxResult> AllocateBoxAsync(
         int convoyId, string vin, int boxId, CancellationToken cancellationToken)
@@ -579,15 +581,21 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             return AllocateBoxResult.VehicleWithdrawn;
         }
 
-        var boxExists = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-            "SELECT CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.Box WHERE Id = @boxId) THEN 1 ELSE 0 END AS bit)",
+        var voidedAt = await connection.QuerySingleOrDefaultAsync<BoxState>(new CommandDefinition(
+            "SELECT CAST(CASE WHEN VoidedAt IS NULL THEN 0 ELSE 1 END AS bit) AS Voided FROM dbo.Box WHERE Id = @boxId",
             new { boxId },
             transaction,
             cancellationToken: cancellationToken));
 
-        if (!boxExists)
+        if (voidedAt is null)
         {
             return AllocateBoxResult.BoxNotFound;
+        }
+
+        // A voided box was replaced (ADR 0011): its cargo went to the replacement, so it is never put back.
+        if (voidedAt.Voided)
+        {
+            return AllocateBoxResult.BoxVoided;
         }
 
         var current = await connection.QuerySingleOrDefaultAsync<AllocationRow>(new CommandDefinition(

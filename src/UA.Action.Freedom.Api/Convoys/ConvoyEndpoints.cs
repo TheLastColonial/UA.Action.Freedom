@@ -337,6 +337,10 @@ public static class ConvoyEndpoints
                 AllocateBoxOutcome.BoxNotFound => Results.Problem(
                     detail: "There is no box with that ID.",
                     statusCode: StatusCodes.Status404NotFound),
+                AllocateBoxOutcome.BoxVoided => Results.Problem(
+                    type: "box-voided",
+                    detail: "That box has been replaced and carries no cargo. Allocate the box that replaced it.",
+                    statusCode: StatusCodes.Status409Conflict),
                 AllocateBoxOutcome.VehicleWithdrawn => Results.Problem(
                     detail: $"Vehicle '{vin}' has been withdrawn from this convoy, so it takes no more cargo.",
                     statusCode: StatusCodes.Status409Conflict),

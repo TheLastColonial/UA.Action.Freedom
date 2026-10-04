@@ -72,6 +72,21 @@ public sealed class BoxesSteps(FreedomApiClient api, ScenarioState state)
     public Task WhenIDeleteOnTheRememberedBox(string template) =>
         api.SendAsync(HttpMethod.Delete, state.Recall("box", template), state.CurrentToken, null);
 
+    [Given("I remember the replacement box")]
+    public void GivenIRememberTheReplacementBox()
+    {
+        // The replace call answers 201 with the new box in the Location header: /boxes/{id}.
+        var location = api.LastResponse!.Headers.Location
+            ?? throw new InvalidOperationException("The last response carried no Location header to read a box from.");
+        var path = location.IsAbsoluteUri ? location.AbsolutePath : location.ToString();
+
+        state.Pin("replacement", path.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1]);
+    }
+
+    [When("I GET \"(.*)\" on the remembered replacement box")]
+    public Task WhenIGetOnTheRememberedReplacementBox(string template) =>
+        api.SendAsync(HttpMethod.Get, state.Recall("replacement", template), state.CurrentToken, null);
+
     [Given("I remember the issued QR token")]
     public void GivenIRememberTheIssuedQrToken()
     {

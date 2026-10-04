@@ -1,7 +1,9 @@
 /*
     A QR label ties the physical box to its record. The token is an opaque, non-enumerable Guid
-    — the label may be inspected at a border, so it carries nothing but a box number and this
-    token (see the label renderer and docs/domain/key-concepts.md § Data Sensitivity).
+    — the label may be inspected at a border, so it carries a box number, this token, what is
+    in the box (category, quantity, expiry) and who signed it, in English and Ukrainian, and never
+    a receiver, region, address, free text, value or donor (see the label renderer and
+    docs/security/0011-label-review.md). Voiding a box revokes its code (ADR 0011).
 
     A box can be re-labelled: issuing a new code revokes the previous one, so at most one row per
     box has RevokedAt IS NULL. That is enforced in a transaction in

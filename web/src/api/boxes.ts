@@ -63,6 +63,11 @@ export function deleteBox(id: number): Promise<void> {
   return delete204(idPath(id));
 }
 
+/** Replace an attested box: it is voided and a new unattested box, with the same items, takes its place. */
+export function replaceBox(id: number): Promise<CreatedResource> {
+  return post201(`${idPath(id)}/replace`);
+}
+
 export function fetchBoxItems(id: number): Promise<readonly BoxItemReadModel[] | ParentMissing> {
   return getCollection(`${idPath(id)}/items`, boxItemReadModelSchema);
 }
@@ -168,6 +173,18 @@ export function useDeleteBox(): UseMutationResult<void, Error, number> {
   return useMutation({
     mutationFn: deleteBox,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.boxes.all }),
+  });
+}
+
+export function useReplaceBox(id: number): UseMutationResult<CreatedResource, Error, void> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => replaceBox(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.boxes.all });
+      await queryClient.invalidateQueries({ queryKey: qk.boxes.detail(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.boxes.qrCode(id) });
+    },
   });
 }
 

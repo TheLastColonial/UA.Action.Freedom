@@ -237,7 +237,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
             INNER JOIN dbo.ConvoyVehicleBoxAllocation AS mb ON mb.ConvoyId = m.ConvoyId AND mb.Vin = m.Vin
             INNER JOIN dbo.Box AS b ON b.Id = mb.BoxId
             LEFT JOIN dbo.Receiver AS r ON r.ReceiverRef = b.ReceiverRef
-            WHERE m.Id = @id
+            WHERE m.Id = @id AND b.VoidedAt IS NULL
             ORDER BY b.Id
             """,
             new { id = SqlKey.Of(id) },
@@ -282,7 +282,7 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
             INNER JOIN dbo.ItemCategory AS c ON c.Id = i.CategoryId
             LEFT JOIN dbo.CategoryCustomsCode AS eu ON eu.CategoryId = c.Id AND eu.Authority = 1
             LEFT JOIN dbo.Receiver AS r ON r.ReceiverRef = b.ReceiverRef
-            WHERE m.Id = @id
+            WHERE m.Id = @id AND b.VoidedAt IS NULL
             ORDER BY b.Id, i.Description, i.Id
             """,
             new { id = SqlKey.Of(id) },

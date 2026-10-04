@@ -136,7 +136,7 @@ public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory, I
         // Identifiers only. A convoy is touched when one of its vehicles is handed over to the receiver,
         // or a manifest on it carries a box addressed to the receiver; an arrived convoy is history.
         var boxes = await connection.QueryAsync<int>(new CommandDefinition(
-            "SELECT Id FROM dbo.Box WHERE ReceiverRef = @receiverRef ORDER BY Id",
+            "SELECT Id FROM dbo.Box WHERE ReceiverRef = @receiverRef AND VoidedAt IS NULL ORDER BY Id",
             new { receiverRef },
             cancellationToken: cancellationToken));
 
@@ -149,7 +149,7 @@ public sealed class ReceiverRepository(IDbConnectionFactory connectionFactory, I
                 SELECT a.ConvoyId
                 FROM dbo.Box AS b
                 INNER JOIN dbo.ConvoyVehicleBoxAllocation AS a ON a.BoxId = b.Id
-                WHERE b.ReceiverRef = @receiverRef
+                WHERE b.ReceiverRef = @receiverRef AND b.VoidedAt IS NULL
             ) AS touched
             INNER JOIN dbo.Convoy AS c ON c.Id = touched.ConvoyId
             WHERE c.ArrivedAt IS NULL

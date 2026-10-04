@@ -14,6 +14,7 @@ public enum AllocateBoxOutcome
     VehicleNotOnConvoy,
     VehicleWithdrawn,
     BoxNotFound,
+    BoxVoided,
     Frozen
 }
 
@@ -59,6 +60,7 @@ public sealed class AllocateBoxHandler(IConvoyVehicleRepository truckList, IMani
             AllocateBoxResult.AlreadyAllocated => AllocateBoxOutcome.AlreadyAllocated,
             AllocateBoxResult.VehicleWithdrawn => AllocateBoxOutcome.VehicleWithdrawn,
             AllocateBoxResult.BoxNotFound => AllocateBoxOutcome.BoxNotFound,
+            AllocateBoxResult.BoxVoided => AllocateBoxOutcome.BoxVoided,
             _ => AllocateBoxOutcome.VehicleNotOnConvoy,
         };
     }
