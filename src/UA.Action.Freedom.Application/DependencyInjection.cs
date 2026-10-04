@@ -132,6 +132,12 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RecordFerryBookingCommand, RecordFerryBookingOutcome>, RecordFerryBookingHandler>();
         services.AddScoped<ICommandHandler<RemoveFerryBookingCommand, RemoveFerryBookingOutcome>, RemoveFerryBookingHandler>();
         services.AddScoped<IQueryHandler<GetFerryBookingQuery, FerryBookingReadModel?>, GetFerryBookingHandler>();
+        services.AddScoped<ICommandHandler<SetBudgetCommand, SetBudgetOutcome>, SetBudgetHandler>();
+        services.AddScoped<IQueryHandler<GetBudgetQuery, IReadOnlyList<BudgetLineReadModel>?>, GetBudgetHandler>();
+        services.AddScoped<ICommandHandler<AddCostCommand, AddCostResult>, AddCostHandler>();
+        services.AddScoped<ICommandHandler<DeleteCostCommand, DeleteCostOutcome>, DeleteCostHandler>();
+        services.AddScoped<IQueryHandler<ListCostsQuery, IReadOnlyList<ConvoyCostReadModel>?>, ListCostsHandler>();
+        services.AddScoped<IQueryHandler<GetBudgetSummaryQuery, BudgetSummaryReadModel?>, GetBudgetSummaryHandler>();
         services.AddScoped<ICommandHandler<RemoveBoxAllocationCommand, RemoveBoxAllocationOutcome>, RemoveBoxAllocationHandler>();
         services.AddScoped<IQueryHandler<ListVehicleBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListVehicleBoxesHandler>();
         services.AddScoped<IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>, GetManifestWeightHandler>();
