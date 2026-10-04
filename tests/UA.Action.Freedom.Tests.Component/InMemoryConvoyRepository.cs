@@ -1,5 +1,6 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Application.People;
 using UA.Action.Freedom.Domain;
 
@@ -79,6 +80,17 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     private readonly Dictionary<Guid, (string FirstName, string LastName)> persons = [];
 
     private int nextId = 1;
+
+    /// <summary>Standing in for <c>dbo.ConvoyVehicleBoxAllocation</c>; shared with the manifest fake.</summary>
+    internal BoxAllocationLedger Ledger { get; set; } = new();
+
+    public InMemoryConvoyRepository WithKnownBox(ManifestBoxReadModel box)
+    {
+        Ledger.KnowBox(box);
+        return this;
+    }
+
+    public IReadOnlyList<BoxAllocation> Allocations => Ledger.Allocations;
 
     public InMemoryConvoyRepository(params ConvoyReadModel[] seed)
     {
@@ -424,6 +436,7 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         crew.RemoveAll(seat => seat.ConvoyId == convoyId && Same(seat.Vin, vin));
         insurance.Remove((convoyId, vin.ToUpperInvariant()));
         coveredDrivers.Remove((convoyId, vin.ToUpperInvariant()));
+        Ledger.ForgetEntry(convoyId, vin);
         truckList.RemoveAll(entry => entry.ConvoyId == convoyId && Same(entry.Vin, vin));
 
         return Task.FromResult(true);
@@ -529,6 +542,48 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
 
     public Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken) =>
         Task.FromResult(RemovePolicy(convoyId, vin));
+
+    public Task<IReadOnlyList<ManifestBoxReadModel>?> ListBoxesAsync(
+        int convoyId, string vin, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ManifestBoxReadModel>?>(
+            EntryFor(convoyId, vin) is null ? null : Ledger.BoxesOn(convoyId, vin));
+
+    public Task<BoxAllocation?> GetBoxAllocationAsync(int boxId, CancellationToken cancellationToken) =>
+        Task.FromResult(Ledger.AllocationOf(boxId));
+
+    public Task<AllocateBoxResult> AllocateBoxAsync(
+        int convoyId, string vin, int boxId, CancellationToken cancellationToken)
+    {
+        if (EntryFor(convoyId, vin) is not { } entry)
+        {
+            return Task.FromResult(AllocateBoxResult.VehicleNotOnConvoy);
+        }
+
+        if (entry.WithdrawnAt is not null)
+        {
+            return Task.FromResult(AllocateBoxResult.VehicleWithdrawn);
+        }
+
+        if (!Ledger.Knows(boxId))
+        {
+            return Task.FromResult(AllocateBoxResult.BoxNotFound);
+        }
+
+        var outcome = Ledger.Allocate(AsDomain(entry), boxId);
+
+        return Task.FromResult(outcome switch
+        {
+            AllocateOutcome.Allocated => AllocateBoxResult.Allocated,
+            AllocateOutcome.Moved => AllocateBoxResult.Moved,
+            _ => AllocateBoxResult.AlreadyAllocated,
+        });
+    }
+
+    public Task<bool> RemoveBoxAsync(int convoyId, string vin, int boxId, CancellationToken cancellationToken) =>
+        Task.FromResult(EntryFor(convoyId, vin) is { } entry && Ledger.Remove(AsDomain(entry), boxId));
+
+    private static ConvoyVehicle AsDomain(TruckListEntry entry) =>
+        new() { ConvoyId = new ConvoyId(entry.ConvoyId), Vin = entry.Vin, WithdrawnAt = entry.WithdrawnAt };
 
     // ---- helpers ------------------------------------------------------------------------------
 

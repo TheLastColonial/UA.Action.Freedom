@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Convoys;
@@ -11,6 +12,17 @@ public enum AddToTruckListResult
     OnAnotherConvoy,
     HandedOver,
     AlreadyOnThisConvoy
+}
+
+/// <summary>What <see cref="IConvoyVehicleRepository.AllocateBoxAsync"/> found when it tried.</summary>
+public enum AllocateBoxResult
+{
+    Allocated,
+    Moved,
+    AlreadyAllocated,
+    VehicleNotOnConvoy,
+    VehicleWithdrawn,
+    BoxNotFound
 }
 
 /// <summary>What <see cref="IConvoyVehicleRepository.AssignCrewAsync"/> found when it tried.</summary>
@@ -110,4 +122,24 @@ public interface IConvoyVehicleRepository
     Task<bool> RecordInsuranceAsync(VehicleInsuranceRecord insurance, CancellationToken cancellationToken);
 
     Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The cargo on a vehicle, meaning the boxes allocated to its entry, or null when it is not on this convoy.
+    /// </summary>
+    Task<IReadOnlyList<ManifestBoxReadModel>?> ListBoxesAsync(
+        int convoyId, string vin, CancellationToken cancellationToken);
+
+    /// <summary>Where a box is allocated now, or null when it is on no vehicle.</summary>
+    Task<BoxAllocation?> GetBoxAllocationAsync(int boxId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Puts a box on a vehicle, moving it if it was on another: a box is on at most one entry. The
+    /// entry must be on this convoy and still travelling, and the box must exist; the move is one
+    /// transaction, so a box is never on two vehicles nor on none in between.
+    /// </summary>
+    Task<AllocateBoxResult> AllocateBoxAsync(
+        int convoyId, string vin, int boxId, CancellationToken cancellationToken);
+
+    /// <summary>Takes a box off this vehicle. Returns false when it was not allocated to it.</summary>
+    Task<bool> RemoveBoxAsync(int convoyId, string vin, int boxId, CancellationToken cancellationToken);
 }
