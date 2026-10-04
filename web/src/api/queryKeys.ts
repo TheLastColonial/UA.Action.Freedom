@@ -74,6 +74,7 @@ export const qk = {
     bays: (id: number) => ['locations', id, 'bays'] as const,
   },
   declarations: {
+    convoy: (convoyId: number) => ['declarations', convoyId] as const,
     vehicle: (convoyId: number, vin: string) => ['declarations', convoyId, vin] as const,
     list: (convoyId: number, vin: string) => ['declarations', convoyId, vin, 'list'] as const,
     ens: (convoyId: number, vin: string) => ['declarations', convoyId, vin, 'ens'] as const,
