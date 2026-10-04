@@ -45,6 +45,11 @@ export function put204(path: string, body?: unknown): Promise<void> {
   });
 }
 
+/** `PUT` that the API answers with 200 and a JSON body (the saved route, the nominated leader). */
+export function putJson<T>(path: string, body: unknown, schema: ZodType<T>): Promise<T> {
+  return request({ method: 'PUT', path, expect: 'json', body, schema });
+}
+
 /** `DELETE` a resource. The API returns 204. */
 export function delete204(path: string): Promise<void> {
   return request({ method: 'DELETE', path, expect: 'nocontent' });

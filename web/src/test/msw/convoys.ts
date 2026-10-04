@@ -3,6 +3,7 @@ import type { RequestHandler } from 'msw';
 import { z } from 'zod';
 
 import type {
+  ConvoyLeaderAssignment,
   ConvoyReadModel,
   ConvoyVehicleReadModel,
   CreateConvoyRequest,
@@ -65,6 +66,8 @@ export interface ConvoyApiLookups {
 export interface ConvoyApi {
   db: Map<number, ConvoyReadModel>;
   routes: Map<number, RouteStopReadModel[]>;
+  /** Each convoy's leader assignments, newest first. */
+  leaders: Map<number, ConvoyLeaderAssignment[]>;
   vehicles: Map<number, ConvoyVehicleReadModel[]>;
   crew: Map<string, VehicleCrewReadModel[]>;
   /** Keyed `${convoyId}:${vin}`, like `crew`. */
@@ -89,6 +92,7 @@ export function convoyApi(
 ): ConvoyApi {
   const db = new Map<number, ConvoyReadModel>(seed.map((c) => [c.id, c]));
   const routes = new Map<number, RouteStopReadModel[]>();
+  const leaders = new Map<number, ConvoyLeaderAssignment[]>();
   const vehicles = new Map<number, ConvoyVehicleReadModel[]>();
   const crew = new Map<string, VehicleCrewReadModel[]>();
   const insurance = new Map<string, VehicleInsuranceReadModel>();
@@ -200,18 +204,72 @@ export function convoyApi(
         return new HttpResponse(null, { status: 404 });
       }
       const body = (await request.json()) as ReplaceConvoyRouteRequest;
-      routes.set(
-        id,
-        body.stops.map((stop, index) => ({
-          sequence: index + 1,
-          house: stop.house ?? null,
-          street: stop.street ?? null,
-          city: stop.city ?? null,
-          country: stop.country ?? null,
-          postcode: stop.postcode,
-        })),
+      const existing = routes.get(id) ?? [];
+      // A merge, as the API does it: a point sent with its id keeps it, a new one is minted one.
+      if (
+        body.stops.some(
+          (s) =>
+            s.routePointId !== undefined &&
+            !existing.some((e) => e.routePointId === s.routePointId),
+        )
+      ) {
+        return problem(422, "A route point named in the edit is not on this convoy's route.");
+      }
+      const saved = body.stops.map((stop, index) => ({
+        sequence: index + 1,
+        house: stop.house ?? null,
+        street: stop.street ?? null,
+        city: stop.city ?? null,
+        country: stop.country ?? null,
+        postcode: stop.postcode,
+        countryCode: stop.countryCode ?? null,
+        routePointId: stop.routePointId ?? ++minted,
+        name: stop.name,
+        kind: stop.kind,
+        authority: stop.authority ?? null,
+      }));
+      routes.set(id, saved);
+      return HttpResponse.json(saved);
+    }),
+
+    http.get('/convoys/:id/leader', ({ params }) => {
+      const id = idFrom(params['id']);
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const history = leaders.get(id) ?? [];
+      return HttpResponse.json({ current: history.find((a) => a.until === null) ?? null, history });
+    }),
+
+    http.put('/convoys/:id/leader', async ({ params, request }) => {
+      const id = idFrom(params['id']);
+      if (!db.has(id)) {
+        return new HttpResponse(null, { status: 404 });
+      }
+      const { personId } = (await request.json()) as { personId: string };
+      const seat = [...crew.entries()]
+        .filter(([key]) => key.startsWith(`${String(id)}:`))
+        .flatMap(([, members]) => members)
+        .find((member) => member.personId === personId && member.role === 'Driver');
+      if (seat === undefined) {
+        return problem(422, 'The leader must be a driver crewed on this convoy.');
+      }
+      const now = new Date().toISOString();
+      const history = (leaders.get(id) ?? []).map((a) =>
+        a.until === null ? { ...a, until: now } : a,
       );
-      return new HttpResponse(null, { status: 204 });
+      history.unshift({
+        id: ++minted,
+        convoyId: id,
+        personId,
+        personName: `${seat.firstName} ${seat.lastName}`,
+        from: now,
+        until: null,
+        lastChangedByName: null,
+        lastChangedAt: null,
+      });
+      leaders.set(id, history);
+      return HttpResponse.json({ current: history[0], history });
     }),
 
     http.get('/convoys/:id/vehicles', ({ params }) => {
@@ -698,5 +756,5 @@ export function convoyApi(
     ),
   ];
 
-  return { db, routes, vehicles, crew, insurance, boxes, ferry, handlers };
+  return { db, routes, leaders, vehicles, crew, insurance, boxes, ferry, handlers };
 }

@@ -12,6 +12,7 @@ import { PageSkeleton } from '../../components/PageSkeleton';
 import { TabPanel, Tabs } from '../../components/Tabs';
 import { ConvoyCargoPanel } from './ConvoyCargoPanel';
 import { ConvoyDriversPanel } from './ConvoyDriversPanel';
+import { ConvoyLeaderPanel } from './ConvoyLeaderPanel';
 import { ConvoyReadinessPanel } from './ConvoyReadinessPanel';
 import { ConvoyVehiclesPanel } from './ConvoyVehiclesPanel';
 import { RouteEditor } from './RouteEditor';
@@ -148,6 +149,7 @@ export function ConvoyDetailPage(): JSX.Element {
       ) : null}
       {tab === 'drivers' ? (
         <TabPanel id="drivers">
+          <ConvoyLeaderPanel convoyId={convoy.id} arrived={convoy.arrived} />
           <ConvoyDriversPanel convoyId={convoy.id} />
         </TabPanel>
       ) : null}
