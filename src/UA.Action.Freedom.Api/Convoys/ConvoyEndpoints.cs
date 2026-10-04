@@ -448,6 +448,57 @@ public static class ConvoyEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        // The vehicle's outbound ferry booking (P1): reference and ticket details, per vehicle.
+        convoys.MapGet("/{id:int}/vehicles/{vin}/ferry", async (
+            int id,
+            string vin,
+            IQueryHandler<GetFerryBookingQuery, FerryBookingReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var booking = await handler.HandleAsync(new GetFerryBookingQuery(id, vin), cancellationToken);
+            return booking is null ? Results.NotFound() : Results.Ok(booking);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+
+        convoys.MapPut("/{id:int}/vehicles/{vin}/ferry", async (
+            int id,
+            string vin,
+            RecordFerryBookingRequest request,
+            ICommandHandler<RecordFerryBookingCommand, RecordFerryBookingOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(request.ToCommand(id, vin), cancellationToken);
+
+            return outcome switch
+            {
+                RecordFerryBookingOutcome.Recorded => Results.NoContent(),
+                RecordFerryBookingOutcome.ConvoyNotFound => Results.NotFound(),
+                RecordFerryBookingOutcome.ConvoyArrived => ConvoyArrived(),
+                _ => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' travelling on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+            };
+        })
+        .AddEndpointFilter<ValidationFilter<RecordFerryBookingRequest>>()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
+        convoys.MapDelete("/{id:int}/vehicles/{vin}/ferry", async (
+            int id,
+            string vin,
+            ICommandHandler<RemoveFerryBookingCommand, RemoveFerryBookingOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new RemoveFerryBookingCommand(id, vin), cancellationToken);
+
+            return outcome switch
+            {
+                RemoveFerryBookingOutcome.Removed => Results.NoContent(),
+                RemoveFerryBookingOutcome.ConvoyArrived => ConvoyArrived(),
+                _ => Results.NotFound(),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
         convoys.MapGet("/{id:int}/readiness", async (
             int id,
             IQueryHandler<GetConvoyReadinessQuery, ConvoyReadinessReadModel?> handler,

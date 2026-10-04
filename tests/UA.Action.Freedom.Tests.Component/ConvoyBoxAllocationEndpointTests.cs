@@ -122,7 +122,7 @@ public class ConvoyBoxAllocationEndpointTests
     {
         // Transitional until plan 15: the GMR stamp still freezes the vehicle's load.
         var frozen = new ManifestReadModel(
-            "MAN-1", ConvoyId, VinA, ManifestStatus.Confirmed, null, false,
+            "MAN-1", ConvoyId, VinA, ManifestStatus.Confirmed, null,
             GmrSubmittedAt: new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc));
         var convoys = AConvoyWithTwoVehicles();
         await using var api = FreedomApi.WithConvoys(convoys, manifests: new InMemoryManifestRepository(frozen), roles: "Loader");
@@ -142,7 +142,7 @@ public class ConvoyBoxAllocationEndpointTests
     public async Task A_box_cannot_be_moved_off_a_vehicle_whose_goods_movement_reference_exists()
     {
         var frozen = new ManifestReadModel(
-            "MAN-1", ConvoyId, VinA, ManifestStatus.Confirmed, null, false,
+            "MAN-1", ConvoyId, VinA, ManifestStatus.Confirmed, null,
             GmrSubmittedAt: new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc));
         var convoys = AConvoyWithTwoVehicles();
         convoys.Ledger.Allocate(

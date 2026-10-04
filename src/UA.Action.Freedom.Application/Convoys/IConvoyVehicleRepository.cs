@@ -123,6 +123,16 @@ public interface IConvoyVehicleRepository
 
     Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken);
 
+    Task<FerryBookingReadModel?> GetFerryBookingAsync(int convoyId, string vin, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records or replaces the vehicle's outbound ferry booking. Returns false when the vehicle is not
+    /// on this convoy or has withdrawn from it.
+    /// </summary>
+    Task<bool> RecordFerryBookingAsync(FerryBookingRecord booking, CancellationToken cancellationToken);
+
+    Task<bool> RemoveFerryBookingAsync(int convoyId, string vin, CancellationToken cancellationToken);
+
     /// <summary>
     /// The cargo on a vehicle, meaning the boxes allocated to its entry, or null when it is not on this convoy.
     /// </summary>

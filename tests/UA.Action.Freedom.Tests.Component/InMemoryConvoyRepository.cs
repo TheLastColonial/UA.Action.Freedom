@@ -28,8 +28,18 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
 {
     private readonly ChangeLedger<int> changes = new();
 
-    public void Attach(IChangeAttribution attribution, IPersonRepository people) =>
+    private readonly ChangeLedger<string> ferryChanges = new(StringComparer.OrdinalIgnoreCase);
+
+    public void Attach(IChangeAttribution attribution, IPersonRepository people)
+    {
         changes.Attach(attribution, people);
+        ferryChanges.Attach(attribution, people);
+    }
+
+    /// <summary>Standing in for <c>dbo.ConvoyVehicleFerryBooking</c>, keyed (ConvoyId, Vin).</summary>
+    private readonly Dictionary<(int ConvoyId, string Vin), FerryBookingReadModel> ferryBookings = [];
+
+    private static string FerryKey(int convoyId, string vin) => $"{convoyId}/{vin}";
 
     private ConvoyReadModel Read(ConvoyReadModel convoy)
     {
@@ -437,6 +447,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         insurance.Remove((convoyId, vin.ToUpperInvariant()));
         coveredDrivers.Remove((convoyId, vin.ToUpperInvariant()));
         Ledger.ForgetEntry(convoyId, vin);
+        ferryBookings.Remove((convoyId, vin.ToUpperInvariant()));
+        ferryChanges.Forget(FerryKey(convoyId, vin));
         truckList.RemoveAll(entry => entry.ConvoyId == convoyId && Same(entry.Vin, vin));
 
         return Task.FromResult(true);
@@ -542,6 +554,39 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
 
     public Task<bool> RemoveInsuranceAsync(int convoyId, string vin, CancellationToken cancellationToken) =>
         Task.FromResult(RemovePolicy(convoyId, vin));
+
+    public Task<FerryBookingReadModel?> GetFerryBookingAsync(
+        int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        if (!ferryBookings.TryGetValue((convoyId, vin.ToUpperInvariant()), out var booking))
+        {
+            return Task.FromResult<FerryBookingReadModel?>(null);
+        }
+
+        var (name, at) = ferryChanges.Of(FerryKey(convoyId, vin));
+        return Task.FromResult<FerryBookingReadModel?>(booking with { LastChangedByName = name, LastChangedAt = at });
+    }
+
+    public Task<bool> RecordFerryBookingAsync(FerryBookingRecord booking, CancellationToken cancellationToken)
+    {
+        // Mirrors the MERGE source clause: the vehicle has to be travelling with the convoy.
+        if (EntryFor(booking.ConvoyId, booking.Vin) is not { WithdrawnAt: null })
+        {
+            return Task.FromResult(false);
+        }
+
+        ferryBookings[(booking.ConvoyId, booking.Vin.ToUpperInvariant())] = new FerryBookingReadModel(
+            booking.ConvoyId, booking.Vin, booking.Operator, booking.Reference, booking.SailingAt,
+            booking.TicketDetails, booking.CostGbp);
+        ferryChanges.Stamp(FerryKey(booking.ConvoyId, booking.Vin));
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> RemoveFerryBookingAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        ferryChanges.Forget(FerryKey(convoyId, vin));
+        return Task.FromResult(ferryBookings.Remove((convoyId, vin.ToUpperInvariant())));
+    }
 
     public Task<IReadOnlyList<ManifestBoxReadModel>?> ListBoxesAsync(
         int convoyId, string vin, CancellationToken cancellationToken) =>

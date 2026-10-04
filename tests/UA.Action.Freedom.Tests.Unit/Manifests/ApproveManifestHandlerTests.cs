@@ -41,7 +41,7 @@ public class ApproveManifestHandlerTests
 
     private static ManifestReadModel AManifest(
         ManifestStatus status = ManifestStatus.Proposed, bool frozen = false) => new(
-        Id, 42, Vin, status, null, FerryBookingComplete: false,
+        Id, 42, Vin, status, null,
         GmrSubmittedAt: frozen ? Stamped : null);
 
     /// <summary>The Movement Reference Number ICS2 issued for the crossing.</summary>

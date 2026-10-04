@@ -18,7 +18,7 @@ public class ManifestCompositionHandlerTests
     private static readonly Guid Driver = new("2b9c1e40-7d8a-4c31-9f52-6a0b8d3e5c11");
 
     private static ManifestReadModel AManifest(bool frozen = false) => new(
-        Id, ConvoyId, Vin, ManifestStatus.Preparing, null, false,
+        Id, ConvoyId, Vin, ManifestStatus.Preparing, null,
         frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
 
     private static readonly VehicleCargoCapacityReadModel NoCapacityData = new(null, null, null, null);

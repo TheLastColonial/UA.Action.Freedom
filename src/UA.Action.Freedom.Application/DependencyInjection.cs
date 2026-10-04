@@ -124,6 +124,9 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListManifestCrewQuery, IReadOnlyList<VehicleCrewReadModel>?>, ListManifestCrewHandler>();
         services.AddScoped<IQueryHandler<ListManifestBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListManifestBoxesHandler>();
         services.AddScoped<ICommandHandler<AllocateBoxCommand, AllocateBoxOutcome>, AllocateBoxHandler>();
+        services.AddScoped<ICommandHandler<RecordFerryBookingCommand, RecordFerryBookingOutcome>, RecordFerryBookingHandler>();
+        services.AddScoped<ICommandHandler<RemoveFerryBookingCommand, RemoveFerryBookingOutcome>, RemoveFerryBookingHandler>();
+        services.AddScoped<IQueryHandler<GetFerryBookingQuery, FerryBookingReadModel?>, GetFerryBookingHandler>();
         services.AddScoped<ICommandHandler<RemoveBoxAllocationCommand, RemoveBoxAllocationOutcome>, RemoveBoxAllocationHandler>();
         services.AddScoped<IQueryHandler<ListVehicleBoxesQuery, IReadOnlyList<ManifestBoxReadModel>?>, ListVehicleBoxesHandler>();
         services.AddScoped<IQueryHandler<GetManifestWeightQuery, ManifestWeightReadModel?>, GetManifestWeightHandler>();

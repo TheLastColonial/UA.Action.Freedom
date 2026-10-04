@@ -29,7 +29,7 @@ public class ManifestTransitionHandlerTests
         Vin: Vin,
         Status: status,
         DeliveryNotes: null,
-        FerryBookingComplete: false,
+       
         GmrSubmittedAt: frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
 
     private const string Vin = "WVWZZZ1JZXW000001";

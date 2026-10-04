@@ -42,7 +42,7 @@ public class ManifestEndpointTests
 
     private static ManifestReadModel AManifest(
         ManifestStatus status = ManifestStatus.Created, bool frozen = false) => new(
-        Id, ConvoyId, Vin, status, null, FerryBookingComplete: false,
+        Id, ConvoyId, Vin, status, null,
         GmrSubmittedAt: frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
 
     /// <summary>

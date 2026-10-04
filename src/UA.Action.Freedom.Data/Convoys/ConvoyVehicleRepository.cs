@@ -439,6 +439,64 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
         return affected > 0;
     }
 
+    public async Task<FerryBookingReadModel?> GetFerryBookingAsync(
+        int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<FerryBookingReadModel>(new CommandDefinition(
+            $"""
+            SELECT f.ConvoyId, f.Vin, f.Operator, f.Reference, f.SailingAt, f.TicketDetails, f.CostGbp,
+                   {ChangeStamp.ReadColumns("f")}
+            FROM dbo.ConvoyVehicleFerryBooking AS f {ChangeStamp.ReadJoin("f")}
+            WHERE f.ConvoyId = @convoyId AND f.Vin = @vin
+            """,
+            new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<bool> RecordFerryBookingAsync(FerryBookingRecord booking, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        // Replace rather than accumulate, and only while the vehicle is travelling with the
+        // convoy: the MERGE source is empty for a withdrawn or unlisted vehicle, so nothing is written.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            MERGE dbo.ConvoyVehicleFerryBooking WITH (HOLDLOCK) AS target
+            USING (SELECT @ConvoyId AS ConvoyId, CAST(@Vin AS varchar(32)) AS Vin
+                   WHERE EXISTS (SELECT 1 FROM dbo.ConvoyVehicle
+                                 WHERE ConvoyId = @ConvoyId
+                                   AND Vin = CAST(@Vin AS varchar(32))
+                                   AND WithdrawnAt IS NULL)) AS source
+            ON target.ConvoyId = source.ConvoyId AND target.Vin = source.Vin
+            WHEN MATCHED THEN UPDATE SET
+                Operator = @Operator, Reference = @Reference, SailingAt = @SailingAt,
+                TicketDetails = @TicketDetails, CostGbp = @CostGbp,
+                LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN INSERT
+                (ConvoyId, Vin, Operator, Reference, SailingAt, TicketDetails, CostGbp, LastChangedBy, LastChangedAt)
+                VALUES (@ConvoyId, @Vin, @Operator, @Reference, @SailingAt, @TicketDetails, @CostGbp,
+                        @changedBy, SYSUTCDATETIME());
+            """,
+            attribution.With(booking),
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<bool> RemoveFerryBookingAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM dbo.ConvoyVehicleFerryBooking WHERE ConvoyId = @convoyId AND Vin = @vin",
+            new { convoyId, vin = SqlKey.Of(vin) },
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
     public async Task<IReadOnlyList<ManifestBoxReadModel>?> ListBoxesAsync(
         int convoyId, string vin, CancellationToken cancellationToken)
     {

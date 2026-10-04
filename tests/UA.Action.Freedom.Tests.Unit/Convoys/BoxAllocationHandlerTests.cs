@@ -22,7 +22,7 @@ public class BoxAllocationHandlerTests
         new(Vin, "AB12CDE", 1_800, 1, 0, withdrawnAt);
 
     private static ManifestReadModel AManifest(string vin, bool frozen) => new(
-        "MAN-1", ConvoyId, vin, ManifestStatus.Preparing, null, false, frozen ? Now : null);
+        "MAN-1", ConvoyId, vin, ManifestStatus.Preparing, null, frozen ? Now : null);
 
     private static (IConvoyVehicleRepository TruckList, IManifestRepository Manifests) Repositories(
         ConvoyVehicleReadModel? entry, ManifestReadModel? manifestOnTarget = null)

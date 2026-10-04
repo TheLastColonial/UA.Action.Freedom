@@ -33,7 +33,7 @@ public class EnsDeclarationHandlerTests
     private static readonly DateTimeOffset Accepted = new(2026, 8, 24, 9, 30, 0, TimeSpan.Zero);
 
     private static ManifestReadModel AManifest(bool frozen = false) => new(
-        Id, 42, Vin, ManifestStatus.Proposed, null, FerryBookingComplete: false,
+        Id, 42, Vin, ManifestStatus.Proposed, null,
         GmrSubmittedAt: frozen ? Stamped : null);
 
     private static RecordEnsDeclarationCommand ACommand(string mrn = Mrn) =>

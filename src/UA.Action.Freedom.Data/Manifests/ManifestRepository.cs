@@ -16,7 +16,7 @@ namespace UA.Action.Freedom.Data.Manifests;
 public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IManifestRepository
 {
     private static readonly string Columns =
-        $"m.Id, m.ConvoyId, m.Vin, m.Status, m.DeliveryNotes, m.FerryBookingComplete, m.GmrSubmittedAt, {ChangeStamp.ReadColumns("m")}";
+        $"m.Id, m.ConvoyId, m.Vin, m.Status, m.DeliveryNotes, m.GmrSubmittedAt, {ChangeStamp.ReadColumns("m")}";
 
     private static readonly string From = $"dbo.Manifest AS m {ChangeStamp.ReadJoin("m")}";
 
@@ -76,9 +76,9 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status, DeliveryNotes, FerryBookingComplete, LastChangedBy, LastChangedAt)
+            INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status, DeliveryNotes, LastChangedBy, LastChangedAt)
             VALUES (CAST(@Id AS varchar(32)), @ConvoyId, CAST(@Vin AS varchar(32)),
-                    @Status, @DeliveryNotes, @FerryBookingComplete, @changedBy, SYSUTCDATETIME())
+                    @Status, @DeliveryNotes, @changedBy, SYSUTCDATETIME())
             """,
             attribution.With(manifest),
             cancellationToken: cancellationToken));
@@ -96,7 +96,6 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
             """
             UPDATE dbo.Manifest SET
                 DeliveryNotes = @DeliveryNotes,
-                FerryBookingComplete = @FerryBookingComplete,
                 UpdatedAt = SYSUTCDATETIME(),
                 LastChangedBy = @changedBy,
                 LastChangedAt = SYSUTCDATETIME()

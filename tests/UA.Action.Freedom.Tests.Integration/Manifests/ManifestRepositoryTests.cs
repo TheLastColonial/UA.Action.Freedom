@@ -50,7 +50,7 @@ public class ManifestRepositoryTests
 
     private static ManifestReadModel AManifest(string id, TruckListEntry on) => new(
         id, on.ConvoyId, on.Vin, ManifestStatus.Created,
-        DeliveryNotes: "Integration test", FerryBookingComplete: false, GmrSubmittedAt: null);
+        DeliveryNotes: "Integration test", GmrSubmittedAt: null);
 
     /// <summary>
     /// A convoy with one vehicle on its truck list. The capacity columns are optional — nothing

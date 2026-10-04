@@ -112,7 +112,6 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
         manifests[manifest.Id] = existing with
         {
             DeliveryNotes = manifest.DeliveryNotes,
-            FerryBookingComplete = manifest.FerryBookingComplete,
         };
         changes.Stamp(manifest.Id);
 
