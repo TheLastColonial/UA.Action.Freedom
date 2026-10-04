@@ -172,3 +172,20 @@ Dockerfile and benchmark script are not committed (throwaway). Steps: `pip insta
 sentencepiece`, `optimum-cli export onnx --model Helsinki-NLP/opus-mt-en-uk --task text2text-generation-with-past out`,
 dynamic INT8 quantise with `ORTQuantizer`, then run a 20-line greedy decode in a `python:3.12-slim` container with
 `--network none --cpus 1 -m 2g`.
+
+## 6. Owner decisions (2026-10-04)
+
+The owner signed off the gate (PR #61).
+
+1. **No Microsoft built-in offline translation exists.** Accepted. Recorded as an open problem to solve
+   ([Q-label-translation](../domain/decisions.md#q-label-translation), gotchas section 9 item 9).
+2. **Free text:** a machine suggestion confirmed by the attesting Loader. Not built yet, see 4.
+3. **Ukrainian category names** are Administrator-edited data (`ItemCategory.NameUk`). They are not seeded with
+   translations by the implementation.
+4. **The translator is not built and where it runs is not decided.** Better solutions will be investigated. Increment 4
+   of the plan (the translator port and adapter) is **deferred**. Machine translation is a seam that is not wired.
+5. **No licence notice is chosen** ([Q-label-translator-licence](../domain/decisions.md#q-label-translator-licence)).
+
+Effect on the plan: nothing in Increments 1 to 3 and 5 to 7 needs the translator. The label prints the category's
+`NameUk` for the Ukrainian line (falling back to the English name where an Administrator has not entered one), so
+there is no free text on the label and nothing to translate yet.

@@ -1094,6 +1094,15 @@ address field to leak.
    without reaching into blob storage. Left unresolved rather than guessed; do not remove the
    `freedom_worker` role or the diagram edge until this is decided.
 
+9. **Translating the label into Ukrainian (plan 16, `Q-label-translation`).** There is no Microsoft built-in
+   offline translation usable from .NET in a Linux container at no fixed cost: the Translator disconnected container
+   needs strategic-customer approval and an annual commitment. OPUS-MT `en-uk` as INT8 ONNX works with networking
+   disabled (221 MB, about 8 s load, about 6 s per 20 lines, 0.76 GB peak) but about half of short item names came out
+   wrong, and it needs more than the 0.5 GiB sizing in `recommendations.md`. Nothing is built: the label prints the
+   category's `NameUk` (Administrator-edited), and a machine suggestion confirmed by the attesting Loader is a seam that is
+   not wired. Where a translator would run and which licence notice it needs are open. See
+   `docs/spikes/0011-offline-translation.md` and `docs/domain/decisions.md#q-label-translation`.
+
 ### Known bug, not ours to fix cheaply
 
 **`HMRC.PushPullNotifications` cannot deserialise a notification.** HMRC sends

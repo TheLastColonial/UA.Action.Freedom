@@ -161,3 +161,30 @@ Confirmed as a design constraint, not only a test:
    read it.
 6. **Sign off** the renderer rule in section 5: the renderer takes a purpose-built label line type, never a box or item
    read model.
+
+## 8. Owner decisions (2026-10-04)
+
+The owner signed off the gate (PR #61), with these answers to section 7.
+
+| # | Decision |
+|---|---|
+| 1 | The label identifies the signer by **both a signer code and first name with last initial** (for example `V-3F9A-21C4 Alex E.`). An erased volunteer reads "Former volunteer" and keeps the code. |
+| 2 | The label prints an **itemised list**, one line per item: **category and quantity**. Never properties, value, donor or donation. The free-text screening rule stands: free text is not printed, and if a description is ever printed it is only after the attesting Loader confirms it. |
+| 3 | **Medicine appears as its category**, and **expiry dates are printed** where an item has one. This is the owner's reading of the question. |
+| 4 | The renderer takes a purpose-built **label-line type, never a box or item read model**. Accepted, "not sure but yes": flagged for revisit ([Q-label-renderer-type](../domain/decisions.md#q-label-renderer-type)). |
+
+**Flags raised by this review against those answers:**
+
+- **Printing a name (decision 1) departs from the recommendation** in section 3, which preferred a signer code alone
+  because a printed name cannot be erased from a box that has shipped. The owner accepted the trade, with the name
+  reduced to a first name and last initial. Recorded as
+  [Q-label-signer-erasure](../domain/decisions.md#q-label-signer-erasure) to revisit with retention.
+- **Medicine and expiry dates on the label (decision 3)** make the load slightly more legible to a hostile reader (a
+  medicine category and a date window). Nothing here is an address or a person, the same information is on the customs
+  paperwork, and the privacy review does not object. Flagged only because the owner asked for it to be.
+- **Signer code:** derived, not stored. It is a one-way hash of the volunteer's random `PersonId`, so it needs no new
+  column, is stable across reprints, cannot be guessed, and survives an erasure (the anonymous identity key is kept).
+  It is a pseudonym, not anonymous data, and it can only be resolved inside Freedom.
+- **Ukrainian wording:** the label prints the category's `NameUk` (Administrator-edited). Where it is empty the line
+  falls back to the English name, so a label is never blank in the Ukrainian column. No machine translation is wired
+  (see the spike).
