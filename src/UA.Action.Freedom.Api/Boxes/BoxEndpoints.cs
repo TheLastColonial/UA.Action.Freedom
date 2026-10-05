@@ -125,6 +125,7 @@ public static class BoxEndpoints
                 _ => Results.Problem(detail: ValidatedProblem, statusCode: StatusCodes.Status409Conflict),
             };
         })
+        .RequireBoxScope(BoxAccess.Write)
         .RequireAuthorization(AuthenticationExtensions.BoxesWrite);
 
         boxes.MapPost("/{id:int}/replace", async (
