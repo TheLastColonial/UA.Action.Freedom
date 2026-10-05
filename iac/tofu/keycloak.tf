@@ -88,17 +88,25 @@ locals {
     GroundOfficer = "Coordinates with local authorities; the only role that may resolve receiver addresses."
   }
 
-  # Three seeded logins, each a member of the groups that carry its roles:
+  # Five seeded logins, each a member of the groups that carry its roles:
   #   Admin        — account, role and MFA administration only.
   #   Operator     — the day-to-day operational roles, so one login walks that whole path.
   #   GroundOfficer — kept as its own login so the receiver-address segregation that this
   #                   role carries in production (docs/domain/key-concepts.md, Data
   #                   Sensitivity) is preserved locally: no other seed user can resolve a
   #                   receiver address.
+  #   Loader       - a Loader and nothing else, so the scope of a Loader to the locations they manage
+  #                   (ADR 0010, O14) can be seen: Operator also holds Dispatcher, and roles union, so
+  #                   Operator is deliberately not scoped.
+  #   Leader       - no application role at all. ConvoyLeader is derived by the API from an open
+  #                   convoy-leader assignment, never issued here; this login becomes a leader when a
+  #                   Dispatcher nominates the volunteer it is linked to.
   seed_users = {
     Admin         = ["Administrator"]
     Operator      = ["Dispatcher", "Loader", "Mechanic", "Purchaser"]
     GroundOfficer = ["GroundOfficer"]
+    Loader        = ["Loader"]
+    Leader        = []
   }
 }
 

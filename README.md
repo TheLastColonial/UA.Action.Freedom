@@ -197,13 +197,15 @@ The `db-seed` service is optional and re-runnable — it guards against seeding 
 database. Integration/BDD suites create their own data and do not invoke it.
 
 `tofu apply` also provisions the public PKCE Keycloak client (`freedom-spa`) the operator UI
-signs in with. The UI is then at <http://localhost:8080/app/>; all three seed logins work
+signs in with. The UI is then at <http://localhost:8080/app/>; all the seed logins work
 through the browser.
 
 **Test logins** (all have password `password`):
 - `admin` — Administrator role
 - `operator` — Dispatcher, Loader, Mechanic, Purchaser roles
 - `groundofficer` — GroundOfficer role (segregated access to delivery addresses)
+- `loader` — Loader role only, so it is **scoped to the locations an Administrator assigns it** (`operator` also holds Dispatcher, roles union, so `operator` is not scoped)
+- `leader` — no application role at all: it becomes a Convoy Leader, for that one convoy, when a Dispatcher nominates the volunteer it is linked to
 
 **After changing code**, rebuild the images before running the BDD or Playwright suites, which drive
 the *deployed containers* rather than an in-process host:
@@ -275,7 +277,7 @@ Core resource endpoints:
   - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/crew/{personId}` — Vehicle crew: an optional `{ "role": "Driver" | "Passenger" }` body (default Driver); a person takes one seat per convoy (**Dispatcher only** for `PUT`/`DELETE`; `GET` is in `convoys:read`)
   - `POST /convoys/{id}/vehicles/{vin}/manifest` — **Open the manifest for this vehicle on this convoy.** There is no `POST /manifests`: a manifest is the paperwork for a truck-list entry, and `(ConvoyId, Vin)` is a composite foreign key to it (`convoys:write`)
   - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/insurance` — The vehicle's insurance for this convoy. It names the drivers it covers (`uncoveredDrivers` lists crew drivers added since); removing a driver keeps it in cover, and a manifest cannot depart without it covering every driver (`convoys:write`)
-  - `GET /convoys/{id}/vehicles/{vin}/boxes`, `PUT|DELETE /convoys/{id}/vehicles/{vin}/boxes/{boxId}` — The vehicle's **cargo**: the boxes allocated to its truck-list entry. A box is on at most one vehicle, so `PUT` on a second one *moves* it. Refused `409` for a withdrawn vehicle or one whose manifest has a GMR (until plan 15). Read is `boxes:read`, write is `boxes:write` (Administrator, Dispatcher, Loader)
+  - `GET /convoys/{id}/vehicles/{vin}/boxes`, `PUT|DELETE /convoys/{id}/vehicles/{vin}/boxes/{boxId}` — The vehicle's **cargo**: the boxes allocated to its truck-list entry. A box is on at most one vehicle, so `PUT` on a second one *moves* it. Refused `409` for a withdrawn vehicle or one whose manifest has a GMR (until plan 15). Read is `convoys:read-led` (every operational role, and the Convoy Leader of that convoy), write is `boxes:write` (Administrator, Dispatcher, Loader), and a scoped Loader may only move a box at a location they manage
   - `GET|PUT|DELETE /convoys/{id}/vehicles/{vin}/ferry` — The vehicle's outbound ferry booking (operator, reference, sailing, ticket details, optional cost) — per vehicle, outbound only, because vehicles are handed over rather than driven back (`convoys:write`)
   - `GET|PUT /convoys/{id}/budget` — The convoy's budget: a planned amount per cost type (Fuel, Ferry, Hotel, Insurance, Other). `PUT` replaces every line and a type left out has none (`convoys:write`; read `convoys:read`). **Not required to depart**
   - `GET /convoys/{id}/budget/summary` — Budget beside actuals per cost type, with an over-budget flag. Ferry and insurance actuals are **read from the booking or policy**, never entered; equipment counts under Other and is also shown as `equipmentGbp` (`convoys:read`)
@@ -330,6 +332,7 @@ Core resource endpoints:
 - `GET|POST /locations` — Distribution hubs (garages/warehouses); writes are **Administrator only**
   - `PUT|DELETE /locations/{id}` — Rename or remove a location
   - `GET|POST /locations/{id}/bays` — Bays within a location (code unique per location, not globally)
+  - `GET /locations/{id}/loaders`, `PUT|DELETE /locations/{id}/loaders/{personId}` — Who manages a location (O14, O31): a Loader sees only the locations with an open assignment. `DELETE` closes the row and keeps the history. **Administrator only** (`locations:write`)
   - `PUT|DELETE /locations/{id}/bays/{bayId}` — Rename or remove a bay
 - `PUT|GET|DELETE /boxes/{id}/bay` — Place, read or vacate a box's bay assignment (`PUT`/`DELETE` are **Loader only** — `boxes:allocate-bay`, narrower than `boxes:write`; `GET` is `boxes:read`)
   - `GET /boxes/{id}/bay/history` — Every bay the box has occupied, most recent first (`boxes:read`)
@@ -363,7 +366,7 @@ a label, shows it inline and prints it (a print stylesheet reveals the label alo
 - Sign-in is **Authorization Code + PKCE** against the public Keycloak client `freedom-spa`
   (`iac/tofu/keycloak.tf`); the resulting JWT is sent as `Authorization: Bearer`. The API is
   unchanged — still a pure JWT resource server.
-- Nav and actions are gated by the same 24-policy matrix the API enforces
+- Nav and actions are gated by the same 28-policy matrix the API enforces
   (`docs/local-authentication.md`); the API remains the enforcement point. Receiver street
   addresses are never rendered on any print/verification view.
 
@@ -371,6 +374,7 @@ a label, shows it inline and prints it (a print stylesheet reveals the label alo
 
 - JWT bearer tokens via OIDC (Keycloak locally, Microsoft Entra External ID in Azure)
 - Role-based policies: `Administrator`, `Dispatcher`, `Loader`, `Purchaser`, `Mechanic`, `GroundOfficer`
+- **Resource-scoped permissions** ([ADR 0010](docs/adr/0010-resource-scoped-permissions.md)): a role says what a caller may do and an assignment says *to what*, so `ConvoyLeader` is **derived per request** from an open `dbo.ConvoyLeaderAssignment` (no identity-provider role, nothing in the token) and a `Loader` reaches only the locations with an open `dbo.LoaderLocationAssignment`. One `ScopedAuthorizationHandler` (`Api/Configuration/Scope/`) decides, fails closed, and reads the assignments on every request. An Administrator, Dispatcher or Purchaser is not narrowed (roles union), and a login not linked to a volunteer reaches nothing scoped. Lists filter in the query through a no-default `LocationVisibility`; an endpoint-map test fails the build for a route a Loader or leader can reach that declares neither a scope nor an exemption. An out-of-scope route is `403` (`out-of-scope`), except `GET /boxes/scan/{token}`, which answers `404` like an unknown token
 - `Mechanic` is vehicles-only: it edits the fleet and records servicing inspections (`vehicles:service`, shared with Administrator), and nothing else
 - **Critical**: `GroundOfficer` has segregated access to receiver delivery addresses only
 

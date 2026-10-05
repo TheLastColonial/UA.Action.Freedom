@@ -10,6 +10,8 @@ export function meApi(overrides: Partial<Me> = {}): RequestHandler[] {
     roles: [],
     personId: 'caller-person-id',
     displayName: 'Val Checker',
+    ledConvoyIds: [],
+    managedLocationIds: [],
     ...overrides,
   };
 

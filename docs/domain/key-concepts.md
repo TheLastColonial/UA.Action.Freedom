@@ -57,7 +57,7 @@ boundary between the donor and Ukrainian Action.
 Also the only role that may place a [Box](#box) in a [Bay](#bay) — narrower even than validating a box,
 because it is the physical, on-site act of shelving one so it can be found again for loading.
 
-A Loader **sees only the locations they manage** ([O14](decisions.md#o14)).
+A Loader **sees only the locations they manage** ([O14](decisions.md#o14)): the ones an Administrator has assigned them ([O31](decisions.md#o31)), with the history of who managed a hub when kept. That is enforced by the API on every route, lists and the label scan included ([ADR 0010](../adr/0010-resource-scoped-permissions.md)). A box that is expected but not yet at any location can be read by any Loader and is checked in by moving it to a location they manage. A person who also holds another role (Dispatcher, Purchaser, Administrator) has that role's reach: capabilities union.
 
 ### Purchaser
 
@@ -101,8 +101,7 @@ their manifest, but do not administer the system. A driver may be *committed* to
 
 The one [Driver](#driver) crewed on a convoy who leads it ([D8](decisions.md#d8), [P7](decisions.md#p7)). The Dispatcher or
 Administrator nominates them and is the only one who reassigns ([D17](decisions.md#d17), [P14](decisions.md#p14)); every
-earlier leader is kept in the history with the dates. A leader is a fact about the convoy for now, not a login capability:
-the leader's own permissions arrive with scoped permissions. A leader cannot be taken off the crew until another is
+earlier leader is kept in the history with the dates. The login of the volunteer who leads a convoy may read **that convoy only** (its route, its truck list and a vehicle's cargo) for as long as the assignment is open: the role is derived from the assignment on every request, so a Dispatcher marks a leader by nominating them and reassigning takes the access away at once ([ADR 0010](../adr/0010-resource-scoped-permissions.md)). The leader's own actions and address reads arrive with plans 14, 18 and 19, and the access ends when the convoy closes. A leader cannot be taken off the crew until another is
 nominated, so a convoy is never left silently without one.
 
 ### Volunteer erasure

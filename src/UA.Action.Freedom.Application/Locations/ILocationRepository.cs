@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Abstractions;
 namespace UA.Action.Freedom.Application.Locations;
 
 /// <summary>
@@ -7,7 +8,8 @@ public interface ILocationRepository
 {
     Task<LocationReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<LocationReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken);
+    Task<IReadOnlyList<LocationReadModel>> ListAsync(
+        int page, int pageSize, LocationVisibility visibility, CancellationToken cancellationToken);
 
     Task<bool> ExistsAsync(int id, CancellationToken cancellationToken);
 

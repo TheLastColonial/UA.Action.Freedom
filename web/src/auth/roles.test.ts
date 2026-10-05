@@ -30,7 +30,15 @@ describe('parseRolesClaim', () => {
 
   it('exposes every application role', () => {
     expect([...ALL_ROLES].sort()).toEqual(
-      ['Administrator', 'Dispatcher', 'GroundOfficer', 'Loader', 'Mechanic', 'Purchaser'].sort(),
+      [
+        'Administrator',
+        'ConvoyLeader',
+        'Dispatcher',
+        'GroundOfficer',
+        'Loader',
+        'Mechanic',
+        'Purchaser',
+      ].sort(),
     );
   });
 });

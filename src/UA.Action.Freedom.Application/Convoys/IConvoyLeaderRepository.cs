@@ -36,4 +36,7 @@ public interface IConvoyLeaderRepository
     Task<NominateLeaderResult> NominateAsync(int convoyId, Guid personId, DateTime at, CancellationToken cancellationToken);
 
     Task<bool> IsCurrentLeaderAsync(int convoyId, Guid personId, CancellationToken cancellationToken);
+
+    /// <summary>The convoys <paramref name="personId"/> currently leads: the open assignments, and no others.</summary>
+    Task<IReadOnlyList<int>> LedConvoyIdsAsync(Guid personId, CancellationToken cancellationToken);
 }

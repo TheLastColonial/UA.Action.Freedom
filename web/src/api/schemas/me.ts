@@ -7,6 +7,9 @@ export const meSchema = z.object({
   roles: z.array(z.string()),
   personId: z.string().nullable(),
   displayName: z.string().nullable(),
+  // From the assignment tables on every call, never from the token (ADR 0010).
+  ledConvoyIds: z.array(z.number().int()),
+  managedLocationIds: z.array(z.number().int()),
 });
 
 export type Me = z.infer<typeof meSchema>;

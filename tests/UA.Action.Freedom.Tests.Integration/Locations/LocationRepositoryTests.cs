@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Abstractions;
 using AwesomeAssertions;
 using UA.Action.Freedom.Application.Locations;
 using UA.Action.Freedom.Data.Locations;
@@ -93,7 +94,7 @@ public class LocationRepositoryTests
 
         try
         {
-            var page = await repository.ListAsync(1, 200, cancellationToken);
+            var page = await repository.ListAsync(1, 200, LocationVisibility.All, cancellationToken);
 
             page.Should().Contain(location => location.Id == id);
         }

@@ -227,7 +227,7 @@ public class BoxEndpointTests
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         problem.GetProperty("type").GetString().Should().Be("login-not-linked");
         (await client.GetAsync($"/boxes/{BoxId}/bay", TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden, "an unlinked Loader is scoped to nothing, so even the read is out of reach");
     }
 
     [Fact]

@@ -71,9 +71,10 @@ internal sealed class InMemoryBoxRepository : IBoxRepository, IRecordsWhoChanged
     public Task<BoxReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken) =>
         Task.FromResult(boxes.TryGetValue(id, out var box) ? Read(box) : null);
 
-    public Task<IReadOnlyList<BoxReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken) =>
+    public Task<IReadOnlyList<BoxReadModel>> ListAsync(
+        int page, int pageSize, LocationVisibility visibility, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<BoxReadModel>>(
-            boxes.Values.OrderBy(box => box.Id).Skip((page - 1) * pageSize).Take(pageSize).Select(Read).ToList());
+            boxes.Values.Where(box => visibility.Allows(box.LocationId)).OrderBy(box => box.Id).Skip((page - 1) * pageSize).Take(pageSize).Select(Read).ToList());
 
     public Task<bool> ExistsAsync(int id, CancellationToken cancellationToken) =>
         Task.FromResult(boxes.ContainsKey(id));

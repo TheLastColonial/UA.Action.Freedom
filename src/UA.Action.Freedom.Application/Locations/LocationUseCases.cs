@@ -86,7 +86,7 @@ public sealed class GetLocationByIdHandler(ILocationRepository repository)
 }
 
 /// <summary>A page of locations. Page size is clamped to 1..200.</summary>
-public sealed record ListLocationsQuery(int Page, int PageSize);
+public sealed record ListLocationsQuery(int Page, int PageSize, LocationVisibility Visibility);
 
 public sealed class ListLocationsHandler(ILocationRepository repository)
     : IQueryHandler<ListLocationsQuery, IReadOnlyList<LocationReadModel>>
@@ -99,6 +99,6 @@ public sealed class ListLocationsHandler(ILocationRepository repository)
         var page = query.Page < 1 ? 1 : query.Page;
         var pageSize = query.PageSize is < 1 or > MaxPageSize ? DefaultPageSize : query.PageSize;
 
-        return repository.ListAsync(page, pageSize, cancellationToken);
+        return repository.ListAsync(page, pageSize, query.Visibility, cancellationToken);
     }
 }
