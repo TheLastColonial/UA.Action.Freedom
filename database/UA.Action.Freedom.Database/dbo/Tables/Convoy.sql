@@ -40,3 +40,8 @@ CREATE TABLE [dbo].[Convoy] (
     CONSTRAINT [CK_Convoy_CrossingMode] CHECK ([CrossingMode] >= 0 AND [CrossingMode] <= 1),
     CONSTRAINT [FK_Convoy_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
+
+GO
+
+CREATE INDEX [IX_Convoy_LastChangedBy] ON [dbo].[Convoy] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

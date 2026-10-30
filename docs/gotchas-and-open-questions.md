@@ -565,7 +565,9 @@ foreign key to the truck-list entry is NO ACTION on purpose.
 
 **Index the foreign keys to `dbo.Person` on any new table.** Every erasure checks them; an unindexed one scans the
 table under lock, and `dbo.Declaration` deadlocked the BDD suite's person erasure against a declaration being filed
-until `IX_Declaration_RecordedBy` and `IX_Declaration_LastChangedBy` were added.
+until `IX_Declaration_RecordedBy` and `IX_Declaration_LastChangedBy` were added. The same went for 24 foreign keys on the
+other entity tables (every `LastChangedBy`, plus the three person columns), which deadlocked BDD erasures in CI. They are
+indexed now, and `PersonForeignKeyIndexTests` fails the Integration suite for any foreign key to `dbo.Person` without one.
 
 ---
 

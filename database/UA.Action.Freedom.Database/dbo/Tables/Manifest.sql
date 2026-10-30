@@ -47,5 +47,10 @@ CREATE TABLE [dbo].[Manifest] (
 GO
 
 -- "Which manifests are on convoy 7?" was a table scan: the only index was the clustered key on Id.
+GO
+
 CREATE INDEX [IX_Manifest_ConvoyId] ON [dbo].[Manifest] ([ConvoyId]);
+GO
+
+CREATE INDEX [IX_Manifest_LastChangedBy] ON [dbo].[Manifest] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
 GO

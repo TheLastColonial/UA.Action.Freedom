@@ -25,3 +25,6 @@ CREATE TABLE [dbo].[ItemCategory] (
     CONSTRAINT [FK_ItemCategory_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
+
+CREATE INDEX [IX_ItemCategory_LastChangedBy] ON [dbo].[ItemCategory] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

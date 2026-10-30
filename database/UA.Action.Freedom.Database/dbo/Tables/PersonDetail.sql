@@ -26,11 +26,18 @@ GO
 
 -- The login (token subject) a volunteer signs in with, set by an Administrator. It lives on the
 -- detail row, so erasing the volunteer erases the link. One login belongs to one person.
+GO
+
 CREATE UNIQUE INDEX [UX_PersonDetail_IdentitySubject] ON [dbo].[PersonDetail] ([IdentitySubject])
     WHERE [IdentitySubject] IS NOT NULL;
 GO
 
 -- The dispatcher's shortlist is "drivers, by name". Everything else pages the full roster in
 -- the same order, so one index serves both reads.
+GO
+
 CREATE INDEX [IX_PersonDetail_IsDriver_Name] ON [dbo].[PersonDetail] ([IsDriver], [LastName], [FirstName], [PersonId]);
+GO
+
+CREATE INDEX [IX_PersonDetail_LastChangedBy] ON [dbo].[PersonDetail] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
 GO

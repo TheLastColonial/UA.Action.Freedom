@@ -30,3 +30,6 @@ GO
 
 CREATE INDEX [IX_BoxBayAssignment_BayId] ON [dbo].[BoxBayAssignment] ([BayId]);
 GO
+
+CREATE INDEX [IX_BoxBayAssignment_AssignedByPersonId] ON [dbo].[BoxBayAssignment] ([AssignedByPersonId]);
+GO

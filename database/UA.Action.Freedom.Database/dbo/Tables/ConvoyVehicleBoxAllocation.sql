@@ -26,3 +26,6 @@ GO
 
 CREATE INDEX [IX_ConvoyVehicleBoxAllocation_ConvoyVehicle] ON [dbo].[ConvoyVehicleBoxAllocation] ([ConvoyId], [Vin]);
 GO
+
+CREATE INDEX [IX_ConvoyVehicleBoxAllocation_LastChangedBy] ON [dbo].[ConvoyVehicleBoxAllocation] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

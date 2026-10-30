@@ -24,5 +24,10 @@ CREATE UNIQUE INDEX [UX_ConvoyLeaderAssignment_OpenPerConvoy] ON [dbo].[ConvoyLe
 GO
 
 -- Every erasure asks whether a record names the person, and an unindexed foreign key scans under lock.
+GO
+
 CREATE INDEX [IX_ConvoyLeaderAssignment_PersonId] ON [dbo].[ConvoyLeaderAssignment] ([PersonId]);
+GO
+
+CREATE INDEX [IX_ConvoyLeaderAssignment_LastChangedBy] ON [dbo].[ConvoyLeaderAssignment] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
 GO

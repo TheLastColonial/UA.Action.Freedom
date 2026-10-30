@@ -15,3 +15,6 @@ CREATE TABLE [dbo].[CategoryCustomsCode] (
     CONSTRAINT [FK_CategoryCustomsCode_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
+
+CREATE INDEX [IX_CategoryCustomsCode_LastChangedBy] ON [dbo].[CategoryCustomsCode] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

@@ -17,3 +17,8 @@ CREATE TABLE [dbo].[Bay] (
     CONSTRAINT [UQ_Bay_Location_Code] UNIQUE ([LocationId], [Code]),
     CONSTRAINT [FK_Bay_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
+
+GO
+
+CREATE INDEX [IX_Bay_LastChangedBy] ON [dbo].[Bay] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

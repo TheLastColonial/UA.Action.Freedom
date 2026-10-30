@@ -19,3 +19,6 @@ GO
 
 CREATE INDEX [IX_Donation_DonorId_ReceivedOn] ON [dbo].[Donation] ([DonorId], [ReceivedOn] DESC, [Id] DESC);
 GO
+
+CREATE INDEX [IX_Donation_LastChangedBy] ON [dbo].[Donation] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

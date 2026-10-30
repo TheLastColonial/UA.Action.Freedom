@@ -20,3 +20,8 @@ CREATE TABLE [dbo].[Location] (
     [LastChangedAt] datetime2(0)     NULL,
     CONSTRAINT [FK_Location_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
+
+GO
+
+CREATE INDEX [IX_Location_LastChangedBy] ON [dbo].[Location] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

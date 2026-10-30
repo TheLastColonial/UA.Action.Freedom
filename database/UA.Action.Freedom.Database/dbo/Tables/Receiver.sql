@@ -23,3 +23,8 @@ CREATE TABLE [dbo].[Receiver] (
     CONSTRAINT [CK_Receiver_Status] CHECK ([Status] >= 0 AND [Status] <= 3),
     CONSTRAINT [FK_Receiver_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
+
+GO
+
+CREATE INDEX [IX_Receiver_LastChangedBy] ON [dbo].[Receiver] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

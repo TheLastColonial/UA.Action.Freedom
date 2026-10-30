@@ -66,3 +66,6 @@ CREATE TABLE [dbo].[Vehicle] (
     CONSTRAINT [FK_Vehicle_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
 GO
+
+CREATE INDEX [IX_Vehicle_LastChangedBy] ON [dbo].[Vehicle] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

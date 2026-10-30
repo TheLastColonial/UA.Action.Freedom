@@ -60,4 +60,14 @@ CREATE TABLE [dbo].[Box] (
 GO
 
 -- A box is replaced at most once, and this also indexes the self-reference.
+GO
+
 CREATE UNIQUE INDEX [UX_Box_ReplacesBoxId] ON [dbo].[Box] ([ReplacesBoxId]) WHERE [ReplacesBoxId] IS NOT NULL;
+
+GO
+
+CREATE INDEX [IX_Box_LastChangedBy] ON [dbo].[Box] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO
+
+CREATE INDEX [IX_Box_ValidatedByPersonId] ON [dbo].[Box] ([ValidatedByPersonId]) WHERE [ValidatedByPersonId] IS NOT NULL;
+GO

@@ -40,3 +40,8 @@ CREATE TABLE [dbo].[ConvoyRouteStop] (
     CONSTRAINT [FK_ConvoyRouteStop_Convoy] FOREIGN KEY ([ConvoyId]) REFERENCES [dbo].[Convoy] ([Id]) ON DELETE CASCADE,
     CONSTRAINT [FK_ConvoyRouteStop_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
+
+GO
+
+CREATE INDEX [IX_ConvoyRouteStop_LastChangedBy] ON [dbo].[ConvoyRouteStop] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

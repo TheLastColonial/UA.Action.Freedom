@@ -47,3 +47,6 @@ GO
 
 CREATE INDEX [IX_BoxItem_DonationId] ON [dbo].[BoxItem] ([DonationId]) WHERE [DonationId] IS NOT NULL;
 GO
+
+CREATE INDEX [IX_BoxItem_LastChangedBy] ON [dbo].[BoxItem] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO
