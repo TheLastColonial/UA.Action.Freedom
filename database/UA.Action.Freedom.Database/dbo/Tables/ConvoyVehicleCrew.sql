@@ -41,5 +41,10 @@ CREATE TABLE [dbo].[ConvoyVehicleCrew] (
 GO
 
 -- "Is this volunteer on a live crew?" — the erasure check in PersonRepository reads this way.
+GO
+
 CREATE INDEX [IX_ConvoyVehicleCrew_PersonId] ON [dbo].[ConvoyVehicleCrew] ([PersonId]);
+GO
+
+CREATE INDEX [IX_ConvoyVehicleCrew_LastChangedBy] ON [dbo].[ConvoyVehicleCrew] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
 GO

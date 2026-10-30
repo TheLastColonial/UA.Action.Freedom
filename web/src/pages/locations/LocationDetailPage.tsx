@@ -10,6 +10,7 @@ import { LastChanged } from '../../components/LastChanged';
 import { NotFound } from '../../components/NotFound';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { BaysPanel } from './BaysPanel';
+import { LoadersPanel } from './LoadersPanel';
 
 export function LocationDetailPage(): JSX.Element {
   const { id = '' } = useParams();
@@ -79,6 +80,10 @@ export function LocationDetailPage(): JSX.Element {
       </DetailCard>
 
       <BaysPanel locationId={location.id} />
+
+      <Gate policy="locations:write">
+        <LoadersPanel locationId={location.id} />
+      </Gate>
     </section>
   );
 }

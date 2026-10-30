@@ -33,3 +33,8 @@ CREATE TABLE [dbo].[ConvoyVehicleInsurance] (
     CONSTRAINT [CK_ConvoyVehicleInsurance_Cover] CHECK ([CoverEnd] >= [CoverStart]),
     CONSTRAINT [CK_ConvoyVehicleInsurance_Cost] CHECK ([CostGbp] IS NULL OR [CostGbp] >= 0)
 );
+
+GO
+
+CREATE INDEX [IX_ConvoyVehicleInsurance_RecordedByPersonId] ON [dbo].[ConvoyVehicleInsurance] ([RecordedByPersonId]);
+GO

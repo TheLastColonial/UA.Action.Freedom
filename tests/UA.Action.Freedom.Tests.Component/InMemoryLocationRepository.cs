@@ -38,9 +38,10 @@ internal sealed class InMemoryLocationRepository : ILocationRepository, IRecords
     public Task<LocationReadModel?> GetByIdAsync(int id, CancellationToken cancellationToken) =>
         Task.FromResult(locations.TryGetValue(id, out var location) ? Read(location) : null);
 
-    public Task<IReadOnlyList<LocationReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken) =>
+    public Task<IReadOnlyList<LocationReadModel>> ListAsync(
+        int page, int pageSize, LocationVisibility visibility, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<LocationReadModel>>(
-            locations.Values.OrderBy(location => location.Id).Skip((page - 1) * pageSize).Take(pageSize).Select(Read).ToList());
+            locations.Values.Where(location => visibility.IsAll || visibility.LocationIds.Contains(location.Id)).OrderBy(location => location.Id).Skip((page - 1) * pageSize).Take(pageSize).Select(Read).ToList());
 
     public Task<bool> ExistsAsync(int id, CancellationToken cancellationToken) =>
         Task.FromResult(locations.ContainsKey(id));

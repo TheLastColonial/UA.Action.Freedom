@@ -18,3 +18,8 @@ CREATE TABLE [sensitive].[ReceiverDetail] (
     [LastChangedAt] datetime2(0)     NULL,
     CONSTRAINT [FK_ReceiverDetail_LastChangedBy] FOREIGN KEY ([LastChangedBy]) REFERENCES [dbo].[Person] ([Id])
 );
+
+GO
+
+CREATE INDEX [IX_ReceiverDetail_LastChangedBy] ON [sensitive].[ReceiverDetail] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

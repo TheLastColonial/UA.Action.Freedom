@@ -1,4 +1,5 @@
 using UA.Action.Freedom.Api.Configuration;
+using UA.Action.Freedom.Api.Configuration.Scope;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Locations;
 
@@ -17,13 +18,16 @@ public static class LocationEndpoints
 
         locations.MapGet("/", async (
             IQueryHandler<ListLocationsQuery, IReadOnlyList<LocationReadModel>> handler,
+            IScopeGuard guard,
             CancellationToken cancellationToken,
             int? page,
             int? pageSize) =>
         {
-            var result = await handler.HandleAsync(new ListLocationsQuery(page ?? 1, pageSize ?? 50), cancellationToken);
+            var visibility = await guard.LocationVisibilityAsync(cancellationToken);
+            var result = await handler.HandleAsync(new ListLocationsQuery(page ?? 1, pageSize ?? 50, visibility), cancellationToken);
             return Results.Ok(result);
         })
+        .ScopeExempt("a list: narrowed in the query by the caller's LocationVisibility")
         .RequireAuthorization(AuthenticationExtensions.LocationsRead);
 
         locations.MapGet("/{id:int}", async (
@@ -34,6 +38,7 @@ public static class LocationEndpoints
             var location = await handler.HandleAsync(new GetLocationByIdQuery(id), cancellationToken);
             return location is null ? Results.NotFound() : Results.Ok(location);
         })
+        .RequireLocationScope()
         .RequireAuthorization(AuthenticationExtensions.LocationsRead);
 
         locations.MapPost("/", async (
@@ -77,6 +82,7 @@ public static class LocationEndpoints
             var bays = await handler.HandleAsync(new ListBaysQuery(id), cancellationToken);
             return bays is null ? Results.NotFound() : Results.Ok(bays);
         })
+        .RequireLocationScope()
         .RequireAuthorization(AuthenticationExtensions.LocationsRead);
 
         locations.MapPost("/{id:int}/bays", async (
@@ -128,6 +134,53 @@ public static class LocationEndpoints
         {
             var outcome = await handler.HandleAsync(new DeleteBayCommand(bayId), cancellationToken);
             return outcome == DeleteBayOutcome.NotFound ? Results.NotFound() : Results.NoContent();
+        })
+        .RequireAuthorization(AuthenticationExtensions.LocationsWrite);
+
+        // Who manages a location (O31). A Loader sees only the locations with an open row here (O14), and only an
+        // Administrator writes them.
+        locations.MapGet("/{id:int}/loaders", async (
+            int id,
+            IQueryHandler<ListLoadersQuery, IReadOnlyList<LoaderAssignmentReadModel>?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var loaders = await handler.HandleAsync(new ListLoadersQuery(id), cancellationToken);
+            return loaders is null ? Results.NotFound() : Results.Ok(loaders);
+        })
+        .RequireAuthorization(AuthenticationExtensions.LocationsWrite);
+
+        locations.MapPut("/{id:int}/loaders/{personId:guid}", async (
+            int id,
+            Guid personId,
+            ICommandHandler<AssignLoaderCommand, AssignLoaderOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new AssignLoaderCommand(id, personId), cancellationToken);
+
+            return outcome switch
+            {
+                AssignLoaderOutcome.Assigned => Results.NoContent(),
+                AssignLoaderOutcome.LocationNotFound => Results.NotFound(),
+                AssignLoaderOutcome.PersonNotFound => Results.Problem(
+                    detail: "There is no such volunteer.",
+                    type: "person-not-found",
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+                _ => Results.Problem(
+                    detail: "That volunteer already manages this location.",
+                    type: "loader-already-assigned",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.LocationsWrite);
+
+        locations.MapDelete("/{id:int}/loaders/{personId:guid}", async (
+            int id,
+            Guid personId,
+            ICommandHandler<UnassignLoaderCommand, UnassignLoaderOutcome> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcome = await handler.HandleAsync(new UnassignLoaderCommand(id, personId), cancellationToken);
+            return outcome == UnassignLoaderOutcome.Unassigned ? Results.NoContent() : Results.NotFound();
         })
         .RequireAuthorization(AuthenticationExtensions.LocationsWrite);
 

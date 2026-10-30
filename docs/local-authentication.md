@@ -117,7 +117,7 @@ enforces it.
 
 ---
 
-## The three seed logins
+## The seed logins
 
 They are named for what they can do, not for people — they are fixtures, and seeding realistic
 volunteer names would put invented personal data in version control for no benefit.
@@ -127,6 +127,8 @@ volunteer names would put invented personal data in version control for no benef
 | `admin` | `Administrator` | Approving manifests, managing volunteers — anything an Administrator alone may do. |
 | `operator` | `Dispatcher`, `Loader`, `Mechanic`, `Purchaser` | The day-to-day operational path. One login walks the whole convoy workflow — including passing a vehicle at inspection, which a convoy requires before the vehicle may join. |
 | `groundofficer` | `GroundOfficer` | Receivers, and **the only login that can resolve a Ukrainian delivery address.** |
+| `loader` | `Loader` | A Loader and nothing else, so it is **scoped to the locations an Administrator assigns it** (`PUT /locations/{id}/loaders/{personId}`) and sees no box at any other. `operator` also holds Dispatcher and roles union, so `operator` is not scoped. |
+| `leader` | none | No application role at all. `ConvoyLeader` is **derived from an open assignment**, not issued: once a Dispatcher nominates the volunteer this login is linked to (a Driver crewed on the convoy), the login may read that convoy and no other, until it is reassigned. |
 
 `groundofficer` is deliberately isolated: it holds *no* other role, so it cannot read vehicles,
 volunteers, convoys, boxes or manifests. That mirrors the segregation the role carries in
@@ -160,8 +162,12 @@ Erasing a volunteer deletes the link with their personal data, so `GET /me` read
 
 **Keycloak generates a subject per user each time the realm is imported**, so the seed logins'
 subjects change whenever the realm is recreated (`docker compose down -v` plus `tofu apply`) and
-cannot be seeded. `database/seed/dev-seed.sql` therefore adds a volunteer for each seed login
-(*Ada Admin*, *Olly Operator*, *Gus Ground*) **without** a subject; link them as above. The BDD
+cannot be seeded in the SQL. `database/seed/dev-seed.sql` therefore adds a volunteer for each seed
+login (*Ada Admin*, *Olly Operator*, *Gus Ground*, *Lou Loader*, *Lee Leader*), and
+`docker compose up db-seed` then **links them automatically**: `database/seed.sh` reads each login's
+subject from Keycloak's admin API and sets it on the matching volunteer. Run it after `tofu apply`.
+If a login is missing from Keycloak it warns and leaves that volunteer unlinked. A database seeded
+before *Lou* and *Lee* were added needs `docker compose down -v` and a fresh seed to get them. The BDD
 suite does this itself: `LoginLinkHooks` links every seed login before the run, reusing the
 volunteer it made last time, because nothing it could hard-code would survive a realm recreation.
 
@@ -217,6 +223,7 @@ token lacking the role is **403**.
 | `convoys:write` | ✓ | ✓ | | | | |
 | `convoys:assign-drivers` | | ✓ | | | | |
 | `convoys:lead-assign` | ✓ | ✓ | | | | |
+| `convoys:read-led` | ✓ | ✓ | ✓ | ✓ | | |
 | `boxes:read` | ✓ | ✓ | ✓ | ✓ | | |
 | `boxes:write` | ✓ | ✓ | ✓ | | | |
 | `boxes:validate` | ✓ | | ✓ | | | |
@@ -242,8 +249,13 @@ A few rows are worth understanding rather than memorising:
 - **`convoys:write` also covers a vehicle's insurance, opening a manifest against a truck-list
   entry, and marking a convoy arrived** — all of it the Dispatcher's (and Administrator's)
   coordination work. Crewing stays narrower, `convoys:assign-drivers`, and it is one seat per person per convoy.
-  Nominating or reassigning the Convoy Leader is `convoys:lead-assign`, Administrator and Dispatcher (P14). A leader is a fact
-  about the convoy, not yet a login capability: their own permissions arrive with scoped permissions (plan 17).
+  Nominating or reassigning the Convoy Leader is `convoys:lead-assign`, Administrator and Dispatcher (P14). The nominated login is then a Convoy Leader **for that
+  convoy only**: `ConvoyLeader` is not a role the identity provider issues (no token carries it) but one the API derives on every request from the open
+  assignment, so it never outlives a reassignment. It reaches `convoys:read-led` on that convoy alone (`GET /convoys/{id}`, `/route`, `/vehicles`, `/vehicles/{vin}/boxes`), and
+  the matrix row above marks the roles that read every convoy; a leader reads their own and is `403` `out-of-scope` on any other.
+- **A Loader is scoped to the locations an Administrator assigns it** (`PUT /locations/{id}/loaders/{personId}`, `locations:write`), on every box and location
+  route, lists and the label scan included. A person who also holds Dispatcher, Purchaser or Administrator has that role's reach, so the seeded `operator`
+  is not scoped; use the `loader` login to see the scope. See ADR 0010.
 - **`people:write` is also volunteer erasure.** `DELETE /people/{id}` permanently deletes the
   volunteer's personal data (UK data protection); it is refused while they are crewing a convoy
   that has not arrived, or a vehicle whose load is not yet delivered, lost or returned.

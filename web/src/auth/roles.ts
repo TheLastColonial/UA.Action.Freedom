@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
-// The six application roles. Names match the Keycloak client roles and the Entra app roles
-// they become in Azure — see docs/local-authentication.md and iac/tofu/keycloak.tf.
+// The application roles. Names match the Keycloak client roles and the Entra app roles they become
+// in Azure — see docs/local-authentication.md and iac/tofu/keycloak.tf. ConvoyLeader is the exception:
+// it is derived by the API from an open convoy-leader assignment (ADR 0010), never issued by the
+// identity provider, so a token never carries it. GET /me reports ledConvoyIds, which the leader screens (plan 18) will turn into this role.
 export const roleSchema = z.enum([
   'Administrator',
   'Purchaser',
@@ -9,6 +11,7 @@ export const roleSchema = z.enum([
   'Loader',
   'Mechanic',
   'GroundOfficer',
+  'ConvoyLeader',
 ]);
 
 export type Role = z.infer<typeof roleSchema>;

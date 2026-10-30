@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using UA.Action.Freedom.Api.Configuration.Scope;
 using Microsoft.IdentityModel.Tokens;
 
 namespace UA.Action.Freedom.Api.Configuration;
@@ -193,12 +196,23 @@ public static class AuthenticationExtensions
     /// </summary>
     public const string ConvoysLeadAssign = "convoys:lead-assign";
 
+    /// <summary>
+    /// Read one convoy, its route, its truck list and a vehicle's cargo - every operational role, and the Convoy Leader
+    /// for the convoy they lead (ADR 0010). Always paired with <c>RequireConvoyScope</c>: a leader holds the role for the
+    /// request only while they hold an open assignment, and the scope says which convoy. Deliberately not the list, the
+    /// crew, the receivers, the declarations or the budget.
+    /// </summary>
+    public const string ConvoysReadLed = "convoys:read-led";
+
     private const string RoleClaimType = "roles";
 
     private const string Administrator = "Administrator";
     private const string Purchaser = "Purchaser";
     private const string Dispatcher = "Dispatcher";
     private const string Loader = "Loader";
+
+    /// <summary>Derived from an open assignment, never issued: see <c>LeaderRoleClaims</c>.</summary>
+    private const string ConvoyLeader = "ConvoyLeader";
 
     /// <summary>
     /// Vehicles only: reads and edits the fleet and records servicing inspections. Absent from
@@ -252,6 +266,11 @@ public static class AuthenticationExtensions
 
     public static IServiceCollection AddFreedomAuthorization(this IServiceCollection services)
     {
+        // Resource-scoped permissions (ADR 0010): the one handler, and the ConvoyLeader role derived from an assignment.
+        services.AddScoped<IAuthorizationHandler, ScopedAuthorizationHandler>();
+        services.AddScoped<IClaimsTransformation, LeaderRoleClaims>();
+        services.AddScoped<IScopeGuard, ScopeGuard>();
+
         services
             .AddAuthorizationBuilder()
             .AddPolicy(VehiclesRead, policy =>
@@ -268,6 +287,8 @@ public static class AuthenticationExtensions
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader))
             .AddPolicy(ConvoysWrite, policy =>
                 policy.RequireRole(Administrator, Dispatcher))
+            .AddPolicy(ConvoysReadLed, policy =>
+                policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader, ConvoyLeader))
             .AddPolicy(ConvoysAssignDrivers, policy =>
                 policy.RequireRole(Dispatcher))
             .AddPolicy(ConvoysLeadAssign, policy =>

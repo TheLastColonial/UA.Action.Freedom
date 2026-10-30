@@ -25,3 +25,6 @@ GO
 
 CREATE INDEX [IX_BoxQrCode_BoxId] ON [dbo].[BoxQrCode] ([BoxId]);
 GO
+
+CREATE INDEX [IX_BoxQrCode_LastChangedBy] ON [dbo].[BoxQrCode] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

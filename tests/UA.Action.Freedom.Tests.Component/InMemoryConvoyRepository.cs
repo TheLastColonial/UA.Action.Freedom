@@ -318,6 +318,10 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     public Task<bool> IsCurrentLeaderAsync(int convoyId, Guid personId, CancellationToken cancellationToken) =>
         Task.FromResult(leaderAssignments.Exists(a => a.ConvoyId == convoyId && a.PersonId == personId && a.Until is null));
 
+    public Task<IReadOnlyList<int>> LedConvoyIdsAsync(Guid personId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<int>>(
+            [.. leaderAssignments.Where(a => a.PersonId == personId && a.Until is null).Select(a => a.ConvoyId).Order()]);
+
     public Task<NominateLeaderResult> NominateAsync(
         int convoyId, Guid personId, DateTime at, CancellationToken cancellationToken)
     {

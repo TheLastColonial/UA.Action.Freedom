@@ -285,7 +285,7 @@ that needs them.
 |---|---|
 | `CLAUDE.md` | Architecture and domain model: legs, manifest, readiness, Convoy Leader. |
 | [Gotchas and open questions](../gotchas-and-open-questions.md) | Crew per leg (§ on `ConvoyVehicleCrew` and the per-leg unique key, and the commitment note), the manifest freeze. |
-| [Local authentication](../local-authentication.md) | The line saying crewing "is per journey leg". Loader scope ([O14](#o14)) and the Convoy Leader permission ([X12](#x12)). |
+| [Local authentication](../local-authentication.md) | The line saying crewing "is per journey leg". |
 | `CLAUDE.md` and the code | The rule that a crew change voids insurance ([O7](#o7)). |
 
 The domain documents describe the **business rules**. Where code or the documents above still describe legs or the
@@ -320,7 +320,7 @@ lists them all.
 | [0007 Journey legs are removed from the crew model](../adr/0007-journey-legs-are-removed-from-the-crew-model.md) | [P12](#p12), [P9](#p9) |
 | [0008 Readiness is computed, and blocking rules are not overridden](../adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md) | [P4](#p4), [P9](#p9), [P11](#p11), [P17](#p17), [O3](#o3), [O4](#o4), [O7](#o7), [O30](#o30), [O36](#o36), [O37](#o37) |
 | [0009 The Convoy Leader reads destination addresses](../adr/0009-convoy-leader-reads-destination-addresses.md) | [X7](#x7) to [X13](#x13), [O1](#o1), [O26](#o26) |
-| [0010 Resource-scoped permissions](../adr/0010-resource-scoped-permissions.md) *(proposed)* | [X12](#x12), [O14](#o14), [D17](#d17), [P14](#p14), [O31](#o31), [O34](#o34), [O35](#o35) |
+| [0010 Resource-scoped permissions](../adr/0010-resource-scoped-permissions.md) *(accepted)* | [X12](#x12), [O14](#o14), [D17](#d17), [P14](#p14), [O31](#o31), [O34](#o34), [O35](#o35) |
 | [0011 An attested box is replaced, never edited](../adr/0011-attested-boxes-are-replaced-not-edited.md) | [D2](#d2), [D3](#d3), [O17](#o17), [O29](#o29) |
 | [0012 Receiver registration gates convoys and boxes](../adr/0012-receiver-registration-gates-convoys-and-boxes.md) | [D22](#d22), [D30](#d30), [D33](#d33), [D35](#d35), [D36](#d36) |
 | [0013 Donors are a split identity](../adr/0013-donors-are-a-split-identity.md) | [D9](#d9), [D14](#d14), [D15](#d15), [D28](#d28), [O6](#o6), [O22](#o22) |

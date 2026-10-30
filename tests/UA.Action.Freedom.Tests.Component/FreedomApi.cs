@@ -102,7 +102,7 @@ internal static class FreedomApi
 
             // Opening a manifest is a convoy route now — POST /convoys/{id}/vehicles/{vin}/manifest
             // — so the convoy tests need somewhere for it to land.
-            services.Replace(manifestFake);
+            services.Replace<IManifestRepository>(manifestFake);
         });
 
     /// <summary>The convoy fake together with the budget fake, for the budget, cost and equipment routes.</summary>
@@ -242,6 +242,33 @@ internal static class FreedomApi
             services.Replace(receivers);
         });
 
+    /// <summary>
+    /// Everything resource scope reads, in one place: convoys (and who leads them), boxes, locations and the Loader
+    /// assignments, with the test caller linked to a volunteer. For tests about who may reach what (ADR 0010).
+    /// </summary>
+    internal static WebApplicationFactory<Program> WithScope(
+        InMemoryConvoyRepository? convoys = null,
+        InMemoryBoxRepository? boxes = null,
+        InMemoryLocationRepository? locations = null,
+        InMemoryLoaderAssignmentRepository? loaders = null,
+        InMemoryPersonRepository? people = null,
+        params string[] roles) =>
+        WithFakes(true, roles, services =>
+        {
+            var convoyFake = convoys ?? new InMemoryConvoyRepository();
+            var manifestFake = new InMemoryManifestRepository();
+            ShareCargo(convoyFake, manifestFake);
+            services.Replace<IConvoyRepository>(convoyFake);
+            services.Replace<IConvoyVehicleRepository>(convoyFake);
+            services.Replace<IConvoyLeaderRepository>(convoyFake);
+            services.Replace<IManifestRepository>(manifestFake);
+            services.Replace<IBoxRepository>(boxes ?? new InMemoryBoxRepository());
+            services.Replace<ILocationRepository>(locations ?? new InMemoryLocationRepository());
+            services.Replace<IBayRepository>(new InMemoryBayRepository());
+            services.Replace<ILoaderAssignmentRepository>(loaders ?? new InMemoryLoaderAssignmentRepository());
+            services.Replace<IPersonRepository>(people ?? InMemoryPersonRepository.WithLinkedTestUser());
+        });
+
     /// <summary>The application with donor and donation persistence swapped for <paramref name="donations"/>, one fake behind both ports.</summary>
     internal static WebApplicationFactory<Program> WithDonations(
         InMemoryDonationRepository donations,
@@ -266,10 +293,25 @@ internal static class FreedomApi
         IBayRepository bays,
         bool authenticated = true,
         params string[] roles) =>
+        WithLocations(locations, bays, InMemoryLoaderAssignmentRepository.ForTheTestCaller(), null, authenticated, roles);
+
+    /// <summary>As above, with the Loader assignments (and optionally the roster they are checked against).</summary>
+    internal static WebApplicationFactory<Program> WithLocations(
+        ILocationRepository locations,
+        IBayRepository bays,
+        InMemoryLoaderAssignmentRepository loaders,
+        IPersonRepository? people = null,
+        bool authenticated = true,
+        params string[] roles) =>
         WithFakes(authenticated, roles, services =>
         {
             services.Replace(locations);
             services.Replace(bays);
+            services.Replace<ILoaderAssignmentRepository>(loaders);
+            if (people is not null)
+            {
+                services.Replace(people);
+            }
         });
 
     /// <summary>
@@ -377,6 +419,7 @@ internal static class FreedomApi
                 EnsureDonationsAreFaked(services);
                 EnsureBudgetIsFaked(services);
                 EnsureEquipmentIsFaked(services);
+                EnsureScopeIsFaked(services);
                 EnsureCargoIsFaked(services);
                 EnsureAccommodationIsFaked(services);
 
@@ -514,6 +557,33 @@ internal static class FreedomApi
             services.Replace<IVehicleEquipmentRepository>(new InMemoryVehicleEquipmentRepository());
         }
     }
+
+    /// <summary>
+    /// Scope reads two assignment stores on every request (ADR 0010): who leads which convoy, and which locations a
+    /// Loader manages. A test that supplied neither gets empty ones, so nobody is scoped into anything and no route
+    /// reaches for a real database.
+    /// </summary>
+    private static void EnsureScopeIsFaked(IServiceCollection services)
+    {
+        if (!IsFaked<IConvoyLeaderRepository>(services))
+        {
+            services.Replace<IConvoyLeaderRepository>(new InMemoryConvoyRepository());
+        }
+
+        if (!IsFaked<ILoaderAssignmentRepository>(services))
+        {
+            services.Replace<ILoaderAssignmentRepository>(InMemoryLoaderAssignmentRepository.ForTheTestCaller());
+        }
+
+        // A scoped Loader is checked against where the box is, so the box store is never a route to a real database.
+        if (!IsFaked<IBoxRepository>(services))
+        {
+            services.Replace<IBoxRepository>(new InMemoryBoxRepository());
+        }
+    }
+
+    private static bool IsFaked<TService>(IServiceCollection services) =>
+        services.Any(descriptor => descriptor.ServiceType == typeof(TService) && descriptor.ImplementationFactory is not null);
 
     /// <summary>
     /// Every write is signed as the caller's linked volunteer, so a test that did not supply its own

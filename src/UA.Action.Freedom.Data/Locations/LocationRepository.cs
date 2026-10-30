@@ -25,17 +25,25 @@ public sealed class LocationRepository(IDbConnectionFactory connectionFactory, I
             cancellationToken: cancellationToken));
     }
 
-    public async Task<IReadOnlyList<LocationReadModel>> ListAsync(int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<LocationReadModel>> ListAsync(
+        int page, int pageSize, LocationVisibility visibility, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
         var rows = await connection.QueryAsync<LocationReadModel>(new CommandDefinition(
             $"""
              SELECT {Columns} FROM {From}
+             WHERE @all = 1 OR l.Id IN @locationIds
              ORDER BY l.Id
              OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY
              """,
-            new { skip = (page - 1) * pageSize, take = pageSize },
+            new
+            {
+                skip = (page - 1) * pageSize,
+                take = pageSize,
+                all = visibility.IsAll,
+                locationIds = visibility.LocationIds,
+            },
             cancellationToken: cancellationToken));
 
         return rows.ToList();

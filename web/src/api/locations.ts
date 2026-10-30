@@ -6,11 +6,16 @@ import type { CreatedResource, ParentMissing } from './client';
 import { delete204, getCollection, getJson, postCreate, put204 } from './http';
 import { qk } from './queryKeys';
 import type { PageParams } from './queryKeys';
-import { bayReadModelSchema, locationReadModelSchema } from './schemas/locations';
+import {
+  bayReadModelSchema,
+  loaderAssignmentSchema,
+  locationReadModelSchema,
+} from './schemas/locations';
 import type {
   BayReadModel,
   CreateBayRequest,
   CreateLocationRequest,
+  LoaderAssignment,
   LocationReadModel,
   UpdateBayRequest,
   UpdateLocationRequest,
@@ -57,6 +62,18 @@ export function updateBay(id: number, bayId: number, body: UpdateBayRequest): Pr
 
 export function deleteBay(id: number, bayId: number): Promise<void> {
   return delete204(bayPath(id, bayId));
+}
+
+export function fetchLoaders(id: number): Promise<readonly LoaderAssignment[]> {
+  return getJson(`${idPath(id)}/loaders`, z.array(loaderAssignmentSchema));
+}
+
+export function assignLoader(id: number, personId: string): Promise<void> {
+  return put204(`${idPath(id)}/loaders/${personId}`);
+}
+
+export function removeLoader(id: number, personId: string): Promise<void> {
+  return delete204(`${idPath(id)}/loaders/${personId}`);
 }
 
 export function useLocations(params: PageParams): UseQueryResult<readonly LocationReadModel[]> {
@@ -129,6 +146,26 @@ export function useUpdateBay(
   return useMutation({
     mutationFn: (body: UpdateBayRequest) => updateBay(id, bayId, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.locations.bays(id) }),
+  });
+}
+
+export function useLoaders(id: number): UseQueryResult<readonly LoaderAssignment[]> {
+  return useQuery({ queryKey: qk.locations.loaders(id), queryFn: () => fetchLoaders(id) });
+}
+
+export function useAssignLoader(id: number): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (personId: string) => assignLoader(id, personId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.locations.loaders(id) }),
+  });
+}
+
+export function useRemoveLoader(id: number): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (personId: string) => removeLoader(id, personId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.locations.loaders(id) }),
   });
 }
 

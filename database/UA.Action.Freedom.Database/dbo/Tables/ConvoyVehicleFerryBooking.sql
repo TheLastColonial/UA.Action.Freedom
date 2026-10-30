@@ -25,3 +25,6 @@ CREATE TABLE [dbo].[ConvoyVehicleFerryBooking] (
     CONSTRAINT [CK_ConvoyVehicleFerryBooking_Cost] CHECK ([CostGbp] IS NULL OR [CostGbp] >= 0)
 );
 GO
+
+CREATE INDEX [IX_ConvoyVehicleFerryBooking_LastChangedBy] ON [dbo].[ConvoyVehicleFerryBooking] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
+GO

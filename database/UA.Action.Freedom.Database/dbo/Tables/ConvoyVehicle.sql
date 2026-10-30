@@ -49,8 +49,13 @@ CREATE TABLE [dbo].[ConvoyVehicle] (
 GO
 
 -- "Which convoys has this vehicle been on?", and the lookup the Vehicle foreign key needs.
+GO
+
 CREATE INDEX [IX_ConvoyVehicle_Vin] ON [dbo].[ConvoyVehicle] ([Vin]);
 GO
 
 CREATE INDEX [IX_ConvoyVehicle_HandoverReceiverRef] ON [dbo].[ConvoyVehicle] ([HandoverReceiverRef]) WHERE [HandoverReceiverRef] IS NOT NULL;
+GO
+
+CREATE INDEX [IX_ConvoyVehicle_LastChangedBy] ON [dbo].[ConvoyVehicle] ([LastChangedBy]) WHERE [LastChangedBy] IS NOT NULL;
 GO

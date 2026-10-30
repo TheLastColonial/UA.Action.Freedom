@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Abstractions;
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Locations;
@@ -77,12 +78,12 @@ public class LocationHandlerTests
     public async Task List_clamps_a_nonsense_page_and_page_size_to_the_defaults()
     {
         var repository = Substitute.For<ILocationRepository>();
-        repository.ListAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+        repository.ListAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<LocationVisibility>(), Arg.Any<CancellationToken>())
             .Returns(new List<LocationReadModel>());
         var handler = new ListLocationsHandler(repository);
 
-        await handler.HandleAsync(new ListLocationsQuery(Page: 0, PageSize: 100_000), CancellationToken.None);
+        await handler.HandleAsync(new ListLocationsQuery(Page: 0, PageSize: 100_000, LocationVisibility.All), CancellationToken.None);
 
-        await repository.Received(1).ListAsync(1, 50, Arg.Any<CancellationToken>());
+        await repository.Received(1).ListAsync(1, 50, LocationVisibility.All, Arg.Any<CancellationToken>());
     }
 }

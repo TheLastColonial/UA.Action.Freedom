@@ -20,7 +20,7 @@ namespace UA.Action.Freedom.Tests.BDD.Support;
 [Binding]
 public static class LoginLinkHooks
 {
-    private static readonly string[] SeedLogins = ["admin", "operator", "groundofficer"];
+    private static readonly string[] SeedLogins = ["admin", "operator", "groundofficer", "loader", "leader"];
 
     private const string VolunteerFirstName = "BDD";
 
@@ -84,8 +84,9 @@ public static class LoginLinkHooks
             lastName = login,
             dateOfBirth = "1990-01-01T00:00:00Z",
             joined = "2024-01-01T00:00:00Z",
-            isDriver = false,
-            committed = false,
+            // The leader login must be a driver: a Convoy Leader is a Driver crewed on the convoy.
+            isDriver = login == "leader",
+            committed = login == "leader",
         });
 
         var created = await api.SendAsync(HttpMethod.Post, "/people", adminToken, body);

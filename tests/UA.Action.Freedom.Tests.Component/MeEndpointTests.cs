@@ -136,6 +136,21 @@ public class MeEndpointTests
         me.GetProperty("personId").GetGuid().Should().Be(Id);
         me.GetProperty("displayName").GetString().Should().Be("Olena Shevchenko");
         me.EnumerateObject().Select(property => property.Name)
-            .Should().BeEquivalentTo("subject", "roles", "personId", "displayName");
+            .Should().BeEquivalentTo("subject", "roles", "personId", "displayName", "ledConvoyIds", "managedLocationIds");
+    }
+
+    [Fact]
+    public async Task Me_reports_the_locations_a_loader_manages_from_the_assignments_and_not_the_token()
+    {
+        var people = new InMemoryPersonRepository(AStoredPerson()).WithTestUserLinkedTo(Id);
+        var loaders = new InMemoryLoaderAssignmentRepository().Managing(Id, 4).Managing(Id, 9);
+        await using var api = FreedomApi.WithLocations(
+            new InMemoryLocationRepository(), new InMemoryBayRepository(), loaders, people, roles: ["Loader"]);
+        using var client = api.CreateClient();
+
+        var me = await client.GetFromJsonAsync<JsonElement>("/me", TestContext.Current.CancellationToken);
+
+        me.GetProperty("managedLocationIds").EnumerateArray().Select(id => id.GetInt32()).Should().Equal(4, 9);
+        me.GetProperty("ledConvoyIds").GetArrayLength().Should().Be(0);
     }
 }

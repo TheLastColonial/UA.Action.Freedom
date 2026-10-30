@@ -2,7 +2,9 @@ import type { RouteObject } from 'react-router-dom';
 import { expect, test } from 'vitest';
 
 import { makeBay, makeLocation } from '../../test/factories/location';
+import { makePerson } from '../../test/factories/person';
 import { locationApi } from '../../test/msw/locations';
+import { personApi } from '../../test/msw/people';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { locationRoutes } from './routes';
@@ -159,4 +161,48 @@ test('an Administrator registers a location as a hub', async () => {
 
   await expect.element(screen.getByRole('heading', { name: 'Przemysl Hub' })).toBeInTheDocument();
   expect([...api.db.values()].map((location) => location.isRegisteredHub)).toEqual([true]);
+});
+
+test('an administrator sees who manages a location', async () => {
+  worker.use(
+    ...locationApi(
+      [makeLocation({ id: 3, name: 'Coventry Depot' })],
+      [],
+      [
+        {
+          id: 1,
+          locationId: 3,
+          personId: 'p-1',
+          personName: 'Olena Bondar',
+          from: '2026-10-01T09:00:00',
+          until: null,
+          lastChangedByName: null,
+          lastChangedAt: null,
+        },
+      ],
+    ).handlers,
+    ...personApi([makePerson({ id: 'p-2', firstName: 'Taras', lastName: 'Melnyk' })]).handlers,
+  );
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/locations/3',
+    roles: ['Administrator'],
+  });
+
+  await expect.element(screen.getByRole('heading', { name: 'Loaders' })).toBeInTheDocument();
+  await expect.element(screen.getByText('Olena Bondar')).toBeInTheDocument();
+});
+
+test('a loader is not shown, and does not fetch, who manages a location', async () => {
+  worker.use(...locationApi([makeLocation({ id: 3, name: 'Coventry Depot' })]).handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/locations/3',
+    roles: ['Loader'],
+  });
+
+  await expect.element(screen.getByRole('heading', { name: 'Coventry Depot' })).toBeInTheDocument();
+  await expect.element(screen.getByRole('heading', { name: 'Loaders' })).not.toBeInTheDocument();
 });

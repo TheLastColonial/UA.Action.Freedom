@@ -47,6 +47,18 @@ public sealed class ConvoyLeaderRepository(IDbConnectionFactory connectionFactor
             cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<int>> LedConvoyIdsAsync(Guid personId, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var ids = await connection.QueryAsync<int>(new CommandDefinition(
+            "SELECT ConvoyId FROM dbo.ConvoyLeaderAssignment WHERE PersonId = @personId AND Until IS NULL ORDER BY ConvoyId",
+            new { personId },
+            cancellationToken: cancellationToken));
+
+        return ids.ToList();
+    }
+
     public async Task<NominateLeaderResult> NominateAsync(
         int convoyId, Guid personId, DateTime at, CancellationToken cancellationToken)
     {

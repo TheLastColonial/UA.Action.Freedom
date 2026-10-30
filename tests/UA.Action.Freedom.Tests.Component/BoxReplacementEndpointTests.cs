@@ -65,10 +65,10 @@ public class BoxReplacementEndpointTests
         .GetProperty("type").GetString();
 
     [Fact]
-    public async Task A_loader_replaces_an_attested_box_and_the_replacement_is_unattested()
+    public async Task An_administrator_replaces_an_attested_box_and_the_replacement_is_unattested()
     {
         await using var api = FreedomApi.WithBoxes(
-            APackedBox(), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Loader");
+            APackedBox(), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Administrator");
         using var client = api.CreateClient();
 
         var response = await Replace(client);
@@ -86,7 +86,7 @@ public class BoxReplacementEndpointTests
     public async Task The_old_box_is_voided_and_points_forward_to_its_replacement()
     {
         await using var api = FreedomApi.WithBoxes(
-            APackedBox(), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Loader");
+            APackedBox(), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Administrator");
         using var client = api.CreateClient();
 
         var replacementId = await NewBoxId(await Replace(client));
@@ -102,7 +102,7 @@ public class BoxReplacementEndpointTests
     {
         var boxes = APackedBox();
         await using var api = FreedomApi.WithBoxes(
-            boxes, InMemoryPersonRepository.WithLinkedTestUser(), roles: "Loader");
+            boxes, InMemoryPersonRepository.WithLinkedTestUser(), roles: "Administrator");
         using var client = api.CreateClient();
 
         var replacementId = await NewBoxId(await Replace(client));
@@ -119,7 +119,7 @@ public class BoxReplacementEndpointTests
         var token = Guid.NewGuid();
         var boxes = APackedBox().WithQrCode(new BoxQrCodeReadModel(token, BoxId, DateTime.UtcNow, RevokedAt: null));
         await using var api = FreedomApi.WithBoxes(
-            boxes, InMemoryPersonRepository.WithLinkedTestUser(), roles: "Loader");
+            boxes, InMemoryPersonRepository.WithLinkedTestUser(), roles: "Administrator");
         using var client = api.CreateClient();
 
         await Replace(client);
@@ -132,7 +132,7 @@ public class BoxReplacementEndpointTests
     public async Task A_box_nobody_has_attested_is_edited_not_replaced()
     {
         await using var api = FreedomApi.WithBoxes(
-            APackedBox(validated: false), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Loader");
+            APackedBox(validated: false), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Administrator");
         using var client = api.CreateClient();
 
         var response = await Replace(client);
@@ -146,7 +146,7 @@ public class BoxReplacementEndpointTests
     {
         var boxes = APackedBox();
         await using var api = FreedomApi.WithBoxes(
-            boxes, InMemoryPersonRepository.WithLinkedTestUser(), roles: "Loader");
+            boxes, InMemoryPersonRepository.WithLinkedTestUser(), roles: "Administrator");
         using var client = api.CreateClient();
         await Replace(client);
 
@@ -161,7 +161,7 @@ public class BoxReplacementEndpointTests
     public async Task Replacing_a_box_that_does_not_exist_is_not_found()
     {
         await using var api = FreedomApi.WithBoxes(
-            new InMemoryBoxRepository(), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Loader");
+            new InMemoryBoxRepository(), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Administrator");
         using var client = api.CreateClient();
 
         (await Replace(client)).StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -181,7 +181,7 @@ public class BoxReplacementEndpointTests
     public async Task A_voided_box_cannot_be_given_a_new_label()
     {
         await using var api = FreedomApi.WithBoxes(
-            APackedBox(), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Loader");
+            APackedBox(), InMemoryPersonRepository.WithLinkedTestUser(), roles: "Administrator");
         using var client = api.CreateClient();
         await Replace(client);
 

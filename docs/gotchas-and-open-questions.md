@@ -329,6 +329,15 @@ There are now three logins (see `iac/README.md`): `sa` applies the schema and no
 address. `ReceiverSegregationTests` asserts the denial against the real database — and only means
 anything because of this.
 
+### Scope is decided per request from assignments, and three things about it are easy to break
+
+Resource-scoped permissions (ADR 0010, plan 17) have no token claim to inspect, so a few things look odd.
+
+- **`ConvoyLeader` is derived by `LeaderRoleClaims`, an `IClaimsTransformation`, and the transformation must not ask `ICurrentPerson`.** It runs inside authentication, before `HttpContext.User` is set, and `ClaimsCurrentPerson` memoises its answer, so asking it there would resolve the caller as unlinked for the whole request. It takes the subject from the principal it is given and asks `IPersonRepository` directly.
+- **A forgotten route is the dominant risk.** `ScopeEndpointMapTests` fails the build for any endpoint a Loader or Convoy Leader can reach under a `boxes:*`, `locations:*` or `convoys:read-led` policy that has neither scope metadata nor `ScopeExempt(reason)`, and pins the exempt list. List handlers take a `LocationVisibility` with no default for the same reason. A new box-bearing route needs one of the two.
+- **Roles union, so `operator` is not scoped.** A login holding Dispatcher, Purchaser or Administrator reaches everything those roles reach whatever else it holds. To see a Loader's scope locally use the `loader` login. In component tests the default fake gives the test caller every location (`ForTheTestCaller`); a test about scope builds its own assignments.
+- Leader scope does not yet end at convoy closing: plan 14 adds `ClosedAt` to the same question (`IConvoyLeaderRepository.IsCurrentLeaderAsync` and `LedConvoyIdsAsync`), and plan 19 must read address access through it.
+
 ### Receiver detail is protected three separate ways
 
 Each holds if the others are removed by mistake:
@@ -556,7 +565,9 @@ foreign key to the truck-list entry is NO ACTION on purpose.
 
 **Index the foreign keys to `dbo.Person` on any new table.** Every erasure checks them; an unindexed one scans the
 table under lock, and `dbo.Declaration` deadlocked the BDD suite's person erasure against a declaration being filed
-until `IX_Declaration_RecordedBy` and `IX_Declaration_LastChangedBy` were added.
+until `IX_Declaration_RecordedBy` and `IX_Declaration_LastChangedBy` were added. The same went for 24 foreign keys on the
+other entity tables (every `LastChangedBy`, plus the three person columns), which deadlocked BDD erasures in CI. They are
+indexed now, and `PersonForeignKeyIndexTests` fails the Integration suite for any foreign key to `dbo.Person` without one.
 
 ---
 
