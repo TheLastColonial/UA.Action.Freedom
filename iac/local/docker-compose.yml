@@ -330,8 +330,9 @@ services:
         condition: service_healthy
 
   # Optionally loads fictional dev seed data after the schema is deployed.
-  # Run with: docker compose up db-seed
-  # Skips if the database already has data. Safe to run multiple times.
+  # Run with: docker compose up db-seed (after tofu apply, so the seed logins exist in Keycloak)
+  # Loads the fictional volunteers, then links each seed login to its volunteer.
+  # Skips the load if the database already has data; the links are made either way. Safe to run multiple times.
   db-seed:
     build:
       context: ../..
@@ -345,10 +346,15 @@ services:
       FREEDOM_DB_NAME: Freedom
       FREEDOM_DB_USER: sa
       FREEDOM_DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      FREEDOM_KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
     depends_on:
       db-deploy:
         condition: service_completed_successfully
       mssql:
+        condition: service_healthy
+      keycloak:
         condition: service_healthy
 
   # --- Identity Provider ----------------------------------------------------

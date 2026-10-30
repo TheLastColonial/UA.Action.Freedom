@@ -162,8 +162,12 @@ Erasing a volunteer deletes the link with their personal data, so `GET /me` read
 
 **Keycloak generates a subject per user each time the realm is imported**, so the seed logins'
 subjects change whenever the realm is recreated (`docker compose down -v` plus `tofu apply`) and
-cannot be seeded. `database/seed/dev-seed.sql` therefore adds a volunteer for each seed login
-(*Ada Admin*, *Olly Operator*, *Gus Ground*) **without** a subject; link them as above. The BDD
+cannot be seeded in the SQL. `database/seed/dev-seed.sql` therefore adds a volunteer for each seed
+login (*Ada Admin*, *Olly Operator*, *Gus Ground*, *Lou Loader*, *Lee Leader*), and
+`docker compose up db-seed` then **links them automatically**: `database/seed.sh` reads each login's
+subject from Keycloak's admin API and sets it on the matching volunteer. Run it after `tofu apply`.
+If a login is missing from Keycloak it warns and leaves that volunteer unlinked. A database seeded
+before *Lou* and *Lee* were added needs `docker compose down -v` and a fresh seed to get them. The BDD
 suite does this itself: `LoginLinkHooks` links every seed login before the run, reusing the
 volunteer it made last time, because nothing it could hard-code would survive a realm recreation.
 

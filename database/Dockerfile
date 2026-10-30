@@ -44,6 +44,11 @@ COPY database/seed/ ./seed/
 COPY --chmod=755 database/deploy.sh ./deploy.sh
 COPY --chmod=755 database/seed.sh ./seed.sh
 
+# seed.sh asks Keycloak for each seed login's subject; the runtime image has no HTTP client.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y curl \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PATH="/tools:${PATH}"
 
 USER app

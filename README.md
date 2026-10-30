@@ -185,7 +185,8 @@ tofu apply
 # Verify all services are healthy
 curl http://localhost:8080/health/ready
 
-# (Optional) Load fictional seed data: depots, volunteers, a convoy, vehicles, boxes, the fixed item categories
+# (Optional) Load fictional seed data: depots, volunteers, a convoy, vehicles, boxes, the fixed item categories,
+# and link each seed login to its volunteer so the Loader can validate boxes and assign bays
 cd ../local && docker compose up db-seed
 ```
 
@@ -194,7 +195,8 @@ cd ../local && docker compose up db-seed
 and the web UI). See [`docs/parallel-agents.md`](docs/parallel-agents.md).
 
 The `db-seed` service is optional and re-runnable — it guards against seeding an already-populated
-database. Integration/BDD suites create their own data and do not invoke it.
+database, and it links the seed logins to their volunteers every time (it needs the realm from
+`tofu apply`). Integration/BDD suites create their own data and do not invoke it.
 
 `tofu apply` also provisions the public PKCE Keycloak client (`freedom-spa`) the operator UI
 signs in with. The UI is then at <http://localhost:8080/app/>; all the seed logins work
