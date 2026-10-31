@@ -4,7 +4,8 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented. Supersedes the delivery half of `ManifestStatus`
+Accepted. Implemented by [plan 14](../plans/14-outcomes-closing.md), with the manifest's delivery states still mirrored
+(see the implementation note at the end). Supersedes the delivery half of `ManifestStatus`
 ([ADR 0004](0004-the-manifest-is-the-load-sign-off.md)).
 
 ## Context
@@ -103,3 +104,22 @@ Added 2026-10-02, from questions resolved before implementation planning.
   ([decision O28](../domain/decisions.md#o28)).
 - Until scoped permissions exist ([ADR 0010](0010-resource-scoped-permissions.md)), the leader's actions are performed
   by the Dispatcher. Implementation is planned in [plan 14](../plans/14-outcomes-closing.md).
+
+## Implementation note
+
+Added with plan 14.
+
+- **Boxes.** `dbo.BoxOutcome` keeps one current row per box per convoy and the history. A seized or undeliverable box
+  is filtered out of the vehicle's cargo list, so its declarations go stale through the plan 09 snapshot with no new
+  code. A return to a registered hub is one transaction: the allocation goes, the box is at the hub, and it can be
+  allocated again unchanged. `dbo.BoxOutcome` is exempt from the last-changed guard because `RecordedBy` and `RecordedAt`
+  already say who and when.
+- **Acceptance** is `POST /convoys/{id}/vehicles/{vin}/declarations/goods-list/{receiverRef}/accepted`, one transaction.
+- **Vehicles** have `dbo.ConvoyVehicle.DeliveredAt`. **Transitional:** marking a vehicle delivered also moves its
+  manifest to `Delivered`, because `ArriveAsync`, `HandedOverAt` and the volunteer erasure guard still read the manifest.
+  Plan 15 switches those readers to outcomes and removes the mirror.
+- **Closing** stamps `dbo.Convoy.ClosedAt` and may be repeated. The report is never stored: it is drawn from the facts every
+  time, counts delivered value through the one function `BoxOutcomes.DeliveredValue`, and names Receivers at organisation
+  and region only. The donor report in plan 06 has its own sum and does not yet use that function.
+- The leader's actions are performed by the Dispatcher (`convoys:write`) until plan 18.
+

@@ -309,3 +309,29 @@ test('@smoke operator allocates a convoy budget, enters fuel over the line and s
   await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.getByText('Fuel is over budget')).toBeVisible();
 });
+
+test('@smoke an arrived convoy is closed and its report is drawn', async ({ page }) => {
+  await signIn(page, 'operator');
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+
+  await nav.getByRole('link', { name: 'Convoys' }).click();
+  await page.getByRole('link', { name: 'New convoy' }).click();
+  await page.getByLabel('Departs').fill('2026-06-01T08:00');
+  await page.getByLabel('Expected arrival').fill('2026-06-06T20:00');
+  await page.getByRole('button', { name: 'Create convoy' }).click();
+  await expect(page.getByRole('heading', { name: /Convoy #/ })).toBeVisible();
+
+  // No vehicles on the truck list, so nothing is still travelling and the convoy can arrive.
+  await page.getByRole('button', { name: 'Publish truck list' }).click();
+  await expect(page.getByText('Truck list published')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Close convoy' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mark arrived' }).click();
+
+  await page.getByRole('button', { name: 'Close convoy' }).click();
+  await expect(page.getByRole('button', { name: 'Close again' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'View report' }).click();
+  await expect(page.getByRole('heading', { name: /report/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Totals' })).toBeVisible();
+  await expect(page.getByText(/Closed \d{4}-\d{2}-\d{2}/)).toBeVisible();
+});
