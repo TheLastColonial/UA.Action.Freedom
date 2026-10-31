@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import { useArriveConvoy, useConvoy, usePublishTruckList } from '../../api/convoys';
+import { useCloseConvoy } from '../../api/outcomes';
 import { ApiDomainProblem, ApiNotFound } from '../../api/problem';
 import { Button, LinkButton } from '../../components/Button';
 import { DetailCard } from '../../components/DetailCard';
@@ -16,6 +17,7 @@ import { ConvoyBudgetPanel } from './ConvoyBudgetPanel';
 import { ConvoyCargoPanel } from './ConvoyCargoPanel';
 import { ConvoyDriversPanel } from './ConvoyDriversPanel';
 import { ConvoyLeaderPanel } from './ConvoyLeaderPanel';
+import { ConvoyOutcomesPanel } from './ConvoyOutcomesPanel';
 import { ConvoyEquipmentPanel } from './ConvoyEquipmentPanel';
 import { ConvoyReadinessPanel } from './ConvoyReadinessPanel';
 import { ConvoyRedeclareTasks } from './ConvoyRedeclareTasks';
@@ -29,6 +31,7 @@ type Tab =
   | 'drivers'
   | 'accommodation'
   | 'cargo'
+  | 'outcomes'
   | 'budget'
   | 'equipment';
 const TABS: readonly Tab[] = [
@@ -38,6 +41,7 @@ const TABS: readonly Tab[] = [
   'drivers',
   'accommodation',
   'cargo',
+  'outcomes',
   'budget',
   'equipment',
 ];
@@ -52,6 +56,7 @@ export function ConvoyDetailPage(): JSX.Element {
   const query = useConvoy(convoyId);
   const publish = usePublishTruckList(convoyId);
   const arrive = useArriveConvoy(convoyId);
+  const close = useCloseConvoy(convoyId);
 
   if (query.isError && query.error instanceof ApiNotFound) {
     return <NotFound />;
@@ -67,7 +72,7 @@ export function ConvoyDetailPage(): JSX.Element {
   const published = convoy.truckListPublished;
   const problemOf = (error: unknown) =>
     error instanceof ApiDomainProblem ? (error.detail ?? error.message) : undefined;
-  const actionError = problemOf(publish.error) ?? problemOf(arrive.error);
+  const actionError = problemOf(publish.error) ?? problemOf(arrive.error) ?? problemOf(close.error);
 
   const selectTab = (next: Tab) => {
     setSearchParams((params) => {
@@ -96,6 +101,7 @@ export function ConvoyDetailPage(): JSX.Element {
           { id: 'drivers', label: 'Crew' },
           { id: 'accommodation', label: 'Accommodation' },
           { id: 'cargo', label: 'Cargo and ferry' },
+          { id: 'outcomes', label: 'Outcomes' },
           { id: 'budget', label: 'Budget' },
           { id: 'equipment', label: 'Equipment' },
         ]}
@@ -113,6 +119,12 @@ export function ConvoyDetailPage(): JSX.Element {
               <dd>{convoy.expectedEnd.slice(0, 16).replace('T', ' ')}</dd>
               <dt>Truck list</dt>
               <dd>{published ? `Published ${convoy.truckListPublishedAt ?? ''}` : 'Open'}</dd>
+              <dt>Closed</dt>
+              <dd>
+                {convoy.closedAt
+                  ? `Closed ${convoy.closedAt.slice(0, 16).replace('T', ' ')}`
+                  : 'Not yet'}
+              </dd>
               <dt>Arrival</dt>
               <dd>
                 {convoy.arrivedAt
@@ -164,8 +176,24 @@ export function ConvoyDetailPage(): JSX.Element {
                   Mark arrived
                 </Button>
               ) : null}
+              {convoy.arrived ? (
+                <Button
+                  type="button"
+                  disabled={close.isPending}
+                  onClick={() => {
+                    close.mutate();
+                  }}
+                >
+                  {convoy.closed ? 'Close again' : 'Close convoy'}
+                </Button>
+              ) : null}
             </span>
           </Gate>
+          {convoy.arrived ? (
+            <LinkButton to={`/convoys/${String(convoy.id)}/report`} variant="secondary">
+              View report
+            </LinkButton>
+          ) : null}
           {actionError ? (
             <p role="alert" className="field__error">
               {actionError}
@@ -199,6 +227,11 @@ export function ConvoyDetailPage(): JSX.Element {
       {tab === 'cargo' ? (
         <TabPanel id="cargo">
           <ConvoyCargoPanel convoyId={convoy.id} />
+        </TabPanel>
+      ) : null}
+      {tab === 'outcomes' ? (
+        <TabPanel id="outcomes">
+          <ConvoyOutcomesPanel convoyId={convoy.id} departed={convoy.departed} />
         </TabPanel>
       ) : null}
       {tab === 'budget' ? (

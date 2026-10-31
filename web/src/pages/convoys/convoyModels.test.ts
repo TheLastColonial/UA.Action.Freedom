@@ -34,6 +34,8 @@ describe('convoyToFormValues', () => {
       arrived: false,
       departedAt: null,
       departed: false,
+      closedAt: null,
+      closed: false,
       lastChangedByName: null,
       lastChangedAt: null,
     });

@@ -24,7 +24,8 @@ public class LastChangedGuardTests
         ["dbo.ConvoyVehicleInsuranceDriver"] = "a link between an insurance and a driver, never updated",
         ["dbo.ConvoyVehicleInsurance"] = "RecordedByPersonId and RecordedAt already say who and when",
         ["dbo.AccommodationBookingGuest"] = "a link between a booking and a guest; the booking row records who last changed it",
-        ["dbo.BoxBayAssignment"] = "AssignedByPersonId and AssignedAt already say who and when",
+        ["dbo.BoxOutcome"] = "an append-only history whose RecordedBy and RecordedAt already say who and when",
+        ["dbo.BoxBayAssignment"] ="AssignedByPersonId and AssignedAt already say who and when",
         ["sensitive.ReceiverDetailAccessLog"] = "an append-only log whose PersonId is who",
     };
 

@@ -55,6 +55,8 @@ export const qk = {
     equipment: (id: number, vin: string) => ['convoys', id, 'vehicles', vin, 'equipment'] as const,
     equipmentItems: ['equipment-items'] as const,
     readiness: (id: number) => ['convoys', id, 'readiness'] as const,
+    outcomes: (id: number) => ['convoys', id, 'outcomes'] as const,
+    report: (id: number) => ['convoys', id, 'report'] as const,
   },
   receivers: {
     all: ['receivers'] as const,

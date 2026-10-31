@@ -190,6 +190,13 @@ mean the convoy could never arrive. Arrival, in one step:
 - **The journey becomes history.** An arrived convoy takes no further crew or insurance changes; its crew list is
   the record of who went.
 
+**Delivery, acceptance and closing** ([ADR 0015](../adr/0015-box-and-vehicle-outcomes-and-convoy-closing.md)). Once a
+convoy has departed, the Convoy Leader or the Dispatcher marks a vehicle **delivered** (`POST .../vehicles/{vin}/delivered`),
+which delivers every box on it that has no outcome yet. Until plan 15 the vehicle's manifest is mirrored to `Delivered`, so
+the arrival rule above still reads the manifest. Acceptance is recorded **once per Ukrainian goods list**, and **closing**
+follows arrival: the Dispatcher closes (`POST /convoys/{id}/close`), **closing does not lock**, and the report is regenerated
+from the facts each time ([O10](decisions.md#o10), [O25](decisions.md#o25)). The report carries no address or delivery detail.
+
 ### Vehicle
 
 A truck or car that has been donated, and which is itself part of the aid — vehicles are handed over in Ukraine,
@@ -345,6 +352,13 @@ Loader gets round to placing it in a specific bay.
 
 Validation is the trust boundary between the donor and Ukrainian Action, and the weight it produces is what the
 border check relies on. Both facts make the validation record an audit artefact, not just a status flag.
+
+**A box ends on a convoy with one outcome** ([ADR 0015](../adr/0015-box-and-vehicle-outcomes-and-convoy-closing.md)):
+`Delivered`, `Accepted` (once per goods list, [O24](decisions.md#o24)), `Seized`, `ReturnedToHub` or `Undeliverable` with a
+bounded reason. "Lost" is not an outcome: a lost box is undeliverable. `Accepted`, `Seized` and `Undeliverable` are terminal.
+A **seized or undeliverable box leaves the vehicle's load**, so the vehicle's declarations go stale. A box
+**returned to a hub** goes to a *registered* hub the actor chooses ([O28](decisions.md#o28)), is taken off its vehicle, and
+is reusable with its label and contents unchanged. Only `Delivered` and `Accepted` count as value delivered.
 
 A box **holding an item that has already expired cannot be validated** (`409 box-has-expired-items`): a Loader cannot vouch for
 contents that are past their date. Taking the item out, or correcting its date by taking it out and packing it again, clears it.

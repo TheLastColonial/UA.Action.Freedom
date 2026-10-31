@@ -43,7 +43,8 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             COALESCE(c.Passengers, 0) AS PassengerCount,
             cv.WithdrawnAt,
             cv.WithdrawnReason,
-            cv.HandoverReceiverRef
+            cv.HandoverReceiverRef,
+            cv.DeliveredAt
         FROM dbo.ConvoyVehicle AS cv
         INNER JOIN dbo.Vehicle AS v ON v.Vin = cv.Vin
         OUTER APPLY (
@@ -528,6 +529,9 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             FROM dbo.ConvoyVehicleBoxAllocation AS a
             INNER JOIN dbo.Box AS b ON b.Id = a.BoxId
             WHERE a.ConvoyId = @convoyId AND a.Vin = @vin AND b.VoidedAt IS NULL
+              AND NOT EXISTS (SELECT 1 FROM dbo.BoxOutcome AS o
+                              WHERE o.BoxId = a.BoxId AND o.ConvoyId = a.ConvoyId AND o.IsCurrent = 1
+                                AND o.Outcome IN (2, 4))
             ORDER BY b.Id
             """,
             new { convoyId, vin = SqlKey.Of(vin) },

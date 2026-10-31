@@ -1,3 +1,4 @@
+using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
 
@@ -17,6 +18,7 @@ internal sealed class BoxAllocationLedger
     private readonly Dictionary<int, ManifestBoxReadModel> boxes = [];
     private readonly HashSet<int> voided = [];
     private IReadOnlyList<BoxAllocation> allocations = [];
+    private readonly List<BoxOutcomeReadModel> outcomes = [];
 
     public IReadOnlyList<BoxAllocation> Allocations => allocations;
 
@@ -70,9 +72,48 @@ internal sealed class BoxAllocationLedger
         allocations = [.. allocations.Where(a => !(a.ConvoyId.Value == convoyId
             && string.Equals(a.Vin, vin, StringComparison.OrdinalIgnoreCase)))];
 
+    /// <summary>The boxes allocated to an entry that have no outcome yet on this convoy, as the delivery INSERT selects them.</summary>
+    public IReadOnlyList<int> BoxesWithoutOutcome(int convoyId, string vin) =>
+        [.. allocations
+            .Where(a => a.ConvoyId.Value == convoyId && string.Equals(a.Vin, vin, StringComparison.OrdinalIgnoreCase)
+                        && !IsVoided(a.BoxId) && CurrentOutcome(convoyId, a.BoxId) is null)
+            .Select(a => a.BoxId)];
+
+    public BoxOutcomeReadModel? CurrentOutcome(int convoyId, int boxId) =>
+        outcomes.LastOrDefault(o => o.ConvoyId == convoyId && o.BoxId == boxId);
+
+    public IReadOnlyList<BoxOutcomeReadModel> CurrentOutcomes(int convoyId) =>
+        [.. outcomes.Where(o => o.ConvoyId == convoyId).GroupBy(o => o.BoxId).Select(g => g.Last()).OrderBy(o => o.BoxId)];
+
+    /// <summary>
+    /// Mirrors <c>BoxOutcomeRepository.RecordAsync</c>: the write conflicts unless the outcome the caller saw is still
+    /// the current one, and a return to a hub takes the box off its vehicle.
+    /// </summary>
+    public RecordBoxOutcomeResult RecordOutcome(RecordBoxOutcome write, DateTime now)
+    {
+        if (CurrentOutcome(write.ConvoyId, write.BoxId)?.Outcome != write.From)
+        {
+            return RecordBoxOutcomeResult.Conflict;
+        }
+
+        outcomes.Add(new BoxOutcomeReadModel(
+            write.BoxId, write.ConvoyId, write.Vin, write.Outcome, write.Reason, write.HubLocationId, now));
+
+        if (write.Outcome == BoxOutcome.ReturnedToHub)
+        {
+            allocations = [.. allocations.Where(a => !(a.BoxId == write.BoxId && a.ConvoyId.Value == write.ConvoyId))];
+        }
+
+        return RecordBoxOutcomeResult.Recorded;
+    }
+
+    private bool LeftTheLoad(int convoyId, int boxId) =>
+        CurrentOutcome(convoyId, boxId)?.Outcome is BoxOutcome.Seized or BoxOutcome.Undeliverable;
+
     public IReadOnlyList<ManifestBoxReadModel> BoxesOn(int convoyId, string vin) =>
         allocations
-            .Where(a => a.ConvoyId.Value == convoyId && string.Equals(a.Vin, vin, StringComparison.OrdinalIgnoreCase))
+            .Where(a => a.ConvoyId.Value == convoyId && string.Equals(a.Vin, vin, StringComparison.OrdinalIgnoreCase)
+                        && !LeftTheLoad(convoyId, a.BoxId))
             .OrderBy(a => a.BoxId)
             .Select(a => boxes[a.BoxId])
             .ToList();

@@ -2,8 +2,10 @@ import type { RouteObject } from 'react-router-dom';
 import { expect, test } from 'vitest';
 
 import { makeConvoy, makeConvoyVehicle } from '../../test/factories/convoy';
+import { makeConvoyReport } from '../../test/factories/outcomes';
 import { makeVehicle } from '../../test/factories/vehicle';
 import { convoyApi } from '../../test/msw/convoys';
+import { outcomesApi } from '../../test/msw/outcomes';
 import { vehicleApi } from '../../test/msw/vehicles';
 import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
@@ -171,4 +173,43 @@ test('a convoy says who last changed it and when', async () => {
   await expect
     .element(screen.getByText('Last changed by Olena Shevchenko on 2026-10-03 18:04 UTC'))
     .toBeInTheDocument();
+});
+
+test('an arrived convoy can be closed, and closed again, and links to its report', async () => {
+  const convoys = convoyApi([
+    makeConvoy({
+      id: 7,
+      truckListPublished: true,
+      arrived: true,
+      arrivedAt: '2026-03-06T20:00:00',
+    }),
+  ]);
+  const outcomes = outcomesApi(convoys);
+  outcomes.reports.set(7, makeConvoyReport());
+  worker.use(...convoys.handlers, ...outcomes.handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/convoys/7',
+    roles: ['Dispatcher'],
+  });
+
+  await screen.getByRole('button', { name: 'Close convoy' }).click();
+
+  await expect.element(screen.getByRole('button', { name: 'Close again' })).toBeInTheDocument();
+  await expect.element(screen.getByText(/Closed 2026-03-08 09:00/)).toBeInTheDocument();
+  await expect.element(screen.getByRole('link', { name: 'View report' })).toBeInTheDocument();
+});
+
+test('a convoy still on the road cannot be closed', async () => {
+  worker.use(...convoyApi([makeConvoy({ id: 7, truckListPublished: true })]).handlers);
+
+  const screen = await renderWithProviders(null, {
+    routes,
+    route: '/convoys/7',
+    roles: ['Dispatcher'],
+  });
+
+  await expect.element(screen.getByRole('heading', { name: 'Convoy #7' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Close convoy' }).elements()).toHaveLength(0);
 });

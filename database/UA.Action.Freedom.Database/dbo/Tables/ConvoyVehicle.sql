@@ -30,6 +30,10 @@ CREATE TABLE [dbo].[ConvoyVehicle] (
     [WithdrawnAt]     datetime2(0)   NULL,
     [WithdrawnReason] nvarchar(500)  NULL,
 
+    -- DeliveredAt is stamped by POST /convoys/{id}/vehicles/{vin}/delivered (O8), together with the delivered outcome of
+    -- the vehicle's boxes. Write-once, absent from every ordinary UPDATE.
+    [DeliveredAt]     datetime2(0)   NULL,
+
     -- The Receiver this vehicle is handed over to in Ukraine. It must be registered when it is set;
     -- plan 13 makes it a requirement for departure. NO ACTION: a Receiver a vehicle names cannot go.
     [HandoverReceiverRef] uniqueidentifier NULL,

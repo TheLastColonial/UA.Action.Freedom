@@ -15,6 +15,9 @@ export const convoyReadModelSchema = z.object({
   // Stamped by POST /convoys/{id}/depart, the one departure action (O36).
   departedAt: z.string().nullable(),
   departed: z.boolean(),
+  // Stamped by POST /convoys/{id}/close (O10). Closing does not lock the convoy (O25).
+  closedAt: z.string().nullable(),
+  closed: z.boolean(),
 });
 export type ConvoyReadModel = z.infer<typeof convoyReadModelSchema>;
 
@@ -62,6 +65,9 @@ export const convoyVehicleReadModelSchema = z.object({
   handoverReceiverRef: z.string().nullable(),
   travelling: z.boolean(),
   withdrawn: z.boolean(),
+  // Stamped by POST /convoys/{id}/vehicles/{vin}/delivered (O8).
+  deliveredAt: z.string().nullable(),
+  delivered: z.boolean(),
 });
 export type ConvoyVehicleReadModel = z.infer<typeof convoyVehicleReadModelSchema>;
 

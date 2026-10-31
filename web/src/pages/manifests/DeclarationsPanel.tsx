@@ -26,6 +26,7 @@ import { Button } from '../../components/Button';
 import { Gate } from '../../components/Gate';
 import { TextField } from '../../components/form/fields';
 import { Spinner } from '../../components/Spinner';
+import { AcceptGoodsListButton } from './AcceptGoodsListButton';
 
 // Mirrors EnsMrn.IsWellFormed — the shape only, not the check character. Verifying that wrongly
 // would refuse an MRN ICS2 has already issued, stranding a convoy over a bug of ours.
@@ -146,13 +147,21 @@ export function DeclarationsPanel({ convoyId, vin }: PanelProps): JSX.Element {
         <h3>Ukrainian goods lists</h3>
         {goodsLists.length === 0 ? <p role="status">No goods list recorded.</p> : null}
         {goodsLists.map((declaration) => (
-          <ReferenceSection
-            key={declaration.id}
-            convoyId={convoyId}
-            vin={vin}
-            kind="GoodsList"
-            declaration={declaration}
-          />
+          <div key={declaration.id}>
+            <ReferenceSection
+              convoyId={convoyId}
+              vin={vin}
+              kind="GoodsList"
+              declaration={declaration}
+            />
+            {declaration.receiverRef ? (
+              <AcceptGoodsListButton
+                convoyId={convoyId}
+                vin={vin}
+                receiverRef={declaration.receiverRef}
+              />
+            ) : null}
+          </div>
         ))}
         <GoodsListForm convoyId={convoyId} vin={vin} />
       </section>

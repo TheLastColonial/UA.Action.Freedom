@@ -68,6 +68,12 @@ public interface IConvoyRepository
     Task<bool> DepartAsync(int convoyId, DateTime departedAt, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Stamps <c>ClosedAt</c> on a convoy that has arrived. It may be called again: closing does not lock (O25), so a
+    /// later close moves the stamp. Returns false when there is no such convoy or it has not arrived.
+    /// </summary>
+    Task<bool> CloseAsync(int convoyId, DateTime closedAt, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Marks the convoy arrived, provided its truck list is published, it has not arrived yet, and
     /// every vehicle still travelling with it has a finished manifest. In the same transaction,
     /// Delivered and Lost vehicles are stamped handed over.
