@@ -421,16 +421,17 @@ arithmetic error.
 An unvalidated box weighs zero until a Loader says otherwise, so a total containing one is
 provisional. The count is the honesty flag that stops it reading as a confirmed figure.
 
-### A frozen manifest still moves
+### Nothing is frozen: a load change reopens the sign-off
 
-`recommendations.md` §5.2 forbids **edits** after the GMR exists, not **progress**. This was got
-wrong first time: blocking every transition stranded approved manifests in `Confirmed` for ever —
-they could never be prepared, loaded or delivered. `Preparing → Ready → InTransit → Delivered`
-report what happened to a load HMRC already knows about and contradict nothing.
+There is no frozen manifest any more (plan 15, ADR 0004). `Manifest.GmrSubmittedAt` and the 409s that came with it are
+gone, and an approved manifest still takes notes and can be deleted. What protects a border document from describing
+something that is no longer true is the declaration's **snapshot** (it reads Stale when the load differs) and the
+**reopening**: allocating, moving, removing or replacing a box, and a box seized, undeliverable or returned, send the
+vehicle's approved manifest back to Proposed in the same transaction as the change (`ManifestReopening`). The reopening
+lives in the repositories, not the handlers, because the manifest repository opens its own connection and could not join
+the transaction. A new write that changes a vehicle's load has to call it too.
 
-What the freeze actually blocks: `PUT`, team assignment, cargo changes, delete, and *reopening*
-to `Proposed`/`Rejected`. That last is a guard against a future backward edge rather than a path
-anything takes today.
+Adding or removing an *item* in an allocated, unattested box changes the load but does not reopen the manifest yet.
 
 ### Publishing a truck list closes it to additions, not to departures
 
@@ -535,14 +536,14 @@ the dispatcher's committed-driver shortlist.
 
 ## 5. The write-once transition pattern
 
-Four records are stamped once and then freeze their aggregate. They are all built the same way,
-and a fifth should follow it:
+Four records are stamped once and then freeze their aggregate (the manifest is no longer one of them: its approval is
+conditional on `Status = Proposed` and a load change reopens it). They are all built the same way, and a fifth should
+follow it:
 
 | Record | Endpoint | Freezes |
 | --- | --- | --- |
 | `Convoy.TruckListPublishedAt` | `POST /convoys/{id}/publish-truck-list` | the convoy's vehicle list, to additions |
 | `Box.ValidatedAt` + `ValidatedByPersonId` | `POST /boxes/{id}/validate` | the box's contents, weight and receiver |
-| `Manifest.Status` + `GmrSubmittedAt` | `POST /manifests/{id}/approve` | the manifest's content |
 | `ConvoyVehicle.WithdrawnAt` + `WithdrawnReason` | `DELETE /convoys/{id}/vehicles/{vin}?reason=` | the vehicle's part in this journey |
 
 The shape, in all four cases:
@@ -552,13 +553,10 @@ The shape, in all four cases:
 - **The transition's SQL is conditional** — `AND TruckListPublishedAt IS NULL`,
   `AND ValidatedAt IS NULL`, `AND Status = @from`, `AND WithdrawnAt IS NULL` — so the *database*
   settles a race between two people pressing the same button, rather than a read-then-write in C#.
-- **`ConfirmAndFreezeAsync` goes further** and does both in one statement with `OUTPUT INSERTED`.
-  A manifest that is Confirmed but not yet frozen is editable, and that window is the thing §5.2
-  rules out.
 
 ### Approval signs off and files nothing; filing enqueues, then stamps
 
-Approval confirms and freezes in one statement (`ConfirmAndFreezeAsync`) and does nothing else: no ENS is needed,
+Approval is one conditional `UPDATE ... WHERE Status = Proposed` (`ApproveAsync`) and does nothing else: no ENS is needed,
 and no GMR, document or envelope is enqueued, in either submission mode.
 
 Filing a declaration is a separate act. In manual mode (the default) a Dispatcher records the reference they
@@ -677,14 +675,6 @@ declines on purpose.
 So Freedom records the MRN a Ground Officer obtained in the EU Customs Trader Portal.
 `IEnsDeclarationStore` is where an IT Service Provider's adapter drops in later — that is a procurement
 decision, not a coding one. See `docs/adr/0003`.
-
-### Approval refuses *before* it freezes, and that is the one exception
-
-Everywhere else in the manifest lifecycle the rule is freeze-then-enqueue, because an editable manifest
-whose GMR is on its way is what §5.2 forbids. `ApproveManifestHandler` checks for a recorded ENS before
-`ConfirmAndFreezeAsync` instead, and the asymmetry is deliberate: a manifest frozen with no declaration
-is frozen for ever against an envelope French customs will never issue. There is a test asserting that
-nothing was frozen and nothing enqueued.
 
 ### A recorded MRN is write-once, enforced by blob storage
 
@@ -836,12 +826,6 @@ the parameter object, the SQL casts the parameter instead.
 `dotnet test --solution` runs the Integration and BDD projects at the same time against one
 database. That is how the deadlock above surfaced, as a BDD scenario failing one run in two. A
 flaky scenario there is worth a deadlock graph before it is worth a retry.
-
-### Frozen manifests accumulate in the local database
-
-BDD cleanup cannot delete them — `DELETE` on a frozen manifest is correctly a `409`, and the hook
-is best-effort. Ids are unique per run so nothing collides, but the rows stay. `docker compose
-down -v` clears it.
 
 ### Health probes are a poor subject for a telemetry test
 

@@ -1,16 +1,15 @@
 @startuml Manifest Creation Process
 
-' TARGET DESIGN (ADRs 0004, 0005, 0006, 0008; decisions P6, X3, X5, O36).
-' Approval is no longer the fork that releases the paperwork: it signs off a vehicle's load, and the
-' declarations are prepared and filed afterwards, manually by default. The code still implements the
-' earlier version (approval refuses without an ENS, freezes the manifest, then hands off the GMR, the
-' document and the ELO) until docs/plans/08 and docs/plans/15 merge. That version of this file is in
+' ADRs 0004, 0005, 0006, 0008; decisions P6, X3, X5, O36. As built (plans 08, 13 and 15).
+' Approval is not the fork that releases the paperwork: it signs off a vehicle's load, and the
+' declarations are prepared and filed afterwards, manually by default. The earlier version (approval
+' refuses without an ENS, freezes the manifest, then hands off the GMR, the document and the ELO) is in
 ' git history at commit f659eed.
 '
 ' Role-by-role detail: docs/process/00-end-to-end-overview.puml and docs/process/05.
 
 title Manifest Creation Process
-caption Target design. ADRs 0004, 0005, 0006, 0008. Detail in docs/process.
+caption ADRs 0004, 0005, 0006, 0008. Detail in docs/process.
 
 start
 

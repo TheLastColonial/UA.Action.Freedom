@@ -64,10 +64,7 @@ export function ManifestDetailPage(): JSX.Element {
     <section>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>{manifest.id}</h1>
-        <span>
-          {manifest.status}
-          {manifest.frozen ? ' · frozen' : ''}
-        </span>
+        <span>{manifest.status}</span>
       </header>
 
       <LastChanged by={manifest.lastChangedByName} at={manifest.lastChangedAt} />
@@ -100,14 +97,12 @@ export function ManifestDetailPage(): JSX.Element {
           </DetailCard>
           <Gate policy="manifests:write">
             <span style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              {!manifest.frozen ? (
-                <LinkButton
-                  to={`/manifests/${encodeURIComponent(manifest.id)}/edit`}
-                  variant="secondary"
-                >
-                  Edit
-                </LinkButton>
-              ) : null}
+              <LinkButton
+                to={`/manifests/${encodeURIComponent(manifest.id)}/edit`}
+                variant="secondary"
+              >
+                Edit
+              </LinkButton>
               <Button
                 variant="danger"
                 disabled={remove.isPending}

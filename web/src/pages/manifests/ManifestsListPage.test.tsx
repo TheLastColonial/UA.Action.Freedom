@@ -12,11 +12,11 @@ const routes: RouteObject[] = [
   { path: 'manifests', children: manifestRoutes },
 ];
 
-test('lists manifests with status and freeze state', async () => {
+test('lists manifests with status and whether the load is signed off', async () => {
   worker.use(
     ...manifestApi([
-      makeManifest({ id: 'UA-1', status: 'Created' }),
-      makeManifest({ id: 'UA-2', status: 'Confirmed', frozen: true }),
+      makeManifest({ id: 'UA-1', status: 'Proposed' }),
+      makeManifest({ id: 'UA-2', status: 'Approved', approved: true }),
     ]).handlers,
   );
 
@@ -28,7 +28,7 @@ test('lists manifests with status and freeze state', async () => {
 
   await expect.element(screen.getByRole('link', { name: 'UA-1' })).toBeInTheDocument();
   await expect.element(screen.getByRole('link', { name: 'UA-2' })).toBeInTheDocument();
-  await expect.element(screen.getByText('Confirmed')).toBeInTheDocument();
+  await expect.element(screen.getByText('Approved')).toBeInTheDocument();
 });
 
 test('the list points at the convoys, because a manifest is opened from a truck list', async () => {

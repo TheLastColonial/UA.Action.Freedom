@@ -1,12 +1,12 @@
 Feature: A box, packed to delivered
     The whole road one box travels, end to end against the deployed containers: packed by a
     Loader, validated and weighed, loaded onto a vehicle's manifest, approved — which is what
-    signs off the load — its declarations filed, then prepared, readied, departed and delivered.
+    signs off the load — its declarations filed, then departed and delivered.
 
     The point of walking it in one scenario is that every slice has its own feature already,
     and none of them proves the slices join up. The joins are where this system goes wrong: a
     box on a manifest whose convoy never published its truck list, a vehicle that departs
-    without insurance, a manifest frozen with paperwork that was never handed off.
+    without insurance, a signed-off manifest whose declarations were never filed.
 
     The French logistics envelope is part of that road. France requires one per transport
     unit at the Smart Border, so filing the ELO asks for it and the Customs Worker obtains it
@@ -62,9 +62,6 @@ Scenario: A validated box travels on an approved manifest and is delivered
     Then the response status is 200
     And the response body is a list of 1 or more
 
-    When I POST "propose" on the remembered manifest
-    Then the response status is 204
-
     # The filing sheet is what a Ground Officer takes to the portal. It is deliberately
     # incomplete: the Ukrainian delivery address is not on it, because the Ground Officer enters
     # it in the portal themselves.
@@ -82,8 +79,8 @@ Scenario: A validated box travels on an approved manifest and is delivered
     When I POST "approve" on the remembered manifest
     Then the response status is 204
     When I GET the remembered manifest
-    Then the response body field "status" is "Confirmed"
-    And the response body field "frozen" is "True"
+    Then the response body field "status" is "Approved"
+    And the response body field "approved" is "True"
     When I GET "/elo" on the remembered manifest
     Then the response status is 404
 
@@ -123,22 +120,17 @@ Scenario: A validated box travels on an approved manifest and is delivered
     And the envelope names the declaration I recorded
     And the envelope's barcode document is a PDF
 
-    # A frozen manifest still progresses — recommendations 5.2 forbids edits, not progress —
-    # because these report what happened to a load the authorities already know about.
+    # Nothing is frozen, and nothing here changes the load, so the sign-off stands through departure and delivery.
     Given I am authenticated as "operator"
-    When I POST "prepare" on the remembered manifest
-    Then the response status is 204
-    When I POST "ready" on the remembered manifest
-    Then the response status is 204
     # A convoy departs as a whole (O36), once nothing blocking is outstanding: its leader, route, ferry, handover
     # Receiver, validated boxes and declarations, including the goods list for the Receiver the box names.
     When I make the convoy of the insured vehicle ready to depart
     And I depart the convoy of the insured vehicle
     Then the response status is 200
-    When I POST "deliver" on the remembered manifest
-    Then the response status is 204
+    When I mark the insured vehicle delivered
+    Then the response status is 200
     When I GET the remembered manifest
-    Then the response body field "status" is "Delivered"
+    Then the response body field "status" is "Approved"
 
     # The box went with it, and the envelope that let it cross is still on file afterwards.
     When I GET "/boxes" on the remembered manifest

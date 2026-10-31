@@ -1,7 +1,6 @@
 import type { ManifestStatus } from '../../api/schemas/common';
 
-export type ManifestVerb =
-  'propose' | 'reject' | 'approve' | 'prepare' | 'ready' | 'deliver' | 'lose' | 'return';
+export type ManifestVerb = 'propose' | 'reject' | 'approve';
 
 interface Edge {
   verb: ManifestVerb;
@@ -9,28 +8,19 @@ interface Edge {
   to: ManifestStatus;
 }
 
-// Mirrors ManifestTransitions.Allowed in src/UA.Action.Freedom.Domain/Manifest.cs. The API
-// is the authority; this only shapes which buttons the panel offers.
+// Mirrors ManifestTransitions.CanBeRequested in src/UA.Action.Freedom.Domain/Manifest.cs. The API
+// is the authority; this only shapes which buttons the panel offers. Approved back to Proposed is
+// not here: only a change to the vehicle's load takes that edge.
 const EDGES: readonly Edge[] = [
-  { verb: 'propose', from: ['Created', 'Rejected'], to: 'Proposed' },
-  { verb: 'reject', from: ['Created', 'Proposed'], to: 'Rejected' },
-  { verb: 'approve', from: ['Proposed'], to: 'Confirmed' },
-  { verb: 'prepare', from: ['Confirmed'], to: 'Preparing' },
-  { verb: 'ready', from: ['Preparing'], to: 'Ready' },
-  { verb: 'deliver', from: ['InTransit'], to: 'Delivered' },
-  { verb: 'lose', from: ['InTransit'], to: 'Lost' },
-  { verb: 'return', from: ['Delivered'], to: 'Returned' },
+  { verb: 'propose', from: ['Rejected'], to: 'Proposed' },
+  { verb: 'reject', from: ['Proposed'], to: 'Rejected' },
+  { verb: 'approve', from: ['Proposed'], to: 'Approved' },
 ];
 
 const VERB_LABEL: Record<ManifestVerb, string> = {
   propose: 'Propose',
   reject: 'Reject',
   approve: 'Approve',
-  prepare: 'Start preparing',
-  ready: 'Mark ready',
-  deliver: 'Mark delivered',
-  lose: 'Mark lost',
-  return: 'Mark returned',
 };
 
 export interface TransitionOption {
@@ -43,7 +33,6 @@ export interface TransitionOption {
 
 export interface TransitionContext {
   status: ManifestStatus;
-  frozen: boolean;
   canApprove: boolean;
   // There is no `hasConvoy`: a manifest is opened against a truck-list entry, so it always names
   // one. What is still worth asking is whether that list has been closed.
@@ -53,15 +42,8 @@ export interface TransitionContext {
 export function availableTransitions(ctx: TransitionContext): TransitionOption[] {
   return EDGES.filter((edge) => edge.from.includes(ctx.status))
     .filter((edge) => {
-      // A frozen manifest still reports what happened to the load, but cannot be reopened.
-      if (ctx.frozen && (edge.verb === 'propose' || edge.verb === 'reject')) {
-        return false;
-      }
-      // Approval signs off the load and freezes the manifest — Administrator alone. It files nothing.
-      if (edge.verb === 'approve' && !ctx.canApprove) {
-        return false;
-      }
-      return true;
+      // Approval signs off the load — Administrator alone. It files nothing.
+      return edge.verb !== 'approve' || ctx.canApprove;
     })
     .map((edge) => ({
       verb: edge.verb,

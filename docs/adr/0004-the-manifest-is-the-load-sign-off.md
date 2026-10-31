@@ -99,6 +99,15 @@ and its sign-off still stands is exactly what this ADR exists to remove.
 **Plan 07 (cargo and ferry).** `dbo.ManifestBox` is replaced by `dbo.ConvoyVehicleBoxAllocation`, keyed on `BoxId`,
 cascading from the truck-list entry and from the box. The ferry flag on the manifest is replaced by
 `dbo.ConvoyVehicleFerryBooking`. The manifest still reads its cargo, for the weight, the printed document and the filing
-sheet, by joining the allocation on `(ConvoyId, Vin)`. While the GMR stamp still freezes the manifest, an allocation
-change is refused for a vehicle whose manifest is frozen, in either direction; plan 15 removes that. `PUT` and `DELETE`
-on `/manifests/{id}/boxes/{boxId}` answer 410 Gone until then.
+sheet, by joining the allocation on `(ConvoyId, Vin)`. Plan 15 removed the transitional refusal and the 410 routes (below).
+
+**Plan 15 (the sign-off lifecycle).** `ManifestStatus` is `Proposed`, `Approved`, `Rejected`, stored `0`, `1`, `2` under a
+CHECK, and `Created` folded into `Proposed`: a manifest opens Proposed. `GmrSubmittedAt` is gone; nothing is frozen, and
+the manifest's notes and its deletion are no longer refused after approval. Approved goes back to Proposed through
+`ManifestReopening` (Data), one conditional `UPDATE ... WHERE Status = Approved` that `ConvoyVehicleRepository`
+(`AllocateBoxAsync`, `RemoveBoxAsync`), `BoxRepository.ReplaceAsync` and `BoxOutcomeRepository.RecordAsync` (seized,
+undeliverable, returned to hub) run inside their own transaction, so the handlers never see it and a load change cannot
+commit without it. It stamps `Manifest.ReopenedAt`, which the next approval clears. The delivery verbs, the manifest mirror
+of delivery and departure, and `FinishedStatuses` are gone: arrival and volunteer erasure read `ConvoyVehicle.DeliveredAt`,
+`WithdrawnAt` and the box outcomes. The old manifest-only `Lost` state has no outcome equivalent, so handover is for
+delivered vehicles only. Not yet reopening: adding or removing an item in an allocated, unattested box.

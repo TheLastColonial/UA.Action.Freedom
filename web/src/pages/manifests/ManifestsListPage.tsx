@@ -20,7 +20,7 @@ const columns: readonly Column<ManifestReadModel>[] = [
   { header: 'Status', cell: (m) => m.status },
   { header: 'Vehicle', cell: (m) => m.vin },
   { header: 'Convoy', cell: (m) => m.convoyId },
-  { header: 'Frozen', cell: (m) => (m.frozen ? 'Yes' : 'No') },
+  { header: 'Signed off', cell: (m) => (m.approved ? 'Yes' : 'No') },
 ];
 
 export function ManifestsListPage(): JSX.Element {

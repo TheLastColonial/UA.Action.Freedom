@@ -1,15 +1,9 @@
 # Goods movement: box attestation to declarations
 
-> **Partly built.** [Plan 08](../plans/08-declarations-filing.md) is built: approval signs off the load and files
-> nothing, a vehicle's declarations are recorded (manual, the default) or filed (automatic), and an ELO needs an
-> accepted ENS. Still the target: the three-state manifest ([plan 15](../plans/15-manifest-signoff-lifecycle.md)),
-> staleness from a snapshot ([plan 09](../plans/09-declaration-staleness.md)) and the departure gate
-> ([plan 13](../plans/13-readiness-departure.md)). The earlier flow is in git history at commit `f659eed`.
-
-The sequence is drawn in [`goods-movements.puml`](goods-movements.puml). The role-by-role processes are
-[05 Load sign-off and declarations](05-load-signoff-and-declarations.puml) and
-[06 Load change and re-declare](06-load-change-and-redeclare.puml). The rules are in
-[Customs declarations](../domain/customs-declarations.md).
+> **Built** except where a later plan is named. Approval signs off the load and files nothing, a vehicle's
+> declarations are recorded or filed, staleness is derived from a snapshot ([plan 09](../plans/09-declaration-staleness.md)),
+> departure is gated ([plan 13](../plans/13-readiness-departure.md)) and the manifest is the three-state sign-off
+> ([plan 15](../plans/15-manifest-signoff-lifecycle.md)). The earlier flow is in git history at commit `f659eed`.
 
 ## Flow summary
 

@@ -192,8 +192,8 @@ mean the convoy could never arrive. Arrival, in one step:
 
 **Delivery, acceptance and closing** ([ADR 0015](../adr/0015-box-and-vehicle-outcomes-and-convoy-closing.md)). Once a
 convoy has departed, the Convoy Leader or the Dispatcher marks a vehicle **delivered** (`POST .../vehicles/{vin}/delivered`),
-which delivers every box on it that has no outcome yet. Until plan 15 the vehicle's manifest is mirrored to `Delivered`, so
-the arrival rule above still reads the manifest. Acceptance is recorded **once per Ukrainian goods list**, and **closing**
+which delivers every box on it that has no outcome yet. Delivery is the fact arrival, the handover and volunteer
+erasure read; the manifest takes no part. Acceptance is recorded **once per Ukrainian goods list**, and **closing**
 follows arrival: the Dispatcher closes (`POST /convoys/{id}/close`), **closing does not lock**, and the report is regenerated
 from the facts each time ([O10](decisions.md#o10), [O25](decisions.md#o25)). The report carries no address or delivery detail.
 
@@ -473,8 +473,11 @@ proposed again, and **any change to an approved load returns it to Proposed** fo
 ([P6](decisions.md#p6), [X3](decisions.md#x3)). Approval files nothing: declarations are prepared and filed
 afterwards ([Customs declarations](customs-declarations.md)). Drawn in [`manifest-status.puml`](../manifest-status.puml).
 
-> The code still implements the earlier ten-state `ManifestStatus` (`Created` to `Returned`), with approval freezing
-> the manifest, until [plan 15](../plans/15-manifest-signoff-lifecycle.md) merges.
+As built (plan 15): the status is stored as `0 Proposed`, `1 Approved`, `2 Rejected` (a CHECK in the schema), a new
+manifest opens **Proposed**, and the edge from Approved back to Proposed is written only by a change to the vehicle's
+load, in the same transaction as the change (`dbo.Manifest.ReopenedAt` says when, and the next approval clears it). The
+changes that do it are allocating, moving or removing a box, replacing a box, and a box that is seized, undeliverable or
+returned; a delivery does not. Nothing is frozen: a filed declaration is compared with its own snapshot of the load.
 
 ### Declaration
 

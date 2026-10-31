@@ -1,23 +1,23 @@
 Feature: Manifests API
-    The deployed Freedom service exposes manifests at /manifests — the document pack for one
-    vehicle on one convoy: its border weight and its GMR. Its cargo and its ferry booking are
-    recorded against the same truck-list entry, at /convoys/{id}/vehicles/{vin}/boxes and
-    /ferry, and the manifest reads them.
+    The deployed Freedom service exposes manifests at /manifests: the Administrator's sign-off of
+    one vehicle's load on one convoy, and its document pack (border weight, delivery notes). Its
+    cargo and its ferry booking are recorded against the same truck-list entry, at
+    /convoys/{id}/vehicles/{vin}/boxes and /ferry, and the manifest reads them.
 
     A manifest is opened against a truck-list entry, at
     POST /convoys/{id}/vehicles/{vin}/manifest, because that pair is what it is the paperwork
-    for. It carries no crew of its own: who is driving is a fact about the vehicle on the
-    convoy, and /manifests/{id}/crew reads it.
+    for. It opens Proposed. It carries no crew of its own: who is driving is a fact about the
+    vehicle on the convoy, and /manifests/{id}/crew reads it.
 
-    Every state change is its own POST, one per edge of docs/manifest-status.puml. Two rules
-    the diagram cannot express are enforced here: a manifest may only be proposed against a
-    convoy whose truck list is published, and once its Goods Movement Reference exists it can
-    no longer be edited — the vehicle would otherwise reach a border carrying something HMRC
-    was not told about.
+    The states are Proposed, Approved and Rejected (docs/manifest-status.puml). Each edge a person
+    can take is its own POST: propose, approve and reject. A rejected manifest may only be proposed
+    against a convoy whose truck list is published. Nothing is frozen: a change to the vehicle's
+    load (a box put on, moved, taken off, replaced, or lost) sends an approved manifest back to
+    Proposed, and it needs approving again. What happened to a load is a box outcome, not a
+    manifest state.
 
-    Approval is the Administrator's sign-off of the load: it confirms the manifest and freezes it,
-    and files nothing. It is Administrator only, so the person who builds a
-    manifest is not the person who signs it off.
+    Approval is the Administrator's sign-off of the load, and files nothing. It is Administrator
+    only, so the person who builds a manifest is not the person who signs it off.
 
     These scenarios run against the running containers (the edge on
     http://localhost:8080, Keycloak on http://localhost:8081) and skip themselves
@@ -35,7 +35,7 @@ Scenario: A ground officer is refused manifests
     When I GET "/manifests"
     Then the response status is 403
 
-Scenario: A dispatcher opens a manifest in the Created state
+Scenario: A dispatcher opens a manifest in the Proposed state
     Given I am authenticated as "operator"
     And a convoy exists whose truck list is not published
     And a manifest reference that is not yet used
@@ -43,7 +43,7 @@ Scenario: A dispatcher opens a manifest in the Created state
     Then the response status is 201
     When I GET the remembered manifest
     Then the response status is 200
-    And the response body field "status" is "Created"
+    And the response body field "status" is "Proposed"
 
 Scenario: Reusing a manifest reference is a conflict
     Given I am authenticated as "operator"
@@ -61,23 +61,27 @@ Scenario: A manifest cannot be opened for a vehicle that is not on the convoy
     When I POST a manifest for a vehicle that is not on the convoy
     Then the response status is 404
 
-Scenario: A manifest cannot be proposed until its convoy has published a truck list
+Scenario: A rejected manifest cannot be proposed until its convoy has published a truck list
     Given I am authenticated as "operator"
     And a convoy exists whose truck list is not published
     And a manifest reference that is not yet used
     When I POST a manifest on the remembered convoy
     Then the response status is 201
+    When I POST "reject" on the remembered manifest
+    Then the response status is 204
     When I POST "propose" on the remembered manifest
     Then the response status is 409
     When I GET the remembered manifest
-    Then the response body field "status" is "Created"
+    Then the response body field "status" is "Rejected"
 
-Scenario: A manifest is proposed once its convoy has published a truck list
+Scenario: A rejected manifest is proposed once its convoy has published a truck list
     Given I am authenticated as "operator"
     And a convoy exists whose truck list is published
     And a manifest reference that is not yet used
     When I POST a manifest on the remembered convoy
     Then the response status is 201
+    When I POST "reject" on the remembered manifest
+    Then the response status is 204
     When I POST "propose" on the remembered manifest
     Then the response status is 204
     When I GET the remembered manifest
@@ -89,76 +93,77 @@ Scenario: A dispatcher may build a manifest but not approve it
     And a manifest reference that is not yet used
     When I POST a manifest on the remembered convoy
     Then the response status is 201
-    When I POST "propose" on the remembered manifest
-    Then the response status is 204
     When I POST "approve" on the remembered manifest
     Then the response status is 403
 
-Scenario: An administrator approves a manifest, which freezes it
+Scenario: An administrator approves a manifest, which signs the load off
     Given I am authenticated as "operator"
     And a convoy exists whose truck list is published
     And a manifest reference that is not yet used
     When I POST a manifest on the remembered convoy
     Then the response status is 201
-    When I POST "propose" on the remembered manifest
-    Then the response status is 204
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     Then the response status is 204
     When I GET the remembered manifest
-    Then the response body field "status" is "Confirmed"
-    And the response body field "frozen" is "True"
+    Then the response body field "status" is "Approved"
+    And the response body field "approved" is "True"
 
-Scenario: A frozen manifest cannot be edited or deleted
+Scenario: An approved manifest still takes its notes and can be deleted
     Given I am authenticated as "operator"
     And a convoy exists whose truck list is published
     And a manifest reference that is not yet used
     When I POST a manifest on the remembered convoy
     Then the response status is 201
-    When I POST "propose" on the remembered manifest
-    Then the response status is 204
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     Then the response status is 204
     When I PUT the remembered manifest with body:
         """
-        { "deliveryNotes": "changed after the GMR" }
+        { "deliveryNotes": "changed after sign-off" }
         """
-    Then the response status is 409
+    Then the response status is 204
     When I DELETE the remembered manifest
-    Then the response status is 409
+    Then the response status is 204
 
-Scenario: A frozen manifest still runs to delivery
+Scenario: A change to the load sends an approved manifest back, and it is approved again
     Given I am authenticated as "operator"
     And a convoy exists with an insured vehicle on its published truck list
+    And a registered receiver exists
     And a manifest reference that is not yet used
+    When I POST "/boxes" with body:
+        """
+        { "receiverRef": "{receiver}" }
+        """
+    Then the response status is 201
+    Given I remember the box
     When I POST a manifest for the insured vehicle on the remembered convoy
     Then the response status is 201
-    When I POST "propose" on the remembered manifest
-    Then the response status is 204
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
     Then the response status is 204
-    When I POST "prepare" on the remembered manifest
-    Then the response status is 204
-    When I POST "ready" on the remembered manifest
-    Then the response status is 204
-    When I make the convoy of the insured vehicle ready to depart
-    And I depart the convoy of the insured vehicle
-    Then the response status is 200
-    When I POST "deliver" on the remembered manifest
+    When I GET the remembered manifest
+    Then the response body field "status" is "Approved"
+    When I put the remembered box on the insured vehicle
     Then the response status is 204
     When I GET the remembered manifest
-    Then the response body field "status" is "Delivered"
+    Then the response body field "status" is "Proposed"
+    And the response body field "approved" is "False"
+    When I POST "approve" on the remembered manifest
+    Then the response status is 204
+    When I GET the remembered manifest
+    Then the response body field "status" is "Approved"
 
-Scenario: A manifest cannot skip the preparation steps
+Scenario: The delivery verbs are gone because what happened to a load is a box outcome
     Given I am authenticated as "operator"
     And a convoy exists whose truck list is published
     And a manifest reference that is not yet used
     When I POST a manifest on the remembered convoy
     Then the response status is 201
     When I POST "deliver" on the remembered manifest
-    Then the response status is 409
+    Then the response status is 404
+    When I POST "prepare" on the remembered manifest
+    Then the response status is 404
 
 Scenario: A rejected manifest can be proposed again
     Given I am authenticated as "operator"
@@ -195,14 +200,14 @@ Scenario: A vehicle's outbound ferry is booked on its truck-list entry
     And the response body field "reference" is "BDD-FERRY-1"
     And the response body field "operator" is "P&O Ferries"
 
-Scenario: Cargo is written on the vehicle, and the manifest route points there
+Scenario: Cargo is written on the vehicle, and the manifest has no route for it
     Given I am authenticated as "operator"
     And a convoy exists with an insured vehicle on its published truck list
     And a manifest reference that is not yet used
     When I POST a manifest for the insured vehicle on the remembered convoy
     Then the response status is 201
     When I PUT "/boxes/1" on the remembered manifest
-    Then the response status is 410
+    Then the response status is 404
 
 Scenario: Fetching an unknown manifest is a 404
     Given I am authenticated as "operator"
@@ -214,17 +219,14 @@ Scenario: A convoy arrives once its vehicles are delivered, and the vehicle is h
     And a convoy exists with an insured vehicle on its published truck list
     And a manifest reference that is not yet used
     When I POST a manifest for the insured vehicle on the remembered convoy
-    And I POST "propose" on the remembered manifest
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
-    And I POST "prepare" on the remembered manifest
-    And I POST "ready" on the remembered manifest
     And I make the convoy of the insured vehicle ready to depart
     And I depart the convoy of the insured vehicle
     Then the response status is 200
     When I mark the manifest's convoy arrived
     Then the response status is 409
-    When I POST "deliver" on the remembered manifest
+    When I mark the insured vehicle delivered
     And I mark the manifest's convoy arrived
     Then the response status is 204
     And the insured vehicle has been handed over
@@ -235,16 +237,13 @@ Scenario: A driver is erased only once their convoy has arrived, and the history
     And a convoy exists with an insured vehicle on its published truck list
     And a manifest reference that is not yet used
     When I POST a manifest for the insured vehicle on the remembered convoy
-    And I POST "propose" on the remembered manifest
     Given I am authenticated as "admin"
     When I POST "approve" on the remembered manifest
-    And I POST "prepare" on the remembered manifest
-    And I POST "ready" on the remembered manifest
     And I make the convoy of the insured vehicle ready to depart
     And I depart the convoy of the insured vehicle
     And the administrator erases the vehicle's driver
     Then the response status is 409
-    When I POST "deliver" on the remembered manifest
+    When I mark the insured vehicle delivered
     And I mark the manifest's convoy arrived
     And the administrator erases the vehicle's driver
     Then the response status is 204
