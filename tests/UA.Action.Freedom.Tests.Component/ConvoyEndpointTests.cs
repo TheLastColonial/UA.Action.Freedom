@@ -999,14 +999,14 @@ public class ConvoyEndpointTests
         readiness.GetProperty("ready").GetBoolean().Should().BeFalse();
         readiness.GetProperty("routePlanned").GetBoolean().Should().BeFalse();
         readiness.GetProperty("reasons").EnumerateArray().Select(reason => reason.GetString())
-            .Should().Equal("No route planned", "1 vehicle not ready");
+            .Should().Equal("No route planned", "No Convoy Leader assigned", "1 vehicle not ready");
         var vehicle = readiness.GetProperty("vehicles").EnumerateArray().Single();
         vehicle.GetProperty("vin").GetString().Should().Be(Vin);
         vehicle.GetProperty("insured").GetBoolean().Should().BeFalse();
 
         // One driver is enough to be ready; the advisory says a second is wanted.
         vehicle.GetProperty("reasons").EnumerateArray().Select(reason => reason.GetString())
-            .Should().Equal("Insurance not recorded");
+            .Should().StartWith("Insurance not recorded").And.Contain("No ferry booking");
         vehicle.GetProperty("advisories").EnumerateArray().Select(reason => reason.GetString())
             .Should().Equal("Only one driver; two are advised");
     }

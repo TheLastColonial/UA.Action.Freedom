@@ -173,6 +173,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         return this;
     }
 
+    public bool Departed(int convoyId) => convoys.TryGetValue(convoyId, out var convoy) && convoy.Departed;
+
     public Guid? HandoverReceiverOf(int convoyId, string vin) => EntryFor(convoyId, vin)?.HandoverReceiverRef;
 
     public bool IsHandedOver(string vin) => vehicles.GetValueOrDefault(vin)?.HandedOver ?? false;

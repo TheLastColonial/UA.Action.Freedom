@@ -134,8 +134,6 @@ public class ManifestEndpointTests
                      ("approve", ManifestStatus.Confirmed),
                      ("prepare", ManifestStatus.Preparing),
                      ("ready", ManifestStatus.Ready),
-                     ("depart", ManifestStatus.InTransit),
-                     ("deliver", ManifestStatus.Delivered),
                  })
         {
             var response = await client.PostAsync(
@@ -147,18 +145,17 @@ public class ManifestEndpointTests
     }
 
     [Fact]
-    public async Task A_vehicle_without_insurance_in_cover_does_not_depart()
+    public async Task A_manifest_has_no_depart_of_its_own_because_a_convoy_departs_as_a_whole()
     {
+        // O36: departure is POST /convoys/{id}/depart. There is no per-vehicle route to take, and so none to bypass.
         var manifests = new InMemoryManifestRepository(AManifest() with { Status = ManifestStatus.Ready });
         await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(insured: false), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
+            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Administrator");
         using var client = api.CreateClient();
 
         var response = await client.PostAsync($"/manifests/{Id}/depart", content: null, TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-        problem.GetProperty("detail").GetString().Should().Contain("insurance");
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed);
         manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Ready);
     }
 
@@ -187,7 +184,7 @@ public class ManifestEndpointTests
         using var client = api.CreateClient();
 
         var response = await client.PostAsync(
-            $"/manifests/{Id}/depart", content: null, TestContext.Current.CancellationToken);
+            $"/manifests/{Id}/deliver", content: null, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
