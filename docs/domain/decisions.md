@@ -259,7 +259,6 @@ per-vehicle anchor.
 | Area | Before | After |
 |---|---|---|
 | `Manifest` | cargo, GMR, ELO, ENS, ferry and status | load sign-off only. Documents are generated. |
-| Convoy Leader | not modelled | one per convoy, with a scoped checklist page |
 | Vehicle value | no value | price paid, included in the value report ([O11](#o11)) |
 | Loader | sees every location | sees only the locations they manage ([O14](#o14)) |
 | Item classification | free text and properties | category, mapped to each authority's codes ([O16](#o16)) |

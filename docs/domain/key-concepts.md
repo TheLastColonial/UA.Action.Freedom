@@ -101,7 +101,7 @@ their manifest, but do not administer the system. A driver may be *committed* to
 
 The one [Driver](#driver) crewed on a convoy who leads it ([D8](decisions.md#d8), [P7](decisions.md#p7)). The Dispatcher or
 Administrator nominates them and is the only one who reassigns ([D17](decisions.md#d17), [P14](decisions.md#p14)); every
-earlier leader is kept in the history with the dates. The login of the volunteer who leads a convoy may read **that convoy only** (its route, its truck list and a vehicle's cargo) for as long as the assignment is open: the role is derived from the assignment on every request, so a Dispatcher marks a leader by nominating them and reassigning takes the access away at once ([ADR 0010](../adr/0010-resource-scoped-permissions.md)). The leader's own actions and address reads arrive with plans 14, 18 and 19, and the access ends when the convoy closes. A leader cannot be taken off the crew until another is
+earlier leader is kept in the history with the dates. The login of the volunteer who leads a convoy may read **that convoy only** (its route, its truck list and a vehicle's cargo) for as long as the assignment is open: the role is derived from the assignment on every request, so a Dispatcher marks a leader by nominating them and reassigning takes the access away at once ([ADR 0010](../adr/0010-resource-scoped-permissions.md)). On a departed convoy the leader **reports progress** from a phone checklist: they mark each route point reached and each border crossed, enter fuel, and record how a box or a vehicle ended, on that convoy only ([ADR 0016](../adr/0016-progress-is-reported-not-tracked.md)); a Dispatcher may do the same on their behalf and the record names the Dispatcher. Nothing is tracked and no position is kept. Address reads arrive with plan 19, and the access ends when the convoy closes. A leader cannot be taken off the crew until another is
 nominated, so a convoy is never left silently without one.
 
 ### Volunteer erasure
@@ -280,7 +280,7 @@ There is one record now.
 
 A convoy may have a **budget**: one planned amount for each cost type (fuel, ferry, hotel, insurance, other). It is a step in creating a convoy and it is **never required to depart** - a convoy with no budget, or a line over its plan, is only advice on the readiness read (O12, O37).
 
-- **Costs entered** are fuel and other, by the Dispatcher until the Convoy Leader's checklist exists. A ferry, hotel or insurance cost is **held on its booking or policy** and the summary reads it from there, so it is never entered twice.
+- **Costs entered** are fuel and other, by the Dispatcher; the Convoy Leader enters **fuel** from the checklist, on their own convoy, recorded under their name. A ferry, hotel or insurance cost is **held on its booking or policy** and the summary reads it from there, so it is never entered twice.
 - **Vehicle equipment** is what the charity buys for a vehicle, such as warning triangles, chosen from a catalogue and added per vehicle on the truck-list entry. It has no donor, is accounted for apart from donations, **is not part of the value delivered**, and its cost counts under *Other* (O13).
 - Reimbursing volunteers is out of scope (O10): there is no payee or bank field.
 
@@ -502,8 +502,11 @@ What the code does today (plan 08):
   declaration reads **Stale** whenever the load now differs, and the Dispatcher gets a **re-declare task** on screen.
   Withdrawing it keeps the record and its reference as history and starts a new draft. Nothing is stored on read and
   nobody sets the flag.
-- **Not yet built:** closing at a crossing (plan 18), and
-  departure refusing a stale declaration (plan 13).
+- **A crossing closes (plan 18).** The Convoy Leader marks a border crossed (the Dispatcher may, for them) and each
+  *accepted* declaration of that border's authority for the vehicles still travelling moves to **Closed** in the same
+  transaction: the UK border closes the GMR, the EU border the ENS and ELO, the Ukrainian border the goods lists. A
+  closed declaration is frozen and is never compared for staleness, so a later load change raises no task for it, while
+  the declarations of a border not yet crossed still go stale.
 
 ### Truck List
 

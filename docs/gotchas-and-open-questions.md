@@ -129,6 +129,10 @@ that turns it into the shape the application uses (the category, quantity, value
 real columns on the same row now, and the seam maps them too). That is the exception, and it is commented as
 such. A non-string JSON value in the bag is kept as its raw text rather than refused.
 
+### A nullable `varchar(32)` key cannot be `SqlKey.Of(...)`
+
+`SqlKey.Of(vin)` returns a Dapper `DbString`, which is an `ICustomQueryParameter` and **cannot be null**: a parameter object whose `vin` member is `null` throws `Member 'vin' is an ICustomQueryParameter and cannot be null`, and a member declared `object` that holds a `DbString` is not recognised at all (`No mapping exists from object type Dapper.DbString`). Where the VIN is optional (`dbo.RoutePointMark.Vin` is null for a mark on the whole convoy) build a `DynamicParameters` and `Add("vin", vin, DbType.AnsiString, size: 32)`, which sends a typed null and still compares as `varchar`. See `RoutePointMarkRepository`.
+
 ### A `date` column does not hydrate a `DateOnly` constructor parameter
 
 Dapper maps a SQL `date` to `DateTime`, so a read model with a `DateOnly` parameter fails with "A parameterless default
@@ -240,7 +244,7 @@ uniqueness.
 negative sequences** (`Sequence = -RoutePointId`, because the unique key is checked row by row and a reorder would otherwise
 collide with itself), update the matched points, insert the new ones. Anything that will refer to a point must be
 reported through `IRoutePointReferences` (Application), which the handler asks before removing points (`409
-route-point-in-use`): the default answers "nothing", plan 11 and plan 18 replace it, and each should also add a real foreign key to
+route-point-in-use`): the default answers "nothing"; plan 11 (accommodation) and plan 18 (progress marks, `dbo.RoutePointMark`) both feed it, each with a real foreign key to
 `RoutePointId`. A test double must keep the same rule (`InMemoryConvoyRepository.ReferenceRoutePoint`). A Border point has an
 authority and no other kind does; that is validated in the API, not by a CHECK that spans two columns, because SQL Server
 normalises such a check and every publish would recreate it.
