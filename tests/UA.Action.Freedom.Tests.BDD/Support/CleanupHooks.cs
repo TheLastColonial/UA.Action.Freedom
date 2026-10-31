@@ -1,4 +1,4 @@
-﻿using Reqnroll;
+using Reqnroll;
 
 namespace UA.Action.Freedom.Tests.BDD.Support;
 
@@ -51,6 +51,7 @@ public sealed class CleanupHooks(FreedomApiClient api, ScenarioState state)
         "vehicles" => 1,
         "donors" => 3,
         "people" => 3,
+        "receivers" => 4,
         _ => 2,
     };
 
