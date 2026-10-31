@@ -1,0 +1,67 @@
+.checklist {
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+.checklist__points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.checklist__point {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.checklist__kind {
+  margin-left: var(--space-2);
+  font-size: 0.85em;
+  color: var(--color-text-muted);
+}
+
+.checklist__stay,
+.checklist__marks {
+  margin: var(--space-1) 0 0;
+  font-size: 0.9em;
+}
+
+.checklist__marks {
+  list-style: none;
+  padding: 0;
+}
+
+.checklist__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.checklist__actions .btn {
+  flex: 1;
+  min-height: 3rem;
+}
+
+.checklist__fuel {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.checklist__fuel label {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.checklist__fallback {
+  margin-top: var(--space-4);
+}
+
+/* The route sheet: just the points and what has been reported, nothing to press. */
+@media print {
+  .checklist__noprint {
+    display: none;
+  }
+}

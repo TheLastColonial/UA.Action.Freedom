@@ -18,6 +18,7 @@ import { ConvoyCargoPanel } from './ConvoyCargoPanel';
 import { ConvoyDriversPanel } from './ConvoyDriversPanel';
 import { ConvoyLeaderPanel } from './ConvoyLeaderPanel';
 import { ConvoyOutcomesPanel } from './ConvoyOutcomesPanel';
+import { ConvoyProgressCard } from './ConvoyProgressCard';
 import { ConvoyEquipmentPanel } from './ConvoyEquipmentPanel';
 import { ConvoyReadinessPanel } from './ConvoyReadinessPanel';
 import { ConvoyRedeclareTasks } from './ConvoyRedeclareTasks';
@@ -134,6 +135,8 @@ export function ConvoyDetailPage(): JSX.Element {
             </dl>
           </DetailCard>
 
+          <ConvoyProgressCard convoyId={convoy.id} departed={convoy.departed} />
+
           <ConvoyReadinessPanel
             convoyId={convoy.id}
             departed={convoy.departed}
@@ -189,6 +192,11 @@ export function ConvoyDetailPage(): JSX.Element {
               ) : null}
             </span>
           </Gate>
+          {convoy.departed ? (
+            <LinkButton to={`/convoys/${String(convoy.id)}/checklist`} variant="secondary">
+              Open the checklist
+            </LinkButton>
+          ) : null}
           {convoy.arrived ? (
             <LinkButton to={`/convoys/${String(convoy.id)}/report`} variant="secondary">
               View report

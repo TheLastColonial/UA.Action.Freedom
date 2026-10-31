@@ -1,5 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
 
+import { ConvoyChecklistPage } from './ConvoyChecklistPage';
 import { ConvoyCreatePage } from './ConvoyCreatePage';
 import { ConvoyDetailPage } from './ConvoyDetailPage';
 import { ConvoyEditPage } from './ConvoyEditPage';
@@ -12,6 +13,8 @@ export const convoyRoutes: RouteObject[] = [
   { path: 'new', element: <ConvoyCreatePage /> },
   { path: ':id', element: <ConvoyDetailPage /> },
   { path: ':id/report', element: <ConvoyReportPage /> },
+  // The Convoy Leader's checklist: a phone page that stores nothing (ADR 0016).
+  { path: ':id/checklist', element: <ConvoyChecklistPage /> },
   { path: ':id/edit', element: <ConvoyEditPage /> },
   // A manifest is opened against a truck-list entry, so its creation lives under the convoy —
   // the same shape as POST /convoys/{id}/vehicles/{vin}/manifest.
