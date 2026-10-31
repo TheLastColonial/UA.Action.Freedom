@@ -18,14 +18,9 @@ interface EdgeRule {
 }
 
 const EDGES: readonly EdgeRule[] = [
-  { verb: 'propose', from: ['Created', 'Rejected'], to: 'Proposed' },
-  { verb: 'reject', from: ['Created', 'Proposed'], to: 'Rejected' },
-  { verb: 'approve', from: ['Proposed'], to: 'Confirmed' },
-  { verb: 'prepare', from: ['Confirmed'], to: 'Preparing' },
-  { verb: 'ready', from: ['Preparing'], to: 'Ready' },
-  { verb: 'deliver', from: ['InTransit'], to: 'Delivered' },
-  { verb: 'lose', from: ['InTransit'], to: 'Lost' },
-  { verb: 'return', from: ['Delivered'], to: 'Returned' },
+  { verb: 'propose', from: ['Rejected'], to: 'Proposed' },
+  { verb: 'reject', from: ['Proposed'], to: 'Rejected' },
+  { verb: 'approve', from: ['Proposed'], to: 'Approved' },
 ];
 
 export interface VehicleCargoCapacity {
@@ -71,9 +66,6 @@ function fitsCargoSpace(box: ManifestBoxReadModel, capacity: VehicleCargoCapacit
   return bSorted.every((dim, i) => dim <= (cSorted[i] ?? Number.POSITIVE_INFINITY));
 }
 
-const FREEZE_MESSAGE =
-  'A Goods Movement Reference has been created for this manifest, so it can no longer be changed.';
-
 export function manifestApi(
   seed: readonly ManifestReadModel[] = [],
   options: ManifestApiOptions = {},
@@ -106,8 +98,7 @@ export function manifestApi(
       if (db.has(body.id)) {
         return problem(409, `A manifest with reference '${body.id}' already exists.`);
       }
-      // One manifest per vehicle per convoy: arrival asks each vehicle for its finished manifest
-      // and has to get one answer.
+      // One manifest per vehicle per convoy.
       if ([...db.values()].some((m) => m.convoyId === convoyId && m.vin === vin)) {
         return problem(409, `Vehicle '${vin}' already has a manifest on this convoy.`);
       }
@@ -118,10 +109,10 @@ export function manifestApi(
         lastChangedAt: null,
         convoyId,
         vin,
-        status: 'Created',
+        status: 'Proposed',
         deliveryNotes: body.deliveryNotes ?? null,
-        gmrSubmittedAt: null,
-        frozen: false,
+        reopenedAt: null,
+        approved: false,
       });
       return new HttpResponse(null, {
         status: 201,
@@ -134,9 +125,6 @@ export function manifestApi(
       const manifest = db.get(id);
       if (!manifest) {
         return new HttpResponse(null, { status: 404 });
-      }
-      if (manifest.frozen) {
-        return problem(409, FREEZE_MESSAGE);
       }
       const body = (await request.json()) as UpdateManifestRequest;
       // The convoy and the vehicle are the manifest's identity: the UPDATE never names those
@@ -153,9 +141,6 @@ export function manifestApi(
       const manifest = db.get(id);
       if (!manifest) {
         return new HttpResponse(null, { status: 404 });
-      }
-      if (manifest.frozen) {
-        return problem(409, FREEZE_MESSAGE);
       }
       db.delete(id);
       return new HttpResponse(null, { status: 204 });
@@ -215,9 +200,6 @@ export function manifestApi(
         if (!manifest) {
           return new HttpResponse(null, { status: 404 });
         }
-        if (manifest.frozen && (edge.verb === 'propose' || edge.verb === 'reject')) {
-          return problem(409, FREEZE_MESSAGE);
-        }
         if (!edge.from.includes(manifest.status)) {
           return problem(409, 'A manifest cannot move to that state from the one it is in.');
         }
@@ -233,9 +215,8 @@ export function manifestApi(
         db.set(id, {
           ...manifest,
           status: edge.to,
-          ...(edge.verb === 'approve'
-            ? { frozen: true, gmrSubmittedAt: '2026-05-01T00:00:00' }
-            : {}),
+          approved: edge.to === 'Approved',
+          reopenedAt: null,
         });
         return new HttpResponse(null, { status: 204 });
       }),

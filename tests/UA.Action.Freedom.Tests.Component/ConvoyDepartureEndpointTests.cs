@@ -34,8 +34,8 @@ public class ConvoyDepartureEndpointTests
     private static InMemoryReceiverRepository Receivers() =>
         new(new ReceiverReadModel(Hospital, "Kharkiv Regional Hospital", "Kharkiv oblast", ReceiverStatus.Registered));
 
-    private static InMemoryManifestRepository Manifests(ManifestStatus status = ManifestStatus.Ready) =>
-        new(new ManifestReadModel(ManifestId, Id, Vin, status, null, Start.AddDays(-5)));
+    private static InMemoryManifestRepository Manifests(ManifestStatus status = ManifestStatus.Approved) =>
+        new(new ManifestReadModel(ManifestId, Id, Vin, status, null));
 
     private static HttpClient ClientFor(
         out InMemoryConvoyRepository convoys,
@@ -133,7 +133,7 @@ public class ConvoyDepartureEndpointTests
         CodesOutstanding(problem, "requirements").Should().Contain(
             ["route", "leader", "insurance", "ferry", "handover-receiver", "declaration.gmr", "declaration.ens", "declaration.elo"]);
         convoys.Departed(Id).Should().BeFalse();
-        manifests.Manifest(ManifestId)!.Status.Should().Be(ManifestStatus.Ready);
+        manifests.Manifest(ManifestId)!.Status.Should().Be(ManifestStatus.Approved);
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class ConvoyDepartureEndpointTests
         (await second.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
             .GetProperty("type").GetString().Should().Be("convoy-already-departed");
         convoys.Departed(Id).Should().BeTrue();
-        manifests.Manifest(ManifestId)!.Status.Should().Be(ManifestStatus.InTransit);
+        manifests.Manifest(ManifestId)!.Status.Should().Be(ManifestStatus.Approved, "departure touches no manifest");
     }
 
     [Fact]

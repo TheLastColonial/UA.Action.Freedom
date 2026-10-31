@@ -280,7 +280,7 @@ that needs them.
 | Document | Change |
 |---|---|
 | `CLAUDE.md` | Architecture and domain model: legs, manifest, readiness, Convoy Leader. |
-| [Gotchas and open questions](../gotchas-and-open-questions.md) | Crew per leg (§ on `ConvoyVehicleCrew` and the per-leg unique key, and the commitment note), the manifest freeze. |
+| [Gotchas and open questions](../gotchas-and-open-questions.md) | Crew per leg (§ on `ConvoyVehicleCrew` and the per-leg unique key, and the commitment note). |
 | [Local authentication](../local-authentication.md) | The line saying crewing "is per journey leg". |
 | `CLAUDE.md` and the code | The rule that a crew change voids insurance ([O7](#o7)). |
 

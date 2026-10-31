@@ -1,10 +1,9 @@
 @startuml Goods Movement Sequence
 
-' TARGET DESIGN (ADRs 0004, 0005, 0006, 0011). The code still implements the earlier approval fork
-' until docs/plans/08 and docs/plans/15 merge; that version of this file is in git history at f659eed.
+' ADRs 0004, 0005, 0006, 0011. The earlier approval fork is in git history at f659eed.
 
 title Box attestation -> allocation -> load sign-off -> declarations
-caption Target design. ADRs 0004, 0005, 0006, 0011. See docs/process/goods-movements.md.
+caption ADRs 0004, 0005, 0006, 0011. See docs/process/goods-movements.md.
 
 actor Loader
 actor Dispatcher

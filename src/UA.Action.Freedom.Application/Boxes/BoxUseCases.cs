@@ -164,8 +164,7 @@ public enum ReplaceBoxOutcome
     Replaced,
     NotFound,
     NotAttested,
-    AlreadyVoided,
-    LoadFrozen
+    AlreadyVoided
 }
 
 /// <summary>The outcome, and the new box identifier when it was replaced.</summary>
@@ -178,13 +177,10 @@ public sealed record ReplaceBoxResult(ReplaceBoxOutcome Outcome, int Replacement
 /// is refused.
 /// </summary>
 /// <remarks>
-/// Transitional: replacing moves the cargo allocation to the new box, which is a change to the vehicle's load, so
-/// it is refused while the manifest's GMR freeze stands (plan 15 replaces the freeze with a return to Proposed).
+/// Replacing moves the cargo allocation to the new box, which changes the vehicle's load: the repository sends an
+/// approved manifest back to Proposed in the same transaction (X3).
 /// </remarks>
-public sealed class ReplaceBoxHandler(
-    IBoxRepository repository,
-    IConvoyVehicleRepository truckList,
-    IManifestRepository manifests)
+public sealed class ReplaceBoxHandler(IBoxRepository repository)
     : ICommandHandler<ReplaceBoxCommand, ReplaceBoxResult>
 {
     public async Task<ReplaceBoxResult> HandleAsync(ReplaceBoxCommand command, CancellationToken cancellationToken)
@@ -194,14 +190,6 @@ public sealed class ReplaceBoxHandler(
         if (Refusal(box) is { } refusal)
         {
             return new ReplaceBoxResult(refusal);
-        }
-
-        var allocation = await truckList.GetBoxAllocationAsync(command.Id, cancellationToken);
-
-        if (allocation is not null
-            && await manifests.IsLoadFrozenAsync(allocation.ConvoyId.Value, allocation.Vin, cancellationToken))
-        {
-            return new ReplaceBoxResult(ReplaceBoxOutcome.LoadFrozen);
         }
 
         if (await repository.ReplaceAsync(command.Id, cancellationToken) is { } replacementId)

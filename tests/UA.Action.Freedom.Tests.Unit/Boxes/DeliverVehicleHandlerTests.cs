@@ -20,11 +20,7 @@ public class DeliverVehicleHandlerTests
     private static ConvoyReadModel ADepartedConvoy() =>
         ConvoyTestData.APublishedConvoy() with { DepartedAt = ConvoyTestData.Start };
 
-    private static ManifestReadModel AManifest(ManifestStatus status) =>
-        new("MAN-1", ConvoyId, Vin, status, null, ConvoyTestData.Start);
-
-    private sealed record World(
-        DeliverVehicleHandler Handler, IBoxOutcomeRepository Outcomes, IManifestRepository Manifests)
+    private sealed record World(DeliverVehicleHandler Handler, IBoxOutcomeRepository Outcomes)
     {
         public Task<DeliverVehicleResult> Deliver() =>
             Handler.HandleAsync(new DeliverVehicleCommand(ConvoyId, Vin), TestContext.Current.CancellationToken);
@@ -33,7 +29,6 @@ public class DeliverVehicleHandlerTests
     private static World AWorld(
         ConvoyReadModel? convoy = null,
         ConvoyVehicleReadModel? entry = null,
-        ManifestReadModel? manifest = null,
         int? boxesDelivered = 2)
     {
         var convoys = Substitute.For<IConvoyRepository>();
@@ -45,14 +40,11 @@ public class DeliverVehicleHandlerTests
         var outcomes = Substitute.For<IBoxOutcomeRepository>();
         outcomes.DeliverVehicleAsync(ConvoyId, Vin, Arg.Any<CancellationToken>()).Returns(boxesDelivered);
 
-        var manifests = Substitute.For<IManifestRepository>();
-        manifests.GetForVehicleAsync(ConvoyId, Vin, Arg.Any<CancellationToken>()).Returns(manifest);
-
-        return new World(new DeliverVehicleHandler(convoys, truckList, outcomes, manifests), outcomes, manifests);
+        return new World(new DeliverVehicleHandler(convoys, truckList, outcomes), outcomes);
     }
 
-    private static World ATravellingVehicle(ManifestReadModel? manifest = null, int? boxesDelivered = 2) =>
-        AWorld(ADepartedConvoy(), ConvoyTestData.AVehicle(Vin), manifest ?? AManifest(ManifestStatus.InTransit), boxesDelivered);
+    private static World ATravellingVehicle(int? boxesDelivered = 2) =>
+        AWorld(ADepartedConvoy(), ConvoyTestData.AVehicle(Vin), boxesDelivered);
 
     [Fact]
     public async Task Delivers_the_vehicle_and_its_boxes()
@@ -63,27 +55,6 @@ public class DeliverVehicleHandlerTests
 
         result.Outcome.Should().Be(DeliverVehicleOutcome.Delivered);
         result.BoxesDelivered.Should().Be(3);
-    }
-
-    [Fact]
-    public async Task Moves_the_vehicles_manifest_to_delivered()
-    {
-        var world = ATravellingVehicle();
-
-        await world.Deliver();
-
-        await world.Manifests.Received(1).TransitionAsync(
-            "MAN-1", ManifestStatus.InTransit, ManifestStatus.Delivered, Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task Leaves_a_manifest_that_cannot_reach_delivered_alone_and_still_delivers()
-    {
-        var world = ATravellingVehicle(AManifest(ManifestStatus.Preparing));
-
-        (await world.Deliver()).Outcome.Should().Be(DeliverVehicleOutcome.Delivered);
-        await world.Manifests.DidNotReceive().TransitionAsync(
-            Arg.Any<string>(), Arg.Any<ManifestStatus>(), Arg.Any<ManifestStatus>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -141,7 +112,5 @@ public class DeliverVehicleHandlerTests
         var world = ATravellingVehicle(boxesDelivered: null);
 
         (await world.Deliver()).Outcome.Should().Be(DeliverVehicleOutcome.AlreadyDelivered);
-        await world.Manifests.DidNotReceive().TransitionAsync(
-            Arg.Any<string>(), Arg.Any<ManifestStatus>(), Arg.Any<ManifestStatus>(), Arg.Any<CancellationToken>());
     }
 }

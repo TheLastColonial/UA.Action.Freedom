@@ -85,7 +85,7 @@ public class ConvoyVehicleRepositoryTests
             await truckList.AddAsync(id, vin, cancellationToken);
             await truckList.AssignCrewAsync(id, vin, driver, CrewRole.Driver, cancellationToken);
             await truckList.RecordInsuranceAsync(AnInsurance(id, vin), cancellationToken);
-            await AddManifestAsync(id, vin, ManifestStatus.InTransit);
+            await AddManifestAsync(id, vin, ManifestStatus.Approved);
 
             (await truckList.WithdrawAsync(id, vin, "Gearbox failure near Poznan", withdrawnAt, cancellationToken))
                 .Should().BeTrue();
@@ -585,9 +585,9 @@ public class ConvoyVehicleRepositoryTests
             await AddVehicleAsync(elsewhere);
             await truckList.AddAsync(id, onConvoy, cancellationToken);
 
-            await AddManifestAsync(id, onConvoy, ManifestStatus.Created);
+            await AddManifestAsync(id, onConvoy, ManifestStatus.Proposed);
 
-            var naming = async () => await AddManifestAsync(id, elsewhere, ManifestStatus.Created);
+            var naming = async () => await AddManifestAsync(id, elsewhere, ManifestStatus.Proposed);
             await naming.Should().ThrowAsync<Exception>();
         }
         finally
@@ -602,8 +602,7 @@ public class ConvoyVehicleRepositoryTests
     [Fact]
     public async Task One_vehicle_on_one_convoy_carries_one_manifest()
     {
-        // UQ_Manifest_ConvoyVehicle. Arrival asks each vehicle for its finished manifest and has
-        // to get one answer; two would be satisfied by whichever finished first.
+        // UQ_Manifest_ConvoyVehicle: a sign-off that two rows could give is no sign-off at all.
         var cancellationToken = TestContext.Current.CancellationToken;
         var (convoys, truckList) = await ConnectOrSkipAsync(cancellationToken);
         var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
@@ -613,9 +612,9 @@ public class ConvoyVehicleRepositoryTests
         {
             await AddVehicleAsync(vin);
             await truckList.AddAsync(id, vin, cancellationToken);
-            await AddManifestAsync(id, vin, ManifestStatus.Created);
+            await AddManifestAsync(id, vin, ManifestStatus.Proposed);
 
-            var second = async () => await AddManifestAsync(id, vin, ManifestStatus.Created);
+            var second = async () => await AddManifestAsync(id, vin, ManifestStatus.Proposed);
             await second.Should().ThrowAsync<Exception>();
         }
         finally

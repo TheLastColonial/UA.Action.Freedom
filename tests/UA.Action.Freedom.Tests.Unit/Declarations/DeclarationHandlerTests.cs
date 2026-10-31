@@ -42,7 +42,7 @@ public class DeclarationHandlerTests
     {
         var repository = Substitute.For<IManifestRepository>();
         repository.GetForVehicleAsync(42, Vin, Arg.Any<CancellationToken>()).Returns(
-            new ManifestReadModel(ManifestId, 42, Vin, ManifestStatus.Confirmed, null, GmrSubmittedAt: Departs));
+            new ManifestReadModel(ManifestId, 42, Vin, ManifestStatus.Approved, null));
         repository.GetVehiclePlateAsync(ManifestId, Arg.Any<CancellationToken>()).Returns("AB12 CDE");
         return repository;
     }
@@ -391,7 +391,7 @@ public class DeclarationHandlerTests
     {
         var manifests = Substitute.For<IManifestRepository>();
         manifests.GetForVehicleAsync(42, Vin, Arg.Any<CancellationToken>()).Returns(
-            new ManifestReadModel(ManifestId, 42, Vin, ManifestStatus.Proposed, null, GmrSubmittedAt: null));
+            new ManifestReadModel(ManifestId, 42, Vin, ManifestStatus.Proposed, null));
         var queue = Substitute.For<IManifestWorkQueue>();
 
         var outcome = await AFiler(ARepositoryWithAnAcceptedEns(), queue, manifests).HandleAsync(

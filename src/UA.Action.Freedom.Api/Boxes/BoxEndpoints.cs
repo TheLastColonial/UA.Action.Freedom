@@ -145,15 +145,10 @@ public static class BoxEndpoints
                     title: "This box has not been validated.",
                     detail: "Only a validated box is replaced. Edit this one instead.",
                     statusCode: StatusCodes.Status409Conflict),
-                ReplaceBoxOutcome.AlreadyVoided => Results.Problem(
+                _ => Results.Problem(
                     type: "box-voided",
                     title: "This box has already been replaced.",
                     detail: "A voided box is terminal. Replace the box that took its place instead.",
-                    statusCode: StatusCodes.Status409Conflict),
-                _ => Results.Problem(
-                    type: "load-frozen",
-                    title: "This box's vehicle has had its Goods Movement Reference created.",
-                    detail: "The load of that vehicle can no longer change.",
                     statusCode: StatusCodes.Status409Conflict),
             };
         })

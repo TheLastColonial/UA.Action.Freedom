@@ -22,6 +22,14 @@ internal sealed class BoxAllocationLedger
 
     public IReadOnlyList<BoxAllocation> Allocations => allocations;
 
+    /// <summary>
+    /// What the SQL does in the same transaction as a change to a vehicle's load: send its approved manifest back to
+    /// Proposed (X3). Set by the manifest fake, which holds the manifests.
+    /// </summary>
+    internal Action<int, string>? ReopenManifest { get; set; }
+
+    public void Reopen(int convoyId, string vin) => ReopenManifest?.Invoke(convoyId, vin);
+
     public void KnowBox(ManifestBoxReadModel box) => boxes[box.BoxId] = box;
 
     /// <summary>Takes in everything another ledger holds, so two fakes seeded apart end up sharing one.</summary>
@@ -41,10 +49,16 @@ internal sealed class BoxAllocationLedger
     /// </summary>
     public void Replace(int voidedBoxId, ManifestBoxReadModel replacement)
     {
+        var carried = AllocationOf(voidedBoxId);
         boxes.Remove(voidedBoxId);
         voided.Add(voidedBoxId);
         boxes[replacement.BoxId] = replacement;
         allocations = [.. allocations.Select(a => a.BoxId == voidedBoxId ? a with { BoxId = replacement.BoxId } : a)];
+
+        if (carried is not null)
+        {
+            Reopen(carried.ConvoyId.Value, carried.Vin);
+        }
     }
 
     public bool Knows(int boxId) => boxes.ContainsKey(boxId);
@@ -102,6 +116,11 @@ internal sealed class BoxAllocationLedger
         if (write.Outcome == BoxOutcome.ReturnedToHub)
         {
             allocations = [.. allocations.Where(a => !(a.BoxId == write.BoxId && a.ConvoyId.Value == write.ConvoyId))];
+        }
+
+        if (write.Outcome is BoxOutcome.Seized or BoxOutcome.Undeliverable or BoxOutcome.ReturnedToHub)
+        {
+            Reopen(write.ConvoyId, write.Vin);
         }
 
         return RecordBoxOutcomeResult.Recorded;

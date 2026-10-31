@@ -22,10 +22,6 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, ICh
 
     private static readonly string From = $"dbo.Convoy AS c {ChangeStamp.ReadJoin("c")}";
 
-    /// <summary>A manifest in one of these says what became of its vehicle; the journey is over for it.</summary>
-    private static readonly string FinishedStatuses =
-        $"({(int)ManifestStatus.Delivered}, {(int)ManifestStatus.Lost}, {(int)ManifestStatus.Returned})";
-
     private const string StopColumns =
         "Sequence, House, Street, City, Country, Postcode, CountryCode, RoutePointId, Name, Kind, Authority";
 
@@ -353,14 +349,11 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, ICh
         }
 
         var stillTravelling = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
-            $"""
-             SELECT COUNT(1)
-             FROM dbo.ConvoyVehicle AS cv
-             WHERE cv.ConvoyId = @convoyId
-               AND cv.WithdrawnAt IS NULL
-               AND NOT EXISTS (SELECT 1 FROM dbo.Manifest AS m
-                               WHERE m.ConvoyId = cv.ConvoyId AND m.Vin = cv.Vin AND m.Status IN {FinishedStatuses})
-             """,
+            """
+            SELECT COUNT(1)
+            FROM dbo.ConvoyVehicle AS cv
+            WHERE cv.ConvoyId = @convoyId AND cv.WithdrawnAt IS NULL AND cv.DeliveredAt IS NULL
+            """,
             new { convoyId },
             transaction,
             cancellationToken: cancellationToken));
@@ -371,7 +364,7 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, ICh
             return ArriveResult.VehiclesStillTravelling;
         }
 
-        // A vehicle is itself part of the aid: Delivered and Lost ones stay in Ukraine and are
+        // A vehicle is itself part of the aid: a delivered one stays in Ukraine and are
         // never offered for a convoy again. A withdrawn vehicle is skipped — it broke down and
         // left, so whatever happened to it did not happen here.
         await connection.ExecuteAsync(new CommandDefinition(
@@ -384,17 +377,10 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, ICh
             FROM dbo.Vehicle AS v
             INNER JOIN dbo.ConvoyVehicle AS cv ON cv.Vin = v.Vin AND cv.ConvoyId = @convoyId
             WHERE cv.WithdrawnAt IS NULL
-              AND v.HandedOverAt IS NULL
-              AND EXISTS (SELECT 1 FROM dbo.Manifest AS m
-                          WHERE m.ConvoyId = @convoyId AND m.Vin = v.Vin AND m.Status IN (@delivered, @lost));
+              AND cv.DeliveredAt IS NOT NULL
+              AND v.HandedOverAt IS NULL;
             """,
-            attribution.With(new
-            {
-                convoyId,
-                arrivedAt,
-                delivered = (int)ManifestStatus.Delivered,
-                lost = (int)ManifestStatus.Lost,
-            }),
+            attribution.With(new { convoyId, arrivedAt }),
             transaction,
             cancellationToken: cancellationToken));
 
@@ -407,14 +393,11 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, ICh
         await using var connection = connectionFactory.Create();
 
         var rows = await connection.QueryAsync<string>(new CommandDefinition(
-            $"""
-             SELECT cv.Vin FROM dbo.ConvoyVehicle AS cv
-             WHERE cv.ConvoyId = @convoyId
-               AND cv.WithdrawnAt IS NULL
-               AND NOT EXISTS (SELECT 1 FROM dbo.Manifest AS m
-                               WHERE m.ConvoyId = cv.ConvoyId AND m.Vin = cv.Vin AND m.Status IN {FinishedStatuses})
-             ORDER BY cv.Vin
-             """,
+            """
+            SELECT cv.Vin FROM dbo.ConvoyVehicle AS cv
+            WHERE cv.ConvoyId = @convoyId AND cv.WithdrawnAt IS NULL AND cv.DeliveredAt IS NULL
+            ORDER BY cv.Vin
+            """,
             new { convoyId },
             cancellationToken: cancellationToken));
 

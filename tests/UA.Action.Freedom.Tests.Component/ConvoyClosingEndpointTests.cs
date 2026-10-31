@@ -55,7 +55,7 @@ public class ConvoyClosingEndpointTests
         var locations = new InMemoryLocationRepository(
             new LocationReadModel(Hub, "Coventry hub", null, null, null, null, null, IsRegisteredHub: true));
         var manifests = new InMemoryManifestRepository(
-            new ManifestReadModel(ManifestId, ConvoyId, Vin, ManifestStatus.InTransit, null, null));
+            new ManifestReadModel(ManifestId, ConvoyId, Vin, ManifestStatus.Approved, null));
         var vehicles = new InMemoryVehicleRepository(
             new VehicleReadModel(
                 Vin, "AB12CDE", null, null, null, TransmissionType.Manual, null, null, false, 2016, FuelType.Diesel,

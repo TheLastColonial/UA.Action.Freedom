@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Manifests;
+using UA.Action.Freedom.Data.Manifests;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Data.Convoys;
@@ -640,6 +641,15 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             transaction,
             cancellationToken: cancellationToken));
 
+        // The load of the vehicle the box joins has changed, and so has the one it left: both sign-offs go back
+        // for re-approval, in this transaction (X3).
+        await connection.ReopenManifestAsync(transaction, attribution, convoyId, vin, cancellationToken);
+
+        if (current is not null)
+        {
+            await connection.ReopenManifestAsync(transaction, attribution, current.ConvoyId, current.Vin, cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         return current is null ? AllocateBoxResult.Allocated : AllocateBoxResult.Moved;
@@ -648,14 +658,26 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
     public async Task<bool> RemoveBoxAsync(int convoyId, string vin, int boxId, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         // Scoped to this vehicle: taking a box off one it was never on is a caller mistake.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM dbo.ConvoyVehicleBoxAllocation WHERE BoxId = @boxId AND ConvoyId = @convoyId AND Vin = @vin",
             new { boxId, convoyId, vin = SqlKey.Of(vin) },
+            transaction,
             cancellationToken: cancellationToken));
 
-        return affected > 0;
+        if (affected == 0)
+        {
+            return false;
+        }
+
+        // The vehicle carries less than the Administrator signed off (X3).
+        await connection.ReopenManifestAsync(transaction, attribution, convoyId, vin, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return true;
     }
 
     private sealed record AllocationRow(int ConvoyId, string Vin, DateTime AllocatedAt);

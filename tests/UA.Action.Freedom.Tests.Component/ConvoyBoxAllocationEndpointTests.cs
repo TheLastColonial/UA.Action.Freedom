@@ -117,44 +117,88 @@ public class ConvoyBoxAllocationEndpointTests
         convoys.Allocations.Should().BeEmpty();
     }
 
+    private static ManifestReadModel AnApprovedManifest(string vin, string id) =>
+        new(id, ConvoyId, vin, ManifestStatus.Approved, null);
+
     [Fact]
-    public async Task A_vehicle_whose_goods_movement_reference_exists_cannot_gain_or_lose_cargo()
+    public async Task Putting_a_box_on_a_vehicle_sends_its_approved_manifest_back_for_re_approval()
     {
-        // Transitional until plan 15: the GMR stamp still freezes the vehicle's load.
-        var frozen = new ManifestReadModel(
-            "MAN-1", ConvoyId, VinA, ManifestStatus.Confirmed, null,
-            GmrSubmittedAt: new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc));
+        var manifests = new InMemoryManifestRepository(AnApprovedManifest(VinA, "MAN-1"));
         var convoys = AConvoyWithTwoVehicles();
-        await using var api = FreedomApi.WithConvoys(convoys, manifests: new InMemoryManifestRepository(frozen), roles: "Loader");
+        await using var api = FreedomApi.WithConvoys(convoys, manifests: manifests, roles: "Loader");
         using var client = api.CreateClient();
 
-        (await client.PutAsync(Route(VinA), content: null, TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var response = await client.PutAsync(Route(VinA), content: null, TestContext.Current.CancellationToken);
 
-        // Moving a box off the frozen vehicle changes its load just as surely.
-        await client.PutAsync(Route(VinB), content: null, TestContext.Current.CancellationToken);
-        (await client.PutAsync(Route(VinA), content: null, TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Conflict);
-        convoys.Allocations.Should().ContainSingle().Which.Vin.Should().Be(VinB);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        manifests.Manifest("MAN-1")!.Status.Should().Be(ManifestStatus.Proposed);
+        manifests.Manifest("MAN-1")!.ReopenedAt.Should().NotBeNull();
     }
 
     [Fact]
-    public async Task A_box_cannot_be_moved_off_a_vehicle_whose_goods_movement_reference_exists()
+    public async Task A_manifest_nobody_has_approved_is_left_as_it_is()
     {
-        var frozen = new ManifestReadModel(
-            "MAN-1", ConvoyId, VinA, ManifestStatus.Confirmed, null,
-            GmrSubmittedAt: new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc));
+        var manifests = new InMemoryManifestRepository(new ManifestReadModel("MAN-1", ConvoyId, VinA, ManifestStatus.Rejected, null));
+        var convoys = AConvoyWithTwoVehicles();
+        await using var api = FreedomApi.WithConvoys(convoys, manifests: manifests, roles: "Loader");
+        using var client = api.CreateClient();
+
+        await client.PutAsync(Route(VinA), content: null, TestContext.Current.CancellationToken);
+
+        manifests.Manifest("MAN-1")!.Status.Should().Be(ManifestStatus.Rejected);
+        manifests.Manifest("MAN-1")!.ReopenedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Moving_a_box_between_vehicles_reopens_both_manifests()
+    {
+        var manifests = new InMemoryManifestRepository(
+            AnApprovedManifest(VinA, "MAN-1"), AnApprovedManifest(VinB, "MAN-2"));
         var convoys = AConvoyWithTwoVehicles();
         convoys.Ledger.Allocate(
             new ConvoyVehicle { ConvoyId = new ConvoyId(ConvoyId), Vin = VinA }, BoxId);
-        await using var api = FreedomApi.WithConvoys(convoys, manifests: new InMemoryManifestRepository(frozen), roles: "Loader");
+        await using var api = FreedomApi.WithConvoys(convoys, manifests: manifests, roles: "Loader");
         using var client = api.CreateClient();
 
-        (await client.PutAsync(Route(VinB), content: null, TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Conflict);
-        (await client.DeleteAsync(Route(VinA), TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Conflict);
-        convoys.Allocations.Should().ContainSingle().Which.Vin.Should().Be(VinA);
+        var response = await client.PutAsync(Route(VinB), content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        convoys.Allocations.Should().ContainSingle().Which.Vin.Should().Be(VinB);
+        manifests.Manifest("MAN-1")!.Status.Should().Be(ManifestStatus.Proposed);
+        manifests.Manifest("MAN-2")!.Status.Should().Be(ManifestStatus.Proposed);
+    }
+
+    [Fact]
+    public async Task Taking_a_box_off_a_vehicle_reopens_its_approved_manifest()
+    {
+        var manifests = new InMemoryManifestRepository(AnApprovedManifest(VinA, "MAN-1"));
+        var convoys = AConvoyWithTwoVehicles();
+        convoys.Ledger.Allocate(
+            new ConvoyVehicle { ConvoyId = new ConvoyId(ConvoyId), Vin = VinA }, BoxId);
+        await using var api = FreedomApi.WithConvoys(convoys, manifests: manifests, roles: "Loader");
+        using var client = api.CreateClient();
+
+        var response = await client.DeleteAsync(Route(VinA), TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        convoys.Allocations.Should().BeEmpty();
+        manifests.Manifest("MAN-1")!.Status.Should().Be(ManifestStatus.Proposed);
+    }
+
+    [Fact]
+    public async Task Approving_again_after_a_load_change_clears_the_reopening()
+    {
+        var manifests = new InMemoryManifestRepository(AnApprovedManifest(VinA, "MAN-1"));
+        var convoys = AConvoyWithTwoVehicles();
+        await using var api = FreedomApi.WithConvoys(convoys, manifests: manifests, roles: ["Loader", "Administrator"]);
+        using var client = api.CreateClient();
+        await client.PutAsync(Route(VinA), content: null, TestContext.Current.CancellationToken);
+
+        var response = await client.PostAsync("/manifests/MAN-1/approve", content: null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        manifests.Manifest("MAN-1")!.Status.Should().Be(ManifestStatus.Approved);
+        manifests.Manifest("MAN-1")!.ReopenedAt.Should().BeNull();
     }
 
     [Theory]

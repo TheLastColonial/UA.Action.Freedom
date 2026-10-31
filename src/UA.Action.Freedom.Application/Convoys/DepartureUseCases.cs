@@ -28,16 +28,13 @@ public sealed record DepartConvoyResult(DepartConvoyOutcome Outcome, IReadOnlyLi
 /// <remarks>
 /// It asks the same query that serves <c>GET /convoys/{id}/readiness</c>, so what a Dispatcher saw is what is enforced.
 /// <para>
-/// Transitional, until plan 15: each vehicle still travelling has its manifest moved to <c>InTransit</c> when it is
-/// <c>Ready</c>, so the legacy delivered / arrival flow keeps working. A manifest in any other state is left alone and
-/// does not hold the convoy back, because the manifest is no longer what decides readiness.
+/// It touches no manifest: the sign-off is the Administrator's, and a convoy departs on its requirements, not on where
+/// a manifest has got to.
 /// </para>
 /// </remarks>
 public sealed class DepartConvoyHandler(
     IQueryHandler<GetConvoyReadinessQuery, ConvoyReadinessReadModel?> readiness,
     IConvoyRepository convoys,
-    IConvoyVehicleRepository truckList,
-    IManifestRepository manifests,
     TimeProvider clock)
     : ICommandHandler<DepartConvoyCommand, DepartConvoyResult>
 {
@@ -70,21 +67,6 @@ public sealed class DepartConvoyHandler(
             return DepartConvoyResult.Of(DepartConvoyOutcome.AlreadyDeparted);
         }
 
-        await SetManifestsInTransitAsync(command.ConvoyId, cancellationToken);
-
         return DepartConvoyResult.Of(DepartConvoyOutcome.Departed);
-    }
-
-    private async Task SetManifestsInTransitAsync(int convoyId, CancellationToken cancellationToken)
-    {
-        foreach (var vehicle in (await truckList.ListAsync(convoyId, cancellationToken)).Where(entry => entry.Travelling))
-        {
-            var manifest = await manifests.GetForVehicleAsync(convoyId, vehicle.Vin, cancellationToken);
-
-            if (manifest is not null && ManifestTransitions.CanTransition(manifest.Status, ManifestStatus.InTransit))
-            {
-                await manifests.TransitionAsync(manifest.Id, manifest.Status, ManifestStatus.InTransit, cancellationToken);
-            }
-        }
     }
 }

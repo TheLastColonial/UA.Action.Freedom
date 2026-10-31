@@ -14,16 +14,15 @@ public enum AllocateBoxOutcome
     VehicleNotOnConvoy,
     VehicleWithdrawn,
     BoxNotFound,
-    BoxVoided,
-    Frozen
+    BoxVoided
 }
 
 /// <remarks>
-/// Transitional: while the manifest still carries the GMR freeze, a vehicle whose manifest is
-/// frozen neither gains nor loses cargo — and moving a box <em>off</em> a frozen vehicle is a
-/// change to its load just as much as moving one on. Plan 15 removes the freeze.
+/// A change to a vehicle's load is allowed whatever its sign-off says: <see cref="IConvoyVehicleRepository.AllocateBoxAsync"/>
+/// sends an approved manifest, on the vehicle the box leaves as well as on the one it joins, back to Proposed in the same
+/// transaction (X3).
 /// </remarks>
-public sealed class AllocateBoxHandler(IConvoyVehicleRepository truckList, IManifestRepository manifests)
+public sealed class AllocateBoxHandler(IConvoyVehicleRepository truckList)
     : ICommandHandler<AllocateBoxCommand, AllocateBoxOutcome>
 {
     public async Task<AllocateBoxOutcome> HandleAsync(AllocateBoxCommand command, CancellationToken cancellationToken)
@@ -38,19 +37,6 @@ public sealed class AllocateBoxHandler(IConvoyVehicleRepository truckList, IMani
         if (entry.Withdrawn)
         {
             return AllocateBoxOutcome.VehicleWithdrawn;
-        }
-
-        if (await manifests.IsLoadFrozenAsync(command.ConvoyId, command.Vin, cancellationToken))
-        {
-            return AllocateBoxOutcome.Frozen;
-        }
-
-        var current = await truckList.GetBoxAllocationAsync(command.BoxId, cancellationToken);
-
-        if (current is not null
-            && await manifests.IsLoadFrozenAsync(current.ConvoyId.Value, current.Vin, cancellationToken))
-        {
-            return AllocateBoxOutcome.Frozen;
         }
 
         return await truckList.AllocateBoxAsync(command.ConvoyId, command.Vin, command.BoxId, cancellationToken) switch
@@ -73,11 +59,10 @@ public enum RemoveBoxAllocationOutcome
 {
     Removed,
     VehicleNotOnConvoy,
-    NotAllocated,
-    Frozen
+    NotAllocated
 }
 
-public sealed class RemoveBoxAllocationHandler(IConvoyVehicleRepository truckList, IManifestRepository manifests)
+public sealed class RemoveBoxAllocationHandler(IConvoyVehicleRepository truckList)
     : ICommandHandler<RemoveBoxAllocationCommand, RemoveBoxAllocationOutcome>
 {
     public async Task<RemoveBoxAllocationOutcome> HandleAsync(
@@ -86,11 +71,6 @@ public sealed class RemoveBoxAllocationHandler(IConvoyVehicleRepository truckLis
         if (await truckList.GetAsync(command.ConvoyId, command.Vin, cancellationToken) is null)
         {
             return RemoveBoxAllocationOutcome.VehicleNotOnConvoy;
-        }
-
-        if (await manifests.IsLoadFrozenAsync(command.ConvoyId, command.Vin, cancellationToken))
-        {
-            return RemoveBoxAllocationOutcome.Frozen;
         }
 
         return await truckList.RemoveBoxAsync(command.ConvoyId, command.Vin, command.BoxId, cancellationToken)

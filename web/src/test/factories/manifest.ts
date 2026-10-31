@@ -10,10 +10,10 @@ export function makeManifest(overrides: Partial<ManifestReadModel> = {}): Manife
     // composite foreign key to that truck-list entry.
     convoyId: 1,
     vin: 'VIN-CONVOY-1',
-    status: 'Created',
+    status: 'Proposed',
     deliveryNotes: null,
-    gmrSubmittedAt: null,
-    frozen: false,
+    reopenedAt: null,
+    approved: false,
     lastChangedByName: null,
     lastChangedAt: null,
     ...overrides,

@@ -7,13 +7,13 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Tests.Unit.Manifests;
 
 /// <summary>
-/// Moving a manifest through its lifecycle, and the three rules that govern it.
+/// Proposing and rejecting a manifest, and refusing to send an approved one back by hand.
 /// </summary>
 /// <remarks>
-/// The legality of a move is decided by <see cref="ManifestTransitions"/>, which is pinned
-/// edge-by-edge elsewhere. What is tested here is what the diagram cannot say: a manifest may
-/// only be proposed against a convoy whose truck list is published (docs/process.puml), and once
-/// its GMR exists it may only record what happened to the load (docs/recommendations.md §5.2).
+/// The legality of a move is decided by <see cref="ManifestTransitions"/>, which is pinned edge-by-edge elsewhere.
+/// What is tested here is what the diagram cannot say: a manifest may only be proposed against a convoy whose truck
+/// list is published (docs/process.puml), and a person cannot send an approved manifest back, because only a change
+/// to the load does (X3).
 /// </remarks>
 public class ManifestTransitionHandlerTests
 {
@@ -21,16 +21,13 @@ public class ManifestTransitionHandlerTests
     private const int ConvoyId = 42;
 
     private static ManifestReadModel AManifest(
-        ManifestStatus status = ManifestStatus.Created,
-        bool frozen = false,
+        ManifestStatus status = ManifestStatus.Proposed,
         int convoyId = ConvoyId) => new(
         Id,
         ConvoyId: convoyId,
         Vin: Vin,
         Status: status,
-        DeliveryNotes: null,
-       
-        GmrSubmittedAt: frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
+        DeliveryNotes: null);
 
     private const string Vin = "WVWZZZ1JZXW000001";
 
@@ -70,7 +67,7 @@ public class ManifestTransitionHandlerTests
     [Fact]
     public async Task Proposes_a_manifest_whose_convoy_has_published_its_truck_list()
     {
-        var repository = ARepositoryHolding(AManifest());
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Rejected));
         var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
@@ -78,7 +75,7 @@ public class ManifestTransitionHandlerTests
 
         outcome.Should().Be(TransitionManifestOutcome.Transitioned);
         await repository.Received(1).TransitionAsync(
-            Id, ManifestStatus.Created, ManifestStatus.Proposed, Arg.Any<CancellationToken>());
+            Id, ManifestStatus.Rejected, ManifestStatus.Proposed, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -86,7 +83,7 @@ public class ManifestTransitionHandlerTests
     {
         // The manifest is proposed against a fixed set of vehicles. Propose before the list is
         // published and the truck it names could still leave the convoy.
-        var repository = ARepositoryHolding(AManifest());
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Rejected));
         var handler = AHandler(repository, AConvoyWithPublishedTruckList(published: false));
 
         var outcome = await handler.HandleAsync(
@@ -104,7 +101,7 @@ public class ManifestTransitionHandlerTests
         // longer is: ConvoyId and Vin are non-nullable and are a composite foreign key to the
         // truck-list entry, so the case this once guarded cannot be constructed. What remains
         // reachable is a convoy the read cannot find, and that is refused the same way.
-        var repository = ARepositoryHolding(AManifest());
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Rejected));
         var convoys = Substitute.For<IConvoyRepository, IConvoyVehicleRepository>();
         convoys.GetByIdAsync(ConvoyId, Arg.Any<CancellationToken>()).Returns((ConvoyReadModel?)null);
 
@@ -117,11 +114,11 @@ public class ManifestTransitionHandlerTests
     [Fact]
     public async Task Refuses_an_edge_the_diagram_does_not_draw()
     {
-        var repository = ARepositoryHolding(AManifest(ManifestStatus.Confirmed));
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Rejected));
         var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
-            new TransitionManifestCommand(Id, ManifestStatus.InTransit), CancellationToken.None);
+            new TransitionManifestCommand(Id, ManifestStatus.Approved), CancellationToken.None);
 
         outcome.Should().Be(TransitionManifestOutcome.IllegalTransition);
     }
@@ -143,64 +140,40 @@ public class ManifestTransitionHandlerTests
     {
         // The conditional UPDATE found nothing, so somebody else transitioned it first. Two
         // dispatchers pressing the same button must resolve to one transition.
-        var repository = ARepositoryHolding(AManifest(ManifestStatus.Preparing), transitions: false);
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Proposed), transitions: false);
         var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
-            new TransitionManifestCommand(Id, ManifestStatus.Ready), CancellationToken.None);
+            new TransitionManifestCommand(Id, ManifestStatus.Rejected), CancellationToken.None);
 
         outcome.Should().Be(TransitionManifestOutcome.IllegalTransition);
     }
 
-    [Theory]
-    [InlineData(ManifestStatus.InTransit, ManifestStatus.Delivered)]
-    [InlineData(ManifestStatus.InTransit, ManifestStatus.Lost)]
-    [InlineData(ManifestStatus.Delivered, ManifestStatus.Returned)]
-    public async Task A_frozen_manifest_can_still_record_what_happened_to_the_load(
-        ManifestStatus from, ManifestStatus to)
+    [Fact]
+    public async Task A_person_cannot_send_an_approved_manifest_back()
     {
-        // These say what the world did to the vehicle. None of them contradicts the GMR.
-        var repository = ARepositoryHolding(AManifest(from, frozen: true));
-        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
-
-        var result = await handler.HandleAsync(new TransitionManifestCommand(Id, to), CancellationToken.None);
-
-        result.Should().Be(TransitionManifestOutcome.Transitioned);
-    }
-
-    [Theory]
-    [InlineData(ManifestStatus.Confirmed, ManifestStatus.Preparing)]
-    [InlineData(ManifestStatus.Preparing, ManifestStatus.Ready)]
-    [InlineData(ManifestStatus.Ready, ManifestStatus.InTransit)]
-    public async Task A_frozen_manifest_still_makes_progress(ManifestStatus from, ManifestStatus to)
-    {
-        // §5.2 forbids edits, not progress. Blocking these would strand every approved manifest
-        // in Confirmed for ever — it could never be prepared, loaded or delivered.
-        var repository = ARepositoryHolding(AManifest(from, frozen: true));
-        var handler = AHandler(repository, AConvoyWithPublishedTruckList());
-
-        var outcome = await handler.HandleAsync(new TransitionManifestCommand(Id, to), CancellationToken.None);
-
-        outcome.Should().Be(TransitionManifestOutcome.Transitioned);
-    }
-
-    [Theory]
-    [InlineData(ManifestStatus.Proposed)]
-    [InlineData(ManifestStatus.Rejected)]
-    public async Task A_frozen_manifest_cannot_be_put_back_in_front_of_an_approver(ManifestStatus target)
-    {
-        // Reopening a manifest whose GMR exists would present it as something still editable.
-        // The diagram makes this unreachable from Confirmed today; the guard is for the day
-        // somebody adds an edge.
-        var repository = ARepositoryHolding(AManifest(ManifestStatus.Rejected, frozen: true));
+        // Only a change to the load does that, in the same transaction as the change (X3). Asking for it by
+        // hand would reopen a sign-off with the load exactly as the Administrator saw it.
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Approved));
         var handler = AHandler(repository, AConvoyWithPublishedTruckList());
 
         var outcome = await handler.HandleAsync(
-            new TransitionManifestCommand(Id, target), CancellationToken.None);
+            new TransitionManifestCommand(Id, ManifestStatus.Proposed), CancellationToken.None);
 
-        outcome.Should().Be(TransitionManifestOutcome.Frozen);
+        outcome.Should().Be(TransitionManifestOutcome.IllegalTransition);
         await repository.DidNotReceive().TransitionAsync(
             Arg.Any<string>(), Arg.Any<ManifestStatus>(), Arg.Any<ManifestStatus>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task An_approved_manifest_cannot_be_rejected()
+    {
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Approved));
+
+        var outcome = await AHandler(repository, AConvoyWithPublishedTruckList()).HandleAsync(
+            new TransitionManifestCommand(Id, ManifestStatus.Rejected), CancellationToken.None);
+
+        outcome.Should().Be(TransitionManifestOutcome.IllegalTransition);
     }
 
     [Fact]

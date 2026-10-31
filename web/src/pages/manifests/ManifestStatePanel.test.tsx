@@ -8,17 +8,16 @@ import { worker } from '../../test/msw/worker';
 import { renderWithProviders } from '../../test/render';
 import { ManifestStatePanel } from './ManifestStatePanel';
 
-test('from Created on an unpublished truck list: Reject is offered, Propose is disabled with a reason', async () => {
-  worker.use(...manifestApi([makeManifest({ id: 'M1', status: 'Created' })]).handlers);
+test('from Rejected on an unpublished truck list: Propose is disabled with a reason', async () => {
+  worker.use(...manifestApi([makeManifest({ id: 'M1', status: 'Rejected' })]).handlers);
 
   const screen = await renderWithProviders(
-    <ManifestStatePanel manifest={makeManifest({ id: 'M1' })} />,
+    <ManifestStatePanel manifest={makeManifest({ id: 'M1', status: 'Rejected' })} />,
     {
       roles: ['Dispatcher'],
     },
   );
 
-  await expect.element(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
   await expect.element(screen.getByRole('button', { name: 'Propose' })).toBeDisabled();
   await expect
     .element(screen.getByText("The convoy's truck list has not been published yet."))
@@ -26,7 +25,7 @@ test('from Created on an unpublished truck list: Reject is offered, Propose is d
 });
 
 test('propose is enabled and moves the manifest to Proposed when the convoy is published', async () => {
-  const manifest = makeManifest({ id: 'M2', status: 'Created', convoyId: 7 });
+  const manifest = makeManifest({ id: 'M2', status: 'Rejected', convoyId: 7 });
   const mApi = manifestApi([manifest], { publishedConvoyIds: [7] });
   worker.use(
     ...mApi.handlers,
@@ -64,7 +63,7 @@ test('approve is hidden from a Dispatcher and shown to an Administrator', async 
   await expect.element(asAdmin.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
 });
 
-test('approving shows the signed-off confirmation and freezes the manifest', async () => {
+test('approving shows the signed-off confirmation and approves the manifest', async () => {
   const manifest = makeManifest({ id: 'M4', status: 'Proposed', convoyId: 7 });
   const mApi = manifestApi([manifest], { publishedConvoyIds: [7] });
   worker.use(
@@ -79,34 +78,47 @@ test('approving shows the signed-off confirmation and freezes the manifest', asy
   await screen.getByRole('button', { name: 'Approve' }).click();
 
   await expect
-    .element(
-      screen.getByText(
-        'Load signed off — the manifest is now frozen. Declarations are filed from the Declarations tab.',
-      ),
-    )
+    .element(screen.getByText('Load signed off. Declarations are filed from the Declarations tab.'))
     .toBeInTheDocument();
-  expect(mApi.db.get('M4')?.frozen).toBe(true);
+  expect(mApi.db.get('M4')?.status).toBe('Approved');
+  expect(mApi.db.get('M4')?.approved).toBe(true);
 });
 
 test('an illegal transition surfaces the API detail', async () => {
-  // Ready has no legal edge from Created; force it by seeding the panel with a stale status.
-  const stale = makeManifest({ id: 'M5', status: 'Preparing' });
-  const server = makeManifest({ id: 'M5', status: 'Created' });
+  // Reject has no legal edge from Approved; force it by seeding the panel with a stale status.
+  const stale = makeManifest({ id: 'M5', status: 'Proposed' });
+  const server = makeManifest({ id: 'M5', status: 'Approved', approved: true });
   worker.use(...manifestApi([server]).handlers);
 
   const screen = await renderWithProviders(<ManifestStatePanel manifest={stale} />, {
     roles: ['Dispatcher'],
   });
 
-  await screen.getByRole('button', { name: 'Mark ready' }).click();
+  await screen.getByRole('button', { name: 'Reject' }).click();
 
   await expect
     .element(screen.getByText('A manifest cannot move to that state from the one it is in.'))
     .toBeInTheDocument();
 });
 
+test('a reopened manifest says why it is back in front of the approver', async () => {
+  const manifest = makeManifest({
+    id: 'M6',
+    status: 'Proposed',
+    reopenedAt: '2026-09-02T10:00:00',
+  });
+  worker.use(...manifestApi([manifest]).handlers);
+
+  const screen = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
+    roles: ['Administrator'],
+  });
+
+  await expect.element(screen.getByText(/Reopened by a load change/)).toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+});
+
 test('a manifest has no depart button: a convoy departs as a whole', async () => {
-  const manifest = makeManifest({ id: 'M9', status: 'Ready', convoyId: 7, vin: 'VIN-9' });
+  const manifest = makeManifest({ id: 'M9', status: 'Approved', convoyId: 7, vin: 'VIN-9' });
   worker.use(...manifestApi([manifest], { publishedConvoyIds: [7] }).handlers);
 
   const screen = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {

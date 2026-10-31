@@ -25,18 +25,6 @@ export function ManifestEditPage(): JSX.Element {
     return <p role="alert">The manifest could not be loaded.</p>;
   }
 
-  if (query.data.frozen) {
-    return (
-      <section>
-        <h1>{query.data.id}</h1>
-        <p role="status">
-          A Goods Movement Reference has been created for this manifest — it can no longer be
-          edited.
-        </p>
-      </section>
-    );
-  }
-
   const errorMessage =
     update.error instanceof ApiDomainProblem
       ? (update.error.detail ?? update.error.message)

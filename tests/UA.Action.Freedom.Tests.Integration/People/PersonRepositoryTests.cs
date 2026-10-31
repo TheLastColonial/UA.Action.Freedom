@@ -122,23 +122,26 @@ public class PersonRepositoryTests
     }
 
     /// <summary>A convoy with one vehicle on its truck list and <paramref name="personId"/> in its crew.</summary>
-    private static Task<int> ACrewedConvoyAsync(string vin, Guid personId, bool arrived) => ScalarAsync(
+    private static Task<int> ACrewedConvoyAsync(string vin, Guid personId, bool arrived, bool delivered = true) => ScalarAsync(
         """
         INSERT INTO dbo.Convoy (Start, ExpectedEnd, TruckListPublishedAt, ArrivedAt)
         VALUES ('2026-09-01', '2026-09-05', '2026-08-20', CASE WHEN @arrived = 1 THEN '2026-09-05' END);
         DECLARE @convoyId int = CAST(SCOPE_IDENTITY() AS int);
         INSERT INTO dbo.Vehicle (Vin, Plate, [Year], WeightKg, InspectionStatus) VALUES (@vin, 'IT12ABC', 2015, 1800, 2);
-        INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin) VALUES (@convoyId, @vin);
+        INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin, DeliveredAt) VALUES (@convoyId, @vin, CASE WHEN @delivered = 1 THEN '2026-09-05' END);
         INSERT INTO dbo.ConvoyVehicleCrew (ConvoyId, Vin, PersonId) VALUES (@convoyId, @vin, @id);
         SELECT @convoyId;
         """,
         ("@vin", vin),
         ("@id", personId),
-        ("@arrived", arrived));
+        ("@arrived", arrived),
+        ("@delivered", delivered));
 
     /// <summary>Deleting the vehicle cascades its truck-list row, and that cascades the crew.</summary>
     private static Task RemoveConvoyAsync(int convoyId, string vin) => ExecuteAsync(
         """
+        DELETE FROM dbo.BoxOutcome WHERE ConvoyId = @convoyId;
+        DELETE FROM dbo.ConvoyVehicleBoxAllocation WHERE ConvoyId = @convoyId;
         DELETE FROM dbo.Vehicle WHERE Vin = @vin;
         DELETE FROM dbo.ConvoyVehicle WHERE ConvoyId = @convoyId;
         DELETE FROM dbo.Convoy WHERE Id = @convoyId;
@@ -230,28 +233,26 @@ public class PersonRepositoryTests
     }
 
     [Theory]
-    [InlineData(ManifestStatus.Confirmed, DeletePersonResult.StillActive)]
-    [InlineData(ManifestStatus.Delivered, DeletePersonResult.Deleted)]
-    public async Task A_volunteer_crewing_an_unfinished_load_is_erased_only_once_that_load_is_finished(
-        ManifestStatus status, DeletePersonResult expected)
+    [InlineData(false, false, DeletePersonResult.StillActive)]
+    [InlineData(true, false, DeletePersonResult.Deleted)]
+    [InlineData(false, true, DeletePersonResult.Deleted)]
+    public async Task A_volunteer_crewing_an_unfinished_vehicle_is_erased_only_once_it_is_delivered_or_withdrawn(
+        bool delivered, bool withdrawn, DeletePersonResult expected)
     {
-        // The convoy has arrived, so the first half of the erasure check is satisfied; what is
-        // left is the load the vehicle they crewed was carrying. The two used to be asked of two
-        // unconnected crew tables — the convoy's and the manifest's own driver teams — and there
-        // is one crew record now, reached from the same row by the truck-list key.
+        // The convoy has arrived, so the first half of the erasure check is satisfied; what is left
+        // is whether the vehicle they crewed finished: delivered, or withdrawn from the convoy.
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
         var id = Guid.NewGuid();
         var vin = "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
-        var manifestId = "IT" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
         await repository.AddAsync(APerson(id, NewSurname(), isDriver: true), cancellationToken);
-        var convoyId = await ACrewedConvoyAsync(vin, id, arrived: true);
-        await ExecuteAsync(
-            "INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status) VALUES (@manifestId, @convoyId, @vin, @status)",
-            ("@manifestId", manifestId),
-            ("@convoyId", convoyId),
-            ("@vin", vin),
-            ("@status", (int)status));
+        var convoyId = await ACrewedConvoyAsync(vin, id, arrived: true, delivered: delivered);
+        if (withdrawn)
+        {
+            await ExecuteAsync(
+                "UPDATE dbo.ConvoyVehicle SET WithdrawnAt = SYSUTCDATETIME(), WithdrawnReason = 'Broke down' WHERE ConvoyId = @convoyId",
+                ("@convoyId", convoyId));
+        }
 
         try
         {
@@ -259,8 +260,47 @@ public class PersonRepositoryTests
         }
         finally
         {
-            await ExecuteAsync("DELETE FROM dbo.Manifest WHERE Id = @id", ("@id", manifestId));
             await RemoveConvoyAsync(convoyId, vin);
+            await RemoveAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task A_volunteer_crewing_a_delivered_vehicle_with_a_box_still_without_an_outcome_is_not_erased()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repository = await ConnectOrSkipAsync(cancellationToken);
+        var id = Guid.NewGuid();
+        var vin = "IT" + Guid.NewGuid().ToString("N")[..15].ToUpperInvariant();
+        await repository.AddAsync(APerson(id, NewSurname(), isDriver: true), cancellationToken);
+        var convoyId = await ACrewedConvoyAsync(vin, id, arrived: true, delivered: true);
+        var boxId = await ScalarAsync(
+            """
+            INSERT INTO dbo.Box DEFAULT VALUES;
+            DECLARE @boxId int = CAST(SCOPE_IDENTITY() AS int);
+            INSERT INTO dbo.ConvoyVehicleBoxAllocation (BoxId, ConvoyId, Vin) VALUES (@boxId, @convoyId, @vin);
+            SELECT @boxId;
+            """,
+            ("@convoyId", convoyId),
+            ("@vin", vin));
+
+        try
+        {
+            (await repository.DeleteAsync(id, cancellationToken)).Should().Be(DeletePersonResult.StillActive);
+
+            await ExecuteAsync(
+                "INSERT INTO dbo.BoxOutcome (BoxId, ConvoyId, Vin, Outcome) VALUES (@boxId, @convoyId, @vin, @delivered)",
+                ("@boxId", boxId),
+                ("@convoyId", convoyId),
+                ("@vin", vin),
+                ("@delivered", (int)BoxOutcome.Delivered));
+
+            (await repository.DeleteAsync(id, cancellationToken)).Should().Be(DeletePersonResult.Deleted);
+        }
+        finally
+        {
+            await RemoveConvoyAsync(convoyId, vin);
+            await ExecuteAsync("DELETE FROM dbo.Box WHERE Id = @boxId", ("@boxId", boxId));
             await RemoveAsync(id);
         }
     }

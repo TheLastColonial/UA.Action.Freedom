@@ -125,6 +125,11 @@ internal static class ConvoyFixtures
         return id;
     }
 
+    /// <summary>The vehicle's delivery, as plan 14's deliver action stamps it.</summary>
+    internal static Task MarkDeliveredAsync(int convoyId, string vin) => ExecuteAsync(
+        "UPDATE dbo.ConvoyVehicle SET DeliveredAt = SYSUTCDATETIME() WHERE ConvoyId = @convoyId AND Vin = @vin",
+        ("@convoyId", convoyId), ("@vin", vin));
+
     internal static Task RemoveManifestsAsync(int convoyId) =>
         ExecuteAsync("DELETE FROM dbo.Manifest WHERE ConvoyId = @id", ("@id", convoyId));
 

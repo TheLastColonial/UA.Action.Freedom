@@ -26,29 +26,26 @@ namespace UA.Action.Freedom.Tests.BDD.Features
         
         private static string[] featureTags = ((string[])(null));
         
-        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "Manifests API", @"    The deployed Freedom service exposes manifests at /manifests — the document pack for one
-    vehicle on one convoy: its border weight and its GMR. Its cargo and its ferry booking are
-    recorded against the same truck-list entry, at /convoys/{id}/vehicles/{vin}/boxes and
-    /ferry, and the manifest reads them.
-
-    A manifest is opened against a truck-list entry, at
-    POST /convoys/{id}/vehicles/{vin}/manifest, because that pair is what it is the paperwork
-    for. It carries no crew of its own: who is driving is a fact about the vehicle on the
-    convoy, and /manifests/{id}/crew reads it.
-
-    Every state change is its own POST, one per edge of docs/manifest-status.puml. Two rules
-    the diagram cannot express are enforced here: a manifest may only be proposed against a
-    convoy whose truck list is published, and once its Goods Movement Reference exists it can
-    no longer be edited — the vehicle would otherwise reach a border carrying something HMRC
-    was not told about.
-
-    Approval is the Administrator's sign-off of the load: it confirms the manifest and freezes it,
-    and files nothing. It is Administrator only, so the person who builds a
-    manifest is not the person who signs it off.
-
-    These scenarios run against the running containers (the edge on
-    http://localhost:8080, Keycloak on http://localhost:8081) and skip themselves
-    when that stack is not up.", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
+        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "Manifests API", "    The deployed Freedom service exposes manifests at /manifests: the Administrat" +
+                "or\'s sign-off of\r\n    one vehicle\'s load on one convoy, and its document pack (b" +
+                "order weight, delivery notes). Its\r\n    cargo and its ferry booking are recorded" +
+                " against the same truck-list entry, at\r\n    /convoys/{id}/vehicles/{vin}/boxes a" +
+                "nd /ferry, and the manifest reads them.\r\n\r\n    A manifest is opened against a tr" +
+                "uck-list entry, at\r\n    POST /convoys/{id}/vehicles/{vin}/manifest, because that" +
+                " pair is what it is the paperwork\r\n    for. It opens Proposed. It carries no cre" +
+                "w of its own: who is driving is a fact about the\r\n    vehicle on the convoy, and" +
+                " /manifests/{id}/crew reads it.\r\n\r\n    The states are Proposed, Approved and Rej" +
+                "ected (docs/manifest-status.puml). Each edge a person\r\n    can take is its own P" +
+                "OST: propose, approve and reject. A rejected manifest may only be proposed\r\n    " +
+                "against a convoy whose truck list is published. Nothing is frozen: a change to t" +
+                "he vehicle\'s\r\n    load (a box put on, moved, taken off, replaced, or lost) sends" +
+                " an approved manifest back to\r\n    Proposed, and it needs approving again. What " +
+                "happened to a load is a box outcome, not a\r\n    manifest state.\r\n\r\n    Approval " +
+                "is the Administrator\'s sign-off of the load, and files nothing. It is Administra" +
+                "tor\r\n    only, so the person who builds a manifest is not the person who signs i" +
+                "t off.\r\n\r\n    These scenarios run against the running containers (the edge on\r\n " +
+                "   http://localhost:8080, Keycloak on http://localhost:8081) and skip themselves" +
+                "\r\n    when that stack is not up.", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
         
 #line 1 "Manifests.feature"
 #line hidden
@@ -235,15 +232,15 @@ await this.FeatureBackgroundAsync();
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="A dispatcher opens a manifest in the Created state")]
+        [global::Xunit.FactAttribute(DisplayName="A dispatcher opens a manifest in the Proposed state")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Manifests API")]
-        [global::Xunit.TraitAttribute("Description", "A dispatcher opens a manifest in the Created state")]
-        public async global::System.Threading.Tasks.Task ADispatcherOpensAManifestInTheCreatedState()
+        [global::Xunit.TraitAttribute("Description", "A dispatcher opens a manifest in the Proposed state")]
+        public async global::System.Threading.Tasks.Task ADispatcherOpensAManifestInTheProposedState()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "2";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A dispatcher opens a manifest in the Created state", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A dispatcher opens a manifest in the Proposed state", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 38
@@ -281,7 +278,7 @@ await this.FeatureBackgroundAsync();
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 46
-    await testRunner.AndAsync("the response body field \"status\" is \"Created\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.AndAsync("the response body field \"status\" is \"Proposed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
@@ -379,15 +376,18 @@ await this.FeatureBackgroundAsync();
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="A manifest cannot be proposed until its convoy has published a truck list")]
+        [global::Xunit.FactAttribute(DisplayName="A rejected manifest cannot be proposed until its convoy has published a truck lis" +
+            "t")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Manifests API")]
-        [global::Xunit.TraitAttribute("Description", "A manifest cannot be proposed until its convoy has published a truck list")]
-        public async global::System.Threading.Tasks.Task AManifestCannotBeProposedUntilItsConvoyHasPublishedATruckList()
+        [global::Xunit.TraitAttribute("Description", "A rejected manifest cannot be proposed until its convoy has published a truck lis" +
+            "t")]
+        public async global::System.Threading.Tasks.Task ARejectedManifestCannotBeProposedUntilItsConvoyHasPublishedATruckList()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "5";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A manifest cannot be proposed until its convoy has published a truck list", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A rejected manifest cannot be proposed until its convoy has published a truck lis" +
+                    "t", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 64
@@ -419,33 +419,39 @@ await this.FeatureBackgroundAsync();
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 70
-    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I POST \"reject\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 71
-    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 72
-    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 73
-    await testRunner.ThenAsync("the response body field \"status\" is \"Created\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 74
+    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 75
+    await testRunner.ThenAsync("the response body field \"status\" is \"Rejected\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="A manifest is proposed once its convoy has published a truck list")]
+        [global::Xunit.FactAttribute(DisplayName="A rejected manifest is proposed once its convoy has published a truck list")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Manifests API")]
-        [global::Xunit.TraitAttribute("Description", "A manifest is proposed once its convoy has published a truck list")]
-        public async global::System.Threading.Tasks.Task AManifestIsProposedOnceItsConvoyHasPublishedATruckList()
+        [global::Xunit.TraitAttribute("Description", "A rejected manifest is proposed once its convoy has published a truck list")]
+        public async global::System.Threading.Tasks.Task ARejectedManifestIsProposedOnceItsConvoyHasPublishedATruckList()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "6";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A manifest is proposed once its convoy has published a truck list", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A rejected manifest is proposed once its convoy has published a truck list", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 75
+#line 77
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -458,31 +464,37 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 76
+#line 78
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 77
+#line 79
     await testRunner.AndAsync("a convoy exists whose truck list is published", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 78
+#line 80
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 79
+#line 81
     await testRunner.WhenAsync("I POST a manifest on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 80
+#line 82
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 81
-    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 82
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
 #line 83
-    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I POST \"reject\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 84
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 85
+    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 86
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 87
+    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 88
     await testRunner.ThenAsync("the response body field \"status\" is \"Proposed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -500,7 +512,7 @@ await this.FeatureBackgroundAsync();
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A dispatcher may build a manifest but not approve it", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 86
+#line 90
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -513,49 +525,43 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 87
+#line 91
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 88
+#line 92
     await testRunner.AndAsync("a convoy exists whose truck list is published", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 89
+#line 93
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 90
+#line 94
     await testRunner.WhenAsync("I POST a manifest on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 91
+#line 95
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 92
-    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 93
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 94
+#line 96
     await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 95
+#line 97
     await testRunner.ThenAsync("the response status is 403", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="An administrator approves a manifest, which freezes it")]
+        [global::Xunit.FactAttribute(DisplayName="An administrator approves a manifest, which signs the load off")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Manifests API")]
-        [global::Xunit.TraitAttribute("Description", "An administrator approves a manifest, which freezes it")]
-        public async global::System.Threading.Tasks.Task AnAdministratorApprovesAManifestWhichFreezesIt()
+        [global::Xunit.TraitAttribute("Description", "An administrator approves a manifest, which signs the load off")]
+        public async global::System.Threading.Tasks.Task AnAdministratorApprovesAManifestWhichSignsTheLoadOff()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "8";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An administrator approves a manifest, which freezes it", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An administrator approves a manifest, which signs the load off", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 97
+#line 99
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -568,26 +574,20 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 98
+#line 100
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 99
+#line 101
     await testRunner.AndAsync("a convoy exists whose truck list is published", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 100
+#line 102
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 101
+#line 103
     await testRunner.WhenAsync("I POST a manifest on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 102
-    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 103
-    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
 #line 104
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 105
     await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
@@ -602,24 +602,24 @@ await this.FeatureBackgroundAsync();
     await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 109
-    await testRunner.ThenAsync("the response body field \"status\" is \"Confirmed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("the response body field \"status\" is \"Approved\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 110
-    await testRunner.AndAsync("the response body field \"frozen\" is \"True\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.AndAsync("the response body field \"approved\" is \"True\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="A frozen manifest cannot be edited or deleted")]
+        [global::Xunit.FactAttribute(DisplayName="An approved manifest still takes its notes and can be deleted")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Manifests API")]
-        [global::Xunit.TraitAttribute("Description", "A frozen manifest cannot be edited or deleted")]
-        public async global::System.Threading.Tasks.Task AFrozenManifestCannotBeEditedOrDeleted()
+        [global::Xunit.TraitAttribute("Description", "An approved manifest still takes its notes and can be deleted")]
+        public async global::System.Threading.Tasks.Task AnApprovedManifestStillTakesItsNotesAndCanBeDeleted()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "9";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A frozen manifest cannot be edited or deleted", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("An approved manifest still takes its notes and can be deleted", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 112
@@ -651,48 +651,42 @@ await this.FeatureBackgroundAsync();
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 118
-    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 119
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 120
     await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 121
+#line 119
     await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 122
+#line 120
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 123
-    await testRunner.WhenAsync("I PUT the remembered manifest with body:", "{ \"deliveryNotes\": \"changed after the GMR\" }", ((global::Reqnroll.Table)(null)), "When ");
+#line 121
+    await testRunner.WhenAsync("I PUT the remembered manifest with body:", "{ \"deliveryNotes\": \"changed after sign-off\" }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 127
-    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 125
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 128
+#line 126
     await testRunner.WhenAsync("I DELETE the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 129
-    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 127
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="A frozen manifest still runs to delivery")]
+        [global::Xunit.FactAttribute(DisplayName="A change to the load sends an approved manifest back, and it is approved again")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Manifests API")]
-        [global::Xunit.TraitAttribute("Description", "A frozen manifest still runs to delivery")]
-        public async global::System.Threading.Tasks.Task AFrozenManifestStillRunsToDelivery()
+        [global::Xunit.TraitAttribute("Description", "A change to the load sends an approved manifest back, and it is approved again")]
+        public async global::System.Threading.Tasks.Task AChangeToTheLoadSendsAnApprovedManifestBackAndItIsApprovedAgain()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "10";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A frozen manifest still runs to delivery", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A change to the load sends an approved manifest back, and it is approved again", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 131
+#line 129
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -705,85 +699,91 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 132
+#line 130
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 133
+#line 131
     await testRunner.AndAsync("a convoy exists with an insured vehicle on its published truck list", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 134
+#line 132
+    await testRunner.AndAsync("a registered receiver exists", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 133
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 135
-    await testRunner.WhenAsync("I POST a manifest for the insured vehicle on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 136
-    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 137
-    await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 134
+    await testRunner.WhenAsync("I POST \"/boxes\" with body:", "{ \"receiverRef\": \"{receiver}\" }", ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 138
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 139
-    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+    await testRunner.GivenAsync("I remember the box", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
 #line 140
-    await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.WhenAsync("I POST a manifest for the insured vehicle on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 141
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 142
-    await testRunner.WhenAsync("I POST \"prepare\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
 #line 143
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 144
-    await testRunner.WhenAsync("I POST \"ready\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 145
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 146
-    await testRunner.WhenAsync("I make the convoy of the insured vehicle ready to depart", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 147
-    await testRunner.AndAsync("I depart the convoy of the insured vehicle", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 148
-    await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 149
-    await testRunner.WhenAsync("I POST \"deliver\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 150
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 151
     await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
+#line 146
+    await testRunner.ThenAsync("the response body field \"status\" is \"Approved\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 147
+    await testRunner.WhenAsync("I put the remembered box on the insured vehicle", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 148
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 149
+    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 150
+    await testRunner.ThenAsync("the response body field \"status\" is \"Proposed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 151
+    await testRunner.AndAsync("the response body field \"approved\" is \"False\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
 #line 152
-    await testRunner.ThenAsync("the response body field \"status\" is \"Delivered\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 153
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 154
+    await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 155
+    await testRunner.ThenAsync("the response body field \"status\" is \"Approved\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="A manifest cannot skip the preparation steps")]
+        [global::Xunit.FactAttribute(DisplayName="The delivery verbs are gone because what happened to a load is a box outcome")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Manifests API")]
-        [global::Xunit.TraitAttribute("Description", "A manifest cannot skip the preparation steps")]
-        public async global::System.Threading.Tasks.Task AManifestCannotSkipThePreparationSteps()
+        [global::Xunit.TraitAttribute("Description", "The delivery verbs are gone because what happened to a load is a box outcome")]
+        public async global::System.Threading.Tasks.Task TheDeliveryVerbsAreGoneBecauseWhatHappenedToALoadIsABoxOutcome()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "11";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A manifest cannot skip the preparation steps", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("The delivery verbs are gone because what happened to a load is a box outcome", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 154
+#line 157
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -796,26 +796,32 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 155
+#line 158
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 156
+#line 159
     await testRunner.AndAsync("a convoy exists whose truck list is published", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 157
+#line 160
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 158
+#line 161
     await testRunner.WhenAsync("I POST a manifest on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 159
+#line 162
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 160
+#line 163
     await testRunner.WhenAsync("I POST \"deliver\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 161
-    await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 164
+    await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 165
+    await testRunner.WhenAsync("I POST \"prepare\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 166
+    await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
@@ -832,7 +838,7 @@ await this.FeatureBackgroundAsync();
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A rejected manifest can be proposed again", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 163
+#line 168
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -845,37 +851,37 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 164
+#line 169
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 165
+#line 170
     await testRunner.AndAsync("a convoy exists whose truck list is published", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 166
+#line 171
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 167
+#line 172
     await testRunner.WhenAsync("I POST a manifest on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 168
+#line 173
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 169
+#line 174
     await testRunner.WhenAsync("I POST \"reject\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 170
+#line 175
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 171
+#line 176
     await testRunner.WhenAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 172
+#line 177
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 173
+#line 178
     await testRunner.WhenAsync("I GET the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 174
+#line 179
     await testRunner.ThenAsync("the response body field \"status\" is \"Proposed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -893,7 +899,7 @@ await this.FeatureBackgroundAsync();
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("The border weight shows its fixed allowances", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 176
+#line 181
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -906,34 +912,34 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 177
+#line 182
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 178
+#line 183
     await testRunner.AndAsync("a convoy exists whose truck list is not published", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 179
+#line 184
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 180
+#line 185
     await testRunner.WhenAsync("I POST a manifest on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 181
+#line 186
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 182
+#line 187
     await testRunner.WhenAsync("I GET \"/weight\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 183
+#line 188
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 184
+#line 189
     await testRunner.AndAsync("the response body field \"crewAndBagsKg\" is \"200\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 185
+#line 190
     await testRunner.AndAsync("the response body field \"fuelKg\" is \"45\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 186
+#line 191
     await testRunner.AndAsync("the response body field \"unvalidatedBoxCount\" is \"0\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
@@ -951,7 +957,7 @@ await this.FeatureBackgroundAsync();
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("A vehicle\'s outbound ferry is booked on its truck-list entry", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 188
+#line 193
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -964,46 +970,46 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 189
+#line 194
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 190
+#line 195
     await testRunner.AndAsync("a convoy exists with an insured vehicle on its published truck list", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 191
+#line 196
     await testRunner.WhenAsync("I book a ferry for the insured vehicle", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 192
+#line 197
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 193
+#line 198
     await testRunner.WhenAsync("I GET the ferry booking of the insured vehicle", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 194
+#line 199
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 195
+#line 200
     await testRunner.AndAsync("the response body field \"reference\" is \"BDD-FERRY-1\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 196
+#line 201
     await testRunner.AndAsync("the response body field \"operator\" is \"P&O Ferries\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.FactAttribute(DisplayName="Cargo is written on the vehicle, and the manifest route points there")]
+        [global::Xunit.FactAttribute(DisplayName="Cargo is written on the vehicle, and the manifest has no route for it")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Manifests API")]
-        [global::Xunit.TraitAttribute("Description", "Cargo is written on the vehicle, and the manifest route points there")]
-        public async global::System.Threading.Tasks.Task CargoIsWrittenOnTheVehicleAndTheManifestRoutePointsThere()
+        [global::Xunit.TraitAttribute("Description", "Cargo is written on the vehicle, and the manifest has no route for it")]
+        public async global::System.Threading.Tasks.Task CargoIsWrittenOnTheVehicleAndTheManifestHasNoRouteForIt()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "15";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Cargo is written on the vehicle, and the manifest route points there", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Cargo is written on the vehicle, and the manifest has no route for it", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 198
+#line 203
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -1016,26 +1022,26 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 199
+#line 204
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 200
+#line 205
     await testRunner.AndAsync("a convoy exists with an insured vehicle on its published truck list", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 201
+#line 206
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 202
+#line 207
     await testRunner.WhenAsync("I POST a manifest for the insured vehicle on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 203
+#line 208
     await testRunner.ThenAsync("the response status is 201", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 204
+#line 209
     await testRunner.WhenAsync("I PUT \"/boxes/1\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 205
-    await testRunner.ThenAsync("the response status is 410", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 210
+    await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
@@ -1052,7 +1058,7 @@ await this.FeatureBackgroundAsync();
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Fetching an unknown manifest is a 404", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 207
+#line 212
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -1065,13 +1071,13 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 208
+#line 213
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 209
+#line 214
     await testRunner.WhenAsync("I GET \"/manifests/NOSUCHMANIFEST\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 210
+#line 215
     await testRunner.ThenAsync("the response status is 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
@@ -1092,7 +1098,7 @@ await this.FeatureBackgroundAsync();
                     "for good", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 212
+#line 217
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -1105,61 +1111,52 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 213
+#line 218
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 214
+#line 219
     await testRunner.AndAsync("a convoy exists with an insured vehicle on its published truck list", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 215
+#line 220
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 216
+#line 221
     await testRunner.WhenAsync("I POST a manifest for the insured vehicle on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 217
-    await testRunner.AndAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 218
+#line 222
     await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 219
+#line 223
     await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 220
-    await testRunner.AndAsync("I POST \"prepare\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 221
-    await testRunner.AndAsync("I POST \"ready\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 222
+#line 224
     await testRunner.AndAsync("I make the convoy of the insured vehicle ready to depart", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 223
+#line 225
     await testRunner.AndAsync("I depart the convoy of the insured vehicle", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 224
+#line 226
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 225
+#line 227
     await testRunner.WhenAsync("I mark the manifest\'s convoy arrived", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 226
+#line 228
     await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 227
-    await testRunner.WhenAsync("I POST \"deliver\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 228
-    await testRunner.AndAsync("I mark the manifest\'s convoy arrived", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
 #line 229
-    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.WhenAsync("I mark the insured vehicle delivered", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 230
-    await testRunner.AndAsync("the insured vehicle has been handed over", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.AndAsync("I mark the manifest\'s convoy arrived", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
 #line 231
+    await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 232
+    await testRunner.AndAsync("the insured vehicle has been handed over", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 233
     await testRunner.AndAsync("the insured vehicle cannot join another convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
@@ -1180,7 +1177,7 @@ await this.FeatureBackgroundAsync();
                     "nonymous seat", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 233
+#line 235
 this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -1193,58 +1190,49 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line 26
 await this.FeatureBackgroundAsync();
 #line hidden
-#line 234
+#line 236
     await testRunner.GivenAsync("I am authenticated as \"operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 235
+#line 237
     await testRunner.AndAsync("a convoy exists with an insured vehicle on its published truck list", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 236
+#line 238
     await testRunner.AndAsync("a manifest reference that is not yet used", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 237
+#line 239
     await testRunner.WhenAsync("I POST a manifest for the insured vehicle on the remembered convoy", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 238
-    await testRunner.AndAsync("I POST \"propose\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 239
+#line 240
     await testRunner.GivenAsync("I am authenticated as \"admin\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 240
+#line 241
     await testRunner.WhenAsync("I POST \"approve\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 241
-    await testRunner.AndAsync("I POST \"prepare\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
 #line 242
-    await testRunner.AndAsync("I POST \"ready\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 243
     await testRunner.AndAsync("I make the convoy of the insured vehicle ready to depart", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 244
+#line 243
     await testRunner.AndAsync("I depart the convoy of the insured vehicle", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 245
+#line 244
     await testRunner.AndAsync("the administrator erases the vehicle\'s driver", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 246
+#line 245
     await testRunner.ThenAsync("the response status is 409", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 247
-    await testRunner.WhenAsync("I POST \"deliver\" on the remembered manifest", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 246
+    await testRunner.WhenAsync("I mark the insured vehicle delivered", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 248
+#line 247
     await testRunner.AndAsync("I mark the manifest\'s convoy arrived", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 249
+#line 248
     await testRunner.AndAsync("the administrator erases the vehicle\'s driver", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 250
+#line 249
     await testRunner.ThenAsync("the response status is 204", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 251
+#line 250
     await testRunner.AndAsync("the vehicle\'s crew on that convoy shows a former volunteer", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }

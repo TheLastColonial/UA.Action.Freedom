@@ -90,11 +90,11 @@ test('hides publish from a role without convoys:write', async () => {
     .not.toBeInTheDocument();
 });
 
-test('a dispatcher marks a convoy arrived once every vehicle has a finished manifest', async () => {
+test('a dispatcher marks a convoy arrived once every vehicle is delivered', async () => {
   const fleet = vehicleApi([makeVehicle({ vin: 'VIN-A', inspectionStatus: 'Passed' })]);
   const convoys = convoyApi([makeConvoy({ id: 7, truckListPublished: true })], {
     fleet: fleet.db,
-    manifestStatusByVin: new Map([['VIN-A', 'Delivered']]),
+    deliveredVins: new Set(['VIN-A']),
   });
   convoys.vehicles.set(7, [makeConvoyVehicle({ vin: 'VIN-A' })]);
   worker.use(...convoys.handlers, ...fleet.handlers);
@@ -112,9 +112,7 @@ test('a dispatcher marks a convoy arrived once every vehicle has a finished mani
 });
 
 test('marking arrival names the vehicles still on the road', async () => {
-  const convoys = convoyApi([makeConvoy({ id: 7, truckListPublished: true })], {
-    manifestStatusByVin: new Map([['VIN-A', 'InTransit']]),
-  });
+  const convoys = convoyApi([makeConvoy({ id: 7, truckListPublished: true })], {});
   convoys.vehicles.set(7, [makeConvoyVehicle({ vin: 'VIN-A' })]);
   worker.use(...convoys.handlers);
 

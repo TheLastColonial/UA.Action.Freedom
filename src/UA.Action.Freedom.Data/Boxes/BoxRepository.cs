@@ -2,6 +2,7 @@ using System.Text.Json;
 using Dapper;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Data.Manifests;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Data.Boxes;
@@ -250,6 +251,12 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
             transaction,
             cancellationToken: cancellationToken));
 
+        var allocation = await connection.QuerySingleOrDefaultAsync<(int ConvoyId, string Vin)?>(new CommandDefinition(
+            "SELECT ConvoyId, Vin FROM dbo.ConvoyVehicleBoxAllocation WHERE BoxId = @boxId",
+            new { boxId },
+            transaction,
+            cancellationToken: cancellationToken));
+
         await connection.ExecuteAsync(new CommandDefinition(
             """
             UPDATE dbo.ConvoyVehicleBoxAllocation SET
@@ -262,6 +269,13 @@ public sealed class BoxRepository(IDbConnectionFactory connectionFactory, IChang
             attribution.With(new { boxId, replacementId }),
             transaction,
             cancellationToken: cancellationToken));
+
+        // The replacement is unattested and weightless until a Loader attests it, so the load the Administrator
+        // signed off has changed (X3).
+        if (allocation is { } carried)
+        {
+            await connection.ReopenManifestAsync(transaction, attribution, carried.ConvoyId, carried.Vin, cancellationToken);
+        }
 
         await transaction.CommitAsync(cancellationToken);
 

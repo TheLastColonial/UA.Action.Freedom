@@ -19,7 +19,6 @@ export function ManifestStatePanel({ manifest }: ManifestStatePanelProps): JSX.E
 
   const options = availableTransitions({
     status: manifest.status,
-    frozen: manifest.frozen,
     canApprove: auth.hasPolicy('manifests:approve'),
     convoyTruckListPublished: convoy.data?.truckListPublished ?? false,
   });
@@ -33,8 +32,16 @@ export function ManifestStatePanel({ manifest }: ManifestStatePanelProps): JSX.E
   return (
     <div>
       <h2>Status: {manifest.status}</h2>
-      {manifest.frozen ? (
-        <p role="status">Frozen — a Goods Movement Reference has been submitted.</p>
+      {manifest.status === 'Proposed' && manifest.reopenedAt ? (
+        <p role="status">
+          Reopened by a load change — a change to this vehicle&apos;s load sent the sign-off back
+          for re-approval.
+        </p>
+      ) : null}
+      {manifest.approved ? (
+        <p role="status">
+          Signed off. Any later change to this vehicle&apos;s load sends it back for re-approval.
+        </p>
       ) : null}
       {errorMessage ? (
         <p role="alert" className="field__error">
@@ -42,10 +49,7 @@ export function ManifestStatePanel({ manifest }: ManifestStatePanelProps): JSX.E
         </p>
       ) : null}
       {justApproved ? (
-        <p role="status">
-          Load signed off — the manifest is now frozen. Declarations are filed from the Declarations
-          tab.
-        </p>
+        <p role="status">Load signed off. Declarations are filed from the Declarations tab.</p>
       ) : null}
 
       {options.length === 0 ? <p>No further transitions are available from here.</p> : null}

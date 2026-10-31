@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { lastChangedShape, manifestStatusSchema } from './common';
 
 // Response shapes — src/UA.Action.Freedom.Application/Manifests/ManifestReadModel.cs.
-// The document pack for one vehicle on one convoy. convoyId and vin are the truck-list entry it
-// is the paperwork for — its identity, not editable attributes — so PUT /manifests/{id} has no
-// field for either.
+// The load sign-off for one vehicle on one convoy, and its document pack. convoyId and vin are the
+// truck-list entry it is the paperwork for — its identity, not editable attributes — so
+// PUT /manifests/{id} has no field for either. reopenedAt is set when a change to the vehicle's
+// load sent an approved manifest back to Proposed; the next approval clears it.
 export const manifestReadModelSchema = z.object({
   ...lastChangedShape,
   id: z.string(),
@@ -13,8 +14,8 @@ export const manifestReadModelSchema = z.object({
   vin: z.string(),
   status: manifestStatusSchema,
   deliveryNotes: z.string().nullable(),
-  gmrSubmittedAt: z.string().nullable(),
-  frozen: z.boolean(),
+  reopenedAt: z.string().nullable(),
+  approved: z.boolean(),
 });
 export type ManifestReadModel = z.infer<typeof manifestReadModelSchema>;
 

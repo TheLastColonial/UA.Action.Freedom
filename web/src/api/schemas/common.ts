@@ -12,18 +12,7 @@ export const fuelTypeSchema = z.enum(['Unknown', 'Petrol', 'Diesel', 'Electric',
 export type FuelType = z.infer<typeof fuelTypeSchema>;
 
 // src/UA.Action.Freedom.Domain/Manifest.cs — ManifestStatus
-export const manifestStatusSchema = z.enum([
-  'Created',
-  'Proposed',
-  'Rejected',
-  'Confirmed',
-  'Preparing',
-  'Ready',
-  'InTransit',
-  'Delivered',
-  'Lost',
-  'Returned',
-]);
+export const manifestStatusSchema = z.enum(['Proposed', 'Approved', 'Rejected']);
 export type ManifestStatus = z.infer<typeof manifestStatusSchema>;
 
 // ADR 0017: every entity says who last changed it and when. The name comes from the login, never

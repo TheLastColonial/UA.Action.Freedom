@@ -22,8 +22,33 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
     }
 
     private readonly Dictionary<string, ManifestReadModel> manifests = new(StringComparer.OrdinalIgnoreCase);
+    private BoxAllocationLedger ledger = new();
+
     /// <summary>Standing in for the allocations the SQL joins; shared with the convoy fake.</summary>
-    internal BoxAllocationLedger Ledger { get; set; } = new();
+    internal BoxAllocationLedger Ledger
+    {
+        get => ledger;
+        set
+        {
+            ledger = value;
+            ledger.ReopenManifest = Reopen;
+        }
+    }
+
+    /// <summary>Mirrors <c>ManifestReopening</c>: an approved manifest goes back to Proposed, and says why.</summary>
+    private void Reopen(int convoyId, string vin)
+    {
+        var manifest = manifests.Values.FirstOrDefault(candidate =>
+            candidate.ConvoyId == convoyId && string.Equals(candidate.Vin, vin, StringComparison.OrdinalIgnoreCase));
+
+        if (manifest is not { Status: ManifestStatus.Approved })
+        {
+            return;
+        }
+
+        manifests[manifest.Id] = manifest with { Status = ManifestStatus.Proposed, ReopenedAt = DateTime.UtcNow };
+        changes.Stamp(manifest.Id);
+    }
 
     private int vehicleWeightKg;
     private string? vehiclePlate = "AB12CDE";
@@ -31,6 +56,8 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
 
     public InMemoryManifestRepository(params ManifestReadModel[] seed)
     {
+        ledger.ReopenManifest = Reopen;
+
         foreach (var manifest in seed)
         {
             manifests[manifest.Id] = manifest;
@@ -66,6 +93,13 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
     }
 
     public int Count => manifests.Count;
+
+    /// <summary>Signs a manifest off as the Administrator would, for a test that loads the vehicle first.</summary>
+    internal InMemoryManifestRepository Approved(string id)
+    {
+        manifests[id] = manifests[id] with { Status = ManifestStatus.Approved, ReopenedAt = null };
+        return this;
+    }
 
     public ManifestReadModel? Manifest(string id) => manifests.GetValueOrDefault(id);
 
@@ -110,9 +144,8 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
             return Task.FromResult(false);
         }
 
-        // Mirrors the SQL, whose UPDATE lists only the notes and the ferry booking: the convoy and
-        // the vehicle are the manifest's identity, and the status and GMR stamp belong to the
-        // transitions.
+        // Mirrors the SQL, whose UPDATE lists only the notes: the convoy and the vehicle are the
+        // manifest's identity, and the status belongs to the transitions.
         manifests[manifest.Id] = existing with
         {
             DeliveryNotes = manifest.DeliveryNotes,
@@ -141,18 +174,17 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
         return Task.FromResult(true);
     }
 
-    public Task<DateTime?> ConfirmAndFreezeAsync(string id, ManifestStatus from, CancellationToken cancellationToken)
+    public Task<bool> ApproveAsync(string id, CancellationToken cancellationToken)
     {
-        if (!manifests.TryGetValue(id, out var manifest) || manifest.Status != from || manifest.Frozen)
+        if (!manifests.TryGetValue(id, out var manifest) || manifest.Status != ManifestStatus.Proposed)
         {
-            return Task.FromResult<DateTime?>(null);
+            return Task.FromResult(false);
         }
 
-        var stamped = new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc);
-        manifests[id] = manifest with { Status = ManifestStatus.Confirmed, GmrSubmittedAt = stamped };
+        manifests[id] = manifest with { Status = ManifestStatus.Approved, ReopenedAt = null };
         changes.Stamp(id);
 
-        return Task.FromResult<DateTime?>(stamped);
+        return Task.FromResult(true);
     }
 
     public Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken) =>

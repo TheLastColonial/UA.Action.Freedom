@@ -304,58 +304,52 @@ public class ConvoyRepositoryTests
     }
 
     [Fact]
-    public async Task Arrival_hands_over_delivered_and_lost_vehicles_and_leaves_returned_ones_free()
+    public async Task Arrival_hands_over_delivered_vehicles_and_leaves_withdrawn_ones_free()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var (convoys, truckList) = await ConnectOrSkipAsync(cancellationToken);
         var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
         var delivered = NewVin();
-        var lost = NewVin();
-        var returned = NewVin();
+        var alsoDelivered = NewVin();
+        var withdrawn = NewVin();
         var arrivedAt = new DateTime(2026, 9, 5, 17, 0, 0, DateTimeKind.Utc);
 
         try
         {
-            foreach (var (vin, status) in new[]
-                     {
-                         (delivered, ManifestStatus.Delivered),
-                         (lost, ManifestStatus.Lost),
-                         (returned, ManifestStatus.Returned),
-                     })
+            foreach (var vin in new[] { delivered, alsoDelivered, withdrawn })
             {
                 await AddVehicleAsync(vin);
                 await truckList.AddAsync(id, vin, cancellationToken);
-                await AddManifestAsync(id, vin, status);
             }
 
             await convoys.PublishTruckListAsync(id, DateTime.UtcNow, cancellationToken);
+            await truckList.WithdrawAsync(id, withdrawn, "Gearbox failure", DateTime.UtcNow, cancellationToken);
+            await MarkDeliveredAsync(id, delivered);
+            await MarkDeliveredAsync(id, alsoDelivered);
 
             var result = await convoys.ArriveAsync(id, arrivedAt, cancellationToken);
 
             result.Should().Be(ArriveResult.Arrived);
             (await convoys.GetByIdAsync(id, cancellationToken))!.ArrivedAt.Should().Be(arrivedAt);
 
-            // Delivered and Lost vehicles are part of the aid and stay in Ukraine.
+            // Delivered vehicles are part of the aid and stay in Ukraine.
             (await HandedOverAtAsync(delivered)).Should().Be(arrivedAt);
-            (await HandedOverAtAsync(lost)).Should().Be(arrivedAt);
-            (await HandedOverAtAsync(returned)).Should().Be(DBNull.Value);
+            (await HandedOverAtAsync(alsoDelivered)).Should().Be(arrivedAt);
+            (await HandedOverAtAsync(withdrawn)).Should().Be(DBNull.Value);
 
-            // Nothing is released by clearing a pointer any more. The truck list still names every
-            // vehicle that set off — which it could not do before, because arrival nulled the
-            // pointer and the convoy lost its own list — and a Returned vehicle is free for the
-            // next convoy simply because this one has arrived.
+            // The truck list still names every vehicle that set off; a vehicle is free for the next
+            // convoy simply because this one has arrived.
             (await TruckListCountAsync(id)).Should().Be(3);
-            (await ConvoyOfAsync(returned)).Should().BeNull();
+            (await ConvoyOfAsync(withdrawn)).Should().BeNull();
             (await ConvoyOfAsync(delivered)).Should().BeNull();
 
             (await convoys.ArriveAsync(id, arrivedAt, cancellationToken)).Should().Be(ArriveResult.AlreadyArrived);
         }
         finally
         {
-            await RemoveManifestsAsync(id);
             await RemoveVehicleAsync(delivered);
-            await RemoveVehicleAsync(lost);
-            await RemoveVehicleAsync(returned);
+            await RemoveVehicleAsync(alsoDelivered);
+            await RemoveVehicleAsync(withdrawn);
             await RemoveConvoyAsync(id);
         }
     }
@@ -367,31 +361,30 @@ public class ConvoyRepositoryTests
         var (convoys, truckList) = await ConnectOrSkipAsync(cancellationToken);
         var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
         var travelling = NewVin();
-        var noManifest = NewVin();
+        var delivered = NewVin();
 
         try
         {
             await AddVehicleAsync(travelling);
-            await AddVehicleAsync(noManifest);
+            await AddVehicleAsync(delivered);
             await truckList.AddAsync(id, travelling, cancellationToken);
-            await truckList.AddAsync(id, noManifest, cancellationToken);
-            await AddManifestAsync(id, travelling, ManifestStatus.InTransit);
+            await truckList.AddAsync(id, delivered, cancellationToken);
             await convoys.PublishTruckListAsync(id, DateTime.UtcNow, cancellationToken);
+            await MarkDeliveredAsync(id, delivered);
 
             var result = await convoys.ArriveAsync(id, DateTime.UtcNow, cancellationToken);
 
             result.Should().Be(ArriveResult.VehiclesStillTravelling);
             (await convoys.GetByIdAsync(id, cancellationToken))!.ArrivedAt.Should().BeNull();
-            (await HandedOverAtAsync(travelling)).Should().Be(DBNull.Value);
+            (await HandedOverAtAsync(delivered)).Should().Be(DBNull.Value);
 
             (await convoys.ListVehiclesStillTravellingAsync(id, cancellationToken))
-                .Should().BeEquivalentTo([travelling, noManifest]);
+                .Should().BeEquivalentTo([travelling]);
         }
         finally
         {
-            await RemoveManifestsAsync(id);
             await RemoveVehicleAsync(travelling);
-            await RemoveVehicleAsync(noManifest);
+            await RemoveVehicleAsync(delivered);
             await RemoveConvoyAsync(id);
         }
     }
@@ -400,7 +393,7 @@ public class ConvoyRepositoryTests
     public async Task A_vehicle_that_withdrew_does_not_hold_the_convoy_back()
     {
         // It broke down near Poznan and left. Waiting for it to deliver something would mean the
-        // convoy could never arrive — and the rest of it did arrive.
+        // convoy could never arrive, and the rest of it did arrive.
         var cancellationToken = TestContext.Current.CancellationToken;
         var (convoys, truckList) = await ConnectOrSkipAsync(cancellationToken);
         var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
@@ -413,25 +406,19 @@ public class ConvoyRepositoryTests
             await AddVehicleAsync(brokeDown);
             await truckList.AddAsync(id, arrived, cancellationToken);
             await truckList.AddAsync(id, brokeDown, cancellationToken);
-            await AddManifestAsync(id, arrived, ManifestStatus.Delivered);
-            await AddManifestAsync(id, brokeDown, ManifestStatus.InTransit);
             await convoys.PublishTruckListAsync(id, DateTime.UtcNow, cancellationToken);
+            await MarkDeliveredAsync(id, arrived);
 
             await truckList.WithdrawAsync(id, brokeDown, "Gearbox failure near Poznan", DateTime.UtcNow, cancellationToken);
 
             (await convoys.ListVehiclesStillTravellingAsync(id, cancellationToken)).Should().BeEmpty();
             (await convoys.ArriveAsync(id, DateTime.UtcNow, cancellationToken)).Should().Be(ArriveResult.Arrived);
 
-            // The withdrawn vehicle is not handed over — whatever became of it did not become of
-            // it here — and its manifest is untouched.
+            // The withdrawn vehicle is not handed over: whatever became of it did not become of it here.
             (await HandedOverAtAsync(brokeDown)).Should().Be(DBNull.Value);
-            (await ScalarAsync(
-                "SELECT COUNT(1) FROM dbo.Manifest WHERE ConvoyId = @id AND Vin = @vin", ("@id", id), ("@vin", brokeDown)))
-                .Should().Be(1);
         }
         finally
         {
-            await RemoveManifestsAsync(id);
             await RemoveVehicleAsync(arrived);
             await RemoveVehicleAsync(brokeDown);
             await RemoveConvoyAsync(id);
@@ -450,7 +437,7 @@ public class ConvoyRepositoryTests
         {
             await AddVehicleAsync(vin);
             await truckList.AddAsync(id, vin, cancellationToken);
-            await AddManifestAsync(id, vin, ManifestStatus.Created);
+            await AddManifestAsync(id, vin, ManifestStatus.Proposed);
 
             (await convoys.DeleteAsync(id, cancellationToken)).Should().Be(DeleteResult.StillReferenced);
             (await convoys.ExistsAsync(id, cancellationToken)).Should().BeTrue();

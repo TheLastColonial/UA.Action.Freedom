@@ -7,10 +7,8 @@ test.beforeEach(async () => {
   test.skip(!(await stackIsUp()), 'the local stack is not up (docker compose + tofu apply)');
 });
 
-test('@smoke a manifest is opened on a truck list, proposed, then approved and frozen', async ({
-  page,
-}) => {
-  // The Administrator can do the whole path — plan, publish, propose and (uniquely) approve.
+test('@smoke a manifest is opened on a truck list and approved', async ({ page }) => {
+  // The Administrator can do the whole path — plan, publish, open the manifest and (uniquely) approve it.
   const stamp = String(Date.now());
   const vin = `E2EM${stamp}`;
   await signIn(page, 'admin');
@@ -56,14 +54,14 @@ test('@smoke a manifest is opened on a truck list, proposed, then approved and f
   await page.getByRole('button', { name: 'Open manifest' }).click();
   await expect(page.getByRole('heading', { name: reference })).toBeVisible();
 
+  // A manifest opens Proposed: the Administrator is asked to sign the load off.
   await page.getByRole('tab', { name: 'Status' }).click();
-  await page.getByRole('button', { name: 'Propose' }).click();
   await expect(page.getByRole('heading', { name: 'Status: Proposed' })).toBeVisible();
 
   // Approval signs off the load and files nothing (ADR 0004, ADR 0006): no ENS is needed to approve.
   await page.getByRole('button', { name: 'Approve' }).click();
   await expect(page.getByText(/Load signed off/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Status: Confirmed' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Status: Approved' })).toBeVisible();
 
   // Filing is a separate act. A Dispatcher records the GMR reference obtained in the HMRC portal.
   await page.getByRole('tab', { name: 'Declarations' }).click();

@@ -339,7 +339,7 @@ public class LastChangedStampingTests
             await ExecuteAsync("INSERT INTO dbo.ConvoyVehicle (ConvoyId, Vin) VALUES (@c, @vin)", ("@c", convoyId), ("@vin", vin));
 
             var manifests = new ManifestRepository(Connections(), AttributedTo(author));
-            var manifest = new ManifestReadModel(id, convoyId, vin, ManifestStatus.Created, null, null);
+            var manifest = new ManifestReadModel(id, convoyId, vin, ManifestStatus.Proposed, null, null);
 
             await manifests.AddAsync(manifest, Cancel);
             await ShouldBeStampedAsync(author, "dbo.Manifest", "Id = @id", ("@id", id));
@@ -348,7 +348,7 @@ public class LastChangedStampingTests
                 .UpdateAsync(manifest with { DeliveryNotes = "Leave at the gate" }, Cancel);
             await ShouldBeStampedAsync(editor, "dbo.Manifest", "Id = @id", ("@id", id));
 
-            await manifests.TransitionAsync(id, ManifestStatus.Created, ManifestStatus.Proposed, Cancel);
+            await manifests.TransitionAsync(id, ManifestStatus.Proposed, ManifestStatus.Proposed, Cancel);
             await ShouldBeStampedAsync(author, "dbo.Manifest", "Id = @id", ("@id", id));
         }
         finally

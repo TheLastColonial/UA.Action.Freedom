@@ -5,8 +5,7 @@ import { availableTransitions } from './transitions';
 import type { ManifestVerb } from './transitions';
 
 const ctx = (over: Partial<Parameters<typeof availableTransitions>[0]> = {}) => ({
-  status: 'Created' as ManifestStatus,
-  frozen: false,
+  status: 'Proposed' as ManifestStatus,
   canApprove: true,
   convoyTruckListPublished: true,
   ...over,
@@ -17,16 +16,9 @@ const verbs = (status: ManifestStatus, over = {}): ManifestVerb[] =>
 
 describe('availableTransitions — the edge table', () => {
   const expected: Record<ManifestStatus, ManifestVerb[]> = {
-    Created: ['propose', 'reject'],
     Proposed: ['reject', 'approve'],
     Rejected: ['propose'],
-    Confirmed: ['prepare'],
-    Preparing: ['ready'],
-    Ready: [],
-    InTransit: ['deliver', 'lose'],
-    Delivered: ['return'],
-    Lost: [],
-    Returned: [],
+    Approved: [],
   };
 
   for (const [status, want] of Object.entries(expected) as [ManifestStatus, ManifestVerb[]][]) {
@@ -41,21 +33,19 @@ describe('extra rules', () => {
     expect(verbs('Proposed', { canApprove: false })).toEqual(['reject']);
   });
 
-  it('when frozen, drops propose and reject but keeps forward progress', () => {
-    expect(verbs('Rejected', { frozen: true })).toEqual([]);
-    expect(verbs('Preparing', { frozen: true })).toEqual(['ready']);
-    expect(verbs('InTransit', { frozen: true }).sort()).toEqual(['deliver', 'lose']);
+  it('offers nothing from Approved, because only a load change sends it back', () => {
+    expect(verbs('Approved')).toEqual([]);
   });
 
   it('disables propose with a reason when the truck list is not published', () => {
     const [propose] = availableTransitions(
-      ctx({ status: 'Created', convoyTruckListPublished: false }),
+      ctx({ status: 'Rejected', convoyTruckListPublished: false }),
     );
     expect(propose?.disabledReason).toBe("The convoy's truck list has not been published yet.");
   });
 
   it('leaves propose enabled once the convoy is linked and published', () => {
-    const [propose] = availableTransitions(ctx({ status: 'Created' }));
+    const [propose] = availableTransitions(ctx({ status: 'Rejected' }));
     expect(propose?.disabledReason).toBeNull();
   });
 });

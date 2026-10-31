@@ -49,9 +49,9 @@ test('groups overview fields into a named card', async () => {
     .toBeInTheDocument();
 });
 
-test('a frozen manifest offers no Edit link and the edit page explains why', async () => {
+test('an approved manifest still offers Edit: nothing is frozen, a load change reopens it', async () => {
   worker.use(
-    ...manifestApi([makeManifest({ id: 'D2', frozen: true, status: 'Confirmed' })]).handlers,
+    ...manifestApi([makeManifest({ id: 'D2', approved: true, status: 'Approved' })]).handlers,
   );
 
   const detail = await renderWithProviders(null, {
@@ -59,21 +59,9 @@ test('a frozen manifest offers no Edit link and the edit page explains why', asy
     route: '/manifests/D2',
     roles: ['Dispatcher'],
   });
-  await expect.element(detail.getByRole('heading', { name: 'D2' })).toBeInTheDocument();
-  await expect.element(detail.getByRole('link', { name: 'Edit' })).not.toBeInTheDocument();
 
-  const edit = await renderWithProviders(null, {
-    routes,
-    route: '/manifests/D2/edit',
-    roles: ['Dispatcher'],
-  });
-  await expect
-    .element(
-      edit.getByText(
-        'A Goods Movement Reference has been created for this manifest — it can no longer be edited.',
-      ),
-    )
-    .toBeInTheDocument();
+  await expect.element(detail.getByRole('heading', { name: 'D2' })).toBeInTheDocument();
+  await expect.element(detail.getByRole('link', { name: 'Edit' })).toBeInTheDocument();
 });
 
 test('the tabs open the Status, Crew, Cargo and Weight panels', async () => {

@@ -52,15 +52,13 @@ public enum DeliverVehicleOutcome
 public sealed record DeliverVehicleResult(DeliverVehicleOutcome Outcome, int BoxesDelivered = 0);
 
 /// <remarks>
-/// Transitional: the manifest still holds <c>Delivered</c>, and <c>ArriveAsync</c>, <c>HandedOverAt</c> and the erasure
-/// guard still read it, so the vehicle manifest is mirrored to <c>Delivered</c> here. Plan 15 switches those readers
-/// to outcomes and removes the mirror.
+/// A vehicle's delivery is the fact arrival, the handover and volunteer erasure read: <c>ConvoyVehicle.DeliveredAt</c>
+/// and the outcomes of its boxes. The manifest takes no part.
 /// </remarks>
 public sealed class DeliverVehicleHandler(
     IConvoyRepository convoys,
     IConvoyVehicleRepository truckList,
-    IBoxOutcomeRepository outcomes,
-    IManifestRepository manifests)
+    IBoxOutcomeRepository outcomes)
     : ICommandHandler<DeliverVehicleCommand, DeliverVehicleResult>
 {
     public async Task<DeliverVehicleResult> HandleAsync(
@@ -105,20 +103,9 @@ public sealed class DeliverVehicleHandler(
             return new DeliverVehicleResult(DeliverVehicleOutcome.AlreadyDelivered);
         }
 
-        await MirrorToManifestAsync(command, cancellationToken);
-
         return new DeliverVehicleResult(DeliverVehicleOutcome.Delivered, boxesDelivered);
     }
 
-    private async Task MirrorToManifestAsync(DeliverVehicleCommand command, CancellationToken cancellationToken)
-    {
-        var manifest = await manifests.GetForVehicleAsync(command.ConvoyId, command.Vin, cancellationToken);
-
-        if (manifest is not null && ManifestTransitions.CanTransition(manifest.Status, ManifestStatus.Delivered))
-        {
-            await manifests.TransitionAsync(manifest.Id, manifest.Status, ManifestStatus.Delivered, cancellationToken);
-        }
-    }
 }
 
 /// <summary>Accept a Ukrainian goods list: every delivered box for that Receiver on that vehicle becomes accepted.</summary>

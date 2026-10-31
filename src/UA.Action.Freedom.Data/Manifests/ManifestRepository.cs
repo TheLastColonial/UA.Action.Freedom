@@ -16,7 +16,7 @@ namespace UA.Action.Freedom.Data.Manifests;
 public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IManifestRepository
 {
     private static readonly string Columns =
-        $"m.Id, m.ConvoyId, m.Vin, m.Status, m.DeliveryNotes, m.GmrSubmittedAt, {ChangeStamp.ReadColumns("m")}";
+        $"m.Id, m.ConvoyId, m.Vin, m.Status, m.DeliveryNotes, m.ReopenedAt, {ChangeStamp.ReadColumns("m")}";
 
     private static readonly string From = $"dbo.Manifest AS m {ChangeStamp.ReadJoin("m")}";
 
@@ -88,10 +88,9 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
     {
         await using var connection = connectionFactory.Create();
 
-        // ConvoyId, Vin, Status and GmrSubmittedAt are all absent on purpose. The first two are
-        // the manifest's identity — the truck-list entry it is the paperwork for — and the
-        // lifecycle belongs to the transitions, so there is no way to re-point a manifest at
-        // another vehicle, or to un-freeze it, through an edit.
+        // ConvoyId, Vin and Status are absent on purpose. The first two are the manifest's identity (the
+        // truck-list entry it is the paperwork for) and the sign-off belongs to the transitions, so there is
+        // no way to re-point a manifest at another vehicle, or to approve it, through an edit.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             """
             UPDATE dbo.Manifest SET
@@ -142,27 +141,29 @@ public sealed class ManifestRepository(IDbConnectionFactory connectionFactory, I
         return affected > 0;
     }
 
-    public async Task<DateTime?> ConfirmAndFreezeAsync(
-        string id, ManifestStatus from, CancellationToken cancellationToken)
+    public async Task<bool> ApproveAsync(string id, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
 
-        // One statement, and it returns what it wrote. Confirming and freezing cannot be two
-        // writes: a manifest that is Confirmed but not yet frozen is editable, and that window
-        // is exactly what recommendations §5.2 forbids.
-        return await connection.ExecuteScalarAsync<DateTime?>(new CommandDefinition(
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
             """
             UPDATE dbo.Manifest SET
-                Status = @confirmed,
-                GmrSubmittedAt = SYSUTCDATETIME(),
+                Status = @approved,
+                ReopenedAt = NULL,
                 UpdatedAt = SYSUTCDATETIME(),
                 LastChangedBy = @changedBy,
                 LastChangedAt = SYSUTCDATETIME()
-            OUTPUT INSERTED.GmrSubmittedAt
-            WHERE Id = @id AND Status = @from AND GmrSubmittedAt IS NULL
+            WHERE Id = @id AND Status = @proposed
             """,
-            attribution.With(new { id = SqlKey.Of(id), from = (int)from, confirmed = (int)ManifestStatus.Confirmed }),
+            attribution.With(new
+            {
+                id = SqlKey.Of(id),
+                proposed = (int)ManifestStatus.Proposed,
+                approved = (int)ManifestStatus.Approved,
+            }),
             cancellationToken: cancellationToken));
+
+        return affected > 0;
     }
 
     public async Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken)

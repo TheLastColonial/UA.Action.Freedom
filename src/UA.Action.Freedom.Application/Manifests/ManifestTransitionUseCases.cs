@@ -17,21 +17,17 @@ public enum TransitionManifestOutcome
     Transitioned,
     NotFound,
     IllegalTransition,
-    Frozen,
     TruckListNotPublished
 }
 
 /// <summary>
-/// Every move a manifest makes, except confirmation.
+/// Proposing and rejecting a manifest. Approval has its own handler.
 /// </summary>
 /// <remarks>
-/// The legality of a move is not decided here — it is decided by
-/// <see cref="ManifestTransitions.CanTransition"/>, which holds the edges of
-/// <c>docs/manifest-status.puml</c> as data. This handler adds the two rules the diagram cannot
-/// express: a manifest may only be proposed against a convoy whose truck list is published
-/// (<c>docs/process.puml</c>) and a frozen manifest may only record what happened to the load. There is no
-/// <c>depart</c> edge to take by hand any more: a convoy departs as a whole (<c>POST /convoys/{id}/depart</c>, O36), which
-/// moves each Ready manifest to InTransit until plan 15.
+/// The legality of a move is decided by <see cref="ManifestTransitions.CanBeRequested"/>, which holds the edges of
+/// <c>docs/manifest-status.puml</c> as data and leaves out the one edge only a load change takes (Approved to
+/// Proposed). This handler adds the rule the diagram cannot express: a manifest may only be proposed against a convoy
+/// whose truck list is published (<c>docs/process.puml</c>).
 /// </remarks>
 public sealed class TransitionManifestHandler(
     IManifestRepository repository,
@@ -40,23 +36,6 @@ public sealed class TransitionManifestHandler(
     : ICommandHandler<TransitionManifestCommand, TransitionManifestOutcome>
 {
     private readonly FreedomMetrics _metrics = metrics ?? FreedomMetrics.Unobserved;
-
-    /// <summary>
-    /// The states that would reopen a manifest for editing.
-    /// </summary>
-    /// <remarks>
-    /// §5.2 forbids <em>edits</em> to a manifest whose GMR exists, not progress. Preparing,
-    /// Ready, InTransit, Delivered, Lost and Returned all report what is happening to a load
-    /// HMRC has already been told about — none of them contradicts the submission, and blocking
-    /// them would strand every approved manifest in Confirmed for ever.
-    ///
-    /// Going back to Proposed or Rejected is different: it would put the manifest back in front
-    /// of an approver as something that can still be changed. The state machine happens to make
-    /// that unreachable from Confirmed today, so this is a guard against a future edge rather
-    /// than a path anything takes now — which is exactly why it is worth stating.
-    /// </remarks>
-    private static readonly ManifestStatus[] ReopensForEditing =
-        [ManifestStatus.Proposed, ManifestStatus.Rejected];
 
     public async Task<TransitionManifestOutcome> HandleAsync(
         TransitionManifestCommand command, CancellationToken cancellationToken)
@@ -77,12 +56,7 @@ public sealed class TransitionManifestHandler(
             return TransitionManifestOutcome.NotFound;
         }
 
-        if (manifest.Frozen && ReopensForEditing.Contains(command.To))
-        {
-            return TransitionManifestOutcome.Frozen;
-        }
-
-        if (!ManifestTransitions.CanTransition(manifest.Status, command.To))
+        if (!ManifestTransitions.CanBeRequested(manifest.Status, command.To))
         {
             return TransitionManifestOutcome.IllegalTransition;
         }
@@ -119,8 +93,7 @@ public sealed class TransitionManifestHandler(
 }
 
 /// <summary>
-/// Approve a manifest: confirm it and freeze it. Approval is the Administrator's sign-off of the load
-/// and nothing more (ADR 0004, ADR 0006).
+/// Approve a manifest. Approval is the Administrator's sign-off of the load and nothing more (ADR 0004, ADR 0006).
 /// </summary>
 /// <remarks>
 /// It no longer hands any paperwork off. The GMR and the French envelope are filed afterwards, as
@@ -143,7 +116,7 @@ public sealed class ApproveManifestHandler(
         var manifest = await repository.GetByIdAsync(command.Id, cancellationToken);
         var outcome = await Approve(manifest, command, cancellationToken);
 
-        _metrics.ManifestTransition(manifest?.Status, ManifestStatus.Confirmed, outcome);
+        _metrics.ManifestTransition(manifest?.Status, ManifestStatus.Approved, outcome);
 
         return outcome;
     }
@@ -156,21 +129,15 @@ public sealed class ApproveManifestHandler(
             return TransitionManifestOutcome.NotFound;
         }
 
-        if (manifest.Frozen)
-        {
-            return TransitionManifestOutcome.Frozen;
-        }
-
-        if (!ManifestTransitions.CanTransition(manifest.Status, ManifestStatus.Confirmed))
+        if (!ManifestTransitions.CanBeRequested(manifest.Status, ManifestStatus.Approved))
         {
             return TransitionManifestOutcome.IllegalTransition;
         }
 
-        // Status and the freeze stamp in one statement, so a manifest that is Confirmed but editable
-        // never exists (§5.2). It remains the freeze signal until plan 15.
-        return await repository.ConfirmAndFreezeAsync(command.Id, manifest.Status, cancellationToken) is null
-            ? TransitionManifestOutcome.IllegalTransition
-            : TransitionManifestOutcome.Transitioned;
+        // Conditional on the manifest still being Proposed, so two approvers resolve to one approval.
+        return await repository.ApproveAsync(command.Id, cancellationToken)
+            ? TransitionManifestOutcome.Transitioned
+            : TransitionManifestOutcome.IllegalTransition;
     }
 }
 
@@ -208,7 +175,7 @@ public sealed class RequestManifestDocumentHandler(
         }
 
         // The document describes a signed-off load; before approval the load can still change.
-        if (!manifest.Frozen)
+        if (!manifest.Approved)
         {
             return RequestManifestDocumentOutcome.NotApproved;
         }

@@ -121,14 +121,3 @@ public sealed class GetManifestWeightHandler(IManifestRepository repository, ICo
             && boxDimensions[2] <= cargoDimensions[2];
     }
 }
-
-public static class ManifestLoadExtensions
-{
-    /// <summary>
-    /// Whether the vehicle's manifest has had its Goods Movement Reference created, which still
-    /// freezes the load until plan 15 moves sign-off off that stamp.
-    /// </summary>
-    public static async Task<bool> IsLoadFrozenAsync(
-        this IManifestRepository manifests, int convoyId, string vin, CancellationToken cancellationToken) =>
-        await manifests.GetForVehicleAsync(convoyId, vin, cancellationToken) is { Frozen: true };
-}

@@ -4,31 +4,22 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Tests.Unit.Domain;
 
 /// <summary>
-/// The manifest state machine from <c>docs/manifest-status.puml</c>, which
-/// <c>docs/recommendations.md</c> §5.3 names as the authoritative design.
+/// The load sign-off from <c>docs/manifest-status.puml</c>: Proposed, Approved or Rejected (ADR 0004).
 /// </summary>
 /// <remarks>
-/// Worth pinning edge by edge rather than trusting the table it guards. The status model decides
-/// where GMR submission is triggered from, and a manifest that can slide backwards past
-/// <c>Confirmed</c> is a manifest that can change after HMRC has been told what is in the vehicle
-/// — the one thing §5.2 rules out.
+/// Worth pinning edge by edge rather than trusting the table it guards. The one edge that goes backwards,
+/// Approved to Proposed, is how a change to the load sends the sign-off back for re-approval (X3), and it must
+/// never be one a person can ask for.
 /// </remarks>
 public class ManifestTransitionsTests
 {
     /// <summary>Every edge drawn in docs/manifest-status.puml, transcribed by hand.</summary>
     private static readonly (ManifestStatus From, ManifestStatus To)[] Diagram =
     [
-        (ManifestStatus.Created, ManifestStatus.Proposed),
-        (ManifestStatus.Created, ManifestStatus.Rejected),
+        (ManifestStatus.Proposed, ManifestStatus.Approved),
         (ManifestStatus.Proposed, ManifestStatus.Rejected),
         (ManifestStatus.Rejected, ManifestStatus.Proposed),
-        (ManifestStatus.Proposed, ManifestStatus.Confirmed),
-        (ManifestStatus.Confirmed, ManifestStatus.Preparing),
-        (ManifestStatus.Preparing, ManifestStatus.Ready),
-        (ManifestStatus.Ready, ManifestStatus.InTransit),
-        (ManifestStatus.InTransit, ManifestStatus.Delivered),
-        (ManifestStatus.InTransit, ManifestStatus.Lost),
-        (ManifestStatus.Delivered, ManifestStatus.Returned),
+        (ManifestStatus.Approved, ManifestStatus.Proposed),
     ];
 
     public static TheoryData<ManifestStatus, ManifestStatus> LegalEdges
@@ -66,42 +57,36 @@ public class ManifestTransitionsTests
     }
 
     [Fact]
-    public void Refuses_to_reopen_a_confirmed_manifest()
+    public void Refuses_to_approve_a_rejected_manifest_without_proposing_it_again()
     {
-        // Confirmation is what releases the manifest to GMR submission and box preparation.
-        // The diagram draws no way back, and adding one would let a manifest change under HMRC.
-        ManifestTransitions.CanTransition(ManifestStatus.Confirmed, ManifestStatus.Proposed).Should().BeFalse();
-        ManifestTransitions.CanTransition(ManifestStatus.Preparing, ManifestStatus.Confirmed).Should().BeFalse();
+        ManifestTransitions.CanTransition(ManifestStatus.Rejected, ManifestStatus.Approved).Should().BeFalse();
     }
 
     [Fact]
-    public void Refuses_to_lose_a_manifest_that_has_already_been_delivered()
+    public void Lets_only_a_load_change_send_an_approved_manifest_back()
     {
-        // Only a manifest in transit can be lost. Losing a delivered one would erase a
-        // confirmed delivery, which is the record the Ground Officer works from.
-        ManifestTransitions.CanTransition(ManifestStatus.Delivered, ManifestStatus.Lost).Should().BeFalse();
-    }
-
-    [Fact]
-    public void Refuses_to_skip_the_preparation_steps()
-    {
-        // Boxes are validated and loaded between Confirmed and InTransit. Skipping straight to
-        // transit would put a vehicle on a ferry with cargo nobody weighed for the border check.
-        ManifestTransitions.CanTransition(ManifestStatus.Confirmed, ManifestStatus.InTransit).Should().BeFalse();
-        ManifestTransitions.CanTransition(ManifestStatus.Proposed, ManifestStatus.Preparing).Should().BeFalse();
+        // The edge exists, because a change to the load takes it, but a person cannot ask for it.
+        ManifestTransitions.CanTransition(ManifestStatus.Approved, ManifestStatus.Proposed).Should().BeTrue();
+        ManifestTransitions.CanBeRequested(ManifestStatus.Approved, ManifestStatus.Proposed).Should().BeFalse();
     }
 
     [Theory]
-    [InlineData(ManifestStatus.Lost)]
-    [InlineData(ManifestStatus.Returned)]
-    public void Treats_lost_and_returned_as_terminal(ManifestStatus terminal) =>
-        Enum.GetValues<ManifestStatus>()
-            .Any(to => ManifestTransitions.CanTransition(terminal, to))
-            .Should().BeFalse();
+    [MemberData(nameof(LegalEdges))]
+    public void Lets_a_person_ask_for_every_edge_but_the_load_changes_own(ManifestStatus from, ManifestStatus to) =>
+        ManifestTransitions.CanBeRequested(from, to)
+            .Should().Be(!(from == ManifestStatus.Approved && to == ManifestStatus.Proposed));
 
     [Fact]
     public void Refuses_a_transition_to_the_state_a_manifest_is_already_in() =>
         Enum.GetValues<ManifestStatus>()
             .Any(status => ManifestTransitions.CanTransition(status, status))
             .Should().BeFalse();
+
+    [Fact]
+    public void Stores_the_three_states_as_the_numbers_the_schema_checks()
+    {
+        ((int)ManifestStatus.Proposed).Should().Be(0);
+        ((int)ManifestStatus.Approved).Should().Be(1);
+        ((int)ManifestStatus.Rejected).Should().Be(2);
+    }
 }

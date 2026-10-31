@@ -53,10 +53,7 @@ public sealed class OutcomesSteps(FreedomApiClient api, ScenarioState state, Dep
         var manifest = state.Pinned("manifest");
         await ExpectAsync(HttpMethod.Post, $"{VehiclePath}/manifest", operatorToken, $$"""{ "id": "{{manifest}}" }""", HttpStatusCode.Created);
         state.CreatedResources.Add(("manifests", manifest));
-        await ExpectAsync(HttpMethod.Post, $"/manifests/{manifest}/propose", operatorToken, null, HttpStatusCode.NoContent);
         await ExpectAsync(HttpMethod.Post, $"/manifests/{manifest}/approve", admin, null, HttpStatusCode.NoContent);
-        await ExpectAsync(HttpMethod.Post, $"/manifests/{manifest}/prepare", operatorToken, null, HttpStatusCode.NoContent);
-        await ExpectAsync(HttpMethod.Post, $"/manifests/{manifest}/ready", operatorToken, null, HttpStatusCode.NoContent);
 
         await departure.WhenIMakeTheConvoyReadyToDepart();
         await ExpectAsync(HttpMethod.Post, $"{ConvoyPath}/depart", operatorToken, null, HttpStatusCode.OK);

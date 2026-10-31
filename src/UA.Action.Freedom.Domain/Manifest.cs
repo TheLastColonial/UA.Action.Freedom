@@ -1,8 +1,8 @@
 namespace UA.Action.Freedom.Domain;
 
 /// <summary>
-/// The document pack for one <see cref="Vehicle"/> on one <see cref="Convoy"/>: its cargo, its
-/// border weight, its Goods Movement Reference and its ferry booking.
+/// The Administrator's sign-off of one <see cref="Vehicle"/>'s load on one <see cref="Convoy"/>, and the
+/// document pack that goes with it: its cargo, its border weight and its delivery notes.
 /// </summary>
 /// <remarks>
 /// A manifest is a child of the truck list — it is opened against a <see cref="ConvoyVehicle"/>,
@@ -25,7 +25,7 @@ public class Manifest
     /// <summary>
     /// Where the manifest has reached in <see cref="ManifestTransitions"/>
     /// </summary>
-    public ManifestStatus Status { get; init; } = ManifestStatus.Created;
+    public ManifestStatus Status { get; init; } = ManifestStatus.Proposed;
 
     /// <summary>
     /// The truck-list entry this manifest is the paperwork for.
@@ -47,16 +47,6 @@ public class Manifest
     /// Text block for passing additional information or comments
     /// </summary>
     public string? DeliveryNotes { get; init; }
-
-    /// <summary>
-    /// When the Goods Movement Reference was submitted to HMRC, if it has been.
-    /// </summary>
-    /// <remarks>
-    /// Once this is set the manifest is frozen: docs/recommendations.md §5.2 records the ruling
-    /// that no edit may modify a manifest after its GMR is created, because the vehicle would then
-    /// arrive at the border carrying something HMRC was not told about.
-    /// </remarks>
-    public DateTime? GmrSubmittedAt { get; init; }
 
     /// <summary>
     /// Total weight of <see cref="Vehicle"/>, Cargo etc for border checks in kilograms
@@ -103,70 +93,42 @@ public static class ManifestWeight
 public record ManifestId(string Value);
 
 /// <summary>
-/// Status of a Manifest to manage flow, as drawn in docs/manifest-status.puml.
+/// Where a manifest's load sign-off stands, as drawn in docs/manifest-status.puml (ADR 0004).
 /// </summary>
 public enum ManifestStatus
 {
-    /// <summary>Created but not populated completely.</summary>
-    Created = 0,
+    /// <summary>Waiting for an Administrator to sign the load off. Also where a load change sends an approved manifest.</summary>
+    Proposed = 0,
 
-    /// <summary>Approval has been requested.</summary>
-    Proposed = 1,
+    /// <summary>The Administrator has signed the load off.</summary>
+    Approved = 1,
 
-    /// <summary>Approval was refused. Recoverable — it may be proposed again.</summary>
+    /// <summary>Sign-off was refused. Recoverable: it may be proposed again.</summary>
     Rejected = 2,
-
-    /// <summary>Approved. Paperwork generation and box preparation follow.</summary>
-    Confirmed = 3,
-
-    /// <summary>Volunteers are preparing the boxes for transit.</summary>
-    Preparing = 4,
-
-    /// <summary>Ready for collection.</summary>
-    Ready = 5,
-
-    /// <summary>On a convoy.</summary>
-    InTransit = 6,
-
-    /// <summary>Arrived at the ultimate destination.</summary>
-    Delivered = 7,
-
-    /// <summary>Lost during transit.</summary>
-    Lost = 8,
-
-    /// <summary>Returned by the destination.</summary>
-    Returned = 9,
 }
 
 /// <summary>
-/// The edges of the manifest state machine.
+/// The edges of the sign-off, as data so the diagram and the code can be read against each other.
 /// </summary>
 /// <remarks>
-/// Kept as data rather than scattered <c>if</c>s in the handlers, so that the diagram and the code
-/// can be read against each other. The happy path is linear and the only way backwards is
-/// <see cref="ManifestStatus.Rejected"/> to <see cref="ManifestStatus.Proposed"/> — nothing may
-/// reopen a manifest once it is confirmed, because confirmation is what releases it to GMR
-/// submission (docs/recommendations.md §5.2).
+/// <see cref="ManifestStatus.Approved"/> to <see cref="ManifestStatus.Proposed"/> is the one edge nobody takes
+/// by hand: it is how any later change to the load sends the sign-off back for re-approval (X3), and it is
+/// written by the load change itself, in the same transaction, never by a <c>propose</c> request.
 /// </remarks>
 public static class ManifestTransitions
 {
     private static readonly HashSet<(ManifestStatus From, ManifestStatus To)> Allowed =
     [
-        (ManifestStatus.Created, ManifestStatus.Proposed),
-        (ManifestStatus.Created, ManifestStatus.Rejected),
+        (ManifestStatus.Proposed, ManifestStatus.Approved),
         (ManifestStatus.Proposed, ManifestStatus.Rejected),
         (ManifestStatus.Rejected, ManifestStatus.Proposed),
-        (ManifestStatus.Proposed, ManifestStatus.Confirmed),
-        (ManifestStatus.Confirmed, ManifestStatus.Preparing),
-        (ManifestStatus.Preparing, ManifestStatus.Ready),
-        (ManifestStatus.Ready, ManifestStatus.InTransit),
-        (ManifestStatus.InTransit, ManifestStatus.Delivered),
-        (ManifestStatus.InTransit, ManifestStatus.Lost),
-        (ManifestStatus.Delivered, ManifestStatus.Returned),
+        (ManifestStatus.Approved, ManifestStatus.Proposed),
     ];
 
-    /// <summary>
-    /// Whether a manifest in <paramref name="from"/> may move to <paramref name="to"/>.
-    /// </summary>
+    /// <summary>Whether a manifest in <paramref name="from"/> may move to <paramref name="to"/>.</summary>
     public static bool CanTransition(ManifestStatus from, ManifestStatus to) => Allowed.Contains((from, to));
+
+    /// <summary>Whether a person may ask for the move: every edge but the load change's own.</summary>
+    public static bool CanBeRequested(ManifestStatus from, ManifestStatus to) =>
+        CanTransition(from, to) && from != ManifestStatus.Approved;
 }
