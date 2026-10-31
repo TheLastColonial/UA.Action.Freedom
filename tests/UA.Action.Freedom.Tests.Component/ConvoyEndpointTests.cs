@@ -897,10 +897,11 @@ public class ConvoyEndpointTests
     [Fact]
     public async Task A_dispatcher_marks_a_convoy_arrived_and_its_delivered_vehicles_are_handed_over()
     {
-        const string returnedVin = "WVWZZZ1JZXW000009";
+        const string withdrawnVin = "WVWZZZ1JZXW000009";
         var repository = new InMemoryConvoyRepository(AConvoy(published: true))
-            .WithVehicle(Vin, onConvoy: Id).WithManifest(Vin, ManifestStatus.Delivered)
-            .WithVehicle(returnedVin, onConvoy: Id).WithManifest(returnedVin, ManifestStatus.Returned);
+            .WithVehicle(Vin, onConvoy: Id).WithDelivered(Vin)
+            .WithVehicle(withdrawnVin, onConvoy: Id);
+        await repository.WithdrawAsync(Id, withdrawnVin, "Broke down", DateTime.UtcNow, TestContext.Current.CancellationToken);
         await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
         using var client = api.CreateClient();
 
@@ -910,15 +911,15 @@ public class ConvoyEndpointTests
         var convoy = await client.GetFromJsonAsync<JsonElement>($"/convoys/{Id}", TestContext.Current.CancellationToken);
         convoy.GetProperty("arrived").GetBoolean().Should().BeTrue();
         repository.IsHandedOver(Vin).Should().BeTrue();
-        repository.IsHandedOver(returnedVin).Should().BeFalse();
-        repository.ConvoyOf(returnedVin).Should().BeNull();
+        repository.IsHandedOver(withdrawnVin).Should().BeFalse();
+        repository.ConvoyOf(withdrawnVin).Should().BeNull();
     }
 
     [Fact]
     public async Task A_convoy_with_a_vehicle_still_on_the_road_has_not_arrived()
     {
         var repository = new InMemoryConvoyRepository(AConvoy(published: true))
-            .WithVehicle(Vin, onConvoy: Id).WithManifest(Vin, ManifestStatus.InTransit);
+            .WithVehicle(Vin, onConvoy: Id);
         await using var api = FreedomApi.WithConvoys(repository, roles: "Dispatcher");
         using var client = api.CreateClient();
 

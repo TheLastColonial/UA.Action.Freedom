@@ -156,7 +156,6 @@ internal static class FreedomApi
 
         convoys.Ledger.Absorb(fake.Ledger);
         fake.Ledger = convoys.Ledger;
-        convoys.ManifestStatuses = fake.StatusOf;
     }
 
     /// <summary>As above, with the receivers a vehicle handover is checked against.</summary>

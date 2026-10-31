@@ -60,21 +60,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         int ConvoyId, string Vin, DateTime AddedAt, DateTime? WithdrawnAt = null, string? WithdrawnReason = null,
         Guid? HandoverReceiverRef = null, DateTime? DeliveredAt = null);
 
-    /// <summary>
-    /// The status of each vehicle's manifest on its convoy — standing in for the join to
-    /// <c>dbo.Manifest</c> that arrival makes.
-    /// </summary>
+    /// <summary>The vehicles that have a manifest on their convoy: a convoy one names cannot be deleted.</summary>
     private readonly Dictionary<string, ManifestStatus> manifestStatus = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// The manifest fake in play, when there is one: arrival joins to <c>dbo.Manifest</c> in the SQL, so a manifest moved by
-    /// the manifest fake (a departure, a vehicle delivered) is what arrival must see. A status set with
-    /// <see cref="WithManifest"/> wins, as it always has.
-    /// </summary>
-    internal Func<int, string, ManifestStatus?>? ManifestStatuses { get; set; }
-
-    private ManifestStatus? ManifestStatusOf(int convoyId, string vin) =>
-        manifestStatus.TryGetValue(vin, out var set) ? set : ManifestStatuses?.Invoke(convoyId, vin);
 
     private readonly Dictionary<int, ConvoyReadModel> convoys = [];
     private readonly Dictionary<int, List<RouteStopReadModel>> routes = [];
@@ -167,6 +154,14 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     public InMemoryConvoyRepository WithManifest(string vin, ManifestStatus status)
     {
         manifestStatus[vin] = status;
+        return this;
+    }
+
+    /// <summary>The vehicle's delivery, as plan 14's deliver action stamps it on its truck-list entry.</summary>
+    public InMemoryConvoyRepository WithDelivered(string vin)
+    {
+        var index = truckList.FindIndex(entry => Same(entry.Vin, vin) && entry.WithdrawnAt is null);
+        truckList[index] = truckList[index] with { DeliveredAt = DateTime.UtcNow };
         return this;
     }
 
@@ -439,13 +434,13 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         convoys[convoyId] = convoy with { ArrivedAt = arrivedAt };
         changes.Stamp(convoyId);
 
-        // Delivered and Lost vehicles stay in Ukraine. Nothing is released: a vehicle that was not
+        // Delivered vehicles stay in Ukraine. Nothing is released: a vehicle that was not
         // handed over is free for the next convoy because this one has arrived, which is what
         // ConvoyOf and AddAsync ask. Withdrawn vehicles are skipped — whatever became of them did
         // not become of them here.
         foreach (var vin in TravellingOn(convoyId))
         {
-            if (ManifestStatusOf(convoyId, vin) is ManifestStatus.Delivered or ManifestStatus.Lost)
+            if (IsDelivered(convoyId, vin))
             {
                 vehicles[vin] = vehicles[vin] with { HandedOver = true };
             }
@@ -457,10 +452,12 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
     public Task<IReadOnlyList<string>> ListVehiclesStillTravellingAsync(int convoyId, CancellationToken cancellationToken) =>
         Task.FromResult(StillTravelling(convoyId));
 
+    private bool IsDelivered(int convoyId, string vin) =>
+        truckList.Any(entry => entry.ConvoyId == convoyId && Same(entry.Vin, vin) && entry.DeliveredAt is not null);
+
     private IReadOnlyList<string> StillTravelling(int convoyId) =>
         TravellingOn(convoyId)
-            .Where(vin => ManifestStatusOf(convoyId, vin)
-                is not (ManifestStatus.Delivered or ManifestStatus.Lost or ManifestStatus.Returned))
+            .Where(vin => !IsDelivered(convoyId, vin))
             .Order(StringComparer.Ordinal)
             .ToList();
 

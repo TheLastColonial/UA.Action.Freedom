@@ -23,10 +23,6 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory, ICh
 
     private static readonly string From = $"dbo.PersonDetail AS d {ChangeStamp.ReadJoin("d")}";
 
-    /// <summary>The manifest states that say what became of the load: its team is history.</summary>
-    private static readonly string FinishedStatuses =
-        $"({(int)ManifestStatus.Delivered}, {(int)ManifestStatus.Lost}, {(int)ManifestStatus.Returned})";
-
     public async Task<PersonReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.Create();
@@ -124,12 +120,12 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory, ICh
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         // Refused while the person is still needed: crewing a vehicle on a convoy that has not
-        // arrived, or on one whose manifest is not yet delivered, lost or returned. Both used to
+        // arrived, or on one that is neither delivered nor withdrawn, or whose boxes have not all ended. Both used to
         // be asked separately, of two unconnected crew tables; there is one crew record now, so
         // the second clause narrows the first rather than duplicating it. The UPDLOCK on their
         // detail row stops an erasure racing another erasure of the same person.
         var status = await connection.QuerySingleAsync<(bool Found, bool Active)>(new CommandDefinition(
-            $"""
+            """
              SELECT
                  CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.PersonDetail WITH (UPDLOCK) WHERE PersonId = @id)
                       THEN 1 ELSE 0 END AS bit) AS Found,
@@ -139,8 +135,15 @@ public sealed class PersonRepository(IDbConnectionFactory connectionFactory, ICh
                           WHERE crew.PersonId = @id AND c.ArrivedAt IS NULL)
                       OR EXISTS (
                           SELECT 1 FROM dbo.ConvoyVehicleCrew AS crew
-                          JOIN dbo.Manifest AS m ON m.ConvoyId = crew.ConvoyId AND m.Vin = crew.Vin
-                          WHERE crew.PersonId = @id AND m.Status NOT IN {FinishedStatuses})
+                          JOIN dbo.ConvoyVehicle AS cv ON cv.ConvoyId = crew.ConvoyId AND cv.Vin = crew.Vin
+                          WHERE crew.PersonId = @id AND cv.WithdrawnAt IS NULL
+                            AND (cv.DeliveredAt IS NULL
+                                 OR EXISTS (
+                                     SELECT 1 FROM dbo.ConvoyVehicleBoxAllocation AS a
+                                     JOIN dbo.Box AS b ON b.Id = a.BoxId
+                                     WHERE a.ConvoyId = cv.ConvoyId AND a.Vin = cv.Vin AND b.VoidedAt IS NULL
+                                       AND NOT EXISTS (SELECT 1 FROM dbo.BoxOutcome AS o
+                                                       WHERE o.BoxId = a.BoxId AND o.ConvoyId = a.ConvoyId AND o.IsCurrent = 1))))
                       THEN 1 ELSE 0 END AS bit) AS Active
              """,
             new { id },
