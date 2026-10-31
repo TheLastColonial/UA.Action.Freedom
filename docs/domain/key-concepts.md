@@ -168,6 +168,11 @@ overview. Which requirements **block departure** and which only **warn** is set 
 A [withdrawn](#withdrawal) vehicle is skipped entirely rather than reported as unready: it has no crew to find and no
 insurance to renew.
 
+**Departure is a convoy action, not a manifest one.** `POST /convoys/{id}/depart` is refused with every blocking
+requirement still outstanding and succeeds once there are none ([ADR 0008](../adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md),
+[O36](decisions.md#o36)). Nothing overrides it. Insurance is judged on one clock, the later of now and the convoy start,
+so what the Dispatcher saw on the overview is what departure enforces.
+
 #### Arrival
 
 A convoy **arrives** when the Dispatcher marks it so (`POST /convoys/{id}/arrive`), which is allowed only once its

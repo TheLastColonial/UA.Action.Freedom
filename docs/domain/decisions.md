@@ -259,7 +259,6 @@ per-vehicle anchor.
 | Area | Before | After |
 |---|---|---|
 | `Manifest` | cargo, GMR, ELO, ENS, ferry and status | load sign-off only. Documents are generated. |
-| Readiness | advisory: route, crew, insurance | requirement checklist, with blocking requirements |
 | Delivery | manifest status | per box, rolled up per vehicle |
 | Convoy Leader | not modelled | one per convoy, with a scoped checklist page |
 | Box outcomes | delivered, lost or returned | delivered, accepted, seized, returned to a hub, or undeliverable ([O2](#o2), [O5](#o5), [O9](#o9)) |

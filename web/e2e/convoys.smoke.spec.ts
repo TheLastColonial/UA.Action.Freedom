@@ -33,6 +33,30 @@ test('@smoke operator plans a convoy, adds a route stop and publishes the truck 
   await expect(page.getByText('Truck list published')).toBeVisible();
 });
 
+test('@smoke a convoy that is not ready is refused departure, and the refusal says why', async ({
+  page,
+}) => {
+  await signIn(page, 'operator');
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+
+  await nav.getByRole('link', { name: 'Convoys' }).click();
+  await page.getByRole('link', { name: 'New convoy' }).click();
+  await page.getByLabel('Departs').fill('2026-06-01T08:00');
+  await page.getByLabel('Expected arrival').fill('2026-06-06T20:00');
+  await page.getByRole('button', { name: 'Create convoy' }).click();
+  await expect(page.getByRole('heading', { name: /Convoy #/ })).toBeVisible();
+
+  // A new convoy has no route, no leader and no vehicles, and nothing overrides that.
+  await expect(page.getByRole('heading', { name: 'Not ready yet' })).toBeVisible();
+  await page.getByRole('button', { name: 'Depart' }).click();
+
+  const refusal = page.getByRole('alert').filter({ hasText: 'cannot depart' });
+  await expect(refusal).toBeVisible();
+  await expect(refusal.getByText('No route planned')).toBeVisible();
+  await expect(refusal.getByText('No Convoy Leader assigned')).toBeVisible();
+  await expect(page.getByText('This convoy has departed.')).toHaveCount(0);
+});
+
 async function addVolunteer(page: Page, first: string, last: string, drives: boolean) {
   const nav = page.getByRole('navigation', { name: 'Sections' });
   await nav.getByRole('link', { name: 'Volunteers' }).click();
