@@ -32,7 +32,7 @@ async function call(
   const response = await fetch(`${apiUrl}${path}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? null : JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(`${method} ${path} -> ${String(response.status)} ${await response.text()}`);
