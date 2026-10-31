@@ -105,6 +105,21 @@ public sealed class ApiSteps(FreedomApiClient api, ScenarioState state)
         actual.Should().Be(expected);
     }
 
+    /// <summary>
+    /// The volunteer a seed login is linked to is whoever linked it first (the dev seed or the test hooks), so the name is read
+    /// back from <c>GET /me</c> rather than assumed.
+    /// </summary>
+    [Then("the response body field \"(.*)\" is the name of the \"(.*)\" login's volunteer")]
+    public async Task ThenTheResponseBodyFieldIsTheNameOfTheLoginsVolunteer(string field, string login)
+    {
+        var body = api.LastBody;
+        await api.SendAsync(HttpMethod.Get, "/me", await api.TokenForAsync(login), null);
+        var name = JsonDocument.Parse(api.LastBody).RootElement.GetProperty("displayName").GetString();
+
+        name.Should().NotBeNullOrWhiteSpace("the {0} login must be linked to a volunteer", login);
+        JsonDocument.Parse(body).RootElement.GetProperty(field).GetString().Should().Be(name);
+    }
+
     [Then("the response body names \"(.*)\" as invalid")]
     public void ThenTheResponseBodyNamesAsInvalid(string field) =>
         JsonDocument.Parse(api.LastBody).RootElement

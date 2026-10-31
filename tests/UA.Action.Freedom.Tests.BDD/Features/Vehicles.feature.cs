@@ -473,7 +473,8 @@ await this.FeatureBackgroundAsync();
     await testRunner.ThenAsync("the response status is 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 74
-    await testRunner.AndAsync("the response body field \"lastChangedByName\" is \"BDD operator\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.AndAsync("the response body field \"lastChangedByName\" is the name of the \"operator\" login\'s" +
+                        " volunteer", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

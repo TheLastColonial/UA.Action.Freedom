@@ -42,6 +42,14 @@ async function call(
 
 const idFrom = (response: Response) => response.headers.get('Location')?.split('/').pop() ?? '';
 
+/** The display name of the volunteer a login is linked to, as the API reports it (the dev seed and the e2e link may differ). */
+export async function volunteerNameOf(login: Login): Promise<string> {
+  const me = (await (await call('/me', await tokenFor(login), 'GET')).json()) as {
+    displayName: string | null;
+  };
+  return me.displayName ?? '';
+}
+
 /** The volunteer a login is linked to, linking one first if nobody has (Keycloak makes the subjects at import). */
 async function volunteerOf(login: Login, adminToken: string): Promise<string> {
   const me = (await (await call('/me', await tokenFor(login), 'GET')).json()) as {
