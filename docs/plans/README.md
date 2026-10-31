@@ -26,15 +26,15 @@ disagree, the domain document wins: raise it in the PR rather than building arou
 | 06 | [Donors and donations](06-donors-donations.md) | `feat/donors-donations` | [ADR 0013](../adr/0013-donors-are-a-split-identity.md) | 05 | – | Done |
 | 07 | [Box allocation and ferry booking](07-box-allocation-ferry.md) | `feat/box-allocation-ferry` | [ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md) (cargo), [P1](../domain/decisions.md#p1) | 03 | – | Done |
 | 08 | [Declarations and filing mode](08-declarations-filing.md) | `feat/declarations-filing` | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (entity), [ADR 0006](../adr/0006-filing-is-manual-by-default.md) | 04, 05, 07 | – | Done |
-| 09 | [Declaration staleness](09-declaration-staleness.md) | `feat/declaration-staleness` | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (snapshot) | 08 | – | In review |
-| 10 | [Route points and the Convoy Leader](10-route-points-convoy-leader.md) | `feat/route-points-convoy-leader` | [P15](../domain/decisions.md#p15), [D17](../domain/decisions.md#d17), [P14](../domain/decisions.md#p14) | 01, 03 | – | In review |
-| 11 | [Accommodation](11-accommodation.md) | `feat/accommodation` | [P2](../domain/decisions.md#p2), [P8](../domain/decisions.md#p8), [P13](../domain/decisions.md#p13), [P16](../domain/decisions.md#p16), [O4](../domain/decisions.md#o4), [O30](../domain/decisions.md#o30) | 10 | – | In review |
-| 12 | [Budget, costs and equipment](12-budget-equipment.md) | `feat/budget-equipment` | [O12](../domain/decisions.md#o12), [O13](../domain/decisions.md#o13), [O37](../domain/decisions.md#o37) | 03, 05 | – | In review |
+| 09 | [Declaration staleness](09-declaration-staleness.md) | `feat/declaration-staleness` | [ADR 0005](../adr/0005-declarations-are-per-vehicle-with-derived-staleness.md) (snapshot) | 08 | – | Done |
+| 10 | [Route points and the Convoy Leader](10-route-points-convoy-leader.md) | `feat/route-points-convoy-leader` | [P15](../domain/decisions.md#p15), [D17](../domain/decisions.md#d17), [P14](../domain/decisions.md#p14) | 01, 03 | – | Done |
+| 11 | [Accommodation](11-accommodation.md) | `feat/accommodation` | [P2](../domain/decisions.md#p2), [P8](../domain/decisions.md#p8), [P13](../domain/decisions.md#p13), [P16](../domain/decisions.md#p16), [O4](../domain/decisions.md#o4), [O30](../domain/decisions.md#o30) | 10 | – | Done |
+| 12 | [Budget, costs and equipment](12-budget-equipment.md) | `feat/budget-equipment` | [O12](../domain/decisions.md#o12), [O13](../domain/decisions.md#o13), [O37](../domain/decisions.md#o37) | 03, 05 | – | Done |
 | 13 | [Readiness and departure](13-readiness-departure.md) | `feat/readiness-departure` | [ADR 0008](../adr/0008-readiness-is-computed-and-blocking-rules-are-not-overridden.md), [O36](../domain/decisions.md#o36) | 01, 04, 07, 09, 11, 12 | – | Not started |
 | 14 | [Outcomes and closing](14-outcomes-closing.md) | `feat/outcomes-closing` | [ADR 0015](../adr/0015-box-and-vehicle-outcomes-and-convoy-closing.md) | 08, 12, 13 | – | Not started |
 | 15 | [Manifest sign-off lifecycle](15-manifest-signoff-lifecycle.md) | `feat/manifest-signoff-lifecycle` | [ADR 0004](../adr/0004-the-manifest-is-the-load-sign-off.md) (lifecycle), [X3](../domain/decisions.md#x3) | 13, 14 | – | Not started |
-| 16 | [Box replacement and bilingual label](16-box-replacement-label.md) | `feat/box-replacement-label` | [ADR 0011](../adr/0011-attested-boxes-are-replaced-not-edited.md) | 02, 05, 09 | **Spike + label review** | In review |
-| 17 | [Scoped permissions](17-scoped-permissions.md) | `feat/scoped-permissions` | [ADR 0010](../adr/0010-resource-scoped-permissions.md) | 02, 10 | **Mechanism sign-off** | In review |
+| 16 | [Box replacement and bilingual label](16-box-replacement-label.md) | `feat/box-replacement-label` | [ADR 0011](../adr/0011-attested-boxes-are-replaced-not-edited.md) | 02, 05, 09 | **Spike + label review** | Done |
+| 17 | [Scoped permissions](17-scoped-permissions.md) | `feat/scoped-permissions` | [ADR 0010](../adr/0010-resource-scoped-permissions.md) | 02, 10 | **Mechanism sign-off** | Done |
 | 18 | [Convoy Leader checklist and progress](18-leader-checklist-progress.md) | `feat/leader-checklist-progress` | [ADR 0016](../adr/0016-progress-is-reported-not-tracked.md), [X2](../domain/decisions.md#x2) | 09, 11, 12, 14, 17 | – | Not started |
 | 19 | [Convoy Leader address access](19-leader-address-access.md) | `feat/leader-address-access` | [ADR 0009](../adr/0009-convoy-leader-reads-destination-addresses.md) | 04, 18 | **Security review** | Not started |
 
@@ -84,8 +84,7 @@ flowchart LR
     P04 --> P19
 ```
 
-**Critical path (remaining):** 10 → 11 → 13 → 14 → 18 → 19. Plan 09 is not on it, but 13 needs it. Plans 12, 16 and 17
-have slack.
+**Critical path (remaining):** 13 → 14 → 18 → 19, with 15 after 14. Plans 09 to 12, 16 and 17 have merged.
 
 **Every merged plan leaves the system working.** While plans 08 to 14 are in flight, some legacy manifest behaviour
 sits alongside the new facts. Each plan has a **Retires and transitional** section that says what it removes and
@@ -93,7 +92,7 @@ what it deliberately leaves for a later plan.
 
 ## Running plans in parallel
 
-Plans 01 to 08 have merged. Each remaining plan can start the moment its dependencies have merged, so the remaining work
+Plans 01 to 12, 16 and 17 have merged; 13, 14, 15, 18 and 19 remain. Each remaining plan can start the moment its dependencies have merged, so the remaining work
 runs in **waves**. Everything in a wave is independent of the rest of the wave. Each plan runs in its own worktree
 and stack ([`docs/parallel-agents.md`](../parallel-agents.md), skill `agent-worktree`).
 
