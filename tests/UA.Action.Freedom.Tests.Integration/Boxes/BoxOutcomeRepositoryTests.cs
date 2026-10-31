@@ -170,4 +170,43 @@ public class BoxOutcomeRepositoryTests
             await CleanUpAsync(world);
         }
     }
+
+    [Fact]
+    public async Task Accepting_a_goods_list_accepts_only_that_receivers_delivered_boxes_in_one_go()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var world = await ArrangeAsync(cancellationToken);
+        var boxes = new BoxRepository(ConnectionFactory(), Unattributed);
+        var otherBoxId = await boxes.AddAsync(new BoxReadModel(0, 8, null, null, null, null, null, null, null), cancellationToken);
+        var receiverA = Guid.NewGuid();
+        var receiverB = Guid.NewGuid();
+
+        try
+        {
+            await world.TruckList.AllocateBoxAsync(world.ConvoyId, world.Vin, otherBoxId, cancellationToken);
+            await ExecuteAsync(
+                "INSERT INTO dbo.Receiver (ReceiverRef, Organisation, Region) VALUES (@a, 'A', 'Lviv'), (@b, 'B', 'Kyiv')",
+                ("@a", receiverA), ("@b", receiverB));
+            await ExecuteAsync("UPDATE dbo.Box SET ReceiverRef = @r WHERE Id = @id", ("@r", receiverA), ("@id", world.BoxId));
+            await ExecuteAsync("UPDATE dbo.Box SET ReceiverRef = @r WHERE Id = @id", ("@r", receiverB), ("@id", otherBoxId));
+            await world.Outcomes.RecordAsync(Record(world, null, BoxOutcome.Delivered), cancellationToken);
+            await world.Outcomes.RecordAsync(
+                new RecordBoxOutcome(world.ConvoyId, world.Vin, otherBoxId, null, BoxOutcome.Delivered, null, null), cancellationToken);
+
+            var accepted = await world.Outcomes.AcceptGoodsListAsync(world.ConvoyId, world.Vin, receiverA, cancellationToken);
+
+            accepted.Should().Be(1);
+            (await world.Outcomes.GetCurrentAsync(world.ConvoyId, world.BoxId, cancellationToken))!.Outcome.Should().Be(BoxOutcome.Accepted);
+            (await world.Outcomes.GetCurrentAsync(world.ConvoyId, otherBoxId, cancellationToken))!.Outcome.Should().Be(BoxOutcome.Delivered);
+            (await world.Outcomes.AcceptGoodsListAsync(world.ConvoyId, world.Vin, receiverA, cancellationToken))
+                .Should().Be(0, "accepting again finds nothing delivered");
+        }
+        finally
+        {
+            await ExecuteAsync("DELETE FROM dbo.BoxOutcome WHERE ConvoyId = @c", ("@c", world.ConvoyId));
+            await ExecuteAsync("DELETE FROM dbo.Box WHERE Id = @id", ("@id", otherBoxId));
+            await CleanUpAsync(world);
+            await ExecuteAsync("DELETE FROM dbo.Receiver WHERE ReceiverRef IN (@a, @b)", ("@a", receiverA), ("@b", receiverB));
+        }
+    }
 }

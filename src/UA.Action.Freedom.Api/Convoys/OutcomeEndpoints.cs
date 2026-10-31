@@ -74,6 +74,35 @@ public static class OutcomeEndpoints
         .AddEndpointFilter<ValidationFilter<RecordBoxOutcomeRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        // Acceptance is recorded once per Ukrainian goods list (O24); every delivered box on it becomes accepted.
+        convoys.MapPost("/{id:int}/vehicles/{vin}/declarations/goods-list/{receiverRef:guid}/accepted", async (
+            int id,
+            string vin,
+            Guid receiverRef,
+            ICommandHandler<AcceptGoodsListCommand, AcceptGoodsListResult> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new AcceptGoodsListCommand(id, vin, receiverRef), cancellationToken);
+
+            return result.Outcome switch
+            {
+                AcceptGoodsListOutcome.Accepted => Results.Ok(new { boxesAccepted = result.BoxesAccepted }),
+                AcceptGoodsListOutcome.ConvoyNotFound => Results.NotFound(),
+                AcceptGoodsListOutcome.VehicleNotOnConvoy => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+                AcceptGoodsListOutcome.ConvoyNotDeparted => Results.Problem(
+                    detail: "This convoy has not departed, so nothing has been delivered yet.",
+                    type: "convoy-not-departed",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.Problem(
+                    detail: "No box for that Receiver is waiting to be accepted on this vehicle.",
+                    type: "goods-list-nothing-to-accept",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
         return app;
     }
 }

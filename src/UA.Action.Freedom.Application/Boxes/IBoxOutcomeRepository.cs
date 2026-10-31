@@ -50,4 +50,11 @@ public interface IBoxOutcomeRepository
     /// also takes the box off its vehicle and puts it at the hub, so it can be allocated again.
     /// </summary>
     Task<RecordBoxOutcomeResult> RecordAsync(RecordBoxOutcome outcome, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Accepts, in one transaction, every box of this Receiver that is currently <see cref="BoxOutcome.Delivered"/> on
+    /// this vehicle (O9, O24). Returns how many were accepted; boxes with any other outcome, or for another Receiver,
+    /// are untouched.
+    /// </summary>
+    Task<int> AcceptGoodsListAsync(int convoyId, string vin, Guid receiverRef, CancellationToken cancellationToken);
 }

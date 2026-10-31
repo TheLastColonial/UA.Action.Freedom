@@ -15,6 +15,27 @@ internal sealed class InMemoryBoxOutcomeRepository(BoxAllocationLedger ledger, I
     public Task<IReadOnlyList<BoxOutcomeReadModel>> ListCurrentAsync(int convoyId, CancellationToken cancellationToken) =>
         Task.FromResult(ledger.CurrentOutcomes(convoyId));
 
+    public Task<int> AcceptGoodsListAsync(int convoyId, string vin, Guid receiverRef, CancellationToken cancellationToken)
+    {
+        // Mirrors the SQL: only this Receiver's delivered, un-voided boxes on this vehicle.
+        var delivered = ledger.CurrentOutcomes(convoyId)
+            .Where(o => o.Outcome == Domain.BoxOutcome.Delivered
+                        && string.Equals(o.Vin, vin, StringComparison.OrdinalIgnoreCase)
+                        && boxes?.Box(o.BoxId) is { ReceiverRef: { } receiver, Voided: false }
+                        && receiver == receiverRef)
+            .ToList();
+
+        foreach (var outcome in delivered)
+        {
+            ledger.RecordOutcome(
+                new RecordBoxOutcome(convoyId, outcome.Vin, outcome.BoxId, Domain.BoxOutcome.Delivered,
+                    Domain.BoxOutcome.Accepted, null, null),
+                DateTime.UtcNow);
+        }
+
+        return Task.FromResult(delivered.Count);
+    }
+
     public Task<RecordBoxOutcomeResult> RecordAsync(RecordBoxOutcome outcome, CancellationToken cancellationToken)
     {
         var result = ledger.RecordOutcome(outcome, DateTime.UtcNow);

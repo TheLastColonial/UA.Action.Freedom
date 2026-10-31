@@ -21,6 +21,55 @@ public enum RecordBoxOutcomeOutcome
     Conflict,
 }
 
+/// <summary>Accept a Ukrainian goods list: every delivered box for that Receiver on that vehicle becomes accepted.</summary>
+public sealed record AcceptGoodsListCommand(int ConvoyId, string Vin, Guid ReceiverRef);
+
+public enum AcceptGoodsListOutcome
+{
+    Accepted,
+    ConvoyNotFound,
+    ConvoyNotDeparted,
+    VehicleNotOnConvoy,
+    NothingToAccept,
+}
+
+public sealed record AcceptGoodsListResult(AcceptGoodsListOutcome Outcome, int BoxesAccepted = 0);
+
+public sealed class AcceptGoodsListHandler(
+    IConvoyRepository convoys,
+    IConvoyVehicleRepository truckList,
+    IBoxOutcomeRepository outcomes)
+    : ICommandHandler<AcceptGoodsListCommand, AcceptGoodsListResult>
+{
+    public async Task<AcceptGoodsListResult> HandleAsync(
+        AcceptGoodsListCommand command, CancellationToken cancellationToken)
+    {
+        var convoy = await convoys.GetByIdAsync(command.ConvoyId, cancellationToken);
+
+        if (convoy is null)
+        {
+            return new AcceptGoodsListResult(AcceptGoodsListOutcome.ConvoyNotFound);
+        }
+
+        if (!convoy.Departed)
+        {
+            return new AcceptGoodsListResult(AcceptGoodsListOutcome.ConvoyNotDeparted);
+        }
+
+        if (await truckList.GetAsync(command.ConvoyId, command.Vin, cancellationToken) is null)
+        {
+            return new AcceptGoodsListResult(AcceptGoodsListOutcome.VehicleNotOnConvoy);
+        }
+
+        var accepted = await outcomes.AcceptGoodsListAsync(
+            command.ConvoyId, command.Vin, command.ReceiverRef, cancellationToken);
+
+        return accepted == 0
+            ? new AcceptGoodsListResult(AcceptGoodsListOutcome.NothingToAccept)
+            : new AcceptGoodsListResult(AcceptGoodsListOutcome.Accepted, accepted);
+    }
+}
+
 public sealed class RecordBoxOutcomeHandler(
     IConvoyRepository convoys,
     IConvoyVehicleRepository truckList,

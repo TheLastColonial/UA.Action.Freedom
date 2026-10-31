@@ -45,6 +45,46 @@ public sealed class BoxOutcomeRepository(IDbConnectionFactory connectionFactory,
         return rows.ToList();
     }
 
+    public async Task<int> AcceptGoodsListAsync(
+        int convoyId, string vin, Guid receiverRef, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // The old rows stop being current and the accepted ones are inserted in the same transaction, so a list is
+        // accepted whole or not at all.
+        var accepted = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            """
+            DECLARE @delivered TABLE (BoxId int NOT NULL);
+
+            UPDATE o SET IsCurrent = 0
+            OUTPUT deleted.BoxId INTO @delivered
+            FROM dbo.BoxOutcome AS o
+            INNER JOIN dbo.Box AS b ON b.Id = o.BoxId
+            WHERE o.ConvoyId = @convoyId AND o.Vin = @vin AND o.IsCurrent = 1 AND o.Outcome = @delivered
+              AND b.ReceiverRef = @receiverRef AND b.VoidedAt IS NULL;
+
+            INSERT INTO dbo.BoxOutcome (BoxId, ConvoyId, Vin, Outcome, RecordedBy)
+            SELECT BoxId, @convoyId, @vin, @accepted, @changedBy FROM @delivered;
+
+            SELECT COUNT(1) FROM @delivered;
+            """,
+            attribution.With(new
+            {
+                convoyId,
+                vin = SqlKey.Of(vin),
+                receiverRef,
+                delivered = (int)BoxOutcome.Delivered,
+                accepted = (int)BoxOutcome.Accepted,
+            }),
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return accepted;
+    }
+
     public async Task<RecordBoxOutcomeResult> RecordAsync(
         RecordBoxOutcome outcome, CancellationToken cancellationToken)
     {
