@@ -332,11 +332,17 @@ internal static class FreedomApi
         IBoxRepository? boxes = null,
         IReceiverRepository? receivers = null,
         ILocationRepository? locations = null,
+        IVehicleRepository? vehicles = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
         {
             ShareCargo(convoys, manifests);
+
+            if (vehicles is not null)
+            {
+                services.Replace(vehicles);
+            }
 
             if (locations is not null)
             {
@@ -432,6 +438,7 @@ internal static class FreedomApi
                 EnsureAccommodationIsFaked(services);
                 EnsureDeclarationsAreFaked(services);
                 EnsureBoxOutcomesAreFaked(services);
+                EnsureVehiclesAreFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -592,6 +599,15 @@ internal static class FreedomApi
         if (!IsFaked<ILocationRepository>(services))
         {
             services.Replace<ILocationRepository>(new InMemoryLocationRepository());
+        }
+    }
+
+    /// <summary>The closing report reads each vehicle's value, so a test that did not supply a roster gets an empty one.</summary>
+    private static void EnsureVehiclesAreFaked(IServiceCollection services)
+    {
+        if (!IsFaked<IVehicleRepository>(services))
+        {
+            services.Replace<IVehicleRepository>(new InMemoryVehicleRepository());
         }
     }
 

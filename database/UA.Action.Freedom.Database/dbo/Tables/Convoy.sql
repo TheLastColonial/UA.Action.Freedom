@@ -10,6 +10,10 @@
     ArrivedAt is stamped by POST /convoys/{id}/arrive once every vehicle on it has a finished
     manifest. Both are write-once, absent from every UPDATE an ordinary edit issues.
 
+    ClosedAt is stamped by POST /convoys/{id}/close, which the Dispatcher presses once the convoy has arrived (O10). Closing
+    does not lock (O25): corrections stay possible and the report is regenerated, so the stamp is simply moved by the next
+    close. Absent from every UPDATE an ordinary edit issues.
+
     DepartedAt is stamped by POST /convoys/{id}/depart, the one departure action (O36), once no blocking
     requirement is outstanding. Write-once like the other two, and absent from every UPDATE an ordinary edit issues.
 
@@ -37,6 +41,7 @@ CREATE TABLE [dbo].[Convoy] (
     [TruckListPublishedAt] datetime2(0) NULL,
     [DepartedAt]           datetime2(0) NULL,
     [ArrivedAt]            datetime2(0) NULL,
+    [ClosedAt]             datetime2(0) NULL,
     [CreatedAt]            datetime2(0) NOT NULL CONSTRAINT [DF_Convoy_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]            datetime2(0) NOT NULL CONSTRAINT [DF_Convoy_UpdatedAt] DEFAULT SYSUTCDATETIME(),
     [LastChangedBy] uniqueidentifier NULL,

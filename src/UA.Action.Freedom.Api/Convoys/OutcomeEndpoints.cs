@@ -2,6 +2,7 @@ using FluentValidation;
 using UA.Action.Freedom.Api.Configuration;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Convoys;
@@ -73,6 +74,37 @@ public static class OutcomeEndpoints
         })
         .AddEndpointFilter<ValidationFilter<RecordBoxOutcomeRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
+        // Closing follows arrival and draws the report (O10). It does not lock the convoy (O25): the report is
+        // regenerated from the facts, so pressing it again after a correction simply shows the corrected account.
+        convoys.MapPost("/{id:int}/close", async (
+            int id,
+            ICommandHandler<CloseConvoyCommand, CloseConvoyResult> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new CloseConvoyCommand(id), cancellationToken);
+
+            return result.Outcome switch
+            {
+                CloseConvoyOutcome.Closed => Results.Ok(result.Report),
+                CloseConvoyOutcome.NotFound => Results.NotFound(),
+                _ => Results.Problem(
+                    detail: "A convoy can only be closed after it has arrived.",
+                    type: "convoy-not-arrived",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
+        convoys.MapGet("/{id:int}/report", async (
+            int id,
+            IQueryHandler<GetConvoyReportQuery, ConvoyReportReadModel?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var report = await handler.HandleAsync(new GetConvoyReportQuery(id), cancellationToken);
+            return report is null ? Results.NotFound() : Results.Ok(report);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
 
         // The vehicle is delivered when the Convoy Leader or the Dispatcher says so (O8); its boxes are delivered with it.
         convoys.MapPost("/{id:int}/vehicles/{vin}/delivered", async (

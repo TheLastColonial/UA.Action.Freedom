@@ -18,7 +18,7 @@ namespace UA.Action.Freedom.Data.Convoys;
 public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, IChangeAttribution attribution) : IConvoyRepository
 {
     private static readonly string Columns =
-        $"c.Id, c.Start, c.ExpectedEnd, c.TruckListPublishedAt, c.ArrivedAt, c.CrossingMode, c.VesselImo, {ChangeStamp.ReadColumns("c")}, c.DepartedAt";
+        $"c.Id, c.Start, c.ExpectedEnd, c.TruckListPublishedAt, c.ArrivedAt, c.CrossingMode, c.VesselImo, {ChangeStamp.ReadColumns("c")}, c.DepartedAt, c.ClosedAt";
 
     private static readonly string From = $"dbo.Convoy AS c {ChangeStamp.ReadJoin("c")}";
 
@@ -290,6 +290,25 @@ public sealed class ConvoyRepository(IDbConnectionFactory connectionFactory, ICh
             WHERE Id = @convoyId AND DepartedAt IS NULL AND ArrivedAt IS NULL
             """,
             attribution.With(new { convoyId, departedAt }),
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
+
+    public async Task<bool> CloseAsync(int convoyId, DateTime closedAt, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.Convoy SET
+                ClosedAt = @closedAt,
+                UpdatedAt = SYSUTCDATETIME(),
+                LastChangedBy = @changedBy,
+                LastChangedAt = SYSUTCDATETIME()
+            WHERE Id = @convoyId AND ArrivedAt IS NOT NULL
+            """,
+            attribution.With(new { convoyId, closedAt }),
             cancellationToken: cancellationToken));
 
         return affected > 0;

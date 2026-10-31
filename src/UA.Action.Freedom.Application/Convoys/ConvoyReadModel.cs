@@ -20,8 +20,12 @@ public sealed record ConvoyReadModel(
     string? VesselImo = null,
     string? LastChangedByName = null,
     DateTime? LastChangedAt = null,
-    DateTime? DepartedAt = null)
+    DateTime? DepartedAt = null,
+    DateTime? ClosedAt = null)
 {
+    /// <summary>Whether the Dispatcher has closed the convoy and drawn its report (O10). Closing does not lock it (O25).</summary>
+    public bool Closed => this.ClosedAt is not null;
+
     /// <summary>Whether the convoy has set off: the one departure action stamped it (O36).</summary>
     public bool Departed => this.DepartedAt is not null;
 

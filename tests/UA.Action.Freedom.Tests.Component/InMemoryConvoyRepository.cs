@@ -411,6 +411,19 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         return Task.FromResult(true);
     }
 
+    public Task<bool> CloseAsync(int convoyId, DateTime closedAt, CancellationToken cancellationToken)
+    {
+        // The SQL: WHERE ArrivedAt IS NOT NULL, and no other condition, because closing does not lock (O25).
+        if (!convoys.TryGetValue(convoyId, out var convoy) || !convoy.Arrived)
+        {
+            return Task.FromResult(false);
+        }
+
+        convoys[convoyId] = convoy with { ClosedAt = closedAt };
+        changes.Stamp(convoyId);
+        return Task.FromResult(true);
+    }
+
     public Task<ArriveResult> ArriveAsync(int convoyId, DateTime arrivedAt, CancellationToken cancellationToken)
     {
         if (!convoys.TryGetValue(convoyId, out var convoy) || convoy.Arrived || !convoy.TruckListPublished)
