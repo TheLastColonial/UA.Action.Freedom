@@ -134,13 +134,18 @@ test('@smoke a convoy is planned to readiness: passed vehicle, a driver, a passe
   const insurance = page.getByRole('form', { name: 'Insurance for E2E 002' });
   await insurance.getByLabel('Insurer').fill('Ukraine Aid Mutual');
   await insurance.getByLabel('Policy number').fill(`E2E-${stamp}`);
-  await insurance.getByLabel('Cover starts').fill('2026-06-30');
-  await insurance.getByLabel('Cover ends').fill('2026-07-10');
+  // Insurance is judged on the later of now and the convoy start, so cover has to include today.
+  const day = (offset: number) =>
+    new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  await insurance.getByLabel('Cover starts').fill(day(-1));
+  await insurance.getByLabel('Cover ends').fill(day(30));
   await insurance.getByRole('button', { name: 'Record insurance' }).click();
   await expect(page.getByText(/Insured with Ukraine Aid Mutual/)).toBeVisible();
 
   await page.getByRole('tab', { name: 'Overview' }).click();
-  await expect(page.getByRole('heading', { name: 'Ready to travel' })).toBeVisible();
+  // The vehicle still lacks a leader, a ferry and its declarations (departure needs them all), but insurance is met.
+  await expect(page.getByRole('heading', { name: 'Not ready yet' })).toBeVisible();
+  await expect(page.getByText('E2E 002: Insurance')).toHaveCount(0);
 
   // Standing the passenger down leaves the policy in cover.
   await page.getByRole('tab', { name: 'Crew' }).click();
@@ -155,14 +160,20 @@ test('@smoke a convoy is planned to readiness: passed vehicle, a driver, a passe
 
   await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.getByRole('heading', { name: 'Not ready yet' })).toBeVisible();
-  await expect(page.getByText('E2E 002: Insurance does not cover every driver')).toBeVisible();
+  await expect(
+    page
+      .getByRole('list', { name: 'E2E 002 requirements' })
+      .getByText(/Insurance does not cover every driver/),
+  ).toBeVisible();
 
   await page.getByRole('tab', { name: 'Crew' }).click();
   await insurance.getByRole('button', { name: 'Record insurance' }).click();
   await expect(page.getByText(/not covered/)).toBeHidden();
 
   await page.getByRole('tab', { name: 'Overview' }).click();
-  await expect(page.getByRole('heading', { name: 'Ready to travel' })).toBeVisible();
+  // The vehicle still lacks a leader, a ferry and its declarations (departure needs them all), but insurance is met.
+  await expect(page.getByRole('heading', { name: 'Not ready yet' })).toBeVisible();
+  await expect(page.getByText('E2E 002: Insurance')).toHaveCount(0);
 
   // Each vehicle has its own outbound ferry booking, made on the truck-list entry.
   await page.getByRole('tab', { name: 'Cargo and ferry' }).click();
