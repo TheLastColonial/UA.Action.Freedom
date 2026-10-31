@@ -45,6 +45,48 @@ public sealed class BoxOutcomeRepository(IDbConnectionFactory connectionFactory,
         return rows.ToList();
     }
 
+    public async Task<int?> DeliverVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // Write-once and conditional, so the database settles a race with a second Dispatcher.
+        var stamped = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE dbo.ConvoyVehicle
+            SET DeliveredAt = SYSUTCDATETIME(), LastChangedBy = @changedBy, LastChangedAt = SYSUTCDATETIME()
+            WHERE ConvoyId = @convoyId AND Vin = @vin AND DeliveredAt IS NULL AND WithdrawnAt IS NULL
+            """,
+            attribution.With(new { convoyId, vin = SqlKey.Of(vin) }),
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (stamped == 0)
+        {
+            return null;
+        }
+
+        var delivered = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            """
+            INSERT INTO dbo.BoxOutcome (BoxId, ConvoyId, Vin, Outcome, RecordedBy)
+            SELECT a.BoxId, a.ConvoyId, a.Vin, @delivered, @changedBy
+            FROM dbo.ConvoyVehicleBoxAllocation AS a
+            INNER JOIN dbo.Box AS b ON b.Id = a.BoxId
+            WHERE a.ConvoyId = @convoyId AND a.Vin = @vin AND b.VoidedAt IS NULL
+              AND NOT EXISTS (SELECT 1 FROM dbo.BoxOutcome AS o
+                              WHERE o.BoxId = a.BoxId AND o.ConvoyId = a.ConvoyId AND o.IsCurrent = 1);
+
+            SELECT @@ROWCOUNT;
+            """,
+            attribution.With(new { convoyId, vin = SqlKey.Of(vin), delivered = (int)BoxOutcome.Delivered }),
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return delivered;
+    }
+
     public async Task<int> AcceptGoodsListAsync(
         int convoyId, string vin, Guid receiverRef, CancellationToken cancellationToken)
     {

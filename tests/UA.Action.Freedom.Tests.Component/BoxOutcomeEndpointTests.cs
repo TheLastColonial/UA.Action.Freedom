@@ -22,6 +22,7 @@ public class BoxOutcomeEndpointTests
     private const string VinA = "WVWZZZ1JZXW000001";
     private const int NextConvoyId = 43;
     private const string VinB = "WVWZZZ1JZXW000002";
+    private const string ManifestId = "MAN-0001";
     private const int BoxId = 3;
     private const int OtherBoxId = 4;
     private static readonly Guid OtherReceiver = Guid.Parse("22222222-2222-2222-2222-222222222222");
@@ -36,7 +37,8 @@ public class BoxOutcomeEndpointTests
     private sealed record World(
         WebApplicationFactory<Program> Api,
         InMemoryConvoyRepository Convoys,
-        InMemoryBoxRepository Boxes) : IAsyncDisposable
+        InMemoryBoxRepository Boxes,
+        InMemoryManifestRepository Manifests) : IAsyncDisposable
     {
         public ValueTask DisposeAsync() => Api.DisposeAsync();
     }
@@ -60,11 +62,14 @@ public class BoxOutcomeEndpointTests
             new LocationReadModel(Hub, "Coventry hub", null, null, null, null, null, IsRegisteredHub: true),
             new LocationReadModel(NotAHub, "Somebody's garage", null, null, null, null, null));
 
+        var manifests = new InMemoryManifestRepository(
+            new ManifestReadModel(ManifestId, ConvoyId, VinA, ManifestStatus.InTransit, null, null));
+
         var api = FreedomApi.WithManifests(
-            new InMemoryManifestRepository(), convoys, new InMemoryPersonRepository().CalledByALinkedVolunteer(),
+            manifests, convoys, new InMemoryPersonRepository().CalledByALinkedVolunteer(),
             new RecordingManifestWorkQueue(), boxes: boxes, receivers: receivers, locations: locations, roles: roles);
 
-        return new World(api, convoys, boxes);
+        return new World(api, convoys, boxes, manifests);
     }
 
     private static async Task<HttpClient> LoadedAsync(World world)
@@ -230,6 +235,100 @@ public class BoxOutcomeEndpointTests
         cargo.EnumerateArray().Select(box => box.GetProperty("boxId").GetInt32()).Should().Equal(BoxId);
         world.Boxes.Box(BoxId)!.ReceiverRef.Should().Be(ReceiverRef, "the box is unchanged: same receiver, same label, same contents");
         world.Boxes.Items(BoxId).Should().ContainSingle();
+    }
+
+    // ---- increment 5: a vehicle is delivered --------------------------------------------------------
+
+    private static string Delivered(string vin = VinA) => $"/convoys/{ConvoyId}/vehicles/{vin}/delivered";
+
+    [Fact]
+    public async Task Delivering_a_vehicle_delivers_its_boxes_and_its_manifest()
+    {
+        await using var world = AWorld(roles: "Dispatcher");
+        using var client = await LoadedAsync(world);
+
+        var response = await client.PostAsync(Delivered(), null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
+            .GetProperty("boxesDelivered").GetInt32().Should().Be(1);
+        world.Convoys.Ledger.CurrentOutcome(ConvoyId, BoxId)!.Outcome.Should().Be(BoxOutcome.Delivered);
+        world.Manifests.Manifest(ManifestId)!.Status.Should().Be(ManifestStatus.Delivered);
+    }
+
+    [Fact]
+    public async Task A_box_that_already_has_an_outcome_is_not_delivered_again_with_its_vehicle()
+    {
+        await using var world = AWorld(roles: "Dispatcher");
+        using var client = await LoadedAsync(world);
+        await Record(client, "Seized");
+
+        var response = await client.PostAsync(Delivered(), null, TestContext.Current.CancellationToken);
+
+        (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
+            .GetProperty("boxesDelivered").GetInt32().Should().Be(0);
+        world.Convoys.Ledger.CurrentOutcome(ConvoyId, BoxId)!.Outcome.Should().Be(BoxOutcome.Seized);
+    }
+
+    [Fact]
+    public async Task A_vehicle_is_delivered_once()
+    {
+        await using var world = AWorld(roles: "Dispatcher");
+        using var client = await LoadedAsync(world);
+        await client.PostAsync(Delivered(), null, TestContext.Current.CancellationToken);
+
+        var again = await client.PostAsync(Delivered(), null, TestContext.Current.CancellationToken);
+
+        again.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await ProblemTypeAsync(again)).Should().Be("vehicle-already-delivered");
+    }
+
+    [Fact]
+    public async Task A_vehicle_cannot_be_delivered_before_the_convoy_departs()
+    {
+        await using var world = AWorld(departed: false, roles: "Dispatcher");
+        using var client = world.Api.CreateClient();
+
+        var response = await client.PostAsync(Delivered(), null, TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await ProblemTypeAsync(response)).Should().Be("convoy-not-departed");
+    }
+
+    [Fact]
+    public async Task Delivering_a_vehicle_that_is_not_on_the_convoy_is_not_found()
+    {
+        await using var world = AWorld(roles: "Dispatcher");
+        using var client = world.Api.CreateClient();
+
+        (await client.PostAsync(Delivered(VinB), null, TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Once_every_vehicle_is_delivered_the_convoy_can_arrive_as_before()
+    {
+        await using var world = AWorld(roles: "Dispatcher");
+        using var client = await LoadedAsync(world);
+
+        (await client.PostAsync($"/convoys/{ConvoyId}/arrive", null, TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.Conflict, "the vehicle is still travelling");
+
+        await client.PostAsync(Delivered(), null, TestContext.Current.CancellationToken);
+
+        (await client.PostAsync($"/convoys/{ConvoyId}/arrive", null, TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        world.Convoys.IsHandedOver(VinA).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_loader_cannot_deliver_a_vehicle()
+    {
+        await using var world = AWorld(roles: "Loader");
+        using var client = world.Api.CreateClient();
+
+        (await client.PostAsync(Delivered(), null, TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     // ---- increment 4: acceptance per goods list ----------------------------------------------------

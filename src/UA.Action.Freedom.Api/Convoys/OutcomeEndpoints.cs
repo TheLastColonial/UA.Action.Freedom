@@ -74,6 +74,42 @@ public static class OutcomeEndpoints
         .AddEndpointFilter<ValidationFilter<RecordBoxOutcomeRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        // The vehicle is delivered when the Convoy Leader or the Dispatcher says so (O8); its boxes are delivered with it.
+        convoys.MapPost("/{id:int}/vehicles/{vin}/delivered", async (
+            int id,
+            string vin,
+            ICommandHandler<DeliverVehicleCommand, DeliverVehicleResult> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new DeliverVehicleCommand(id, vin), cancellationToken);
+
+            return result.Outcome switch
+            {
+                DeliverVehicleOutcome.Delivered => Results.Ok(new { boxesDelivered = result.BoxesDelivered }),
+                DeliverVehicleOutcome.ConvoyNotFound => Results.NotFound(),
+                DeliverVehicleOutcome.VehicleNotOnConvoy => Results.Problem(
+                    detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
+                    statusCode: StatusCodes.Status404NotFound),
+                DeliverVehicleOutcome.ConvoyNotDeparted => Results.Problem(
+                    detail: "This convoy has not departed, so nothing can have been delivered.",
+                    type: "convoy-not-departed",
+                    statusCode: StatusCodes.Status409Conflict),
+                DeliverVehicleOutcome.ConvoyArrived => Results.Problem(
+                    detail: "This convoy has arrived.",
+                    type: "convoy-arrived",
+                    statusCode: StatusCodes.Status409Conflict),
+                DeliverVehicleOutcome.VehicleWithdrawn => Results.Problem(
+                    detail: "That vehicle has left the convoy.",
+                    type: "vehicle-withdrawn",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.Problem(
+                    detail: "That vehicle has already been delivered.",
+                    type: "vehicle-already-delivered",
+                    statusCode: StatusCodes.Status409Conflict),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
         // Acceptance is recorded once per Ukrainian goods list (O24); every delivered box on it becomes accepted.
         convoys.MapPost("/{id:int}/vehicles/{vin}/declarations/goods-list/{receiverRef:guid}/accepted", async (
             int id,

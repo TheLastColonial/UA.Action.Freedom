@@ -156,6 +156,7 @@ internal static class FreedomApi
 
         convoys.Ledger.Absorb(fake.Ledger);
         fake.Ledger = convoys.Ledger;
+        convoys.ManifestStatuses = fake.StatusOf;
     }
 
     /// <summary>As above, with the receivers a vehicle handover is checked against.</summary>
@@ -585,7 +586,7 @@ internal static class FreedomApi
         services.RemoveAll<IBoxOutcomeRepository>();
         services.AddScoped<IBoxOutcomeRepository>(provider =>
             new InMemoryBoxOutcomeRepository(
-                ((InMemoryConvoyRepository)provider.GetRequiredService<IConvoyVehicleRepository>()).Ledger,
+                (InMemoryConvoyRepository)provider.GetRequiredService<IConvoyVehicleRepository>(),
                 provider.GetRequiredService<IBoxRepository>() as InMemoryBoxRepository));
 
         if (!IsFaked<ILocationRepository>(services))

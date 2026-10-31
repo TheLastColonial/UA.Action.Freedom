@@ -209,4 +209,48 @@ public class BoxOutcomeRepositoryTests
             await ExecuteAsync("DELETE FROM dbo.Receiver WHERE ReceiverRef IN (@a, @b)", ("@a", receiverA), ("@b", receiverB));
         }
     }
+
+    [Fact]
+    public async Task Delivering_a_vehicle_stamps_it_once_and_delivers_the_boxes_that_had_no_outcome()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var world = await ArrangeAsync(cancellationToken);
+
+        try
+        {
+            (await world.Outcomes.DeliverVehicleAsync(world.ConvoyId, world.Vin, cancellationToken)).Should().Be(1);
+
+            (await world.TruckList.GetAsync(world.ConvoyId, world.Vin, cancellationToken))!.Delivered.Should().BeTrue();
+            (await world.Outcomes.GetCurrentAsync(world.ConvoyId, world.BoxId, cancellationToken))!.Outcome
+                .Should().Be(BoxOutcome.Delivered);
+            (await world.Outcomes.DeliverVehicleAsync(world.ConvoyId, world.Vin, cancellationToken))
+                .Should().BeNull("a vehicle is delivered once, and nothing is written the second time");
+            (await ScalarAsync("SELECT COUNT(1) FROM dbo.BoxOutcome WHERE BoxId = @b", ("@b", world.BoxId))).Should().Be(1);
+        }
+        finally
+        {
+            await CleanUpAsync(world);
+        }
+    }
+
+    [Fact]
+    public async Task Delivering_a_vehicle_leaves_a_box_that_already_has_an_outcome_alone()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var world = await ArrangeAsync(cancellationToken);
+
+        try
+        {
+            await world.Outcomes.RecordAsync(Record(world, null, BoxOutcome.Seized), cancellationToken);
+
+            (await world.Outcomes.DeliverVehicleAsync(world.ConvoyId, world.Vin, cancellationToken)).Should().Be(0);
+
+            (await world.Outcomes.GetCurrentAsync(world.ConvoyId, world.BoxId, cancellationToken))!.Outcome
+                .Should().Be(BoxOutcome.Seized);
+        }
+        finally
+        {
+            await CleanUpAsync(world);
+        }
+    }
 }

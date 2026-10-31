@@ -52,6 +52,13 @@ public interface IBoxOutcomeRepository
     Task<RecordBoxOutcomeResult> RecordAsync(RecordBoxOutcome outcome, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Marks the vehicle delivered and gives every box allocated to it that has no outcome yet the outcome
+    /// <see cref="BoxOutcome.Delivered"/>, in one transaction. Returns how many boxes were delivered, or null when the
+    /// vehicle was already delivered (or has left the convoy), in which case nothing is written.
+    /// </summary>
+    Task<int?> DeliverVehicleAsync(int convoyId, string vin, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Accepts, in one transaction, every box of this Receiver that is currently <see cref="BoxOutcome.Delivered"/> on
     /// this vehicle (O9, O24). Returns how many were accepted; boxes with any other outcome, or for another Receiver,
     /// are untouched.

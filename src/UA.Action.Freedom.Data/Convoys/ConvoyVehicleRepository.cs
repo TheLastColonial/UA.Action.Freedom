@@ -43,7 +43,8 @@ public sealed class ConvoyVehicleRepository(IDbConnectionFactory connectionFacto
             COALESCE(c.Passengers, 0) AS PassengerCount,
             cv.WithdrawnAt,
             cv.WithdrawnReason,
-            cv.HandoverReceiverRef
+            cv.HandoverReceiverRef,
+            cv.DeliveredAt
         FROM dbo.ConvoyVehicle AS cv
         INNER JOIN dbo.Vehicle AS v ON v.Vin = cv.Vin
         OUTER APPLY (

@@ -72,6 +72,13 @@ internal sealed class BoxAllocationLedger
         allocations = [.. allocations.Where(a => !(a.ConvoyId.Value == convoyId
             && string.Equals(a.Vin, vin, StringComparison.OrdinalIgnoreCase)))];
 
+    /// <summary>The boxes allocated to an entry that have no outcome yet on this convoy, as the delivery INSERT selects them.</summary>
+    public IReadOnlyList<int> BoxesWithoutOutcome(int convoyId, string vin) =>
+        [.. allocations
+            .Where(a => a.ConvoyId.Value == convoyId && string.Equals(a.Vin, vin, StringComparison.OrdinalIgnoreCase)
+                        && !IsVoided(a.BoxId) && CurrentOutcome(convoyId, a.BoxId) is null)
+            .Select(a => a.BoxId)];
+
     public BoxOutcomeReadModel? CurrentOutcome(int convoyId, int boxId) =>
         outcomes.LastOrDefault(o => o.ConvoyId == convoyId && o.BoxId == boxId);
 

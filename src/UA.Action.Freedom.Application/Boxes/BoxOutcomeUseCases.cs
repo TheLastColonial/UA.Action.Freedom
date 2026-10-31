@@ -1,6 +1,7 @@
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Application.Locations;
+using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Boxes;
@@ -19,6 +20,92 @@ public enum RecordBoxOutcomeOutcome
     ReasonRequired,
     HubNotRegistered,
     Conflict,
+}
+
+/// <summary>Mark a vehicle delivered: the Convoy Leader act, performed by the Dispatcher until plan 17 (O8).</summary>
+public sealed record DeliverVehicleCommand(int ConvoyId, string Vin);
+
+public enum DeliverVehicleOutcome
+{
+    Delivered,
+    ConvoyNotFound,
+    ConvoyNotDeparted,
+    ConvoyArrived,
+    VehicleNotOnConvoy,
+    VehicleWithdrawn,
+    AlreadyDelivered,
+}
+
+public sealed record DeliverVehicleResult(DeliverVehicleOutcome Outcome, int BoxesDelivered = 0);
+
+/// <remarks>
+/// Transitional: the manifest still holds <c>Delivered</c>, and <c>ArriveAsync</c>, <c>HandedOverAt</c> and the erasure
+/// guard still read it, so the vehicle manifest is mirrored to <c>Delivered</c> here. Plan 15 switches those readers
+/// to outcomes and removes the mirror.
+/// </remarks>
+public sealed class DeliverVehicleHandler(
+    IConvoyRepository convoys,
+    IConvoyVehicleRepository truckList,
+    IBoxOutcomeRepository outcomes,
+    IManifestRepository manifests)
+    : ICommandHandler<DeliverVehicleCommand, DeliverVehicleResult>
+{
+    public async Task<DeliverVehicleResult> HandleAsync(
+        DeliverVehicleCommand command, CancellationToken cancellationToken)
+    {
+        var convoy = await convoys.GetByIdAsync(command.ConvoyId, cancellationToken);
+
+        if (convoy is null)
+        {
+            return new DeliverVehicleResult(DeliverVehicleOutcome.ConvoyNotFound);
+        }
+
+        if (!convoy.Departed)
+        {
+            return new DeliverVehicleResult(DeliverVehicleOutcome.ConvoyNotDeparted);
+        }
+
+        if (convoy.Arrived)
+        {
+            return new DeliverVehicleResult(DeliverVehicleOutcome.ConvoyArrived);
+        }
+
+        var entry = await truckList.GetAsync(command.ConvoyId, command.Vin, cancellationToken);
+
+        if (entry is null)
+        {
+            return new DeliverVehicleResult(DeliverVehicleOutcome.VehicleNotOnConvoy);
+        }
+
+        if (entry.Withdrawn)
+        {
+            return new DeliverVehicleResult(DeliverVehicleOutcome.VehicleWithdrawn);
+        }
+
+        if (entry.Delivered)
+        {
+            return new DeliverVehicleResult(DeliverVehicleOutcome.AlreadyDelivered);
+        }
+
+        if (await outcomes.DeliverVehicleAsync(command.ConvoyId, command.Vin, cancellationToken) is not { } boxesDelivered)
+        {
+            return new DeliverVehicleResult(DeliverVehicleOutcome.AlreadyDelivered);
+        }
+
+        await MirrorToManifestAsync(command, cancellationToken);
+
+        return new DeliverVehicleResult(DeliverVehicleOutcome.Delivered, boxesDelivered);
+    }
+
+    private async Task MirrorToManifestAsync(DeliverVehicleCommand command, CancellationToken cancellationToken)
+    {
+        var manifest = await manifests.GetForVehicleAsync(command.ConvoyId, command.Vin, cancellationToken);
+
+        if (manifest is not null && ManifestTransitions.CanTransition(manifest.Status, ManifestStatus.Delivered))
+        {
+            await manifests.TransitionAsync(manifest.Id, manifest.Status, ManifestStatus.Delivered, cancellationToken);
+        }
+    }
 }
 
 /// <summary>Accept a Ukrainian goods list: every delivered box for that Receiver on that vehicle becomes accepted.</summary>
