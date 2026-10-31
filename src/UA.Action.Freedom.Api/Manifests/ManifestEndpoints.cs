@@ -197,7 +197,6 @@ public static class ManifestEndpoints
         MapTransition(manifests, "reject", ManifestStatus.Rejected);
         MapTransition(manifests, "prepare", ManifestStatus.Preparing);
         MapTransition(manifests, "ready", ManifestStatus.Ready);
-        MapTransition(manifests, "depart", ManifestStatus.InTransit);
         MapTransition(manifests, "deliver", ManifestStatus.Delivered);
         MapTransition(manifests, "lose", ManifestStatus.Lost);
         MapTransition(manifests, "return", ManifestStatus.Returned);
@@ -221,10 +220,6 @@ public static class ManifestEndpoints
         TransitionManifestOutcome.TruckListNotPublished => Results.Problem(
             detail: "This manifest's convoy has not published its truck list, so there is no fixed set of "
                     + "vehicles to propose against.",
-            statusCode: StatusCodes.Status409Conflict),
-        TransitionManifestOutcome.NotInsured => Results.Problem(
-            detail: "This vehicle cannot depart: its insurance is not recorded, was voided by a crew change, "
-                    + "or does not cover today. Record the insurance for its current crew first.",
             statusCode: StatusCodes.Status409Conflict),
         _ => Results.Problem(
             detail: "A manifest cannot move to that state from the one it is in.",

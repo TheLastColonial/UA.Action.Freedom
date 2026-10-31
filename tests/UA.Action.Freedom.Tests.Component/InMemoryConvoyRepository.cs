@@ -386,6 +386,19 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         return Task.FromResult(true);
     }
 
+    public Task<bool> DepartAsync(int convoyId, DateTime departedAt, CancellationToken cancellationToken)
+    {
+        // The SQL: WHERE DepartedAt IS NULL AND ArrivedAt IS NULL.
+        if (!convoys.TryGetValue(convoyId, out var convoy) || convoy.Departed || convoy.Arrived)
+        {
+            return Task.FromResult(false);
+        }
+
+        convoys[convoyId] = convoy with { DepartedAt = departedAt };
+        changes.Stamp(convoyId);
+        return Task.FromResult(true);
+    }
+
     public Task<ArriveResult> ArriveAsync(int convoyId, DateTime arrivedAt, CancellationToken cancellationToken)
     {
         if (!convoys.TryGetValue(convoyId, out var convoy) || convoy.Arrived || !convoy.TruckListPublished)

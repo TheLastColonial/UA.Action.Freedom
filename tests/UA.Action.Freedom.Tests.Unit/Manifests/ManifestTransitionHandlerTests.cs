@@ -40,32 +40,15 @@ public class ManifestTransitionHandlerTests
     /// describe the same convoy and splitting them would only add ceremony.
     /// </summary>
     private static TransitionManifestHandler AHandler(IManifestRepository repository, IConvoyRepository convoys) =>
-        new(repository, convoys, (IConvoyVehicleRepository)convoys);
+        new(repository, convoys);
 
-    private static VehicleInsuranceReadModel APolicy(
-        DateTime? coverStart = null,
-        DateTime? coverEnd = null,
-        DateTime? voidedAt = null,
-        IReadOnlyList<Guid>? uncoveredDrivers = null) => new(
-        ConvoyId, Vin, "Ukraine Aid Mutual", "POL-1",
-        coverStart ?? DateTime.UtcNow.Date.AddDays(-7), coverEnd ?? DateTime.UtcNow.Date.AddDays(30),
-        400m, Guid.NewGuid(), DateTime.UtcNow.AddDays(-7), voidedAt)
-    {
-        UncoveredDrivers = uncoveredDrivers ?? [],
-    };
-
-    /// <summary>
-    /// A convoy with its truck list published and the vehicle insured and in cover — the state
-    /// every test here assumes unless it is about one of those.
-    /// </summary>
+    /// <summary>A convoy with its truck list published — the state every test here assumes unless it is about that.</summary>
     private static IConvoyRepository AConvoyWithPublishedTruckList(bool published = true) =>
-        AConvoyInsuredBy(APolicy(), published);
+        AConvoy(published);
 
-    private static IConvoyRepository AConvoyInsuredBy(VehicleInsuranceReadModel? policy, bool published = true)
+    private static IConvoyRepository AConvoy(bool published = true)
     {
-        // One substitute for both ports: the truck-list half answers for the insurance.
-        var convoys = Substitute.For<IConvoyRepository, IConvoyVehicleRepository>();
-        ((IConvoyVehicleRepository)convoys).GetInsuranceAsync(ConvoyId, Vin, Arg.Any<CancellationToken>()).Returns(policy);
+        var convoys = Substitute.For<IConvoyRepository>();
         convoys.GetByIdAsync(ConvoyId, Arg.Any<CancellationToken>()).Returns(
             new ConvoyReadModel(
                 ConvoyId,
@@ -242,54 +225,6 @@ public class ManifestTransitionHandlerTests
 
         var outcome = await handler.HandleAsync(
             new TransitionManifestCommand(Id, ManifestStatus.Rejected), CancellationToken.None);
-
-        outcome.Should().Be(TransitionManifestOutcome.Transitioned);
-    }
-
-    [Fact]
-    public async Task A_vehicle_departs_when_its_insurance_is_recorded_and_in_cover()
-    {
-        var repository = ARepositoryHolding(AManifest(ManifestStatus.Ready, frozen: true));
-        var handler = AHandler(repository, AConvoyInsuredBy(APolicy()));
-
-        var outcome = await handler.HandleAsync(
-            new TransitionManifestCommand(Id, ManifestStatus.InTransit), TestContext.Current.CancellationToken);
-
-        outcome.Should().Be(TransitionManifestOutcome.Transitioned);
-    }
-
-    public static TheoryData<string, VehicleInsuranceReadModel?> UninsuredPolicies => new()
-    {
-        { "never recorded", null },
-        { "voided", APolicy(voidedAt: DateTime.UtcNow.AddHours(-1)) },
-        { "a driver was added and not yet covered", APolicy(uncoveredDrivers: [Guid.NewGuid()]) },
-        { "cover already ended", APolicy(coverEnd: DateTime.UtcNow.Date.AddDays(-1)) },
-        { "cover not yet started", APolicy(coverStart: DateTime.UtcNow.Date.AddDays(1)) },
-    };
-
-    [Theory]
-    [MemberData(nameof(UninsuredPolicies))]
-    public async Task A_vehicle_does_not_depart_without_insurance_in_cover(string why, VehicleInsuranceReadModel? policy)
-    {
-        var repository = ARepositoryHolding(AManifest(ManifestStatus.Ready, frozen: true));
-        var handler = AHandler(repository, AConvoyInsuredBy(policy));
-
-        var outcome = await handler.HandleAsync(
-            new TransitionManifestCommand(Id, ManifestStatus.InTransit), TestContext.Current.CancellationToken);
-
-        outcome.Should().Be(TransitionManifestOutcome.NotInsured, why);
-        await repository.DidNotReceive().TransitionAsync(
-            Arg.Any<string>(), Arg.Any<ManifestStatus>(), Arg.Any<ManifestStatus>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task Insurance_is_only_checked_on_departure()
-    {
-        var repository = ARepositoryHolding(AManifest(ManifestStatus.Preparing, frozen: true));
-        var handler = AHandler(repository, AConvoyInsuredBy(policy: null));
-
-        var outcome = await handler.HandleAsync(
-            new TransitionManifestCommand(Id, ManifestStatus.Ready), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(TransitionManifestOutcome.Transitioned);
     }

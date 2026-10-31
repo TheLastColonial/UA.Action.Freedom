@@ -62,6 +62,12 @@ public interface IConvoyRepository
     Task<bool> PublishTruckListAsync(int convoyId, DateTime publishedAt, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Stamps the departure time, but only if the convoy has neither departed nor arrived. False when it does not exist or
+    /// already has: a conditional <c>UPDATE</c>, so two dispatchers pressing the button resolve to one departure.
+    /// </summary>
+    Task<bool> DepartAsync(int convoyId, DateTime departedAt, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Marks the convoy arrived, provided its truck list is published, it has not arrived yet, and
     /// every vehicle still travelling with it has a finished manifest. In the same transaction,
     /// Delivered and Lost vehicles are stamped handed over.

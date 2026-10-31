@@ -19,8 +19,12 @@ public sealed record ConvoyReadModel(
     ChannelCrossing CrossingMode = ChannelCrossing.Ferry,
     string? VesselImo = null,
     string? LastChangedByName = null,
-    DateTime? LastChangedAt = null)
+    DateTime? LastChangedAt = null,
+    DateTime? DepartedAt = null)
 {
+    /// <summary>Whether the convoy has set off: the one departure action stamped it (O36).</summary>
+    public bool Departed => this.DepartedAt is not null;
+
     /// <summary>
     /// Whether the convoy has arrived. After that nothing about it changes — its vehicles are
     /// handed over or free to travel again, and its crew and insurance are history.
