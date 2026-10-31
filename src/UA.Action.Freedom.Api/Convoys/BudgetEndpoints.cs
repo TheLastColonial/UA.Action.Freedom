@@ -1,6 +1,9 @@
+using System.Security.Claims;
 using UA.Action.Freedom.Api.Configuration;
+using UA.Action.Freedom.Api.Configuration.Scope;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Convoys;
+using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Api.Convoys;
 
@@ -59,9 +62,19 @@ public static class BudgetEndpoints
         convoys.MapPost("/{id:int}/costs", async (
             int id,
             AddCostRequest request,
+            ClaimsPrincipal user,
             ICommandHandler<AddCostCommand, AddCostResult> handler,
             CancellationToken cancellationToken) =>
         {
+            // The Convoy Leader enters fuel and nothing else (P14); the rest of the budget stays with HQ.
+            if (request.Type != CostType.Fuel && !user.IsInRole("Administrator") && !user.IsInRole("Dispatcher"))
+            {
+                return Results.Problem(
+                    detail: "From the road only fuel is entered.",
+                    type: ScopeProblems.OutOfScope,
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+
             var result = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
 
             return result.Outcome switch
@@ -77,7 +90,8 @@ public static class BudgetEndpoints
             };
         })
         .AddEndpointFilter<ValidationFilter<AddCostRequest>>()
-        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+        .RequireConvoyScope()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysReportProgress);
 
         convoys.MapDelete("/{id:int}/costs/{costId:int}", async (
             int id,

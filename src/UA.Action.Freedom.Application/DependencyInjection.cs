@@ -78,6 +78,8 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<AcceptGoodsListCommand, AcceptGoodsListResult>, AcceptGoodsListHandler>();
         services.AddScoped<IQueryHandler<ListBoxOutcomesQuery, IReadOnlyList<BoxOutcomeReadModel>?>, ListBoxOutcomesHandler>();
         services.AddScoped<ICommandHandler<DeliverVehicleCommand, DeliverVehicleResult>, DeliverVehicleHandler>();
+        services.AddScoped<ICommandHandler<RecordRoutePointMarkCommand, RecordRoutePointMarkOutcome>, RecordRoutePointMarkHandler>();
+        services.AddScoped<IQueryHandler<GetConvoyProgressQuery, ConvoyProgressReadModel?>, GetConvoyProgressHandler>();
         services.AddScoped<IQueryHandler<GetConvoyReportQuery, ConvoyReportReadModel?>, GetConvoyReportHandler>();
         services.AddScoped<ICommandHandler<CloseConvoyCommand, CloseConvoyResult>, CloseConvoyHandler>();
         services.AddScoped<IQueryHandler<GetConvoyReadinessQuery, ConvoyReadinessReadModel?>, GetConvoyReadinessHandler>();

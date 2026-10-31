@@ -21,7 +21,37 @@ internal sealed class InMemoryDeclarationRepository(InMemoryConvoyRepository con
         return this;
     }
 
+    /// <summary>Seeds a declaration in a given status, as it would be after the authority has answered.</summary>
+    internal InMemoryDeclarationRepository WithDeclaration(
+        int convoyId, string vin, DeclarationKind kind, DeclarationStatus status, Guid? receiverRef = null)
+    {
+        _rows.Add(Row(convoyId, vin, kind, receiverRef, status, "REF-" + kind));
+        return this;
+    }
+
     internal IReadOnlyList<DeclarationReadModel> All => _rows;
+
+    /// <summary>
+    /// A border crossing: every accepted declaration of these kinds moves to Closed, for the named vehicle or for every
+    /// vehicle still travelling. Nothing else closes, as the single Accepted to Closed edge allows.
+    /// </summary>
+    internal void CloseAccepted(int convoyId, IReadOnlyCollection<DeclarationKind> kinds, string? vin)
+    {
+        for (var index = 0; index < _rows.Count; index++)
+        {
+            var row = _rows[index];
+            var crossing = row.ConvoyId == convoyId
+                           && row.Status == DeclarationStatus.Accepted
+                           && kinds.Contains(row.Kind)
+                           && !convoys.IsWithdrawn(convoyId, row.Vin)
+                           && (vin is null || string.Equals(row.Vin, vin, StringComparison.OrdinalIgnoreCase));
+
+            if (crossing)
+            {
+                _rows[index] = row with { Status = DeclarationStatus.Closed, LastChangedAt = DateTime.UtcNow };
+            }
+        }
+    }
 
     private DeclarationReadModel Row(
         int convoyId, string vin, DeclarationKind kind, Guid? receiverRef, DeclarationStatus status, string? reference) =>

@@ -352,6 +352,8 @@ public sealed class AccommodationRoutePointReferences(IDbConnectionFactory conne
                         WHERE ConvoyId = @convoyId AND RoutePointId IN (SELECT value FROM OPENJSON(@ids) WITH (value int '$')))
                 OR EXISTS (SELECT 1 FROM dbo.SelfAccommodation
                         WHERE ConvoyId = @convoyId AND RoutePointId IN (SELECT value FROM OPENJSON(@ids) WITH (value int '$')))
+                OR EXISTS (SELECT 1 FROM dbo.RoutePointMark
+                        WHERE ConvoyId = @convoyId AND RoutePointId IN (SELECT value FROM OPENJSON(@ids) WITH (value int '$')))
                 THEN 1 ELSE 0 END AS bit)
             """,
             new { convoyId, ids = System.Text.Json.JsonSerializer.Serialize(routePointIds) },
