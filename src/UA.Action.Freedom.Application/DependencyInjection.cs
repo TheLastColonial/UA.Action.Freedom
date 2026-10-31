@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RemoveInsuranceCommand, RemoveInsuranceOutcome>, RemoveInsuranceHandler>();
         services.AddScoped<ICommandHandler<ArriveConvoyCommand, ArriveConvoyResult>, ArriveConvoyHandler>();
         services.AddScoped<ICommandHandler<DepartConvoyCommand, DepartConvoyResult>, DepartConvoyHandler>();
+        services.AddScoped<ICommandHandler<RecordBoxOutcomeCommand, RecordBoxOutcomeOutcome>, RecordBoxOutcomeHandler>();
         services.AddScoped<IQueryHandler<GetConvoyReadinessQuery, ConvoyReadinessReadModel?>, GetConvoyReadinessHandler>();
 
         services.AddScoped<ICommandHandler<CreateReceiverCommand, Guid>, CreateReceiverHandler>();
