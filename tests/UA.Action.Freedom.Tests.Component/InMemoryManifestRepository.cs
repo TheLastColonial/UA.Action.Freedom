@@ -69,6 +69,10 @@ internal sealed class InMemoryManifestRepository : IManifestRepository, IRecords
 
     public ManifestReadModel? Manifest(string id) => manifests.GetValueOrDefault(id);
 
+    internal ManifestStatus? StatusOf(int convoyId, string vin) =>
+        manifests.Values.FirstOrDefault(manifest =>
+            manifest.ConvoyId == convoyId && string.Equals(manifest.Vin, vin, StringComparison.OrdinalIgnoreCase))?.Status;
+
     public Task<ManifestReadModel?> GetByIdAsync(string id, CancellationToken cancellationToken) =>
         Task.FromResult(manifests.TryGetValue(id, out var manifest) ? Read(manifest) : null);
 

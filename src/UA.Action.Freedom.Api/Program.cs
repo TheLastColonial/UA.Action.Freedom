@@ -271,6 +271,7 @@ app.MapFreedomDonations();
 app.MapFreedomMe();
 app.MapFreedomConvoys();
 app.MapFreedomBudget();
+app.MapFreedomOutcomes();
 app.MapFreedomEquipment();
 app.MapFreedomAccommodation();
 app.MapFreedomReceivers();

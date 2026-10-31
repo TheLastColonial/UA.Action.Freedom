@@ -41,6 +41,16 @@ internal sealed class InMemoryBoxRepository : IBoxRepository, IRecordsWhoChanged
 
     public int Count => boxes.Count;
 
+    /// <summary>A box returned to a hub is at that hub: the SQL updates <c>Box.LocationId</c> in the same transaction.</summary>
+    internal void MoveTo(int boxId, int locationId)
+    {
+        if (boxes.TryGetValue(boxId, out var box))
+        {
+            boxes[boxId] = box with { LocationId = locationId };
+            changes.Stamp(boxId);
+        }
+    }
+
     public BoxReadModel? Box(int id) => boxes.GetValueOrDefault(id);
 
     public IReadOnlyList<BoxItemReadModel> Items(int boxId) => items.GetValueOrDefault(boxId, []);

@@ -85,6 +85,19 @@ temporary publish profile instead of passing it as an argument.
 slash-arguments rewritten into paths ("Unrecognized command line argument"). Prefix with
 `MSYS_NO_PATHCONV=1`, use SqlPackage's dash form (`-a:Publish -p:...`), or run it from PowerShell.
 
+### Integration and BDD tests run against whatever the environment names, and the default is the main checkout's stack
+
+`SqlTestDatabase` and the BDD client default to the ports of slot 0 (SQL on 1433, the edge on 8080). In an agent worktree
+a bare `dotnet test --solution` therefore reaches the **main checkout's** stack, not yours: it has the old schema, the
+tests fail on columns that do not exist there, and the ones that got as far as an insert may leave rows behind. Source
+`. ./.agent/env.sh` (or `.ps1`) first, or run only the Unit and Component projects. CI is unaffected.
+
+### A table variable and a parameter share one namespace
+
+`DECLARE @delivered TABLE ...` beside a Dapper parameter called `delivered` fails with *The variable name '@delivered' has
+already been declared*. Only a real database finds it, which is why `BoxOutcomeRepositoryTests` exists. Give table
+variables a name no parameter has.
+
 ### Rebuild the image before running the BDD suite
 
 The BDD project talks HTTP to the **deployed containers**, not to code in your working tree.

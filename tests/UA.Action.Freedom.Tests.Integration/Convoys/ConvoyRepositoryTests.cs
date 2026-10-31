@@ -229,6 +229,52 @@ public class ConvoyRepositoryTests
     }
 
     [Fact]
+    public async Task A_convoy_can_be_closed_only_once_it_has_arrived_and_closing_again_moves_the_stamp()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, _) = await ConnectOrSkipAsync(cancellationToken);
+        var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var closedAt = Start.AddDays(6);
+
+        try
+        {
+            (await convoys.CloseAsync(id, closedAt, cancellationToken)).Should().BeFalse("it has not arrived");
+            (await convoys.GetByIdAsync(id, cancellationToken))!.Closed.Should().BeFalse();
+
+            await ExecuteAsync("UPDATE dbo.Convoy SET ArrivedAt = @at WHERE Id = @id", ("@at", Start.AddDays(5)), ("@id", id));
+
+            (await convoys.CloseAsync(id, closedAt, cancellationToken)).Should().BeTrue();
+            (await convoys.CloseAsync(id, closedAt.AddDays(1), cancellationToken)).Should().BeTrue("closing does not lock");
+            (await convoys.GetByIdAsync(id, cancellationToken))!.ClosedAt.Should().Be(closedAt.AddDays(1));
+        }
+        finally
+        {
+            await RemoveConvoyAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task An_ordinary_edit_cannot_clear_or_set_the_closing()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, _) = await ConnectOrSkipAsync(cancellationToken);
+        var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
+
+        try
+        {
+            await ExecuteAsync("UPDATE dbo.Convoy SET ArrivedAt = @at WHERE Id = @id", ("@at", Start.AddDays(5)), ("@id", id));
+            await convoys.CloseAsync(id, Start.AddDays(6), cancellationToken);
+            await convoys.UpdateAsync(new ConvoyReadModel(id, Start, ExpectedEnd.AddDays(1), null), cancellationToken);
+
+            (await convoys.GetByIdAsync(id, cancellationToken))!.ClosedAt.Should().Be(Start.AddDays(6));
+        }
+        finally
+        {
+            await RemoveConvoyAsync(id);
+        }
+    }
+
+    [Fact]
     public async Task A_convoy_that_does_not_exist_does_not_depart()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

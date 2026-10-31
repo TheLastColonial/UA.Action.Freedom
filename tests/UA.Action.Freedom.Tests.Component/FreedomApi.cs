@@ -156,6 +156,7 @@ internal static class FreedomApi
 
         convoys.Ledger.Absorb(fake.Ledger);
         fake.Ledger = convoys.Ledger;
+        convoys.ManifestStatuses = fake.StatusOf;
     }
 
     /// <summary>As above, with the receivers a vehicle handover is checked against.</summary>
@@ -330,11 +331,23 @@ internal static class FreedomApi
         DeclarationSubmissionModes? submissionModes = null,
         IBoxRepository? boxes = null,
         IReceiverRepository? receivers = null,
+        ILocationRepository? locations = null,
+        IVehicleRepository? vehicles = null,
         bool authenticated = true,
         params string[] roles) =>
         WithFakes(authenticated, roles, services =>
         {
             ShareCargo(convoys, manifests);
+
+            if (vehicles is not null)
+            {
+                services.Replace(vehicles);
+            }
+
+            if (locations is not null)
+            {
+                services.Replace(locations);
+            }
 
             // Replacing a box moves its cargo allocation, which both fakes read through the one ledger.
             if (boxes is InMemoryBoxRepository replaceable)
@@ -424,6 +437,8 @@ internal static class FreedomApi
                 EnsureCargoIsFaked(services);
                 EnsureAccommodationIsFaked(services);
                 EnsureDeclarationsAreFaked(services);
+                EnsureBoxOutcomesAreFaked(services);
+                EnsureVehiclesAreFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -562,6 +577,38 @@ internal static class FreedomApi
         services.RemoveAll<IDeclarationRepository>();
         services.AddScoped<IDeclarationRepository>(provider =>
             new InMemoryDeclarationRepository((InMemoryConvoyRepository)provider.GetRequiredService<IConvoyVehicleRepository>()));
+    }
+
+    /// <summary>
+    /// Box outcomes live in the convoy fake's allocation ledger, so the outcome fake is built from whichever convoy and box
+    /// fakes are in play. A test that supplied neither gets an empty one over the defaults.
+    /// </summary>
+    private static void EnsureBoxOutcomesAreFaked(IServiceCollection services)
+    {
+        if (IsFaked<IBoxOutcomeRepository>(services))
+        {
+            return;
+        }
+
+        services.RemoveAll<IBoxOutcomeRepository>();
+        services.AddScoped<IBoxOutcomeRepository>(provider =>
+            new InMemoryBoxOutcomeRepository(
+                (InMemoryConvoyRepository)provider.GetRequiredService<IConvoyVehicleRepository>(),
+                provider.GetRequiredService<IBoxRepository>() as InMemoryBoxRepository));
+
+        if (!IsFaked<ILocationRepository>(services))
+        {
+            services.Replace<ILocationRepository>(new InMemoryLocationRepository());
+        }
+    }
+
+    /// <summary>The closing report reads each vehicle's value, so a test that did not supply a roster gets an empty one.</summary>
+    private static void EnsureVehiclesAreFaked(IServiceCollection services)
+    {
+        if (!IsFaked<IVehicleRepository>(services))
+        {
+            services.Replace<IVehicleRepository>(new InMemoryVehicleRepository());
+        }
     }
 
     /// <summary>Equipment is read into the budget summary, so a test that did not supply a store gets an empty one.</summary>
