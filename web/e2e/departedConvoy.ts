@@ -132,8 +132,8 @@ export async function departedConvoyLedBy(leaderLogin: Login): Promise<number> {
         postcode: '62100',
       },
       {
-        name: 'Krakow stay',
-        kind: 'Overnight',
+        name: 'Krakow',
+        kind: 'Stop',
         city: 'Krakow',
         country: 'Poland',
         postcode: '30-001',
