@@ -1,5 +1,4 @@
 using AwesomeAssertions;
-using NSubstitute;
 using UA.Action.Freedom.Application.Convoys;
 using UA.Action.Freedom.Domain;
 
@@ -40,28 +39,12 @@ public class BudgetReadinessAdvisoryTests
     }
 
     [Fact]
-    public async Task The_readiness_carries_the_advice_and_is_still_ready()
+    public async Task The_readiness_carries_the_advice_and_is_not_blocked_by_it()
     {
-        var convoys = Substitute.For<IConvoyRepository>();
-        convoys.GetByIdAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns(ConvoyTestData.AReadModel());
-        convoys.GetRouteAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns([ConvoyTestData.AStop(1)]);
-        var truckList = Substitute.For<IConvoyVehicleRepository>();
-        truckList.ListAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns([ConvoyTestData.AVehicle("VIN-1")]);
-        truckList.GetInsuranceAsync(ConvoyTestData.Id, "VIN-1", Arg.Any<CancellationToken>()).Returns(
-            new VehicleInsuranceReadModel(
-                ConvoyTestData.Id, "VIN-1", "Acme", "P-1", ConvoyTestData.Start.AddDays(-7), ConvoyTestData.Start.AddDays(30),
-                null, Guid.Empty, ConvoyTestData.Start.AddDays(-10), null));
-        var budget = Substitute.For<IConvoyBudgetRepository>();
-        budget.ListLinesAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns([]);
-        budget.ListCostsAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns([]);
-        var equipment = Substitute.For<IVehicleEquipmentRepository>();
-        equipment.ListForConvoyAsync(ConvoyTestData.Id, Arg.Any<CancellationToken>()).Returns([]);
+        var readiness = await new ReadinessWorld().ReadAsync();
 
-        var readiness = await new GetConvoyReadinessHandler(
-            convoys, truckList, new BudgetPosition(convoys, truckList, budget, equipment)).HandleAsync(
-            new GetConvoyReadinessQuery(ConvoyTestData.Id), TestContext.Current.CancellationToken);
-
-        readiness!.Ready.Should().BeTrue();
-        readiness.Advisories.Should().Equal("No budget set");
+        readiness!.Advisories.Should().Equal("No budget set");
+        readiness.Requirements.Single(requirement => requirement.Code == "advisory.budget")
+            .Severity.Should().Be(RequirementSeverity.Advisory);
     }
 }

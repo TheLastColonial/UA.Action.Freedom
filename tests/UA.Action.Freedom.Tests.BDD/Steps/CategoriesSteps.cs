@@ -31,6 +31,7 @@ public sealed class CategoriesSteps(FreedomApiClient api, ScenarioState state)
     /// </summary>
     internal static string Expand(ScenarioState state, string text) => text
         .Replace("{category}", state.TryPinned(CategoryKey) ?? "missing-category", StringComparison.Ordinal)
+        .Replace("{receiver}", state.TryPinned(DepartureSteps.ReceiverKey) ?? "missing-receiver", StringComparison.Ordinal)
         .Replace("{donor}", state.TryPinned(DonationsSteps.DonorKey) ?? "missing-donor", StringComparison.Ordinal)
         .Replace("{donation}", state.TryPinned(DonationsSteps.DonationKey) ?? "missing-donation", StringComparison.Ordinal)
         .Replace("{yesterday}", DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd"), StringComparison.Ordinal);

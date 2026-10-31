@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetInsuranceQuery, VehicleInsuranceReadModel?>, GetInsuranceHandler>();
         services.AddScoped<ICommandHandler<RemoveInsuranceCommand, RemoveInsuranceOutcome>, RemoveInsuranceHandler>();
         services.AddScoped<ICommandHandler<ArriveConvoyCommand, ArriveConvoyResult>, ArriveConvoyHandler>();
+        services.AddScoped<ICommandHandler<DepartConvoyCommand, DepartConvoyResult>, DepartConvoyHandler>();
         services.AddScoped<IQueryHandler<GetConvoyReadinessQuery, ConvoyReadinessReadModel?>, GetConvoyReadinessHandler>();
 
         services.AddScoped<ICommandHandler<CreateReceiverCommand, Guid>, CreateReceiverHandler>();
@@ -138,6 +139,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RecordFerryBookingCommand, RecordFerryBookingOutcome>, RecordFerryBookingHandler>();
         services.AddScoped<ICommandHandler<RemoveFerryBookingCommand, RemoveFerryBookingOutcome>, RemoveFerryBookingHandler>();
         services.AddScoped<IQueryHandler<GetFerryBookingQuery, FerryBookingReadModel?>, GetFerryBookingHandler>();
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<BudgetPosition>();
         services.AddScoped<ICommandHandler<SetBudgetCommand, SetBudgetOutcome>, SetBudgetHandler>();
         services.AddScoped<IQueryHandler<GetBudgetQuery, IReadOnlyList<BudgetLineReadModel>?>, GetBudgetHandler>();

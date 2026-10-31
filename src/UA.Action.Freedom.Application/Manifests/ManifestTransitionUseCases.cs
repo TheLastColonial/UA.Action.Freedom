@@ -18,8 +18,7 @@ public enum TransitionManifestOutcome
     NotFound,
     IllegalTransition,
     Frozen,
-    TruckListNotPublished,
-    NotInsured
+    TruckListNotPublished
 }
 
 /// <summary>
@@ -30,13 +29,13 @@ public enum TransitionManifestOutcome
 /// <see cref="ManifestTransitions.CanTransition"/>, which holds the edges of
 /// <c>docs/manifest-status.puml</c> as data. This handler adds the two rules the diagram cannot
 /// express: a manifest may only be proposed against a convoy whose truck list is published
-/// (<c>docs/process.puml</c>), a frozen manifest may only record what happened to the load, and a
-/// vehicle may only depart with its insurance recorded, not voided by a crew change, and in cover.
+/// (<c>docs/process.puml</c>) and a frozen manifest may only record what happened to the load. There is no
+/// <c>depart</c> edge to take by hand any more: a convoy departs as a whole (<c>POST /convoys/{id}/depart</c>, O36), which
+/// moves each Ready manifest to InTransit until plan 15.
 /// </remarks>
 public sealed class TransitionManifestHandler(
     IManifestRepository repository,
     IConvoyRepository convoys,
-    IConvoyVehicleRepository truckList,
     FreedomMetrics? metrics = null)
     : ICommandHandler<TransitionManifestCommand, TransitionManifestOutcome>
 {
@@ -94,28 +93,11 @@ public sealed class TransitionManifestHandler(
             return TransitionManifestOutcome.TruckListNotPublished;
         }
 
-        if (command.To == ManifestStatus.InTransit
-            && !await IsInsuredToday(manifest, cancellationToken))
-        {
-            return TransitionManifestOutcome.NotInsured;
-        }
-
         // Conditional on the manifest still being where we found it, so two dispatchers pressing
         // the same button resolve to one transition rather than both reporting success.
         return await repository.TransitionAsync(command.Id, manifest.Status, command.To, cancellationToken)
             ? TransitionManifestOutcome.Transitioned
             : TransitionManifestOutcome.IllegalTransition;
-    }
-
-    /// <summary>
-    /// The policy names the drivers, so it has to cover every one of them as well as the day the
-    /// vehicle leaves.
-    /// </summary>
-    private async Task<bool> IsInsuredToday(ManifestReadModel manifest, CancellationToken cancellationToken)
-    {
-        var policy = await truckList.GetInsuranceAsync(manifest.ConvoyId, manifest.Vin, cancellationToken);
-
-        return policy is { CoversAllDrivers: true } && policy.CoversOn(DateTime.UtcNow);
     }
 
     /// <summary>

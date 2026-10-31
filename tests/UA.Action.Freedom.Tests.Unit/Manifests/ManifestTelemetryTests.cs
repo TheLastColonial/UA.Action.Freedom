@@ -55,7 +55,7 @@ public sealed class ManifestTelemetryTests : IDisposable
 
     private static TransitionManifestHandler AHandler(
         IManifestRepository repository, IConvoyRepository convoys, FreedomMetrics metrics) =>
-        new(repository, convoys, (IConvoyVehicleRepository)convoys, metrics);
+        new(repository, convoys, metrics);
 
 
     private static IManifestRepository AProposedManifest()

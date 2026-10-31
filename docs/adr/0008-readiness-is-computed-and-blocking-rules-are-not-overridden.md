@@ -107,3 +107,11 @@ Added 2026-10-02, from questions resolved before implementation planning.
 - **Self-accommodation is flagged per crew member, per overnight stop** ([decision O30](../domain/decisions.md#o30)).
 - Implementation is planned in [plan 13](../plans/13-readiness-departure.md), with the crew and insurance changes in
   [plan 01](../plans/01-crew-without-legs.md).
+
+## Implementation note (plan 13)
+
+Built. `ConvoyReadiness.Assess(facts, asOf)` returns requirements; `POST /convoys/{id}/depart` enforces the blocking ones
+and stamps `Convoy.DepartedAt`; the manifest `depart` transition and its insurance check are removed. Every date rule is
+judged on one `asOf`, the later of now and the convoy start. Advisories that need data that does not exist yet are
+deferred, not invented: sensitive cargo acknowledgement, declaration deadlines (D34), weight and volume limits, hotel and
+ferry timing against the route, and Receiver registration expiry. See `CLAUDE.md` for the details.

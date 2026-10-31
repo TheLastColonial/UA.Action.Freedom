@@ -22,7 +22,7 @@ describe('availableTransitions — the edge table', () => {
     Rejected: ['propose'],
     Confirmed: ['prepare'],
     Preparing: ['ready'],
-    Ready: ['depart'],
+    Ready: [],
     InTransit: ['deliver', 'lose'],
     Delivered: ['return'],
     Lost: [],

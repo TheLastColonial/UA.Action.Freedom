@@ -14,6 +14,18 @@ test('budget advice is shown without making the convoy not ready', async () => {
         reasons: [],
         vehicles: [],
         advisories: ['No budget set', 'Fuel is over budget'],
+        requirements: [
+          {
+            code: 'advisory.budget',
+            scope: 'Convoy',
+            vin: null,
+            state: 'Warning',
+            ownerRole: 'Dispatcher',
+            severity: 'Advisory',
+            message: 'No budget set; Fuel is over budget',
+            resolveLink: '/convoys/7/budget',
+          },
+        ],
       }),
     ),
   );
@@ -25,6 +37,5 @@ test('budget advice is shown without making the convoy not ready', async () => {
   await expect
     .element(screen.getByRole('heading', { name: 'Ready to travel' }))
     .toBeInTheDocument();
-  await expect.element(screen.getByText('No budget set')).toBeInTheDocument();
-  await expect.element(screen.getByText('Fuel is over budget')).toBeInTheDocument();
+  await expect.element(screen.getByText('No budget set; Fuel is over budget')).toBeInTheDocument();
 });

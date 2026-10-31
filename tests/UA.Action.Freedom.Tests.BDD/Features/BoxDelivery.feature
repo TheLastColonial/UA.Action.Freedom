@@ -33,13 +33,14 @@ Scenario: A validated box travels on an approved manifest and is delivered
     And a convoy exists with an insured vehicle on its published truck list
     And a category exists
     And the category maps to the EU code "300490"
+    And a registered receiver exists
     And a manifest reference that is not yet used
 
     # Packed, filled and weighed. Validation is the trust boundary: afterwards the box is
     # frozen, and the confirmed weight is what a border check relies on.
     When I POST "/boxes" with body:
         """
-        {}
+        { "receiverRef": "{receiver}" }
         """
     Then the response status is 201
     Given I remember the box
@@ -129,8 +130,11 @@ Scenario: A validated box travels on an approved manifest and is delivered
     Then the response status is 204
     When I POST "ready" on the remembered manifest
     Then the response status is 204
-    When I POST "depart" on the remembered manifest
-    Then the response status is 204
+    # A convoy departs as a whole (O36), once nothing blocking is outstanding: its leader, route, ferry, handover
+    # Receiver, validated boxes and declarations, including the goods list for the Receiver the box names.
+    When I make the convoy of the insured vehicle ready to depart
+    And I depart the convoy of the insured vehicle
+    Then the response status is 200
     When I POST "deliver" on the remembered manifest
     Then the response status is 204
     When I GET the remembered manifest

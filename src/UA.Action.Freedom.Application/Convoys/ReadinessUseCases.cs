@@ -1,4 +1,8 @@
 using UA.Action.Freedom.Application.Abstractions;
+using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Application.Categories;
+using UA.Action.Freedom.Application.Declarations;
+using UA.Action.Freedom.Application.Receivers;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Application.Convoys;
@@ -12,7 +16,10 @@ public sealed record VehicleReadinessReadModel(
     IReadOnlyList<string> Reasons,
     IReadOnlyList<string> Advisories);
 
-/// <summary>Whether a convoy is ready to travel, and if not, why. Advisory: nothing is blocked by it.</summary>
+/// <summary>
+/// Whether a convoy is ready to travel, and if not, why. <see cref="Requirements"/> is the full list, blocking and
+/// advisory; <see cref="Ready"/> is true when no blocking requirement is outstanding, and departure enforces the same.
+/// </summary>
 public sealed record ConvoyReadinessReadModel(
     bool Ready,
     bool RoutePlanned,
@@ -21,84 +28,27 @@ public sealed record ConvoyReadinessReadModel(
 {
     /// <summary>Advice that does not change <see cref="Ready"/>: no budget set, or a budget line over its plan (O37).</summary>
     public IReadOnlyList<string> Advisories { get; init; } = [];
-}
 
-/// <summary>
-/// The readiness rules, as one pure function so they can be read and tested in one place.
-/// </summary>
-/// <remarks>
-/// A vehicle is ready when it has at least <see cref="DriversRequired"/> driver — passengers do not
-/// count — and its insurance is recorded, not voided, in cover on the day the convoy departs and
-/// names every driver. <see cref="DriversAdvised"/> drivers are advised; fewer is an advisory, not a
-/// reason. A convoy is ready when it has a route, has vehicles still travelling with it, and every
-/// one of them is ready.
-///
-/// <para>
-/// A withdrawn vehicle is skipped entirely rather than reported as unready. It broke down and left;
-/// it has no crew to find and no insurance to renew, so listing it as a problem would be reporting
-/// something nobody can fix and would keep the convoy permanently un-ready.
-/// </para>
-/// </remarks>
-public static class ConvoyReadiness
-{
-    public const int DriversRequired = 1;
-
-    public const int DriversAdvised = 2;
-
-    public static ConvoyReadinessReadModel Assess(
-        DateTime departs,
-        bool routePlanned,
-        IReadOnlyList<(ConvoyVehicleReadModel Vehicle, VehicleInsuranceReadModel? Policy)> vehicles)
-    {
-        var assessed = vehicles
-            .Where(entry => entry.Vehicle.Travelling)
-            .Select(entry => AssessVehicle(departs, entry.Vehicle, entry.Policy))
-            .ToList();
-
-        var notReady = assessed.Count(vehicle => !vehicle.Ready);
-
-        string[] reasons =
-        [
-            .. routePlanned ? [] : new[] { "No route planned" },
-            .. assessed.Count > 0 ? [] : new[] { "No vehicles on the truck list" },
-            .. notReady == 0 ? [] : new[] { notReady == 1 ? "1 vehicle not ready" : $"{notReady} vehicles not ready" },
-        ];
-
-        return new ConvoyReadinessReadModel(reasons.Length == 0, routePlanned, reasons, assessed);
-    }
-
-    private static VehicleReadinessReadModel AssessVehicle(
-        DateTime departs, ConvoyVehicleReadModel vehicle, VehicleInsuranceReadModel? policy)
-    {
-        var insuranceProblem = policy switch
-        {
-            null => "Insurance not recorded",
-            { Voided: true } => "Insurance voided",
-            _ when !policy.CoversOn(departs) => "Insurance does not cover the departure date",
-            { CoversAllDrivers: false } => "Insurance does not cover every driver",
-            _ => null,
-        };
-
-        string[] reasons =
-        [
-            .. vehicle.DriverCount >= DriversRequired ? [] : new[] { "No driver assigned" },
-            .. insuranceProblem is null ? [] : new[] { insuranceProblem },
-        ];
-
-        string[] advisories = vehicle.DriverCount is >= DriversRequired and < DriversAdvised
-            ? ["Only one driver; two are advised"]
-            : [];
-
-        return new VehicleReadinessReadModel(
-            vehicle.Vin, vehicle.Plate, insuranceProblem is null, reasons.Length == 0, reasons, advisories);
-    }
+    public IReadOnlyList<Requirement> Requirements { get; init; } = [];
 }
 
 public sealed record GetConvoyReadinessQuery(int ConvoyId);
 
-/// <summary>The convoy's readiness, or null when there is no such convoy.</summary>
+/// <summary>
+/// The convoy's readiness, or null when there is no such convoy. The one place the facts are gathered: the departure
+/// action calls this too, so what the Dispatcher sees is exactly what the refusal enforces.
+/// </summary>
 public sealed class GetConvoyReadinessHandler(
-    IConvoyRepository convoys, IConvoyVehicleRepository truckList, BudgetPosition? budget = null)
+    IConvoyRepository convoys,
+    IConvoyVehicleRepository truckList,
+    IConvoyLeaderRepository leaders,
+    IAccommodationRepository accommodation,
+    IQueryHandler<ListDeclarationsQuery, IReadOnlyList<DeclarationReadModel>?> declarations,
+    IBoxRepository boxes,
+    IReceiverRepository receivers,
+    IItemCategoryRepository categories,
+    BudgetPosition budget,
+    TimeProvider clock)
     : IQueryHandler<GetConvoyReadinessQuery, ConvoyReadinessReadModel?>
 {
     public async Task<ConvoyReadinessReadModel?> HandleAsync(
@@ -111,18 +61,94 @@ public sealed class GetConvoyReadinessHandler(
         }
 
         var route = await convoys.GetRouteAsync(query.ConvoyId, cancellationToken);
-        var vehicles = await truckList.ListAsync(query.ConvoyId, cancellationToken);
+        var entries = await truckList.ListAsync(query.ConvoyId, cancellationToken);
+        var overview = await AccommodationOverview.OfAsync(convoys, truckList, accommodation, query.ConvoyId, cancellationToken);
+        var leader = await leaders.HistoryAsync(query.ConvoyId, cancellationToken);
+        var position = await budget.OfAsync(query.ConvoyId, cancellationToken);
+        var categoryById = (await categories.ListAsync(cancellationToken)).ToDictionary(category => category.Id);
+        var registered = new Dictionary<Guid, bool>();
 
-        // One read per vehicle: a convoy is a handful of vans, so this stays cheap and simple.
-        var withPolicies = new List<(ConvoyVehicleReadModel, VehicleInsuranceReadModel?)>();
-        foreach (var vehicle in vehicles)
+        // One set of reads per vehicle still travelling: a convoy is a handful of vans. The rules read nothing themselves.
+        var vehicles = new List<VehicleReadinessFacts>();
+        foreach (var entry in entries)
         {
-            withPolicies.Add((vehicle, await truckList.GetInsuranceAsync(query.ConvoyId, vehicle.Vin, cancellationToken)));
+            vehicles.Add(entry.Travelling
+                ? await VehicleFactsAsync(query.ConvoyId, entry, categoryById, registered, cancellationToken)
+                : new VehicleReadinessFacts(entry, null, null, false, [], [], VehicleItemFacts.None));
         }
 
-        var readiness = ConvoyReadiness.Assess(convoy.Start, route.Count > 0, withPolicies);
-        var position = budget is null ? null : await budget.OfAsync(query.ConvoyId, cancellationToken);
+        var facts = new ConvoyReadinessFacts(
+            convoy,
+            route.Count > 0,
+            leader.Any(assignment => assignment.Until is null),
+            new AccommodationFacts(overview.AllCovered, overview.MissingCount, overview.LeftoverBookings.Count),
+            vehicles,
+            position is null ? [] : BudgetAdvisories.For(position));
 
-        return position is null ? readiness : readiness with { Advisories = BudgetAdvisories.For(position) };
+        return ConvoyReadiness.Assess(facts, ReadinessClock.AsOf(clock.GetUtcNow().UtcDateTime, convoy.Start));
     }
+
+    private async Task<VehicleReadinessFacts> VehicleFactsAsync(
+        int convoyId,
+        ConvoyVehicleReadModel entry,
+        IReadOnlyDictionary<int, ItemCategoryReadModel> categoryById,
+        Dictionary<Guid, bool> registered,
+        CancellationToken cancellationToken)
+    {
+        var policy = await truckList.GetInsuranceAsync(convoyId, entry.Vin, cancellationToken);
+        var ferry = await truckList.GetFerryBookingAsync(convoyId, entry.Vin, cancellationToken);
+        var allocated = await truckList.ListBoxesAsync(convoyId, entry.Vin, cancellationToken) ?? [];
+        var declared = await declarations.HandleAsync(new ListDeclarationsQuery(convoyId, entry.Vin), cancellationToken) ?? [];
+        var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+
+        var cargo = new List<CargoBoxFact>();
+        var items = new List<BoxItemReadModel>();
+        foreach (var allocation in allocated)
+        {
+            var box = await boxes.GetByIdAsync(allocation.BoxId, cancellationToken);
+            cargo.Add(new CargoBoxFact(
+                allocation.BoxId,
+                allocation.Validated,
+                box?.ReceiverRef is { } receiverRef && await IsRegisteredAsync(receiverRef, registered, cancellationToken),
+                box?.ReceiverRef));
+            items.AddRange(await boxes.ListItemsAsync(allocation.BoxId, cancellationToken));
+        }
+
+        var shelfLives = items
+            .Select(item => ShelfLife.Assess(item.ExpiresOn, categoryById.GetValueOrDefault(item.CategoryId)?.ShelfLife ?? ShelfLifeRule.None, today))
+            .ToList();
+
+        return new VehicleReadinessFacts(
+            entry,
+            policy,
+            ferry,
+            entry.HandoverReceiverRef is { } handover && await IsRegisteredAsync(handover, registered, cancellationToken),
+            cargo,
+            [.. declared.Select(declaration => new DeclarationFact(declaration.Kind, declaration.ReceiverRef, declaration.Status))],
+            new VehicleItemFacts(
+                items.Count(item => item.ValueGbp is null),
+                items.Count(item => item.DonationId is null),
+                shelfLives.Count(status => status == ShelfLifeStatus.Expired),
+                shelfLives.Count(status => status == ShelfLifeStatus.Short)));
+    }
+
+    private async Task<bool> IsRegisteredAsync(Guid receiverRef, Dictionary<Guid, bool> seen, CancellationToken cancellationToken)
+    {
+        if (seen.TryGetValue(receiverRef, out var known))
+        {
+            return known;
+        }
+
+        var receiver = await receivers.GetByRefAsync(receiverRef, cancellationToken);
+        return seen[receiverRef] = receiver is not null && ReceiverRegistration.CanReceive(receiver.Status);
+    }
+}
+
+/// <summary>
+/// The one clock for every date rule in readiness and departure. Insurance must cover the day the convoy sets off: its
+/// start, or today if it is going later than planned. A readiness read and a departure agree because both ask this.
+/// </summary>
+public static class ReadinessClock
+{
+    public static DateTime AsOf(DateTime now, DateTime convoyStart) => now > convoyStart ? now : convoyStart;
 }

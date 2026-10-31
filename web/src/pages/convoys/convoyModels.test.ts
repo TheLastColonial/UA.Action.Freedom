@@ -32,6 +32,8 @@ describe('convoyToFormValues', () => {
       truckListPublished: false,
       arrivedAt: null,
       arrived: false,
+      departedAt: null,
+      departed: false,
       lastChangedByName: null,
       lastChangedAt: null,
     });

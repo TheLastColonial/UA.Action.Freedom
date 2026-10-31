@@ -10,6 +10,9 @@
     ArrivedAt is stamped by POST /convoys/{id}/arrive once every vehicle on it has a finished
     manifest. Both are write-once, absent from every UPDATE an ordinary edit issues.
 
+    DepartedAt is stamped by POST /convoys/{id}/depart, the one departure action (O36), once no blocking
+    requirement is outstanding. Write-once like the other two, and absent from every UPDATE an ordinary edit issues.
+
     CrossingMode is how the convoy crosses the Channel, and it is here rather than in configuration
     because it decides two things an ICS2 Entry Summary Declaration cannot be filed without: the
     mode-of-transport code (Ferry -> 1 maritime, Shuttle -> 3 road; rail is not accepted at the
@@ -32,6 +35,7 @@ CREATE TABLE [dbo].[Convoy] (
     [CrossingMode]         int          NOT NULL CONSTRAINT [DF_Convoy_CrossingMode] DEFAULT 0,
     [VesselImo]            varchar(10)  NULL,
     [TruckListPublishedAt] datetime2(0) NULL,
+    [DepartedAt]           datetime2(0) NULL,
     [ArrivedAt]            datetime2(0) NULL,
     [CreatedAt]            datetime2(0) NOT NULL CONSTRAINT [DF_Convoy_CreatedAt] DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]            datetime2(0) NOT NULL CONSTRAINT [DF_Convoy_UpdatedAt] DEFAULT SYSUTCDATETIME(),

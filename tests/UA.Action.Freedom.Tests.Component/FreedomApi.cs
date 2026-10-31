@@ -352,6 +352,7 @@ internal static class FreedomApi
             services.Replace(manifests);
             services.Replace<IConvoyRepository>(convoys);
             services.Replace<IConvoyVehicleRepository>(convoys);
+            services.Replace<IConvoyLeaderRepository>(convoys);
             services.Replace(people);
             services.Replace(queue);
 
@@ -422,6 +423,7 @@ internal static class FreedomApi
                 EnsureScopeIsFaked(services);
                 EnsureCargoIsFaked(services);
                 EnsureAccommodationIsFaked(services);
+                EnsureDeclarationsAreFaked(services);
 
                 services
                     .AddAuthentication(TestAuthHandler.SchemeName)
@@ -544,6 +546,22 @@ internal static class FreedomApi
         {
             services.Replace<IAccommodationRepository>(new InMemoryAccommodationRepository());
         }
+    }
+
+    /// <summary>
+    /// Readiness reads each vehicle's declarations, so a test that did not supply a store gets an empty one over the
+    /// convoy fake in play, rather than a route to a real database.
+    /// </summary>
+    private static void EnsureDeclarationsAreFaked(IServiceCollection services)
+    {
+        if (IsFaked<IDeclarationRepository>(services))
+        {
+            return;
+        }
+
+        services.RemoveAll<IDeclarationRepository>();
+        services.AddScoped<IDeclarationRepository>(provider =>
+            new InMemoryDeclarationRepository((InMemoryConvoyRepository)provider.GetRequiredService<IConvoyVehicleRepository>()));
     }
 
     /// <summary>Equipment is read into the budget summary, so a test that did not supply a store gets an empty one.</summary>

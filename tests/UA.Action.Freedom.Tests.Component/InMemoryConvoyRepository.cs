@@ -173,6 +173,8 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         return this;
     }
 
+    public bool Departed(int convoyId) => convoys.TryGetValue(convoyId, out var convoy) && convoy.Departed;
+
     public Guid? HandoverReceiverOf(int convoyId, string vin) => EntryFor(convoyId, vin)?.HandoverReceiverRef;
 
     public bool IsHandedOver(string vin) => vehicles.GetValueOrDefault(vin)?.HandedOver ?? false;
@@ -382,6 +384,19 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         }
 
         convoys[convoyId] = convoy with { TruckListPublishedAt = publishedAt };
+        changes.Stamp(convoyId);
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> DepartAsync(int convoyId, DateTime departedAt, CancellationToken cancellationToken)
+    {
+        // The SQL: WHERE DepartedAt IS NULL AND ArrivedAt IS NULL.
+        if (!convoys.TryGetValue(convoyId, out var convoy) || convoy.Departed || convoy.Arrived)
+        {
+            return Task.FromResult(false);
+        }
+
+        convoys[convoyId] = convoy with { DepartedAt = departedAt };
         changes.Stamp(convoyId);
         return Task.FromResult(true);
     }

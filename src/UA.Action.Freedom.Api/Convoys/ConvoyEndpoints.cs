@@ -603,6 +603,32 @@ public static class ConvoyEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        // The one departure action (O36). There is deliberately no override, no waiver and no per-vehicle variant:
+        // a refusal lists every outstanding blocking requirement and where to fix it.
+        convoys.MapPost("/{id:int}/depart", async (
+            int id,
+            ICommandHandler<DepartConvoyCommand, DepartConvoyResult> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new DepartConvoyCommand(id), cancellationToken);
+
+            return result.Outcome switch
+            {
+                DepartConvoyOutcome.Departed => Results.Ok(new { departed = true }),
+                DepartConvoyOutcome.NotFound => Results.NotFound(),
+                DepartConvoyOutcome.AlreadyDeparted => Results.Problem(
+                    detail: "This convoy has already departed.",
+                    type: "convoy-already-departed",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.Problem(
+                    detail: "This convoy cannot depart until every blocking requirement is met.",
+                    type: "convoy-not-ready",
+                    statusCode: StatusCodes.Status409Conflict,
+                    extensions: new Dictionary<string, object?> { ["requirements"] = result.Unmet }),
+            };
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+
         convoys.MapPost("/{id:int}/publish-truck-list", async (
             int id,
             ICommandHandler<PublishTruckListCommand, PublishTruckListOutcome> handler,
