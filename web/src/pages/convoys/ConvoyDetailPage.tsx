@@ -122,7 +122,11 @@ export function ConvoyDetailPage(): JSX.Element {
             </dl>
           </DetailCard>
 
-          <ConvoyReadinessPanel convoyId={convoy.id} />
+          <ConvoyReadinessPanel
+            convoyId={convoy.id}
+            departed={convoy.departed}
+            arrived={convoy.arrived}
+          />
 
           <Gate policy="manifests:declare">
             <ConvoyRedeclareTasks convoyId={convoy.id} />

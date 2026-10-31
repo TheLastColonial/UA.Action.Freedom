@@ -23,7 +23,6 @@ const EDGES: readonly EdgeRule[] = [
   { verb: 'approve', from: ['Proposed'], to: 'Confirmed' },
   { verb: 'prepare', from: ['Confirmed'], to: 'Preparing' },
   { verb: 'ready', from: ['Preparing'], to: 'Ready' },
-  { verb: 'depart', from: ['Ready'], to: 'InTransit' },
   { verb: 'deliver', from: ['InTransit'], to: 'Delivered' },
   { verb: 'lose', from: ['InTransit'], to: 'Lost' },
   { verb: 'return', from: ['Delivered'], to: 'Returned' },
@@ -38,8 +37,6 @@ export interface VehicleCargoCapacity {
 
 export interface ManifestApiOptions {
   publishedConvoyIds?: readonly number[];
-  /** VINs whose insurance is recorded, not voided and in cover — the API refuses `depart` otherwise. */
-  insuredVins?: readonly string[];
   /** The crew each manifest reports, keyed by manifest id. */
   crewByManifest?: ReadonlyMap<string, readonly VehicleCrewReadModel[]>;
   vehicleCargoCapacity?: VehicleCargoCapacity;
@@ -89,7 +86,6 @@ export function manifestApi(
   );
   const boxes = new Map<string, ManifestBoxReadModel[]>();
   const publishedConvoys = new Set(options.publishedConvoyIds ?? []);
-  const insuredVins = new Set(options.insuredVins ?? []);
   const idFrom = (raw: string | readonly string[] | undefined) => decodeURIComponent(String(raw));
 
   const handlers: RequestHandler[] = [
@@ -233,12 +229,6 @@ export function manifestApi(
               "This manifest's convoy has not published its truck list, so it cannot be proposed.",
             );
           }
-        }
-        if (edge.verb === 'depart' && !insuredVins.has(manifest.vin)) {
-          return problem(
-            409,
-            'This vehicle cannot depart: its insurance is not recorded, was voided, does not cover today, or does not name every driver. Record the insurance again to cover its current drivers.',
-          );
         }
         db.set(id, {
           ...manifest,

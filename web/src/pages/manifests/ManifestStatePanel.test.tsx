@@ -90,7 +90,7 @@ test('approving shows the signed-off confirmation and freezes the manifest', asy
 
 test('an illegal transition surfaces the API detail', async () => {
   // Ready has no legal edge from Created; force it by seeding the panel with a stale status.
-  const stale = makeManifest({ id: 'M5', status: 'Ready' });
+  const stale = makeManifest({ id: 'M5', status: 'Preparing' });
   const server = makeManifest({ id: 'M5', status: 'Created' });
   worker.use(...manifestApi([server]).handlers);
 
@@ -98,38 +98,20 @@ test('an illegal transition surfaces the API detail', async () => {
     roles: ['Dispatcher'],
   });
 
-  await screen.getByRole('button', { name: 'Depart' }).click();
+  await screen.getByRole('button', { name: 'Mark ready' }).click();
 
   await expect
     .element(screen.getByText('A manifest cannot move to that state from the one it is in.'))
     .toBeInTheDocument();
 });
 
-test('a vehicle without insurance does not depart, and the reason is shown', async () => {
+test('a manifest has no depart button: a convoy departs as a whole', async () => {
   const manifest = makeManifest({ id: 'M9', status: 'Ready', convoyId: 7, vin: 'VIN-9' });
-  const mApi = manifestApi([manifest], { publishedConvoyIds: [7] });
-  worker.use(...mApi.handlers);
+  worker.use(...manifestApi([manifest], { publishedConvoyIds: [7] }).handlers);
 
   const screen = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
     roles: ['Dispatcher'],
   });
 
-  await screen.getByRole('button', { name: 'Depart' }).click();
-
-  await expect.element(screen.getByRole('alert')).toHaveTextContent('insurance');
-  expect(mApi.db.get('M9')?.status).toBe('Ready');
-});
-
-test('an insured vehicle departs', async () => {
-  const manifest = makeManifest({ id: 'M10', status: 'Ready', convoyId: 7, vin: 'VIN-10' });
-  const mApi = manifestApi([manifest], { publishedConvoyIds: [7], insuredVins: ['VIN-10'] });
-  worker.use(...mApi.handlers);
-
-  const screen = await renderWithProviders(<ManifestStatePanel manifest={manifest} />, {
-    roles: ['Dispatcher'],
-  });
-
-  await screen.getByRole('button', { name: 'Depart' }).click();
-
-  await expect.poll(() => mApi.db.get('M10')?.status).toBe('InTransit');
+  await expect.element(screen.getByRole('button', { name: 'Depart' })).not.toBeInTheDocument();
 });

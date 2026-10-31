@@ -1,7 +1,7 @@
 import type { ManifestStatus } from '../../api/schemas/common';
 
 export type ManifestVerb =
-  'propose' | 'reject' | 'approve' | 'prepare' | 'ready' | 'depart' | 'deliver' | 'lose' | 'return';
+  'propose' | 'reject' | 'approve' | 'prepare' | 'ready' | 'deliver' | 'lose' | 'return';
 
 interface Edge {
   verb: ManifestVerb;
@@ -17,7 +17,6 @@ const EDGES: readonly Edge[] = [
   { verb: 'approve', from: ['Proposed'], to: 'Confirmed' },
   { verb: 'prepare', from: ['Confirmed'], to: 'Preparing' },
   { verb: 'ready', from: ['Preparing'], to: 'Ready' },
-  { verb: 'depart', from: ['Ready'], to: 'InTransit' },
   { verb: 'deliver', from: ['InTransit'], to: 'Delivered' },
   { verb: 'lose', from: ['InTransit'], to: 'Lost' },
   { verb: 'return', from: ['Delivered'], to: 'Returned' },
@@ -29,7 +28,6 @@ const VERB_LABEL: Record<ManifestVerb, string> = {
   approve: 'Approve',
   prepare: 'Start preparing',
   ready: 'Mark ready',
-  depart: 'Depart',
   deliver: 'Mark delivered',
   lose: 'Mark lost',
   return: 'Mark returned',

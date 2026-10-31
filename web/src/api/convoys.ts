@@ -8,6 +8,7 @@ import {
   getCollection,
   getJson,
   postCreate,
+  postJson,
   postTransition,
   put204,
   putJson,
@@ -227,6 +228,12 @@ export function cancelFerryBooking(id: number, vin: string): Promise<void> {
 
 export function arriveConvoy(id: number): Promise<void> {
   return postTransition(`${idPath(id)}/arrive`);
+}
+
+// The one departure (O36). The API answers 409 `convoy-not-ready` while a blocking requirement is outstanding; the
+// readiness read is the same list, so the panel shows that rather than a second copy.
+export function departConvoy(id: number): Promise<{ readonly departed: boolean }> {
+  return postJson(`${idPath(id)}/depart`, {}, z.object({ departed: z.boolean() }));
 }
 
 export function publishTruckList(id: number): Promise<void> {
@@ -457,6 +464,20 @@ export function useArriveConvoy(id: number): UseMutationResult<void, Error, void
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.convoys.all });
       await queryClient.invalidateQueries({ queryKey: qk.vehicles.all });
+    },
+  });
+}
+
+export function useDepartConvoy(
+  id: number,
+): UseMutationResult<{ readonly departed: boolean }, Error, void> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => departConvoy(id),
+    // Success or refusal, the list the Dispatcher is looking at has changed.
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.readiness(id) });
+      await queryClient.invalidateQueries({ queryKey: qk.convoys.all });
     },
   });
 }

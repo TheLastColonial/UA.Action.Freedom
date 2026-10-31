@@ -12,6 +12,9 @@ export const convoyReadModelSchema = z.object({
   truckListPublished: z.boolean(),
   arrivedAt: z.string().nullable(),
   arrived: z.boolean(),
+  // Stamped by POST /convoys/{id}/depart, the one departure action (O36).
+  departedAt: z.string().nullable().default(null),
+  departed: z.boolean().default(false),
 });
 export type ConvoyReadModel = z.infer<typeof convoyReadModelSchema>;
 
@@ -156,7 +159,7 @@ export interface RecordInsuranceRequest {
 }
 
 // src/UA.Action.Freedom.Application/Convoys/ReadinessUseCases.cs. Advisory: it says what is
-// missing and blocks nothing.
+// missing; the blocking requirements in it are enforced by POST /convoys/{id}/depart (O36).
 export const vehicleReadinessReadModelSchema = z.object({
   vin: z.string(),
   plate: z.string(),
@@ -167,6 +170,20 @@ export const vehicleReadinessReadModelSchema = z.object({
 });
 export type VehicleReadinessReadModel = z.infer<typeof vehicleReadinessReadModelSchema>;
 
+// src/UA.Action.Freedom.Application/Convoys/ConvoyReadiness.cs — Requirement. `code` is a stable name
+// (ADR 0008): the links and the tests depend on it.
+export const requirementSchema = z.object({
+  code: z.string(),
+  scope: z.enum(['Convoy', 'Vehicle']),
+  vin: z.string().nullable(),
+  state: z.enum(['Done', 'ToDo', 'Blocked', 'Warning']),
+  ownerRole: z.string(),
+  severity: z.enum(['Blocking', 'Advisory']),
+  message: z.string(),
+  resolveLink: z.string(),
+});
+export type Requirement = z.infer<typeof requirementSchema>;
+
 export const convoyReadinessReadModelSchema = z.object({
   ready: z.boolean(),
   routePlanned: z.boolean(),
@@ -174,6 +191,7 @@ export const convoyReadinessReadModelSchema = z.object({
   vehicles: z.array(vehicleReadinessReadModelSchema),
   // Budget advice (O37): no budget set, or a line over its plan. Never a reason.
   advisories: z.array(z.string()).default([]),
+  requirements: z.array(requirementSchema).default([]),
 });
 export type ConvoyReadinessReadModel = z.infer<typeof convoyReadinessReadModelSchema>;
 

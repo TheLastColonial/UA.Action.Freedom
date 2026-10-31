@@ -145,6 +145,101 @@ export function convoyApi(
     );
   };
 
+  // The same rules as ConvoyReadiness.Assess, for what this fake holds: a route, a vehicle still travelling, a
+  // leader, and per vehicle a driver, insurance in cover naming every driver, a ferry booking and a registered
+  // handover Receiver. Cargo, accommodation and declarations are not modelled here, so they never block. A withdrawn
+  // vehicle is skipped - it has no crew to find and no insurance to renew.
+  const assess = (id: number) => {
+    const convoy = db.get(id);
+    if (!convoy) {
+      return null;
+    }
+    const departs = convoy.start.slice(0, 10);
+    const requirement = (
+      code: string,
+      done: boolean,
+      message: string,
+      vin: string | null = null,
+      link = '',
+    ) => ({
+      code,
+      scope: vin === null ? 'Convoy' : 'Vehicle',
+      vin,
+      state: done ? 'Done' : 'ToDo',
+      ownerRole: 'Dispatcher',
+      severity: 'Blocking',
+      message,
+      resolveLink: link,
+    });
+    const travelling = (vehicles.get(id) ?? []).filter((vehicle) => !vehicle.withdrawn);
+    const routePlanned = (routes.get(id) ?? []).length > 0;
+    const perVehicle = travelling.map((vehicle) => {
+      const policy = insurance.get(crewKey(id, vehicle.vin));
+      const insuranceProblem = !policy
+        ? 'Insurance not recorded'
+        : policy.voided
+          ? 'Insurance voided'
+          : policy.coverStart.slice(0, 10) > departs || policy.coverEnd.slice(0, 10) < departs
+            ? 'Insurance does not cover the departure date'
+            : policy.uncoveredDrivers.length > 0
+              ? 'Insurance does not cover every driver'
+              : null;
+      const handover = vehicle.handoverReceiverRef;
+      const requirements = [
+        requirement('driver', vehicle.driverCount >= 1, 'No driver assigned', vehicle.vin),
+        requirement('insurance', insuranceProblem === null, insuranceProblem ?? 'Insurance in cover', vehicle.vin),
+        requirement('ferry', ferry.has(crewKey(id, vehicle.vin)), 'No ferry booking', vehicle.vin),
+        requirement(
+          'handover-receiver',
+          handover != null && receiverStatuses.get(handover) === 'Registered',
+          'No registered handover Receiver',
+          vehicle.vin,
+        ),
+        ...(vehicle.driverCount === 1
+          ? [
+              {
+                ...requirement('advisory.second-driver', false, 'Only one driver; two are advised', vehicle.vin),
+                state: 'Warning',
+                severity: 'Advisory',
+              },
+            ]
+          : []),
+      ];
+      const blocking = requirements.filter((r) => r.severity === 'Blocking' && r.state !== 'Done');
+      return {
+        summary: {
+          vin: vehicle.vin,
+          plate: vehicle.plate,
+          insured: insuranceProblem === null,
+          ready: blocking.length === 0,
+          reasons: blocking.map((r) => r.message),
+          advisories: requirements.filter((r) => r.severity === 'Advisory').map((r) => r.message),
+        },
+        requirements,
+      };
+    });
+    const hasLeader = (leaders.get(id) ?? []).some((assignment) => assignment.until === null);
+    const convoyRequirements = [
+      requirement('route', routePlanned, 'No route planned'),
+      requirement('vehicles', travelling.length > 0, 'No vehicles on the truck list'),
+      requirement('leader', hasLeader, 'No Convoy Leader assigned'),
+    ];
+    const notReady = perVehicle.filter((entry) => !entry.summary.ready).length;
+    const reasons = [
+      ...convoyRequirements.filter((r) => r.state !== 'Done').map((r) => r.message),
+      ...(notReady === 0
+        ? []
+        : [notReady === 1 ? '1 vehicle not ready' : `${String(notReady)} vehicles not ready`]),
+    ];
+    return {
+      ready: reasons.length === 0,
+      routePlanned,
+      reasons,
+      vehicles: perVehicle.map((entry) => entry.summary),
+      requirements: [...convoyRequirements, ...perVehicle.flatMap((entry) => entry.requirements)],
+    };
+  };
+
   const handlers: RequestHandler[] = [
     http.get('/convoys', () => HttpResponse.json([...db.values()])),
 
@@ -433,58 +528,33 @@ export function convoyApi(
       }),
     ),
 
-    // The same rules as ConvoyReadiness.Assess: one driver (two advised) and insurance covering the
-    // departure date and every driver per vehicle; a route and at least one vehicle still travelling for the
-    // convoy. A withdrawn vehicle is skipped — it has no crew to find and no insurance to renew.
     http.get('/convoys/:id/readiness', ({ params }) => {
+      const readiness = assess(idFrom(params['id']));
+      return readiness ? HttpResponse.json(readiness) : new HttpResponse(null, { status: 404 });
+    }),
+
+    // O36: refused with the outstanding blocking requirements, no override.
+    http.post('/convoys/:id/depart', ({ params }) => {
       const id = idFrom(params['id']);
       const convoy = db.get(id);
-      if (!convoy) {
+      const readiness = assess(id);
+      if (!convoy || !readiness) {
         return new HttpResponse(null, { status: 404 });
       }
-      const departs = convoy.start.slice(0, 10);
-      const assessed = (vehicles.get(id) ?? [])
-        .filter((vehicle) => !vehicle.withdrawn)
-        .map((vehicle) => {
-          const policy = insurance.get(crewKey(id, vehicle.vin));
-          const insuranceProblem = !policy
-            ? 'Insurance not recorded'
-            : policy.voided
-              ? 'Insurance voided'
-              : policy.coverStart.slice(0, 10) > departs || policy.coverEnd.slice(0, 10) < departs
-                ? 'Insurance does not cover the departure date'
-                : policy.uncoveredDrivers.length > 0
-                  ? 'Insurance does not cover every driver'
-                  : null;
-          const reasons = [
-            ...(vehicle.driverCount >= 1 ? [] : ['No driver assigned']),
-            ...(insuranceProblem ? [insuranceProblem] : []),
-          ];
-          const advisories = vehicle.driverCount === 1 ? ['Only one driver; two are advised'] : [];
-          return {
-            vin: vehicle.vin,
-            plate: vehicle.plate,
-            insured: insuranceProblem === null,
-            ready: reasons.length === 0,
-            reasons,
-            advisories,
-          };
+      if (convoy.departed || convoy.arrived) {
+        return problem(409, 'This convoy has already departed.', { type: 'convoy-already-departed' });
+      }
+      const unmet = readiness.requirements.filter(
+        (r) => r.severity === 'Blocking' && r.state !== 'Done',
+      );
+      if (unmet.length > 0) {
+        return problem(409, 'This convoy cannot depart until every blocking requirement is met.', {
+          type: 'convoy-not-ready',
+          requirements: unmet,
         });
-      const routePlanned = (routes.get(id) ?? []).length > 0;
-      const notReady = assessed.filter((vehicle) => !vehicle.ready).length;
-      const reasons = [
-        ...(routePlanned ? [] : ['No route planned']),
-        ...(assessed.length > 0 ? [] : ['No vehicles on the truck list']),
-        ...(notReady === 0
-          ? []
-          : [notReady === 1 ? '1 vehicle not ready' : `${String(notReady)} vehicles not ready`]),
-      ];
-      return HttpResponse.json({
-        ready: reasons.length === 0,
-        routePlanned,
-        reasons,
-        vehicles: assessed,
-      });
+      }
+      db.set(id, { ...convoy, departed: true, departedAt: '2026-09-01T06:00:00' });
+      return HttpResponse.json({ departed: true });
     }),
 
     http.post('/convoys/:id/arrive', ({ params }) => {

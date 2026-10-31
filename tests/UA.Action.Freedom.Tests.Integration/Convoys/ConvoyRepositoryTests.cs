@@ -201,6 +201,63 @@ public class ConvoyRepositoryTests
     }
 
     [Fact]
+    public async Task Departs_once_and_refuses_the_second_attempt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, _) = await ConnectOrSkipAsync(cancellationToken);
+        var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
+        var departedAt = new DateTime(2026, 9, 1, 6, 5, 0, DateTimeKind.Utc);
+
+        try
+        {
+            (await convoys.GetByIdAsync(id, cancellationToken))!.Departed.Should().BeFalse();
+
+            (await convoys.DepartAsync(id, departedAt, cancellationToken)).Should().BeTrue();
+
+            // The UPDATE is conditional on the convoy not having departed, so the database settles a race
+            // between two dispatchers and the first stamp stands.
+            (await convoys.DepartAsync(id, departedAt.AddHours(1), cancellationToken)).Should().BeFalse();
+
+            var stored = await convoys.GetByIdAsync(id, cancellationToken);
+            stored!.Departed.Should().BeTrue();
+            stored.DepartedAt.Should().Be(departedAt);
+        }
+        finally
+        {
+            await RemoveConvoyAsync(id);
+        }
+    }
+
+    [Fact]
+    public async Task A_convoy_that_does_not_exist_does_not_depart()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, _) = await ConnectOrSkipAsync(cancellationToken);
+
+        (await convoys.DepartAsync(int.MaxValue, DateTime.UtcNow, cancellationToken)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_ordinary_edit_cannot_clear_or_set_the_departure()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (convoys, _) = await ConnectOrSkipAsync(cancellationToken);
+        var id = await convoys.AddAsync(Start, ExpectedEnd, cancellationToken);
+
+        try
+        {
+            await convoys.DepartAsync(id, Start, cancellationToken);
+            await convoys.UpdateAsync(new ConvoyReadModel(id, Start, ExpectedEnd.AddDays(1), null), cancellationToken);
+
+            (await convoys.GetByIdAsync(id, cancellationToken))!.DepartedAt.Should().Be(Start);
+        }
+        finally
+        {
+            await RemoveConvoyAsync(id);
+        }
+    }
+
+    [Fact]
     public async Task Arrival_hands_over_delivered_and_lost_vehicles_and_leaves_returned_ones_free()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
