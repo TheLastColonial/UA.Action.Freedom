@@ -13,8 +13,8 @@ export const convoyReadModelSchema = z.object({
   arrivedAt: z.string().nullable(),
   arrived: z.boolean(),
   // Stamped by POST /convoys/{id}/depart, the one departure action (O36).
-  departedAt: z.string().nullable().default(null),
-  departed: z.boolean().default(false),
+  departedAt: z.string().nullable(),
+  departed: z.boolean(),
 });
 export type ConvoyReadModel = z.infer<typeof convoyReadModelSchema>;
 

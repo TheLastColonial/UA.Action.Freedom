@@ -108,11 +108,7 @@ export function ConvoyReadinessPanel({
       {convoyBlockers.length > 0 ? (
         <ul aria-label="Convoy requirements">
           {convoyBlockers.map((requirement) => (
-            <RequirementItem
-              key={requirement.code}
-              convoyId={convoyId}
-              requirement={requirement}
-            />
+            <RequirementItem key={requirement.code} convoyId={convoyId} requirement={requirement} />
           ))}
         </ul>
       ) : null}

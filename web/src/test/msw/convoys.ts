@@ -187,7 +187,12 @@ export function convoyApi(
       const handover = vehicle.handoverReceiverRef;
       const requirements = [
         requirement('driver', vehicle.driverCount >= 1, 'No driver assigned', vehicle.vin),
-        requirement('insurance', insuranceProblem === null, insuranceProblem ?? 'Insurance in cover', vehicle.vin),
+        requirement(
+          'insurance',
+          insuranceProblem === null,
+          insuranceProblem ?? 'Insurance in cover',
+          vehicle.vin,
+        ),
         requirement('ferry', ferry.has(crewKey(id, vehicle.vin)), 'No ferry booking', vehicle.vin),
         requirement(
           'handover-receiver',
@@ -198,7 +203,12 @@ export function convoyApi(
         ...(vehicle.driverCount === 1
           ? [
               {
-                ...requirement('advisory.second-driver', false, 'Only one driver; two are advised', vehicle.vin),
+                ...requirement(
+                  'advisory.second-driver',
+                  false,
+                  'Only one driver; two are advised',
+                  vehicle.vin,
+                ),
                 state: 'Warning',
                 severity: 'Advisory',
               },
@@ -260,6 +270,8 @@ export function convoyApi(
         truckListPublishedAt: null,
         truckListPublished: false,
         arrivedAt: null,
+        departedAt: null,
+        departed: false,
         arrived: false,
       });
       return new HttpResponse(null, {
@@ -542,7 +554,9 @@ export function convoyApi(
         return new HttpResponse(null, { status: 404 });
       }
       if (convoy.departed || convoy.arrived) {
-        return problem(409, 'This convoy has already departed.', { type: 'convoy-already-departed' });
+        return problem(409, 'This convoy has already departed.', {
+          type: 'convoy-already-departed',
+        });
       }
       const unmet = readiness.requirements.filter(
         (r) => r.severity === 'Blocking' && r.state !== 'Done',
