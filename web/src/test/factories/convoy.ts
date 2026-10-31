@@ -20,6 +20,8 @@ export function makeConvoy(overrides: Partial<ConvoyReadModel> = {}): ConvoyRead
     arrived: false,
     departedAt: null,
     departed: false,
+    closedAt: null,
+    closed: false,
     lastChangedByName: null,
     lastChangedAt: null,
     ...overrides,
@@ -57,6 +59,8 @@ export function makeConvoyVehicle(
     handoverReceiverRef: null,
     travelling: true,
     withdrawn: false,
+    deliveredAt: null,
+    delivered: false,
     ...overrides,
   };
 }

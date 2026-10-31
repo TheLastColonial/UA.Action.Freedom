@@ -272,6 +272,8 @@ export function convoyApi(
         arrivedAt: null,
         departedAt: null,
         departed: false,
+        closedAt: null,
+        closed: false,
         arrived: false,
       });
       return new HttpResponse(null, {
@@ -465,6 +467,8 @@ export function convoyApi(
             handoverReceiverRef: null,
             travelling: true,
             withdrawn: false,
+            deliveredAt: null,
+            delivered: false,
           },
         ]);
       }
