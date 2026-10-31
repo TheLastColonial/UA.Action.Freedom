@@ -75,6 +75,16 @@ public static class OutcomeEndpoints
         .AddEndpointFilter<ValidationFilter<RecordBoxOutcomeRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
 
+        convoys.MapGet("/{id:int}/outcomes", async (
+            int id,
+            IQueryHandler<ListBoxOutcomesQuery, IReadOnlyList<BoxOutcomeReadModel>?> handler,
+            CancellationToken cancellationToken) =>
+        {
+            var outcomes = await handler.HandleAsync(new ListBoxOutcomesQuery(id), cancellationToken);
+            return outcomes is null ? Results.NotFound() : Results.Ok(outcomes);
+        })
+        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+
         // Closing follows arrival and draws the report (O10). It does not lock the convoy (O25): the report is
         // regenerated from the facts, so pressing it again after a correction simply shows the corrected account.
         convoys.MapPost("/{id:int}/close", async (

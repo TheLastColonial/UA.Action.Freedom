@@ -237,6 +237,37 @@ public class BoxOutcomeEndpointTests
         world.Boxes.Items(BoxId).Should().ContainSingle();
     }
 
+    // ---- reading the current outcomes ---------------------------------------------------------------
+
+    [Fact]
+    public async Task The_current_outcome_of_every_box_on_the_convoy_can_be_read_without_a_receiver()
+    {
+        await using var world = AWorld(roles: "Dispatcher");
+        using var client = await LoadedAsync(world);
+        await Record(client, "Delivered");
+        await Record(client, "Accepted");
+
+        var response = await client.GetAsync($"/convoys/{ConvoyId}/outcomes", TestContext.Current.CancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var outcomes = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var only = outcomes.EnumerateArray().Single();
+        only.GetProperty("boxId").GetInt32().Should().Be(BoxId);
+        only.GetProperty("vin").GetString().Should().Be(VinA);
+        only.GetProperty("outcome").GetString().Should().Be("Accepted");
+        only.GetRawText().ToLowerInvariant().Should().NotContain("receiver");
+    }
+
+    [Fact]
+    public async Task Outcomes_of_an_unknown_convoy_are_not_found()
+    {
+        await using var world = AWorld(roles: "Dispatcher");
+        using var client = world.Api.CreateClient();
+
+        (await client.GetAsync("/convoys/999/outcomes", TestContext.Current.CancellationToken))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     // ---- increment 5: a vehicle is delivered --------------------------------------------------------
 
     private static string Delivered(string vin = VinA) => $"/convoys/{ConvoyId}/vehicles/{vin}/delivered";

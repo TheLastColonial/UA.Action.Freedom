@@ -22,6 +22,19 @@ public enum RecordBoxOutcomeOutcome
     Conflict,
 }
 
+/// <summary>Every box's current outcome on a convoy, or null when there is no such convoy.</summary>
+public sealed record ListBoxOutcomesQuery(int ConvoyId);
+
+public sealed class ListBoxOutcomesHandler(IConvoyRepository convoys, IBoxOutcomeRepository outcomes)
+    : IQueryHandler<ListBoxOutcomesQuery, IReadOnlyList<BoxOutcomeReadModel>?>
+{
+    public async Task<IReadOnlyList<BoxOutcomeReadModel>?> HandleAsync(
+        ListBoxOutcomesQuery query, CancellationToken cancellationToken) =>
+        await convoys.ExistsAsync(query.ConvoyId, cancellationToken)
+            ? await outcomes.ListCurrentAsync(query.ConvoyId, cancellationToken)
+            : null;
+}
+
 /// <summary>Mark a vehicle delivered: the Convoy Leader act, performed by the Dispatcher until plan 17 (O8).</summary>
 public sealed record DeliverVehicleCommand(int ConvoyId, string Vin);
 
