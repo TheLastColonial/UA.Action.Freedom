@@ -1,8 +1,6 @@
 using AwesomeAssertions;
 using NSubstitute;
 using UA.Action.Freedom.Application.Boxes;
-using UA.Action.Freedom.Application.Convoys;
-using UA.Action.Freedom.Application.Manifests;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Tests.Unit.Boxes;
@@ -30,28 +28,15 @@ public class ReplaceBoxHandlerTests
         ValidatedAt: validated ? new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc) : null,
         VoidedAt: voided ? new DateTime(2026, 8, 21, 9, 0, 0, DateTimeKind.Utc) : null);
 
-    private sealed record Fixture(
-        ReplaceBoxHandler Handler,
-        IBoxRepository Boxes,
-        IConvoyVehicleRepository TruckList,
-        IManifestRepository Manifests);
+    private sealed record Fixture(ReplaceBoxHandler Handler, IBoxRepository Boxes);
 
-    private static Fixture AFixture(BoxReadModel? box, BoxAllocation? allocation = null, bool loadFrozen = false)
+    private static Fixture AFixture(BoxReadModel? box)
     {
         var boxes = Substitute.For<IBoxRepository>();
         boxes.GetByIdAsync(BoxId, Arg.Any<CancellationToken>()).Returns(box);
         boxes.ReplaceAsync(BoxId, Arg.Any<CancellationToken>()).Returns(ReplacementId);
 
-        var truckList = Substitute.For<IConvoyVehicleRepository>();
-        truckList.GetBoxAllocationAsync(BoxId, Arg.Any<CancellationToken>()).Returns(allocation);
-
-        var manifests = Substitute.For<IManifestRepository>();
-        manifests.GetForVehicleAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new ManifestReadModel(
-                "M-1", 5, "WVWZZZ1KZ6W000001", ManifestStatus.Confirmed, null,
-                GmrSubmittedAt: loadFrozen ? new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Utc) : null));
-
-        return new Fixture(new ReplaceBoxHandler(boxes, truckList, manifests), boxes, truckList, manifests);
+        return new Fixture(new ReplaceBoxHandler(boxes), boxes);
     }
 
     [Fact]
@@ -94,20 +79,6 @@ public class ReplaceBoxHandlerTests
         var result = await fixture.Handler.HandleAsync(new ReplaceBoxCommand(BoxId), CancellationToken.None);
 
         result.Outcome.Should().Be(ReplaceBoxOutcome.AlreadyVoided);
-        await fixture.Boxes.DidNotReceive().ReplaceAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task A_box_on_a_vehicle_whose_load_is_frozen_cannot_be_replaced()
-    {
-        // Replacing moves the cargo to a different box. While the manifest's freeze stands (until plan 15) the
-        // load of that vehicle may not change.
-        var allocation = new BoxAllocation(new ConvoyId(5), "WVWZZZ1KZ6W000001", BoxId, DateTime.UtcNow);
-        var fixture = AFixture(ABox(), allocation, loadFrozen: true);
-
-        var result = await fixture.Handler.HandleAsync(new ReplaceBoxCommand(BoxId), CancellationToken.None);
-
-        result.Outcome.Should().Be(ReplaceBoxOutcome.LoadFrozen);
         await fixture.Boxes.DidNotReceive().ReplaceAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 

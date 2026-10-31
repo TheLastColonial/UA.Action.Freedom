@@ -6,8 +6,8 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Tests.Unit.Manifests;
 
 /// <summary>
-/// Approval signs off the load and nothing more (ADR 0004, ADR 0006): it confirms the manifest and
-/// freezes it, and files, enqueues and hands off nothing. The GMR and the French envelope are filed
+/// Approval signs off the load and nothing more (ADR 0004, ADR 0006): it approves the manifest, and
+/// files, enqueues and hands off nothing. The GMR and the French envelope are filed
 /// from the vehicle's declarations afterwards, and the travelling document is requested explicitly.
 /// </summary>
 public class ApproveManifestHandlerTests
@@ -16,23 +16,19 @@ public class ApproveManifestHandlerTests
 
     private const string Vin = "WVWZZZ1JZXW000001";
 
-    private static readonly DateTime Stamped = new(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc);
-
-    private static ManifestReadModel AManifest(
-        ManifestStatus status = ManifestStatus.Proposed, bool frozen = false) => new(
-        Id, 42, Vin, status, null,
-        GmrSubmittedAt: frozen ? Stamped : null);
+    private static ManifestReadModel AManifest(ManifestStatus status = ManifestStatus.Proposed) =>
+        new(Id, 42, Vin, status, null);
 
     private static IManifestRepository ARepositoryHolding(ManifestReadModel? manifest)
     {
         var repository = Substitute.For<IManifestRepository>();
         repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(manifest);
-        repository.ConfirmAndFreezeAsync(Id, ManifestStatus.Proposed, Arg.Any<CancellationToken>()).Returns(Stamped);
+        repository.ApproveAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
         return repository;
     }
 
     [Fact]
-    public async Task Confirms_and_freezes_the_manifest()
+    public async Task Approves_the_manifest()
     {
         var repository = ARepositoryHolding(AManifest());
 
@@ -40,8 +36,7 @@ public class ApproveManifestHandlerTests
             new ApproveManifestCommand(Id), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(TransitionManifestOutcome.Transitioned);
-        await repository.Received(1).ConfirmAndFreezeAsync(
-            Id, ManifestStatus.Proposed, Arg.Any<CancellationToken>());
+        await repository.Received(1).ApproveAsync(Id, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -60,27 +55,26 @@ public class ApproveManifestHandlerTests
     }
 
     [Fact]
-    public async Task Refuses_to_approve_a_manifest_that_was_never_proposed()
+    public async Task Refuses_to_approve_a_manifest_that_was_rejected_and_not_proposed_again()
     {
-        var repository = ARepositoryHolding(AManifest(ManifestStatus.Created));
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Rejected));
 
         var outcome = await new ApproveManifestHandler(repository).HandleAsync(
             new ApproveManifestCommand(Id), TestContext.Current.CancellationToken);
 
         outcome.Should().Be(TransitionManifestOutcome.IllegalTransition);
-        await repository.DidNotReceive().ConfirmAndFreezeAsync(
-            Arg.Any<string>(), Arg.Any<ManifestStatus>(), Arg.Any<CancellationToken>());
+        await repository.DidNotReceive().ApproveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Refuses_to_approve_a_manifest_twice()
     {
-        var repository = ARepositoryHolding(AManifest(ManifestStatus.Confirmed, frozen: true));
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Approved));
 
         var outcome = await new ApproveManifestHandler(repository).HandleAsync(
             new ApproveManifestCommand(Id), TestContext.Current.CancellationToken);
 
-        outcome.Should().Be(TransitionManifestOutcome.Frozen);
+        outcome.Should().Be(TransitionManifestOutcome.IllegalTransition);
     }
 
     [Fact]
@@ -88,8 +82,7 @@ public class ApproveManifestHandlerTests
     {
         // The conditional confirm found nothing, so somebody else already approved it.
         var repository = ARepositoryHolding(AManifest());
-        repository.ConfirmAndFreezeAsync(Id, ManifestStatus.Proposed, Arg.Any<CancellationToken>())
-            .Returns((DateTime?)null);
+        repository.ApproveAsync(Id, Arg.Any<CancellationToken>()).Returns(false);
 
         var outcome = await new ApproveManifestHandler(repository).HandleAsync(
             new ApproveManifestCommand(Id), TestContext.Current.CancellationToken);
@@ -132,7 +125,7 @@ public class ApproveManifestHandlerTests
     [Fact]
     public async Task The_travelling_document_is_requested_separately_and_carries_the_plate_not_the_vin()
     {
-        var repository = ARepositoryHolding(AManifest(ManifestStatus.Confirmed, frozen: true));
+        var repository = ARepositoryHolding(AManifest(ManifestStatus.Approved));
         repository.GetVehiclePlateAsync(Id, Arg.Any<CancellationToken>()).Returns("AB12 CDE");
         repository.GetDocumentLinesAsync(Id, Arg.Any<CancellationToken>()).Returns([]);
         var queue = Substitute.For<IManifestWorkQueue>();

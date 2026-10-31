@@ -229,7 +229,7 @@ public sealed class FileDeclarationHandler(
         }
 
         // Declarations are prepared after sign-off (ADR 0006): an unapproved load can still change.
-        if (!manifest.Frozen)
+        if (!manifest.Approved)
         {
             return FileDeclarationOutcome.ManifestNotApproved;
         }

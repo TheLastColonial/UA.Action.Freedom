@@ -736,7 +736,18 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
             return Task.FromResult(AllocateBoxResult.BoxNotFound);
         }
 
+        var previous = Ledger.AllocationOf(boxId);
         var outcome = Ledger.Allocate(AsDomain(entry), boxId);
+
+        if (outcome is AllocateOutcome.Allocated or AllocateOutcome.Moved)
+        {
+            Ledger.Reopen(convoyId, vin);
+
+            if (previous is not null)
+            {
+                Ledger.Reopen(previous.ConvoyId.Value, previous.Vin);
+            }
+        }
 
         return Task.FromResult(outcome switch
         {
@@ -746,8 +757,17 @@ internal sealed class InMemoryConvoyRepository : IConvoyRepository, IConvoyVehic
         });
     }
 
-    public Task<bool> RemoveBoxAsync(int convoyId, string vin, int boxId, CancellationToken cancellationToken) =>
-        Task.FromResult(EntryFor(convoyId, vin) is { } entry && Ledger.Remove(AsDomain(entry), boxId));
+    public Task<bool> RemoveBoxAsync(int convoyId, string vin, int boxId, CancellationToken cancellationToken)
+    {
+        var removed = EntryFor(convoyId, vin) is { } entry && Ledger.Remove(AsDomain(entry), boxId);
+
+        if (removed)
+        {
+            Ledger.Reopen(convoyId, vin);
+        }
+
+        return Task.FromResult(removed);
+    }
 
     private static ConvoyVehicle AsDomain(TruckListEntry entry) =>
         new() { ConvoyId = new ConvoyId(entry.ConvoyId), Vin = entry.Vin, WithdrawnAt = entry.WithdrawnAt };

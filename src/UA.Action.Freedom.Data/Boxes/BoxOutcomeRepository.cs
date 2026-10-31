@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.SqlClient;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
+using UA.Action.Freedom.Data.Manifests;
 using UA.Action.Freedom.Domain;
 
 namespace UA.Action.Freedom.Data.Boxes;
@@ -187,6 +188,13 @@ public sealed class BoxOutcomeRepository(IDbConnectionFactory connectionFactory,
                     attribution.With(new { boxId = outcome.BoxId, hubLocationId = outcome.HubLocationId }),
                     transaction,
                     cancellationToken: cancellationToken));
+            }
+
+            // A box that was seized, could not be delivered or came back has left the vehicle's load, so the
+            // sign-off of what it carries goes back for re-approval (X3). A delivery changes nothing.
+            if (outcome.Outcome is BoxOutcome.Seized or BoxOutcome.Undeliverable or BoxOutcome.ReturnedToHub)
+            {
+                await connection.ReopenManifestAsync(transaction, attribution, outcome.ConvoyId, outcome.Vin, cancellationToken);
             }
 
             await transaction.CommitAsync(cancellationToken);

@@ -69,17 +69,15 @@ public sealed class CreateManifestHandler(IManifestRepository repository, IConvo
             return CreateManifestOutcome.AlreadyHasManifest;
         }
 
-        // A manifest is Created before it is populated — no teams, no cargo required yet. That is
-        // the first state of the diagram, and proposing it is what asserts it is complete enough
-        // to look at.
+        // A manifest opens Proposed: the Administrator is asked to sign the load off, and may do so while
+        // the load is still being built, because a later change to it simply sends the sign-off back.
         await repository.AddAsync(
             new ManifestReadModel(
                 command.Id,
                 command.ConvoyId,
                 command.Vin,
-                ManifestStatus.Created,
-                command.DeliveryNotes,
-                GmrSubmittedAt: null),
+                ManifestStatus.Proposed,
+                command.DeliveryNotes),
             cancellationToken);
 
         return CreateManifestOutcome.Created;
@@ -92,7 +90,7 @@ public sealed class CreateManifestHandler(IManifestRepository repository, IConvo
 /// <remarks>
 /// The convoy and the vehicle are deliberately absent. They are the manifest's identity — the
 /// truck-list entry it is the paperwork for — not attributes of it, and re-pointing a manifest at
-/// a different vehicle is not an edit: the Goods Movement Reference named a crossing. A vehicle
+/// a different vehicle is not an edit: the declarations named a crossing. A vehicle
 /// that leaves the convoy is withdrawn from the truck list, which keeps this manifest intact.
 /// </remarks>
 public sealed record UpdateManifestCommand(string Id, string? DeliveryNotes);
@@ -100,8 +98,7 @@ public sealed record UpdateManifestCommand(string Id, string? DeliveryNotes);
 public enum UpdateManifestOutcome
 {
     Updated,
-    NotFound,
-    Frozen
+    NotFound
 }
 
 public sealed class UpdateManifestHandler(IManifestRepository repository)
@@ -115,13 +112,6 @@ public sealed class UpdateManifestHandler(IManifestRepository repository)
         if (manifest is null)
         {
             return UpdateManifestOutcome.NotFound;
-        }
-
-        // §5.2: once the GMR exists, HMRC has been told what is crossing the border. Changing
-        // the manifest afterwards would mean the vehicle arrives carrying something else.
-        if (manifest.Frozen)
-        {
-            return UpdateManifestOutcome.Frozen;
         }
 
         var updated = await repository.UpdateAsync(
@@ -141,8 +131,7 @@ public sealed record DeleteManifestCommand(string Id);
 public enum DeleteManifestOutcome
 {
     Deleted,
-    NotFound,
-    Frozen
+    NotFound
 }
 
 public sealed class DeleteManifestHandler(IManifestRepository repository)
@@ -156,13 +145,6 @@ public sealed class DeleteManifestHandler(IManifestRepository repository)
         if (manifest is null)
         {
             return DeleteManifestOutcome.NotFound;
-        }
-
-        // Deleting is the most complete edit there is. A manifest HMRC has been told about has
-        // to remain answerable for, whatever happened to the load.
-        if (manifest.Frozen)
-        {
-            return DeleteManifestOutcome.Frozen;
         }
 
         var deleted = await repository.DeleteAsync(command.Id, cancellationToken);

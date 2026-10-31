@@ -40,10 +40,8 @@ public class ManifestEndpointTests
     private static readonly byte[] Barcode =
         System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 barcode for one lorry");
 
-    private static ManifestReadModel AManifest(
-        ManifestStatus status = ManifestStatus.Created, bool frozen = false) => new(
-        Id, ConvoyId, Vin, status, null,
-        GmrSubmittedAt: frozen ? new DateTime(2026, 8, 25, 10, 0, 0, DateTimeKind.Utc) : null);
+    private static ManifestReadModel AManifest(ManifestStatus status = ManifestStatus.Proposed) =>
+        new(Id, ConvoyId, Vin, status, null);
 
     /// <summary>
     /// A convoy whose truck list is published, carrying the manifest's vehicle, insured and in
@@ -119,21 +117,20 @@ public class ManifestEndpointTests
     }
 
     [Fact]
-    public async Task A_manifest_moves_along_the_happy_path()
+    public async Task A_manifest_is_proposed_again_after_a_rejection_and_then_approved()
     {
-        var manifests = new InMemoryManifestRepository(AManifest());
-        var queue = new RecordingManifestWorkQueue();
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Rejected));
         await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), ARosterOfDrivers(), queue,
+            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(),
             roles: "Administrator");
         using var client = api.CreateClient();
 
         foreach (var (step, expected) in new (string Step, ManifestStatus Expected)[]
                  {
                      ("propose", ManifestStatus.Proposed),
-                     ("approve", ManifestStatus.Confirmed),
-                     ("prepare", ManifestStatus.Preparing),
-                     ("ready", ManifestStatus.Ready),
+                     ("reject", ManifestStatus.Rejected),
+                     ("propose", ManifestStatus.Proposed),
+                     ("approve", ManifestStatus.Approved),
                  })
         {
             var response = await client.PostAsync(
@@ -148,7 +145,7 @@ public class ManifestEndpointTests
     public async Task A_manifest_has_no_depart_of_its_own_because_a_convoy_departs_as_a_whole()
     {
         // O36: departure is POST /convoys/{id}/depart. There is no per-vehicle route to take, and so none to bypass.
-        var manifests = new InMemoryManifestRepository(AManifest() with { Status = ManifestStatus.Ready });
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Approved));
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Administrator");
         using var client = api.CreateClient();
@@ -156,13 +153,13 @@ public class ManifestEndpointTests
         var response = await client.PostAsync($"/manifests/{Id}/depart", content: null, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed);
-        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Ready);
+        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Approved);
     }
 
     [Fact]
     public async Task Refuses_to_propose_against_a_convoy_whose_truck_list_is_still_open()
     {
-        var manifests = new InMemoryManifestRepository(AManifest());
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Rejected));
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(truckListPublished: false), ARosterOfDrivers(),
             new RecordingManifestWorkQueue(), roles: "Dispatcher");
@@ -172,28 +169,28 @@ public class ManifestEndpointTests
             $"/manifests/{Id}/propose", content: null, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Created);
+        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Rejected);
     }
 
     [Fact]
     public async Task Refuses_an_edge_the_diagram_does_not_draw()
     {
-        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Confirmed));
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Rejected));
         await using var api = FreedomApi.WithManifests(
-            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
+            manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Administrator");
         using var client = api.CreateClient();
 
         var response = await client.PostAsync(
-            $"/manifests/{Id}/deliver", content: null, TestContext.Current.CancellationToken);
+            $"/manifests/{Id}/approve", content: null, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Rejected);
     }
 
     [Fact]
     public async Task A_dispatcher_may_build_a_manifest_but_not_approve_it()
     {
-        // Approval releases the GMR and freezes the manifest, so the person who builds one is
-        // not the person who signs it off.
+        // Approval signs the load off, so the person who builds one is not the person who signs it off.
         var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Proposed));
         var queue = new RecordingManifestWorkQueue();
         await using var api = FreedomApi.WithManifests(
@@ -205,11 +202,11 @@ public class ManifestEndpointTests
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         queue.Submissions.Should().BeEmpty();
-        manifests.Manifest(Id)!.Frozen.Should().BeFalse();
+        manifests.Manifest(Id)!.Approved.Should().BeFalse();
     }
 
     [Fact]
-    public async Task Approving_freezes_the_manifest_and_queues_nothing()
+    public async Task Approving_signs_the_load_off_and_queues_nothing()
     {
         // Approval signs off the load and nothing else (ADR 0004, ADR 0006): the GMR, the envelope and
         // the document are separate, explicit acts afterwards.
@@ -224,7 +221,7 @@ public class ManifestEndpointTests
             $"/manifests/{Id}/approve", content: null, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-        manifests.Manifest(Id)!.Frozen.Should().BeTrue();
+        manifests.Manifest(Id)!.Approved.Should().BeTrue();
         queue.Submissions.Should().BeEmpty();
         queue.Envelopes.Should().BeEmpty();
         queue.Documents.Should().BeEmpty();
@@ -258,22 +255,26 @@ public class ManifestEndpointTests
     }
 
     [Fact]
-    public async Task The_old_ens_routes_say_the_declaration_has_moved()
+    public async Task The_old_ens_routes_are_gone()
     {
         await using var api = FreedomApi.WithManifests(
             new InMemoryManifestRepository(AManifest()), AConvoy(), ARosterOfDrivers(),
             new RecordingManifestWorkQueue(), roles: "Dispatcher");
         using var client = api.CreateClient();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
-        (await client.GetAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Gone);
-        (await client.GetAsync($"/manifests/{Id}/ens/filing-sheet", TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Gone);
-        (await client.PutAsJsonAsync($"/manifests/{Id}/ens", new { mrn = Mrn }, TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Gone);
-        (await client.DeleteAsync($"/manifests/{Id}/ens", TestContext.Current.CancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Gone);
+        foreach (var response in new[]
+                 {
+                     await client.GetAsync($"/manifests/{Id}/ens", cancellationToken),
+                     await client.GetAsync($"/manifests/{Id}/ens/filing-sheet", cancellationToken),
+                     await client.PutAsJsonAsync($"/manifests/{Id}/ens", new { mrn = Mrn }, cancellationToken),
+                     await client.DeleteAsync($"/manifests/{Id}/ens", cancellationToken),
+                 })
+        {
+            response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed);
+        }
     }
+
     [Fact]
     public void The_queued_document_has_nowhere_to_put_a_delivery_address()
     {
@@ -302,11 +303,10 @@ public class ManifestEndpointTests
     }
 
     [Fact]
-    public async Task A_frozen_manifest_cannot_be_put_back_in_front_of_an_approver()
+    public async Task A_person_cannot_send_an_approved_manifest_back()
     {
-        // A manifest whose GMR exists must not reappear as something still editable. Progress
-        // is fine — it is reopening that §5.2 forbids.
-        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Rejected, frozen: true));
+        // Only a change to the load does that, in the same transaction as the change (X3).
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Approved));
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Administrator");
         using var client = api.CreateClient();
@@ -315,15 +315,18 @@ public class ManifestEndpointTests
             $"/manifests/{Id}/propose", content: null, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Rejected);
+        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Approved);
     }
 
     [Theory]
+    [InlineData("prepare")]
+    [InlineData("ready")]
     [InlineData("deliver")]
     [InlineData("lose")]
-    public async Task A_frozen_manifest_can_still_record_what_happened_to_the_load(string step)
+    [InlineData("return")]
+    public async Task The_delivery_verbs_are_gone_because_what_happened_to_a_load_is_a_box_outcome(string step)
     {
-        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.InTransit, frozen: true));
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Approved));
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Administrator");
         using var client = api.CreateClient();
@@ -331,34 +334,36 @@ public class ManifestEndpointTests
         var response = await client.PostAsync(
             $"/manifests/{Id}/{step}", content: null, TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed);
+        manifests.Manifest(Id)!.Status.Should().Be(ManifestStatus.Approved);
     }
 
     [Fact]
-    public async Task A_frozen_manifest_cannot_be_edited_reloaded_or_deleted()
+    public async Task An_approved_manifest_still_takes_its_notes_and_can_be_deleted()
     {
-        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Confirmed, frozen: true));
+        // Nothing is frozen: a filed declaration is compared with its own snapshot of the load, not with this row.
+        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Approved));
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Administrator");
         using var client = api.CreateClient();
         var cancellationToken = TestContext.Current.CancellationToken;
 
         (await client.PutAsJsonAsync($"/manifests/{Id}", new { deliveryNotes = "changed" }, cancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Conflict);
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        manifests.Manifest(Id)!.DeliveryNotes.Should().Be("changed");
 
         (await client.DeleteAsync($"/manifests/{Id}", cancellationToken))
-            .StatusCode.Should().Be(HttpStatusCode.Conflict);
-
-        manifests.Count.Should().Be(1);
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        manifests.Count.Should().Be(0);
     }
 
     [Fact]
-    public async Task A_frozen_manifest_cannot_be_re_pointed_at_a_different_vehicle()
+    public async Task A_manifest_cannot_be_re_pointed_at_a_different_vehicle()
     {
         // Not because the edit is refused — because there is nowhere to put it. The convoy and
         // the vehicle are the manifest's identity, so PUT /manifests/{id} has no field for them
         // and the UPDATE never names those columns.
-        var manifests = new InMemoryManifestRepository(AManifest(ManifestStatus.Preparing));
+        var manifests = new InMemoryManifestRepository(AManifest());
         await using var api = FreedomApi.WithManifests(
             manifests, AConvoy(), ARosterOfDrivers(), new RecordingManifestWorkQueue(), roles: "Dispatcher");
         using var client = api.CreateClient();
@@ -479,7 +484,7 @@ public class ManifestEndpointTests
     [Theory]
     [InlineData("PUT")]
     [InlineData("DELETE")]
-    public async Task Writing_cargo_to_a_manifest_is_gone_and_points_at_the_truck_list_entry(string method)
+    public async Task Writing_cargo_to_a_manifest_is_gone_because_cargo_is_allocated_to_the_truck_list_entry(string method)
     {
         var manifests = new InMemoryManifestRepository(AManifest());
         await using var api = FreedomApi.WithManifests(
@@ -489,10 +494,8 @@ public class ManifestEndpointTests
         var response = await client.SendAsync(
             new HttpRequestMessage(new HttpMethod(method), $"/manifests/{Id}/boxes/7"),
             TestContext.Current.CancellationToken);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
-        problem.GetProperty("detail").GetString().Should().Contain("/convoys/{id}/vehicles/{vin}/boxes/{boxId}");
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed);
     }
 
     [Fact]

@@ -14,10 +14,7 @@ namespace UA.Action.Freedom.Tests.Integration.Manifests;
 /// </summary>
 /// <remarks>
 /// The conditional writes are what need a real database: <c>TransitionAsync</c> and
-/// <c>ConfirmAndFreezeAsync</c> both depend on the <c>WHERE</c> clause deciding a race, and
-/// <c>ConfirmAndFreezeAsync</c> additionally has to confirm and freeze in one statement — a
-/// manifest that is Confirmed but not yet frozen is editable, and that window is what §5.2 rules
-/// out.
+/// <c>ApproveAsync</c> both depend on the <c>WHERE</c> clause deciding a race.
 ///
 /// <para>
 /// Every manifest here is opened against a real truck-list entry, because <c>ConvoyId</c> and
@@ -49,8 +46,8 @@ public class ManifestRepositoryTests
     private sealed record TruckListEntry(int ConvoyId, string Vin, string Plate);
 
     private static ManifestReadModel AManifest(string id, TruckListEntry on) => new(
-        id, on.ConvoyId, on.Vin, ManifestStatus.Created,
-        DeliveryNotes: "Integration test", GmrSubmittedAt: null);
+        id, on.ConvoyId, on.Vin, ManifestStatus.Proposed,
+        DeliveryNotes: "Integration test");
 
     /// <summary>
     /// A convoy with one vehicle on its truck list. The capacity columns are optional — nothing
@@ -135,7 +132,7 @@ public class ManifestRepositoryTests
         ExecuteAsync("DELETE FROM dbo.Person WHERE Id = @id", ("@id", id));
 
     [Fact]
-    public async Task Round_trips_a_manifest_in_the_created_state()
+    public async Task Round_trips_a_manifest_in_the_proposed_state()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
@@ -149,7 +146,7 @@ public class ManifestRepositoryTests
             var stored = await repository.GetByIdAsync(id, cancellationToken);
 
             stored.Should().Be(AManifest(id, entry) with { LastChangedAt = stored!.LastChangedAt });
-            stored!.Frozen.Should().BeFalse();
+            stored!.Approved.Should().BeFalse();
 
             // The pair is also reachable from the truck-list side: one manifest per vehicle per convoy.
             (await repository.GetForVehicleAsync(entry.ConvoyId, entry.Vin, cancellationToken))!.Id.Should().Be(id);
@@ -173,15 +170,15 @@ public class ManifestRepositoryTests
         {
             await repository.AddAsync(AManifest(id, entry), cancellationToken);
 
-            (await repository.TransitionAsync(id, ManifestStatus.Created, ManifestStatus.Proposed, cancellationToken))
+            (await repository.TransitionAsync(id, ManifestStatus.Proposed, ManifestStatus.Rejected, cancellationToken))
                 .Should().BeTrue();
 
-            // The same call again finds nothing to move: the manifest is no longer in Created.
+            // The same call again finds nothing to move: the manifest is no longer Proposed.
             // That is how two dispatchers pressing one button resolve to a single transition.
-            (await repository.TransitionAsync(id, ManifestStatus.Created, ManifestStatus.Proposed, cancellationToken))
+            (await repository.TransitionAsync(id, ManifestStatus.Proposed, ManifestStatus.Rejected, cancellationToken))
                 .Should().BeFalse();
 
-            (await repository.GetByIdAsync(id, cancellationToken))!.Status.Should().Be(ManifestStatus.Proposed);
+            (await repository.GetByIdAsync(id, cancellationToken))!.Status.Should().Be(ManifestStatus.Rejected);
         }
         finally
         {
@@ -191,7 +188,7 @@ public class ManifestRepositoryTests
     }
 
     [Fact]
-    public async Task Confirming_and_freezing_happen_in_one_write()
+    public async Task Approving_signs_the_load_off_once_and_only_from_proposed()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
@@ -200,20 +197,17 @@ public class ManifestRepositoryTests
 
         try
         {
-            await repository.AddAsync(AManifest(id, entry) with { Status = ManifestStatus.Proposed }, cancellationToken);
+            await repository.AddAsync(AManifest(id, entry), cancellationToken);
 
-            var stamped = await repository.ConfirmAndFreezeAsync(id, ManifestStatus.Proposed, cancellationToken);
-
-            stamped.Should().NotBeNull();
+            (await repository.ApproveAsync(id, cancellationToken)).Should().BeTrue();
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
-            stored!.Status.Should().Be(ManifestStatus.Confirmed);
-            stored.Frozen.Should().BeTrue();
-            stored.GmrSubmittedAt.Should().Be(stamped);
+            stored!.Status.Should().Be(ManifestStatus.Approved);
+            stored.Approved.Should().BeTrue();
+            stored.ReopenedAt.Should().BeNull();
 
-            // A second approval finds nothing: one manifest, one GMR.
-            (await repository.ConfirmAndFreezeAsync(id, ManifestStatus.Proposed, cancellationToken))
-                .Should().BeNull();
+            // A second approval finds nothing: one manifest, one sign-off.
+            (await repository.ApproveAsync(id, cancellationToken)).Should().BeFalse();
         }
         finally
         {
@@ -223,7 +217,7 @@ public class ManifestRepositoryTests
     }
 
     [Fact]
-    public async Task An_update_cannot_reach_the_status_the_freeze_or_the_vehicle()
+    public async Task An_update_cannot_reach_the_status_or_the_vehicle()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repository = await ConnectOrSkipAsync(cancellationToken);
@@ -233,23 +227,21 @@ public class ManifestRepositoryTests
 
         try
         {
-            await repository.AddAsync(AManifest(id, entry) with { Status = ManifestStatus.Proposed }, cancellationToken);
-            await repository.ConfirmAndFreezeAsync(id, ManifestStatus.Proposed, cancellationToken);
+            await repository.AddAsync(AManifest(id, entry), cancellationToken);
+            await repository.ApproveAsync(id, cancellationToken);
 
-            // Asked directly to unfreeze, rewind, and re-point at a different vehicle on a
-            // different convoy. The UPDATE has no columns for any of it.
+            // Asked directly to rewind, and to re-point at a different vehicle on a different
+            // convoy. The UPDATE has no columns for either.
             await repository.UpdateAsync(
                 AManifest(id, elsewhere) with
                 {
-                    Status = ManifestStatus.Created,
-                    GmrSubmittedAt = null,
+                    Status = ManifestStatus.Rejected,
                     DeliveryNotes = "changed",
                 },
                 cancellationToken);
 
             var stored = await repository.GetByIdAsync(id, cancellationToken);
-            stored!.Status.Should().Be(ManifestStatus.Confirmed);
-            stored.Frozen.Should().BeTrue();
+            stored!.Status.Should().Be(ManifestStatus.Approved);
             stored.DeliveryNotes.Should().Be("changed");
             stored.ConvoyId.Should().Be(entry.ConvoyId);
             stored.Vin.Should().Be(entry.Vin);
@@ -259,6 +251,28 @@ public class ManifestRepositoryTests
             await RemoveManifestAsync(id);
             await RemoveTruckListEntryAsync(entry);
             await RemoveTruckListEntryAsync(elsewhere);
+        }
+    }
+
+    [Fact]
+    public async Task The_schema_refuses_a_status_the_sign_off_does_not_have()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await ConnectOrSkipAsync(cancellationToken);
+        var entry = await ATruckListEntryAsync();
+        var id = NewId();
+
+        try
+        {
+            var insert = () => ExecuteAsync(
+                "INSERT INTO dbo.Manifest (Id, ConvoyId, Vin, Status) VALUES (@id, @convoyId, @vin, 3)",
+                ("@id", id), ("@convoyId", entry.ConvoyId), ("@vin", entry.Vin));
+
+            await insert.Should().ThrowAsync<SqlException>();
+        }
+        finally
+        {
+            await RemoveTruckListEntryAsync(entry);
         }
     }
 

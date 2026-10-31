@@ -10,15 +10,15 @@ namespace UA.Action.Freedom.Api.Manifests;
 /// Manifests: the central document of the system, and the lifecycle it moves through.
 /// </summary>
 /// <remarks>
-/// Every state change is its own <c>POST</c>, one per edge of <c>docs/manifest-status.puml</c>,
-/// rather than a <c>PATCH</c> of a status field. The happy path is linear, most pairs of states
-/// are not connected, and two of the rules — the truck-list precondition and the GMR freeze —
-/// have nothing to do with the pair of states involved. A status field would make all of that
-/// look like data validation instead of a process.
+/// Every state change a person can ask for is its own <c>POST</c> (<c>propose</c>, <c>approve</c>,
+/// <c>reject</c>), one per edge of <c>docs/manifest-status.puml</c>, rather than a <c>PATCH</c> of a status
+/// field: the truck-list precondition has nothing to do with the pair of states involved, and a status field
+/// would make it look like data validation instead of a process. The remaining edge, Approved back to
+/// Proposed, is taken only by a change to the vehicle's load.
 ///
-/// <c>approve</c> is the one with consequences: it confirms the manifest and freezes it. It hands no
-/// paperwork off: the GMR and the French envelope are filed from the vehicle's declarations, and the
-/// travelling document is requested with <c>POST /{id}/document</c>. Administrator only.
+/// <c>approve</c> signs the load off and hands no paperwork off: the GMR and the French envelope are filed
+/// from the vehicle's declarations, and the travelling document is requested with <c>POST /{id}/document</c>.
+/// Administrator only.
 /// </remarks>
 public static class ManifestEndpoints
 {
@@ -59,12 +59,7 @@ public static class ManifestEndpoints
         {
             var outcome = await handler.HandleAsync(request.ToCommand(id), cancellationToken);
 
-            return outcome switch
-            {
-                UpdateManifestOutcome.Updated => Results.NoContent(),
-                UpdateManifestOutcome.NotFound => Results.NotFound(),
-                _ => Frozen(),
-            };
+            return outcome == UpdateManifestOutcome.Updated ? Results.NoContent() : Results.NotFound();
         })
         .AddEndpointFilter<ValidationFilter<UpdateManifestRequest>>()
         .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
@@ -76,12 +71,7 @@ public static class ManifestEndpoints
         {
             var outcome = await handler.HandleAsync(new DeleteManifestCommand(id), cancellationToken);
 
-            return outcome switch
-            {
-                DeleteManifestOutcome.Deleted => Results.NoContent(),
-                DeleteManifestOutcome.NotFound => Results.NotFound(),
-                _ => Frozen(),
-            };
+            return outcome == DeleteManifestOutcome.Deleted ? Results.NoContent() : Results.NotFound();
         })
         .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
 
@@ -109,14 +99,6 @@ public static class ManifestEndpoints
             return boxes is null ? Results.NotFound() : Results.Ok(boxes);
         })
         .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
-
-        // Cargo moved to the truck-list entry (ADR 0004, plan 07). These stay as a signpost until
-        // plan 15 removes them, so a stale client is told where to go rather than getting a 404.
-        manifests.MapPut("/{id}/boxes/{boxId:int}", (string id, int boxId) => BoxesMoved())
-        .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
-
-        manifests.MapDelete("/{id}/boxes/{boxId:int}", (string id, int boxId) => BoxesMoved())
-        .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
 
         manifests.MapGet("/{id}/weight", async (
             string id,
@@ -158,17 +140,9 @@ public static class ManifestEndpoints
         })
         .RequireAuthorization(AuthenticationExtensions.ManifestsRead);
 
-        // The ENS moved onto the vehicle's declarations (plan 08): /convoys/{id}/vehicles/{vin}/declarations/ens.
-        // The old routes answer 410 until plan 15 removes them, so a client that still calls one is told
-        // where to go instead of being refused with a bare 404.
-        manifests.MapGet("/{id}/ens", () => DeclarationsMoved()).RequireAuthorization(AuthenticationExtensions.ManifestsRead);
-        manifests.MapGet("/{id}/ens/filing-sheet", () => DeclarationsMoved()).RequireAuthorization(AuthenticationExtensions.ManifestsRead);
-        manifests.MapPut("/{id}/ens", () => DeclarationsMoved()).RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
-        manifests.MapDelete("/{id}/ens", () => DeclarationsMoved()).RequireAuthorization(AuthenticationExtensions.ManifestsDeclare);
-
         // Approval signs off the load and nothing else (ADR 0004, ADR 0006): the GMR and the envelope are
         // filed afterwards from the vehicle's declarations. It stays the transition an Administrator alone
-        // may make, because it freezes the manifest.
+        // may make, because it signs the load off.
         manifests.MapPost("/{id}/approve", async (
             string id,
             ICommandHandler<ApproveManifestCommand, TransitionManifestOutcome> handler,
@@ -192,14 +166,9 @@ public static class ManifestEndpoints
             })
         .RequireAuthorization(AuthenticationExtensions.ManifestsWrite);
 
-        // One route per edge of the diagram.
+        // One route per edge a person can take.
         MapTransition(manifests, "propose", ManifestStatus.Proposed);
         MapTransition(manifests, "reject", ManifestStatus.Rejected);
-        MapTransition(manifests, "prepare", ManifestStatus.Preparing);
-        MapTransition(manifests, "ready", ManifestStatus.Ready);
-        MapTransition(manifests, "deliver", ManifestStatus.Delivered);
-        MapTransition(manifests, "lose", ManifestStatus.Lost);
-        MapTransition(manifests, "return", ManifestStatus.Returned);
 
         return app;
     }
@@ -216,7 +185,6 @@ public static class ManifestEndpoints
     {
         TransitionManifestOutcome.Transitioned => Results.NoContent(),
         TransitionManifestOutcome.NotFound => Results.NotFound(),
-        TransitionManifestOutcome.Frozen => Frozen(),
         TransitionManifestOutcome.TruckListNotPublished => Results.Problem(
             detail: "This manifest's convoy has not published its truck list, so there is no fixed set of "
                     + "vehicles to propose against.",
@@ -225,18 +193,4 @@ public static class ManifestEndpoints
             detail: "A manifest cannot move to that state from the one it is in.",
             statusCode: StatusCodes.Status409Conflict),
     };
-
-    private static IResult DeclarationsMoved() => Results.Problem(
-        detail: "The ICS2 declaration is recorded on the vehicle now. Use /convoys/{id}/vehicles/{vin}/declarations/ens "
-                + "(and .../declarations/ens/filing-sheet) instead.",
-        statusCode: StatusCodes.Status410Gone);
-
-    private static IResult BoxesMoved() => Results.Problem(
-        detail: "A vehicle's cargo is no longer kept on its manifest. Use PUT or DELETE "
-                + "/convoys/{id}/vehicles/{vin}/boxes/{boxId} on the truck-list entry instead.",
-        statusCode: StatusCodes.Status410Gone);
-
-    private static IResult Frozen() => Results.Problem(
-        detail: "A Goods Movement Reference has been created for this manifest, so it can no longer be changed.",
-        statusCode: StatusCodes.Status409Conflict);
 }

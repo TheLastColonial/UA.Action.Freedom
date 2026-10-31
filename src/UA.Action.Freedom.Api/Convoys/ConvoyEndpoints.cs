@@ -346,10 +346,9 @@ public static class ConvoyEndpoints
                     type: "box-voided",
                     detail: "That box has been replaced and carries no cargo. Allocate the box that replaced it.",
                     statusCode: StatusCodes.Status409Conflict),
-                AllocateBoxOutcome.VehicleWithdrawn => Results.Problem(
+                _ => Results.Problem(
                     detail: $"Vehicle '{vin}' has been withdrawn from this convoy, so it takes no more cargo.",
                     statusCode: StatusCodes.Status409Conflict),
-                _ => LoadFrozen(),
             };
         })
         .RequireBoxScope(BoxAccess.Write, "boxId")
@@ -370,10 +369,9 @@ public static class ConvoyEndpoints
                 RemoveBoxAllocationOutcome.VehicleNotOnConvoy => Results.Problem(
                     detail: $"There is no vehicle with VIN '{vin}' on this convoy.",
                     statusCode: StatusCodes.Status404NotFound),
-                RemoveBoxAllocationOutcome.NotAllocated => Results.Problem(
+                _ => Results.Problem(
                     detail: "That box is not on this vehicle.",
                     statusCode: StatusCodes.Status404NotFound),
-                _ => LoadFrozen(),
             };
         })
         .RequireBoxScope(BoxAccess.Write, "boxId")
@@ -649,10 +647,6 @@ public static class ConvoyEndpoints
 
         return app;
     }
-
-    private static IResult LoadFrozen() => Results.Problem(
-        detail: "A Goods Movement Reference has been created for this vehicle's manifest, so its load can no longer change.",
-        statusCode: StatusCodes.Status409Conflict);
 
     private static IResult ConvoyArrived() => Results.Problem(
         detail: "This convoy has arrived. Its crew and insurance are a record of the journey and can no longer change.",

@@ -42,7 +42,7 @@ public sealed class ManifestTelemetryTests : IDisposable
     }
 
     private static ManifestReadModel AManifest(ManifestStatus status) => new(
-        Id, 42, "WVWZZZ1JZXW000001", status, null, GmrSubmittedAt: null);
+        Id, 42, "WVWZZZ1JZXW000001", status, null);
 
     /// <summary>One substitute for both convoy ports — see ManifestTransitionHandlerTests.</summary>
     private static IConvoyRepository AConvoy()
@@ -62,7 +62,7 @@ public sealed class ManifestTelemetryTests : IDisposable
     {
         var repository = Substitute.For<IManifestRepository>();
         repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest(ManifestStatus.Proposed));
-        repository.ConfirmAndFreezeAsync(Id, ManifestStatus.Proposed, Arg.Any<CancellationToken>()).Returns(Stamped);
+        repository.ApproveAsync(Id, Arg.Any<CancellationToken>()).Returns(true);
         return repository;
     }
 
@@ -70,14 +70,14 @@ public sealed class ManifestTelemetryTests : IDisposable
     public async Task A_refused_edge_is_counted_with_where_it_started_and_where_it_was_going()
     {
         var repository = Substitute.For<IManifestRepository>();
-        repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest(ManifestStatus.Created));
+        repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest(ManifestStatus.Rejected));
         var handler = AHandler(repository, AConvoy(), _metrics);
 
-        await handler.HandleAsync(new TransitionManifestCommand(Id, ManifestStatus.Delivered), CancellationToken.None);
+        await handler.HandleAsync(new TransitionManifestCommand(Id, ManifestStatus.Approved), CancellationToken.None);
 
         _capture.Sum(
                 "freedom.manifest.transitions",
-                ("from", "Created"), ("to", "Delivered"), ("outcome", "IllegalTransition"))
+                ("from", "Rejected"), ("to", "Approved"), ("outcome", "IllegalTransition"))
             .Should().Be(1);
     }
 
@@ -85,16 +85,16 @@ public sealed class ManifestTelemetryTests : IDisposable
     public async Task A_transition_that_happened_is_counted_as_transitioned()
     {
         var repository = Substitute.For<IManifestRepository>();
-        repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest(ManifestStatus.Confirmed));
-        repository.TransitionAsync(Id, ManifestStatus.Confirmed, ManifestStatus.Preparing, Arg.Any<CancellationToken>())
+        repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(AManifest(ManifestStatus.Proposed));
+        repository.TransitionAsync(Id, ManifestStatus.Proposed, ManifestStatus.Rejected, Arg.Any<CancellationToken>())
             .Returns(true);
         var handler = AHandler(repository, AConvoy(), _metrics);
 
-        await handler.HandleAsync(new TransitionManifestCommand(Id, ManifestStatus.Preparing), CancellationToken.None);
+        await handler.HandleAsync(new TransitionManifestCommand(Id, ManifestStatus.Rejected), CancellationToken.None);
 
         _capture.Sum(
                 "freedom.manifest.transitions",
-                ("from", "Confirmed"), ("to", "Preparing"), ("outcome", "Transitioned"))
+                ("from", "Proposed"), ("to", "Rejected"), ("outcome", "Transitioned"))
             .Should().Be(1);
     }
 
@@ -112,7 +112,7 @@ public sealed class ManifestTelemetryTests : IDisposable
     }
 
     [Fact]
-    public async Task An_approval_is_counted_as_the_edge_into_confirmed()
+    public async Task An_approval_is_counted_as_the_edge_into_approved()
     {
         var handler = new ApproveManifestHandler(AProposedManifest(), _metrics);
 
@@ -120,7 +120,7 @@ public sealed class ManifestTelemetryTests : IDisposable
 
         _capture.Sum(
                 "freedom.manifest.transitions",
-                ("from", "Proposed"), ("to", "Confirmed"), ("outcome", "Transitioned"))
+                ("from", "Proposed"), ("to", "Approved"), ("outcome", "Transitioned"))
             .Should().Be(1);
     }
 
@@ -175,7 +175,7 @@ public sealed class ManifestTelemetryTests : IDisposable
     private static IManifestRepository AnApprovedManifest()
     {
         var repository = Substitute.For<IManifestRepository>();
-        var approved = AManifest(ManifestStatus.Confirmed) with { GmrSubmittedAt = Stamped };
+        var approved = AManifest(ManifestStatus.Approved);
         repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(approved);
         repository.GetForVehicleAsync(42, "WVWZZZ1JZXW000001", Arg.Any<CancellationToken>()).Returns(approved);
         return repository;

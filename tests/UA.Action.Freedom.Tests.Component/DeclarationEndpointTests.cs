@@ -27,8 +27,7 @@ public class DeclarationEndpointTests
     private static readonly string Base = $"/convoys/{ConvoyId}/vehicles/{Vin}/declarations";
 
     private static ManifestReadModel AManifest(bool approved = true) => new(
-        Id, ConvoyId, Vin, approved ? ManifestStatus.Confirmed : ManifestStatus.Proposed, null,
-        GmrSubmittedAt: approved ? Stamped : null);
+        Id, ConvoyId, Vin, approved ? ManifestStatus.Approved : ManifestStatus.Proposed, null);
 
     private static InMemoryConvoyRepository AConvoy() =>
         new InMemoryConvoyRepository(new ConvoyReadModel(ConvoyId, Departs, Departs.AddDays(4), Published))

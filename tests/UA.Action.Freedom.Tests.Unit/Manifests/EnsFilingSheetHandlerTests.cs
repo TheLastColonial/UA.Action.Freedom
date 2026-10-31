@@ -60,8 +60,7 @@ public class EnsFilingSheetHandlerTests
     {
         var repository = Substitute.For<IManifestRepository>();
         repository.GetByIdAsync(Id, Arg.Any<CancellationToken>()).Returns(new ManifestReadModel(
-            Id, ConvoyId, Vin, ManifestStatus.Created, null,
-            GmrSubmittedAt: null));
+            Id, ConvoyId, Vin, ManifestStatus.Proposed, null));
         repository.GetVehiclePlateAsync(Id, Arg.Any<CancellationToken>()).Returns(Plate);
         repository.GetVehicleWeightKgAsync(Id, Arg.Any<CancellationToken>()).Returns(1_400);
         repository.GetEnsGoodsLinesAsync(Id, Arg.Any<CancellationToken>()).Returns(lines);

@@ -3,8 +3,8 @@ using UA.Action.Freedom.Domain;
 namespace UA.Action.Freedom.Application.Manifests;
 
 /// <summary>
-/// A manifest as this slice persists and returns it — the document pack for one vehicle on one
-/// convoy: its cargo, its border weight, its Goods Movement Reference and its ferry booking.
+/// A manifest as this slice persists and returns it: the load sign-off for one vehicle on one convoy and its
+/// document pack (delivery notes; the cargo and the border weight are read through the vehicle's boxes).
 /// </summary>
 /// <remarks>
 /// <see cref="ConvoyId"/> and <see cref="Vin"/> are not optional and are not independently
@@ -17,14 +17,6 @@ namespace UA.Action.Freedom.Application.Manifests;
 /// There is no crew here. Who is driving is a fact about the vehicle on the convoy, read from the
 /// one crew record rather than kept a second time — see <c>VehicleCrewReadModel</c>.
 /// </para>
-///
-/// <para>
-/// <see cref="GmrSubmittedAt"/> is stamped at the moment the Goods Movement Reference is handed
-/// to the customs worker, which is the point of no return: <c>docs/recommendations.md</c> §5.2
-/// records the ruling that <em>once a GMR is created, no edits can be made to the manifest</em>.
-/// From then on the only things that may still happen to it are the ones that describe what the
-/// world did to the vehicle — delivered, lost, returned.
-/// </para>
 /// </remarks>
 public sealed record ManifestReadModel(
     string Id,
@@ -32,12 +24,12 @@ public sealed record ManifestReadModel(
     string Vin,
     ManifestStatus Status,
     string? DeliveryNotes,
-    DateTime? GmrSubmittedAt,
+    DateTime? ReopenedAt = null,
     string? LastChangedByName = null,
     DateTime? LastChangedAt = null)
 {
-    /// <summary>Whether the manifest can still be edited at all.</summary>
-    public bool Frozen => this.GmrSubmittedAt is not null;
+    /// <summary>Whether the Administrator has signed the load off: what declaring and the travelling document wait for.</summary>
+    public bool Approved => this.Status == ManifestStatus.Approved;
 }
 
 /// <summary>A box on the manifest, with enough of its state to add up a border weight.</summary>

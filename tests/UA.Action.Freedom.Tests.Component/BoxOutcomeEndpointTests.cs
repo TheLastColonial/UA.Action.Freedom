@@ -63,7 +63,7 @@ public class BoxOutcomeEndpointTests
             new LocationReadModel(NotAHub, "Somebody's garage", null, null, null, null, null));
 
         var manifests = new InMemoryManifestRepository(
-            new ManifestReadModel(ManifestId, ConvoyId, VinA, ManifestStatus.InTransit, null, null));
+            new ManifestReadModel(ManifestId, ConvoyId, VinA, ManifestStatus.Approved, null));
 
         var api = FreedomApi.WithManifests(
             manifests, convoys, new InMemoryPersonRepository().CalledByALinkedVolunteer(),
@@ -273,10 +273,11 @@ public class BoxOutcomeEndpointTests
     private static string Delivered(string vin = VinA) => $"/convoys/{ConvoyId}/vehicles/{vin}/delivered";
 
     [Fact]
-    public async Task Delivering_a_vehicle_delivers_its_boxes_and_its_manifest()
+    public async Task Delivering_a_vehicle_delivers_its_boxes_and_leaves_its_sign_off_alone()
     {
         await using var world = AWorld(roles: "Dispatcher");
         using var client = await LoadedAsync(world);
+        world.Manifests.Approved(ManifestId);
 
         var response = await client.PostAsync(Delivered(), null, TestContext.Current.CancellationToken);
 
@@ -284,7 +285,23 @@ public class BoxOutcomeEndpointTests
         (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
             .GetProperty("boxesDelivered").GetInt32().Should().Be(1);
         world.Convoys.Ledger.CurrentOutcome(ConvoyId, BoxId)!.Outcome.Should().Be(BoxOutcome.Delivered);
-        world.Manifests.Manifest(ManifestId)!.Status.Should().Be(ManifestStatus.Delivered);
+        world.Manifests.Manifest(ManifestId)!.Status.Should().Be(ManifestStatus.Approved);
+    }
+
+    [Theory]
+    [InlineData("Seized", true)]
+    [InlineData("Delivered", false)]
+    public async Task A_box_that_leaves_the_load_sends_the_vehicles_approved_manifest_back_for_re_approval(
+        string outcome, bool reopens)
+    {
+        await using var world = AWorld(roles: "Dispatcher");
+        using var client = await LoadedAsync(world);
+        world.Manifests.Approved(ManifestId);
+
+        await Record(client, outcome);
+
+        world.Manifests.Manifest(ManifestId)!.Status.Should().Be(
+            reopens ? ManifestStatus.Proposed : ManifestStatus.Approved);
     }
 
     [Fact]

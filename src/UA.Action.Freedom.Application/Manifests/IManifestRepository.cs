@@ -45,14 +45,10 @@ public interface IManifestRepository
     Task<bool> TransitionAsync(string id, ManifestStatus from, ManifestStatus to, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Confirms the manifest and freezes it in one statement, returning the stamp it wrote.
+    /// Signs the manifest off and clears any note that a load change reopened it, but only if it is still
+    /// <see cref="ManifestStatus.Proposed"/>. Returns false when it has moved underneath us.
     /// </summary>
-    /// <remarks>
-    /// The freeze and the status change are the same write because a confirmed manifest whose
-    /// GMR is on its way must never be editable, not even for the width of a second statement.
-    /// Returns null when the manifest was not in <paramref name="from"/> any more.
-    /// </remarks>
-    Task<DateTime?> ConfirmAndFreezeAsync(string id, ManifestStatus from, CancellationToken cancellationToken);
+    Task<bool> ApproveAsync(string id, CancellationToken cancellationToken);
 
     /// <summary>The kerb weight of the manifest's vehicle.</summary>
     Task<int> GetVehicleWeightKgAsync(string id, CancellationToken cancellationToken);
