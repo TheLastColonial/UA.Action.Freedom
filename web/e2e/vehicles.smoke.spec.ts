@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 import { signIn } from './auth';
+import { volunteerNameOf } from './departedConvoy';
 import { stackIsUp } from './stack';
 
 test.beforeEach(async () => {
@@ -34,7 +35,10 @@ test('@smoke operator creates a vehicle and reads it back', async ({ page }) => 
   await expect(page.getByText('E2E 001')).toBeVisible();
   await expect(page.getByText('Not yet inspected')).toBeVisible();
   // The change is signed as the volunteer the operator login is linked to (the BDD or the e2e one), never typed in.
-  await expect(page.getByText(/Last changed by \w+ operator on \d{4}-\d{2}-\d{2}/)).toBeVisible();
+  const name = await volunteerNameOf('operator');
+  await expect(
+    page.getByText(new RegExp(`Last changed by ${name} on \\d{4}-\\d{2}-\\d{2}`)),
+  ).toBeVisible();
 });
 
 test('@smoke a mechanic records an inspection and it survives a reload', async ({ page }) => {

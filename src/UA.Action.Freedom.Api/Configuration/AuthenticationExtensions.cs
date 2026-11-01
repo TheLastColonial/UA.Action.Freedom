@@ -204,6 +204,13 @@ public static class AuthenticationExtensions
     /// </summary>
     public const string ConvoysReadLed = "convoys:read-led";
 
+    /// <summary>
+    /// Report progress and the load's outcome from the road: mark a point reached or a border crossed, enter fuel, record how
+    /// a box or a vehicle ended - the Convoy Leader for the convoy they lead, and the Dispatcher or Administrator on their
+    /// behalf (ADR 0016, O27). Always paired with <c>RequireConvoyScope</c>.
+    /// </summary>
+    public const string ConvoysReportProgress = "convoys:report-progress";
+
     private const string RoleClaimType = "roles";
 
     private const string Administrator = "Administrator";
@@ -289,6 +296,8 @@ public static class AuthenticationExtensions
                 policy.RequireRole(Administrator, Dispatcher))
             .AddPolicy(ConvoysReadLed, policy =>
                 policy.RequireRole(Administrator, Purchaser, Dispatcher, Loader, ConvoyLeader))
+            .AddPolicy(ConvoysReportProgress, policy =>
+                policy.RequireRole(Administrator, Dispatcher, ConvoyLeader))
             .AddPolicy(ConvoysAssignDrivers, policy =>
                 policy.RequireRole(Dispatcher))
             .AddPolicy(ConvoysLeadAssign, policy =>

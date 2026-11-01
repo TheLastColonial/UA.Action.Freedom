@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IConvoyBudgetRepository, ConvoyBudgetRepository>();
         services.AddScoped<IVehicleEquipmentRepository, VehicleEquipmentRepository>();
         services.AddScoped<IAccommodationRepository, AccommodationRepository>();
+        services.AddScoped<IRoutePointMarkRepository, RoutePointMarkRepository>();
         services.Replace(ServiceDescriptor.Scoped<IRoutePointReferences, AccommodationRoutePointReferences>());
         services.AddScoped<IReceiverRepository, ReceiverRepository>();
         services.AddScoped<IBoxRepository, BoxRepository>();

@@ -224,6 +224,7 @@ token lacking the role is **403**.
 | `convoys:assign-drivers` | | ✓ | | | | |
 | `convoys:lead-assign` | ✓ | ✓ | | | | |
 | `convoys:read-led` | ✓ | ✓ | ✓ | ✓ | | |
+| `convoys:report-progress` | ✓ | ✓ | | | | |
 | `boxes:read` | ✓ | ✓ | ✓ | ✓ | | |
 | `boxes:write` | ✓ | ✓ | ✓ | | | |
 | `boxes:validate` | ✓ | | ✓ | | | |
@@ -253,6 +254,7 @@ A few rows are worth understanding rather than memorising:
   convoy only**: `ConvoyLeader` is not a role the identity provider issues (no token carries it) but one the API derives on every request from the open
   assignment, so it never outlives a reassignment. It reaches `convoys:read-led` on that convoy alone (`GET /convoys/{id}`, `/route`, `/vehicles`, `/vehicles/{vin}/boxes`), and
   the matrix row above marks the roles that read every convoy; a leader reads their own and is `403` `out-of-scope` on any other.
+  The leader also **reports progress** on that convoy alone (`convoys:report-progress`, the Convoy Leader plus Administrator and Dispatcher, always scoped): marks a point reached or a border crossed, enters **fuel** (and only fuel) on `POST /convoys/{id}/costs`, records a box's outcome and marks a vehicle delivered. A Dispatcher who does the same is recorded as acting on the leader's behalf and is named (ADR 0016, O27). The matrix has no Convoy Leader column because the role is derived.
 - **A Loader is scoped to the locations an Administrator assigns it** (`PUT /locations/{id}/loaders/{personId}`, `locations:write`), on every box and location
   route, lists and the label scan included. A person who also holds Dispatcher, Purchaser or Administrator has that role's reach, so the seeded `operator`
   is not scoped; use the `loader` login to see the scope. See ADR 0010.

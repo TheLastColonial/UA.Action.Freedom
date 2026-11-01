@@ -261,6 +261,7 @@ internal static class FreedomApi
             services.Replace<IConvoyRepository>(convoyFake);
             services.Replace<IConvoyVehicleRepository>(convoyFake);
             services.Replace<IConvoyLeaderRepository>(convoyFake);
+            services.Replace<IRoutePointReferences>(convoyFake);
             services.Replace<IManifestRepository>(manifestFake);
             services.Replace<IBoxRepository>(boxes ?? new InMemoryBoxRepository());
             services.Replace<ILocationRepository>(locations ?? new InMemoryLocationRepository());
@@ -437,6 +438,7 @@ internal static class FreedomApi
                 EnsureAccommodationIsFaked(services);
                 EnsureDeclarationsAreFaked(services);
                 EnsureBoxOutcomesAreFaked(services);
+                EnsureProgressIsFaked(services);
                 EnsureVehiclesAreFaked(services);
 
                 services
@@ -599,6 +601,29 @@ internal static class FreedomApi
         {
             services.Replace<ILocationRepository>(new InMemoryLocationRepository());
         }
+    }
+
+    /// <summary>
+    /// Progress marks are one store for the life of the application, built over the convoy and declaration fakes in play: a
+    /// crossing closes the declarations that fake holds, and a mark pins a route point on the convoy fake.
+    /// </summary>
+    private static void EnsureProgressIsFaked(IServiceCollection services)
+    {
+        if (IsFaked<IRoutePointMarkRepository>(services))
+        {
+            return;
+        }
+
+        InMemoryRoutePointMarkRepository? marks = null;
+        services.RemoveAll<IRoutePointMarkRepository>();
+        services.AddScoped<IRoutePointMarkRepository>(provider =>
+        {
+            marks ??= new InMemoryRoutePointMarkRepository(
+                (InMemoryConvoyRepository)provider.GetRequiredService<IConvoyVehicleRepository>(),
+                (InMemoryDeclarationRepository)provider.GetRequiredService<IDeclarationRepository>());
+            marks.Attach(provider.GetRequiredService<IChangeAttribution>(), provider.GetRequiredService<IPersonRepository>());
+            return marks;
+        });
     }
 
     /// <summary>The closing report reads each vehicle's value, so a test that did not supply a roster gets an empty one.</summary>

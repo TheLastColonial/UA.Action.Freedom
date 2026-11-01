@@ -5,7 +5,6 @@ import { useConvoyVehicles, useVehicleBoxes } from '../../api/convoys';
 import { useLocations } from '../../api/locations';
 import { useBoxOutcomes, useDeliverVehicle, useRecordBoxOutcome } from '../../api/outcomes';
 import { ApiDomainProblem } from '../../api/problem';
-import type { LocationReadModel } from '../../api/schemas/locations';
 import { undeliverableReasons } from '../../api/schemas/outcomes';
 import type {
   BoxOutcome,
@@ -15,14 +14,26 @@ import type {
 import { Button } from '../../components/Button';
 import { DataTable } from '../../components/DataTable';
 import type { Column } from '../../components/DataTable';
-import { Gate } from '../../components/Gate';
 import { PageSkeleton } from '../../components/PageSkeleton';
 import { Spinner } from '../../components/Spinner';
+import { useAuth } from '../../auth/useAuth';
 import { nextOutcomes } from './outcomeModel';
 
 interface ConvoyOutcomesPanelProps {
   convoyId: number;
   departed: boolean;
+}
+
+/** A registered hub a box can be returned to. */
+export interface OutcomeHub {
+  id: number;
+  name: string;
+}
+
+interface ConvoyOutcomesListProps extends ConvoyOutcomesPanelProps {
+  hubs: readonly OutcomeHub[];
+  /** Overrides the role check, for the Convoy Leader whose role the token does not carry (ADR 0010). */
+  canRecord?: boolean;
 }
 
 const LABEL: Record<BoxOutcome, string> = {
@@ -42,9 +53,28 @@ const problemMessage = (error: unknown) =>
  * that vehicle's filed declarations stale.
  */
 export function ConvoyOutcomesPanel({ convoyId, departed }: ConvoyOutcomesPanelProps): JSX.Element {
+  const locations = useLocations({ page: 1, pageSize: 200 });
+  const hubs = (locations.data ?? [])
+    .filter((location) => location.isRegisteredHub)
+    .map((location) => ({ id: location.id, name: location.name }));
+
+  return <ConvoyOutcomesList convoyId={convoyId} departed={departed} hubs={hubs} />;
+}
+
+/**
+ * The list itself, with the hubs handed in. The checklist page uses it directly: a Convoy Leader may not list locations,
+ * so the registered hubs come with their progress instead.
+ */
+export function ConvoyOutcomesList({
+  convoyId,
+  departed,
+  hubs,
+  canRecord,
+}: ConvoyOutcomesListProps): JSX.Element {
+  const auth = useAuth();
+  const allowed = canRecord ?? auth.hasPolicy('convoys:write');
   const vehicles = useConvoyVehicles(convoyId);
   const outcomes = useBoxOutcomes(convoyId);
-  const locations = useLocations({ page: 1, pageSize: 200 });
 
   if (vehicles.isPending || outcomes.isPending) {
     return <PageSkeleton />;
@@ -57,7 +87,6 @@ export function ConvoyOutcomesPanel({ convoyId, departed }: ConvoyOutcomesPanelP
   }
 
   const rows = 'parentMissing' in vehicles.data ? [] : vehicles.data;
-  const hubs = (locations.data ?? []).filter((location) => location.isRegisteredHub);
 
   return (
     <div>
@@ -71,6 +100,7 @@ export function ConvoyOutcomesPanel({ convoyId, departed }: ConvoyOutcomesPanelP
           delivered={vehicle.delivered}
           outcomes={outcomes.data.filter((outcome) => outcome.vin === vehicle.vin)}
           hubs={hubs}
+          canRecord={allowed}
         />
       ))}
     </div>
@@ -84,7 +114,8 @@ interface VehicleOutcomesProps {
   withdrawn: boolean;
   delivered: boolean;
   outcomes: readonly BoxOutcomeReadModel[];
-  hubs: readonly LocationReadModel[];
+  hubs: readonly OutcomeHub[];
+  canRecord: boolean;
 }
 
 function VehicleOutcomes({
@@ -95,6 +126,7 @@ function VehicleOutcomes({
   delivered,
   outcomes,
   hubs,
+  canRecord,
 }: VehicleOutcomesProps): JSX.Element {
   const boxes = useVehicleBoxes(convoyId, vin);
   const deliver = useDeliverVehicle(convoyId);
@@ -128,8 +160,8 @@ function VehicleOutcomes({
     },
     {
       header: 'Record',
-      cell: (boxId) => (
-        <Gate policy="convoys:write">
+      cell: (boxId) =>
+        canRecord ? (
           <BoxOutcomeForm
             boxId={boxId}
             current={outcomeOf(boxId)?.outcome}
@@ -139,8 +171,7 @@ function VehicleOutcomes({
               record.mutate({ boxId, body });
             }}
           />
-        </Gate>
-      ),
+        ) : null,
     },
   ];
 
@@ -148,18 +179,16 @@ function VehicleOutcomes({
     <section aria-label={`Outcomes for ${plate}`}>
       <h3>{plate}</h3>
       {delivered ? <p>Delivered.</p> : null}
-      {!delivered && !withdrawn ? (
-        <Gate policy="convoys:write">
-          <Button
-            type="button"
-            disabled={deliver.isPending}
-            onClick={() => {
-              deliver.mutate(vin);
-            }}
-          >
-            Mark {plate} delivered
-          </Button>
-        </Gate>
+      {!delivered && !withdrawn && canRecord ? (
+        <Button
+          type="button"
+          disabled={deliver.isPending}
+          onClick={() => {
+            deliver.mutate(vin);
+          }}
+        >
+          Mark {plate} delivered
+        </Button>
       ) : null}
       {message ? (
         <p role="alert" className="field__error">
@@ -180,7 +209,7 @@ function VehicleOutcomes({
 interface BoxOutcomeFormProps {
   boxId: number;
   current: BoxOutcome | undefined;
-  hubs: readonly LocationReadModel[];
+  hubs: readonly OutcomeHub[];
   pending: boolean;
   onRecord: (body: {
     outcome: BoxOutcome;

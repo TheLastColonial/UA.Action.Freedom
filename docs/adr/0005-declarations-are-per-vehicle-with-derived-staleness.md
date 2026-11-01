@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. The entity and its lifecycle are implemented by [plan 08](../plans/08-declarations-filing.md); the snapshot and derived staleness are [plan 09](../plans/09-declaration-staleness.md) and closing at a crossing is [plan 18](../plans/18-leader-checklist-progress.md), so those two states are defined but never set yet. Builds on [ADR 0004](0004-the-manifest-is-the-load-sign-off.md), and generalises
+Accepted. The entity and its lifecycle are implemented by [plan 08](../plans/08-declarations-filing.md); the snapshot and derived staleness are [plan 09](../plans/09-declaration-staleness.md) and closing at a crossing is [plan 18](../plans/18-leader-checklist-progress.md), now implemented: a border crossing moves each accepted declaration of that authority for the vehicles still travelling to Closed, in one transaction, and a closed declaration is never compared. Builds on [ADR 0004](0004-the-manifest-is-the-load-sign-off.md), and generalises
 [ADR 0002](0002-elo-envelope-on-manifest-approval.md) and [ADR 0003](0003-ens-declaration-recorded-not-submitted.md).
 
 ## Context
@@ -131,5 +131,5 @@ Added by plan 08. The decision above stands; these are choices the implementatio
   applied when declarations are listed and when tasks are derived, and **`Stale` is never written by a read**.
 - **A re-declare task is derived** (`GET /convoys/{id}/tasks`), so there is nothing to close. `withdraw` clears it and
   starts a new draft in one transaction.
-- **Not yet:** "declarations current" does not block departure (plan 13), and a closed declaration is not yet
-  excluded from the comparison (plan 18).
+- **Not yet:** "declarations current" does not block departure (plan 13). A closed declaration is excluded from the
+  comparison (plan 18): only a filed or accepted declaration can read stale, and a crossing closes the accepted ones.

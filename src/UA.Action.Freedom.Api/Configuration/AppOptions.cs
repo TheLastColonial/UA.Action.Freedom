@@ -15,4 +15,10 @@ public sealed class AppOptions
     /// why the local simulation sets it explicitly.
     /// </summary>
     public string? PublicBaseUrl { get; set; }
+
+    /// <summary>
+    /// The number the Convoy Leader rings when the checklist page is out of reach (O18): HQ's, shown on the page. Plain
+    /// configuration, not a secret.
+    /// </summary>
+    public string? HqPhone { get; set; }
 }

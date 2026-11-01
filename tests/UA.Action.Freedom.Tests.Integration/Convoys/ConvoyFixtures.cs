@@ -83,6 +83,7 @@ internal static class ConvoyFixtures
     internal static Task RemoveConvoyAsync(int id) => ExecuteAsync(
         """
         DELETE FROM dbo.BoxOutcome WHERE ConvoyId = @id;
+        DELETE FROM dbo.RoutePointMark WHERE ConvoyId = @id;
         DELETE FROM dbo.Declaration WHERE ConvoyId = @id;
         DELETE FROM dbo.ConvoyVehicle WHERE ConvoyId = @id;
         DELETE FROM dbo.Convoy WHERE Id = @id;

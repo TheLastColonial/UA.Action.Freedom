@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { useAuth } from '../auth/useAuth';
 import './Dashboard.css';
 import { DashboardCard } from './DashboardCard';
+import { LeaderChecklistLinks } from './convoys/LeaderChecklistLinks';
 import { DASHBOARD_CARD_ENTRIES } from './dashboardCards';
 
 export function Dashboard(): JSX.Element {
@@ -17,6 +18,7 @@ export function Dashboard(): JSX.Element {
           <DashboardCard key={entry.to} entry={entry} />
         ))}
       </div>
+      <LeaderChecklistLinks />
     </section>
   );
 }

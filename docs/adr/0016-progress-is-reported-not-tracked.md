@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted. Not yet implemented, except the route-point groundwork [plan 10](../plans/10-route-points-convoy-leader.md) built: a route point has a stable id and a kind, and a border point names its authority.
+Accepted. Implemented by [plan 18](../plans/18-leader-checklist-progress.md), on top of the route-point groundwork [plan 10](../plans/10-route-points-convoy-leader.md) built. See *Implementation notes* at the end.
 
 ## Context
 
@@ -81,3 +81,13 @@ Added 2026-10-02, from questions resolved before implementation planning.
   the person who recorded it ([decision O27](../domain/decisions.md#o27)). That resolves the "forgotten mark" concern
   above.
 - **Only the time of entry is recorded** ([decision O27](../domain/decisions.md#o27)).
+
+## Implementation notes
+
+Added with [plan 18](../plans/18-leader-checklist-progress.md).
+
+- **A mark is a row of `dbo.RoutePointMark`:** the route point, `Reached` or `Crossed`, an optional vehicle, the person who entered it, the time it was **entered** (nothing else is kept, [O27](../domain/decisions.md#o27)) and whether that person was not the sitting leader. A mark is one fact, so a second one for the same point, kind and vehicle is refused, and it pins its route point (a marked point cannot be removed from the route).
+- **A crossing closes the declarations of that border in the same transaction:** UK the GMR, EU the ENS and ELO, Ukraine the goods lists, for the vehicles still travelling, and only those that are `Accepted` ([ADR 0005](0005-declarations-are-per-vehicle-with-derived-staleness.md)).
+- **The leader's routes are scoped** (`convoys:report-progress` with the convoy scope of [ADR 0010](0010-resource-scoped-permissions.md)). They enter **fuel only** among the costs.
+- **"Nothing stored on the device" is enforced three ways:** every checklist response is `Cache-Control: no-store` (refusals included), the page's own code names no browser storage (a test reads the source), and the progress query is not kept in the query cache after the page closes.
+- **Not done:** a mark does not say when it *happened* ([Q-occurrence-time](../domain/decisions.md#q-occurrence-time) was answered *entered only*), and the leader's access ending at convoy closing waits on plan 19.

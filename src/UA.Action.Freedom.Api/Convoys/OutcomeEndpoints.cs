@@ -1,5 +1,6 @@
 using FluentValidation;
 using UA.Action.Freedom.Api.Configuration;
+using UA.Action.Freedom.Api.Configuration.Scope;
 using UA.Action.Freedom.Application.Abstractions;
 using UA.Action.Freedom.Application.Boxes;
 using UA.Action.Freedom.Application.Convoys;
@@ -25,8 +26,9 @@ public sealed class RecordBoxOutcomeRequestValidator : AbstractValidator<RecordB
 }
 
 /// <summary>
-/// How a load ends on a convoy (ADR 0015, plan 14). The Dispatcher records these for the Convoy Leader until scoped
-/// permissions give the leader their own, so every route is <c>convoys:write</c>.
+/// How a load ends on a convoy (ADR 0015). Recording an outcome and marking a vehicle delivered are the Convoy Leader's own
+/// acts on the convoy they lead (<c>convoys:report-progress</c>, scoped), and the Dispatcher keeps them on their behalf
+/// (ADR 0016). Acceptance and closing stay the Dispatcher's.
 /// </summary>
 public static class OutcomeEndpoints
 {
@@ -73,7 +75,8 @@ public static class OutcomeEndpoints
             };
         })
         .AddEndpointFilter<ValidationFilter<RecordBoxOutcomeRequest>>()
-        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+        .RequireConvoyScope()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysReportProgress);
 
         convoys.MapGet("/{id:int}/outcomes", async (
             int id,
@@ -83,7 +86,8 @@ public static class OutcomeEndpoints
             var outcomes = await handler.HandleAsync(new ListBoxOutcomesQuery(id), cancellationToken);
             return outcomes is null ? Results.NotFound() : Results.Ok(outcomes);
         })
-        .RequireAuthorization(AuthenticationExtensions.ConvoysRead);
+        .RequireConvoyScope()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysReadLed);
 
         // Closing follows arrival and draws the report (O10). It does not lock the convoy (O25): the report is
         // regenerated from the facts, so pressing it again after a correction simply shows the corrected account.
@@ -150,7 +154,8 @@ public static class OutcomeEndpoints
                     statusCode: StatusCodes.Status409Conflict),
             };
         })
-        .RequireAuthorization(AuthenticationExtensions.ConvoysWrite);
+        .RequireConvoyScope()
+        .RequireAuthorization(AuthenticationExtensions.ConvoysReportProgress);
 
         // Acceptance is recorded once per Ukrainian goods list (O24); every delivered box on it becomes accepted.
         convoys.MapPost("/{id:int}/vehicles/{vin}/declarations/goods-list/{receiverRef:guid}/accepted", async (

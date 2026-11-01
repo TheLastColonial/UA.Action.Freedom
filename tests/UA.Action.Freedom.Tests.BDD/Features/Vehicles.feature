@@ -71,7 +71,7 @@ Scenario: A vehicle says who last changed it, taken from the login and not the r
     And a vehicle exists with VIN "WDB9066331S0BDD01"
     When I GET "/vehicles/WDB9066331S0BDD01"
     Then the response status is 200
-    And the response body field "lastChangedByName" is "BDD operator"
+    And the response body field "lastChangedByName" is the name of the "operator" login's volunteer
 
 Scenario: A recorded vehicle appears in the list
     Given I am authenticated as "operator"

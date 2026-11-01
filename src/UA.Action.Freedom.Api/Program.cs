@@ -260,6 +260,8 @@ if (hosting.ServeStaticFrontend)
 
 app.UseRouting();
 
+app.UseFreedomChecklistNoStore();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseFreedomChangeAttribution();
@@ -272,6 +274,7 @@ app.MapFreedomMe();
 app.MapFreedomConvoys();
 app.MapFreedomBudget();
 app.MapFreedomOutcomes();
+app.MapFreedomProgress();
 app.MapFreedomEquipment();
 app.MapFreedomAccommodation();
 app.MapFreedomReceivers();
